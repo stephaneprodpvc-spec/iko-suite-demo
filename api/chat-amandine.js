@@ -26,7 +26,7 @@ const CRENEAUX = {
 };
 
 const SYSTEM_PROMPT = `
-Tu es Amandine, l'assistante SAV en ligne de Falliero, specialiste de la
+Tu es Amandine, l'assistante SAV en ligne d'Iko Suite, specialiste de la
 menuiserie (fenetres, coulissants, volets roulants, portails, portes de
 garage, verandas).
 
@@ -63,7 +63,7 @@ DEROULE POUR OUVRIR UN TICKET / PRENDRE RDV
          Verifie que l'adresse contient bien un @ et un domaine plausible ; si ce n'est
          pas le cas, relis l'adresse au client et demande-lui de confirmer ou de la
          repreciser avant d'appeler creer_ticket.
-         4. Demander si l'equipement est sous garantie (facture Falliero) ; si oui,
+         4. Demander si l'equipement est sous garantie (facture Iko Suite) ; si oui,
             demander le numero de facture. Sinon note "hors garantie".
             5. Si le client veut un rendez-vous : demande la periode preferee (matin ou
                apres-midi), appelle lister_creneaux, propose 2-3 dates parmi celles
@@ -82,7 +82,7 @@ DEROULE POUR OUVRIR UN TICKET / PRENDRE RDV
                                   - N'invente JAMAIS de creneau, de disponibilite ou de numero de telephone
                                     d'agence.
                                     - En cas d'urgence securite (degat des eaux en cours, effraction, portail
-                                      dangereux), invite le client a contacter directement son agence Falliero
+                                      dangereux), invite le client a contacter directement son agence
                                         par telephone plutot que d'attendre ; propose quand meme d'ouvrir un
                                           ticket en parallele si le client le souhaite.
                                           - Reste sur le sujet SAV. Si on te parle d'un nouveau projet ou d'un devis,
@@ -103,7 +103,7 @@ const TOOLS = [
     input_schema: {
       type: "object",
       properties: {
-        agence: { type: "string", enum: AGENCES_VALIDES, description: "Agence Falliero concernee." },
+        agence: { type: "string", enum: AGENCES_VALIDES, description: "Agence concernee." },
         periode: { type: "string", enum: ["matin", "apres_midi"], description: "Periode de la journee souhaitee." },
       },
       required: ["agence", "periode"],
@@ -122,7 +122,7 @@ const TOOLS = [
   },
   {
     name: "creer_ticket",
-    description: "Cree reellement le ticket SAV dans le systeme Falliero (meme mecanisme que le formulaire manuel) et notifie l'agence. A appeler une seule fois, quand toutes les informations necessaires ont ete recueillies.",
+    description: "Cree reellement le ticket SAV dans le systeme Iko Suite (meme mecanisme que le formulaire manuel) et notifie l'agence. A appeler une seule fois, quand toutes les informations necessaires ont ete recueillies.",
     input_schema: {
       type: "object",
       properties: {
@@ -202,7 +202,7 @@ async function executerOutil(nom, input) {
     const garantieTexte = input.garantie === "oui" ? "Oui - Facture " + (input.numero_facture || "") : input.garantie === "non" ? "Non / Hors garantie" : "N/A";
 
     const payload = {
-      marque: "falliero",
+      marque: "iko",
       ticket: numero,
       agence: input.agence,
       nom: input.nom,

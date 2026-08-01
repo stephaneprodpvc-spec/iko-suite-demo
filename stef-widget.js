@@ -1,5 +1,5 @@
 // ============================================================
-// STEF — Assistant 3D Falliero pour la page SAV
+// STEF — Assistant 3D Iko pour la page SAV
 // Usage : <script type="module" src="stef-widget.js"></script>
 // Requiert : stef.glb à la racine du site
 // ============================================================
@@ -227,7 +227,7 @@ try {
     scene.add(rim);
   }
 
-  const INTRO = "Bonjour, je suis Stef, votre conseiller SAV Falliero. Je suis là pour vous accompagner et vous guider.";
+  const INTRO = "Bonjour, je suis Stef, votre conseiller SAV Iko. Je suis là pour vous accompagner et vous guider.";
   function stripForSpeech(text) {
     return text
       .replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{2190}-\u{21FF}\u{2B00}-\u{2BFF}]/gu, '')

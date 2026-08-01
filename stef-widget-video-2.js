@@ -1,5 +1,5 @@
 // ============================================================
-// STEF — Assistant Falliero pour la page SAV — VARIANTE TEST VIDEO 2
+// STEF — Assistant Iko pour la page SAV — VARIANTE TEST VIDEO 2
 // Usage : <script type="module" src="stef-widget-video-2.js"></script>
 //
 // Difference avec le test video 1 (stef-widget-video.js) : ici la voix
@@ -256,7 +256,7 @@ function stefDebugBadge(msg) {
     try { video.currentTime = 0; video.muted = mini ? true : muted; video.play().catch(() => {}); } catch (e) {}
   }
 
-  const INTRO = "Bonjour, je suis Stef, votre conseiller SAV Falliero. Je suis là pour vous accompagner et vous guider.";
+  const INTRO = "Bonjour, je suis Stef, votre conseiller SAV Iko. Je suis là pour vous accompagner et vous guider.";
   function stripForSpeech(text) {
     return text
       .replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{2190}-\u{21FF}\u{2B00}-\u{2BFF}]/gu, '')

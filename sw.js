@@ -1,4 +1,4 @@
-const CACHE_NAME = 'falliero-sav-v1';
+const CACHE_NAME = 'iko-suite-sav-v1';
 const CORE_ASSETS = [
   '/',
   '/index.html',

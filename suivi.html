@@ -3,12 +3,12 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Falliero — Suivi de ma demande SAV</title>
+<title>Iko Suite — Suivi de ma demande SAV</title>
 <link rel="manifest" href="/manifest.json">
-<meta name="theme-color" content="#001A42">
+<meta name="theme-color" content="#0D0D0D">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Falliero Suivi">
+<meta name="apple-mobile-web-app-title" content="Iko Suivi">
 <link rel="apple-touch-icon" href="/icon-192.png">
 <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
 <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -17,7 +17,7 @@
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body { font-family: 'Segoe UI', sans-serif; background: #F5F5F5; min-height: 100vh; }
 input, textarea { font-family: 'Segoe UI', sans-serif; outline: none; }
-input:focus, textarea:focus { border-color: #DAB239 !important; }
+input:focus, textarea:focus { border-color: #FF6B00 !important; }
 </style>
 </head>
 <body>
@@ -42,7 +42,7 @@ input:focus, textarea:focus { border-color: #DAB239 !important; }
 const { useState } = React;
 
 const F = {
-  marine: "#001A42", or: "#DAB239", orClair: "#F0DFA8",
+  marine: "#0D0D0D", or: "#FF6B00", orClair: "#F0DFA8",
   blanc: "#FFFFFF", grisClair: "#F5F5F5", grisBord: "#E5E5E5",
   rouge: "#DC2626", rougeClair: "#FEE2E2", vert: "#15803D", vertClair: "#F0FDF4",
   bleu: "#2563EB", bleuClair: "#EFF6FF", jaune: "#D97706", jauneClair: "#FFFBEB",
@@ -82,7 +82,7 @@ function PhoneChat({ ticket, message, onChangeMessage, onEnvoyer, envoi }) {
               F
             </div>
             <div style={{flex:1,minWidth:0}}>
-              <div style={{color:"#fff",fontSize:"12px",fontWeight:"700"}}>Agence Falliero</div>
+              <div style={{color:"#fff",fontSize:"12px",fontWeight:"700"}}>Agence Iko</div>
               <div style={{color:"rgba(255,255,255,0.5)",fontSize:"9px"}}>SMS · Suivi SAV</div>
             </div>
           </div>
@@ -378,10 +378,10 @@ function App() {
     <div style={{minHeight:"100vh",display:"flex",flexDirection:"column",alignItems:"center",padding:"0 0 40px"}}>
       <div style={{width:"100%",background:F.marine,padding:"18px 20px",display:"flex",alignItems:"center",gap:"12px"}}>
         <div style={{width:"42px",height:"42px",background:F.blanc,borderRadius:"10px",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,overflow:"hidden"}}>
-          <img src="/icon-192.png" alt="Falliero" style={{width:"100%",height:"100%",objectFit:"contain"}}/>
+          <img src="/icon-192.png" alt="Iko" style={{width:"100%",height:"100%",objectFit:"contain"}}/>
         </div>
         <div>
-          <div style={{color:F.blanc,fontWeight:"900",fontSize:"16px"}}>Falliero</div>
+          <div style={{color:F.blanc,fontWeight:"900",fontSize:"16px"}}>Iko</div>
           <div style={{color:"rgba(255,255,255,0.5)",fontSize:"9px",letterSpacing:"1.5px",textTransform:"uppercase",marginTop:"2px"}}>Suivi de ma demande SAV</div>
         </div>
         <a href="index.html" style={{marginLeft:"auto",color:"rgba(255,255,255,0.7)",fontSize:"12px",textDecoration:"none",border:"1px solid rgba(255,255,255,0.25)",borderRadius:"8px",padding:"6px 12px"}}>← Retour</a>
