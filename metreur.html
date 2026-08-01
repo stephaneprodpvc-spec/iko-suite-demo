@@ -1,0 +1,2448 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RSIA IKO — Module Métreur</title>
+<link rel="manifest" href="/manifest.json">
+<link rel="apple-touch-icon" href="/icon-192.png">
+<meta name="theme-color" content="#001A42">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="RSIA IKO Métreur">
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://unpkg.com/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Segoe UI', sans-serif; background: #F5F5F5; color: #374151; min-height: 100vh; -webkit-tap-highlight-color: transparent; }
+input, select, textarea { font-family: inherit; border: 1px solid #E2E2E2; border-radius: 8px; padding: 9px 11px; font-size: 13px; width: 100%; background: #fff; color: #111; }
+input:focus, select:focus, textarea:focus { outline: none; border-color: #DAB239; }
+button { font-family: inherit; touch-action: manipulation; }
+svg text { user-select: none; -webkit-user-select: none; }
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-thumb { background: #D1D5DB; border-radius: 4px; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script>
+// Ajoute un secret partage sur tous les appels au proxy Airtable, pour
+// empecher un acces direct a l'API sans passer par cette page (voir
+// api/airtable-proxy.js pour le detail et les limites de cette protection).
+(function() {
+  var APP_SECRET = "97960bb3f41d75c71ba3e831a7acb90ab324549734e27d6a";
+  var _fetch = window.fetch;
+  window.fetch = function(url, opts) {
+    if (typeof url === "string" && url.indexOf("/api/airtable") === 0) {
+      opts = opts || {};
+      opts.headers = Object.assign({}, opts.headers || {}, { "X-App-Secret": APP_SECRET });
+    }
+    return _fetch(url, opts);
+  };
+})();
+</script>
+<script type="text/babel">
+
+const PASSWORDS = {
+  "falliero2026": "global",
+  "ibos65": "Ibos (65)",
+  "tarnos40": "Tarnos (40)",
+  "lescar64": "Lescar (64)",
+  "stgaudens31": "Saint-Gaudens (31)",
+};
+const AGENCES = ["Ibos (65)", "Tarnos (40)", "Lescar (64)", "Saint-Gaudens (31)"];
+const WEBHOOK = 'https://hook.eu1.make.com/xczscdk40wh653mmnxnx7x63kawjcgx4';
+
+const C = {
+  bg: "#F5F5F5", card: "#FFFFFF", border: "#E2E2E2",
+  or: "#DAB239", orDim: "rgba(218,178,57,0.12)", orBord: "rgba(218,178,57,0.3)",
+  text: "#374151", muted: "#5B6472", white: "#001A42",
+  rouge: "#DC2626", rougeDim: "rgba(220,38,38,0.12)",
+  vert: "#16a34a", vertDim: "rgba(22,163,74,0.12)",
+  bleu: "#2563eb", bleuDim: "rgba(37,99,235,0.12)",
+  vitre: "rgba(37,99,235,0.07)", cote: "#8a6d1f",
+};
+
+const TABLE_METRES = "Métrés";
+const TABLE_OUVERTURES = "Ouvertures Métré";
+
+const TYPES = [
+  { v: "Fixe", l: "Fixe" },
+  { v: "OB1", l: "OB1 · 1 vantail" },
+  { v: "OB2", l: "OB2 · 2 vantaux" },
+  { v: "OF1", l: "OF1 · Oscillo 1 vtx" },
+  { v: "OF2", l: "OF2 · Oscillo 2 vtx" },
+  { v: "Coulissant 2 rails", l: "Coulissant 2 rails" },
+  { v: "Coulissant 3 rails", l: "Coulissant 3 rails" },
+  { v: "Soufflet", l: "Soufflet" },
+  { v: "Porte d'entrée", l: "Porte d'entrée" },
+  { v: "Porte-fenêtre", l: "Porte-fenêtre" },
+  { v: "Volet roulant intégré", l: "Volet roulant" },
+  { v: "Portail battant", l: "Portail battant" },
+  { v: "Portail coulissant", l: "Portail coulissant" },
+  { v: "Ensemble composé", l: "Ensemble composé" },
+];
+// Serrure / cylindre / seuil alu / barillet ne concernent que les portes —
+// évite de proposer ces options sur une fenêtre classique.
+const TYPES_PORTE = ["Porte d'entrée", "Porte-fenêtre"];
+// Types de vitrage courants proposés en premier choix ; "Autre" laisse la
+// saisie libre pour une composition non listée.
+const TYPES_VITRAGE = ["4/16/4", "4/16/4 argon", "6/18/4", "44.2/16/4", "44.2/18/4", "44.2/16/44.2", "Triple 4/16/4/16/4", "Autre"];
+// Hauteur de poignée réglable seulement sur les ouvrants à poignée (OF/OB) —
+// pas de sens sur un fixe, un coulissant, une porte ou un portail.
+const TYPES_POIGNEE = ["OF1", "OF2", "OB1", "OB2"];
+
+// ---- Configurateur : constantes métier ----
+const POSES = ["Neuf", "Rénovation", "Applique"];
+const REMPLISSAGES = [
+  { v: "Fixe",     l: "Fixe" },
+  { v: "OF-G",     l: "OF tirant gauche" },
+  { v: "OF-D",     l: "OF tirant droit" },
+  { v: "Soufflet", l: "Soufflet" },
+  { v: "OB-G",     l: "Oscillo-battant G" },
+  { v: "OB-D",     l: "Oscillo-battant D" },
+  { v: "Coul",     l: "Coulissant" },
+  { v: "Porte-G",  l: "Porte tirant G" },
+  { v: "Porte-D",  l: "Porte tirant D" },
+];
+const ECART_MIN = 150; // écart mini en mm entre deux divisions
+const libelleRempl = (v) => (REMPLISSAGES.find(r => r.v === v) || {}).l || v;
+
+// ---- Mapping Type d'ouvrant (Niveau 1, sélecteur du haut) -> zones/meneaux
+// par défaut du schéma (Niveau 2). Sans ce mapping, choisir "OB1" en haut ne
+// change rien au dessin (bug remonté par Stéphane) : le schéma restait sur
+// "Fixe" tant qu'on n'allait pas configurer la zone à la main.
+// meneaux exprimés en fraction de la largeur (0 à 1), convertis en mm au moment
+// de l'application. Tirant par défaut = droit (ajustable ensuite dans le
+// configurateur en tapant sur la zone). Convention confirmée par le lexique
+// Total Fenêtres : tirant = sens d'ouverture de l'ouvrant principal, vue intérieure.
+const TYPE_ZONES = {
+  "Fixe":               { meneaux: [],          zonesRempl: { "0-0": "Fixe" } },
+  "OB1":                { meneaux: [],          zonesRempl: { "0-0": "OB-D" } },
+  "OB2":                { meneaux: [0.5],        zonesRempl: { "0-0": "OB-D", "1-0": "OB-G" } },
+  "OF1":                { meneaux: [],          zonesRempl: { "0-0": "OF-D" } },
+  "OF2":                { meneaux: [0.5],        zonesRempl: { "0-0": "OF-D", "1-0": "OF-G" } },
+  "Coulissant 2 rails": { meneaux: [0.5],        zonesRempl: { "0-0": "Coul", "1-0": "Coul" } },
+  "Coulissant 3 rails": { meneaux: [1/3, 2/3],   zonesRempl: { "0-0": "Coul", "1-0": "Coul", "2-0": "Coul" } },
+  "Soufflet":           { meneaux: [],          zonesRempl: { "0-0": "Soufflet" } },
+  "Porte-fenêtre":      { meneaux: [0.5],        zonesRempl: { "0-0": "Porte-D", "1-0": "Porte-G" } },
+};
+// Types non couverts (Porte d'entrée, Volet roulant, Portails) : dessin neutre
+// à 1 zone Fixe — le dormant/pose/cotes restent corrects, le détail spécifique
+// à ces produits viendra avec les futurs modules dédiés.
+function zonesFromType(type, largeurMm) {
+  const cfg = TYPE_ZONES[type] || { meneaux: [], zonesRempl: { "0-0": "Fixe" } };
+  return { meneaux: cfg.meneaux.map(f => Math.round(f * largeurMm)), zonesRempl: cfg.zonesRempl };
+}
+
+// ---- Teintes PVC (finitions de masse, pas de laquage) ----
+// Noms alignés sur le catalogue Kömmerling Programme couleurs 2026.
+const TEINTES_PVC = ["Blanc", "Chêne doré", "Anthracite mat", "Chêne irlandais"];
+
+// ---- Liste RAL laquage (exemple de départ — ajouter des lignes ici au fil de l'eau) ----
+const RAL_LIST = [
+  { v: "7016", l: "7016 · Gris anthracite" },
+  { v: "9005", l: "9005 · Noir foncé" },
+  { v: "9016", l: "9016 · Blanc signalisation" },
+];
+const FINITIONS_ALU = ["Structuré", "Satiné"];
+const libelleRal = (v) => (RAL_LIST.find(r => r.v === v) || {}).l || v;
+
+// ---- Correspondances couleur réelle (pour que le dessin respecte la teinte
+// choisie). Approximations visuelles raisonnables, pas une charte colorimétrique
+// certifiée — suffisant pour que le schéma se lise au premier coup d'œil.
+const TEINTE_HEX = {
+  "Blanc": "#F4F4F1",
+  "Chêne doré": "#8A5A2B",
+  "Anthracite mat": "#33383D",
+  "Chêne irlandais": "#5B3A22",
+};
+const RAL_HEX = {
+  "7016": "#383E42", // Gris anthracite
+  "9005": "#0A0A0A", // Noir foncé
+  "9016": "#F1F0EA", // Blanc signalisation
+};
+// Couleur du profilé à utiliser dans le schéma : Alu -> son RAL ; PVC + capot
+// alu -> le RAL du capot (visible côté extérieur) ; PVC seul -> sa teinte.
+function couleurSchema(o) {
+  if (o.materiau === "Alu") return RAL_HEX[o.ralAlu] || C.white;
+  if (o.capotAlu) return RAL_HEX[o.ralCapot] || TEINTE_HEX[o.teintePvc] || C.white;
+  return TEINTE_HEX[o.teintePvc] || C.white;
+}
+
+// ---- Base de gammes (largeurs de profilé en mm) — Niveau 2 du générateur ----
+// PVC : Kömmerling 76 ADVANCED — profondeur dormant/ouvrant 76 mm confirmée
+// par la fiche technique constructeur (Avis Technique CSTB 6/16-2334).
+// Alu : Profils Systèmes Cuzco® 713 — gamme dormant 70 mm (fiche produit
+// officielle). Ce sont les profondeurs globales des systèmes, pas la largeur
+// visible exacte en élévation (il faudrait la fiche technique complète ou
+// l'extranet fabricant pour ça) — approximation visuelle, mais bien plus
+// fidèle que les valeurs génériques précédentes.
+const GAMMES = {
+  PVC: { dormant: 76, ouvrant: 61 },
+  Alu: { dormant: 70, ouvrant: 56 },
+};
+const gammeOf = (materiau) => GAMMES[materiau] || GAMMES.PVC;
+
+// ---- ICONES SCHEMATIQUES (convention menuiserie : diagonale = vantail, pointe = charnière) ----
+function IconOuverture({ type, active, size }) {
+  const s = size || 40;
+  const stroke = active ? "#001A42" : "#9CA3AF";
+  const fill = active ? "rgba(218,178,57,0.08)" : "none";
+  const sw = 2.4;
+  const common = { fill, stroke, strokeWidth: sw, strokeLinejoin: "round", strokeLinecap: "round" };
+
+  let inner = null;
+  switch (type) {
+    case "Fixe":
+      inner = <rect x="10" y="12" width="44" height="40" {...common}/>;
+      break;
+    case "OB1":
+      inner = <>
+        <rect x="10" y="12" width="44" height="40" {...common}/>
+        <line x1="10" y1="52" x2="54" y2="12" stroke={stroke} strokeWidth={sw}/>
+      </>;
+      break;
+    case "OB2":
+      inner = <>
+        <rect x="10" y="12" width="44" height="40" {...common}/>
+        <line x1="32" y1="12" x2="32" y2="52" stroke={stroke} strokeWidth={sw}/>
+        <line x1="10" y1="12" x2="32" y2="52" stroke={stroke} strokeWidth={sw}/>
+        <line x1="54" y1="12" x2="32" y2="52" stroke={stroke} strokeWidth={sw}/>
+      </>;
+      break;
+    case "OF1":
+      inner = <>
+        <rect x="10" y="12" width="44" height="40" {...common}/>
+        <line x1="10" y1="52" x2="54" y2="12" stroke={stroke} strokeWidth={sw}/>
+        <line x1="10" y1="12" x2="14" y2="12" stroke={stroke} strokeWidth={sw*1.6}/>
+        <line x1="10" y1="12" x2="10" y2="16" stroke={stroke} strokeWidth={sw*1.6}/>
+      </>;
+      break;
+    case "OF2":
+      inner = <>
+        <rect x="10" y="12" width="44" height="40" {...common}/>
+        <line x1="32" y1="12" x2="32" y2="52" stroke={stroke} strokeWidth={sw}/>
+        <line x1="10" y1="12" x2="32" y2="52" stroke={stroke} strokeWidth={sw}/>
+        <line x1="54" y1="12" x2="32" y2="52" stroke={stroke} strokeWidth={sw}/>
+        <line x1="10" y1="12" x2="14" y2="12" stroke={stroke} strokeWidth={sw*1.6}/>
+        <line x1="54" y1="12" x2="50" y2="12" stroke={stroke} strokeWidth={sw*1.6}/>
+      </>;
+      break;
+    case "Coulissant 2 rails":
+      inner = <>
+        <rect x="8" y="12" width="24" height="40" {...common}/>
+        <rect x="32" y="12" width="24" height="40" {...common}/>
+        <line x1="16" y1="32" x2="4" y2="32" stroke={stroke} strokeWidth={sw} markerEnd="url(#arrM)"/>
+        <line x1="48" y1="32" x2="60" y2="32" stroke={stroke} strokeWidth={sw} markerEnd="url(#arrM)"/>
+      </>;
+      break;
+    case "Coulissant 3 rails":
+      inner = <>
+        <rect x="6" y="12" width="17" height="40" {...common}/>
+        <rect x="23" y="12" width="18" height="40" {...common}/>
+        <rect x="41" y="12" width="17" height="40" {...common}/>
+        <line x1="23" y1="32" x2="12" y2="32" stroke={stroke} strokeWidth={sw} markerEnd="url(#arrM)"/>
+        <line x1="41" y1="32" x2="52" y2="32" stroke={stroke} strokeWidth={sw} markerEnd="url(#arrM)"/>
+      </>;
+      break;
+    case "Soufflet":
+      inner = <>
+        <rect x="10" y="12" width="44" height="40" {...common}/>
+        <line x1="10" y1="12" x2="32" y2="46" stroke={stroke} strokeWidth={sw}/>
+        <line x1="54" y1="12" x2="32" y2="46" stroke={stroke} strokeWidth={sw}/>
+      </>;
+      break;
+    case "Porte d'entrée":
+      inner = <>
+        <rect x="16" y="8" width="32" height="48" {...common}/>
+        <circle cx="42" cy="32" r="2" fill={stroke} stroke="none"/>
+        <path d="M16 56 A32 32 0 0 0 48 24" fill="none" stroke={stroke} strokeWidth={1.4} strokeDasharray="3,3"/>
+      </>;
+      break;
+    case "Porte-fenêtre":
+      inner = <>
+        <rect x="12" y="6" width="40" height="50" {...common}/>
+        <line x1="32" y1="6" x2="32" y2="56" stroke={stroke} strokeWidth={sw}/>
+        <line x1="12" y1="6" x2="32" y2="56" stroke={stroke} strokeWidth={sw}/>
+        <line x1="52" y1="6" x2="32" y2="56" stroke={stroke} strokeWidth={sw}/>
+      </>;
+      break;
+    case "Volet roulant intégré":
+      inner = <>
+        <rect x="10" y="20" width="44" height="32" {...common}/>
+        <rect x="10" y="8" width="44" height="10" fill={active ? "#DAB239" : "#D1D5DB"} stroke={stroke} strokeWidth={1.4}/>
+        <line x1="14" y1="12" x2="50" y2="12" stroke="#fff" strokeWidth="1"/>
+      </>;
+      break;
+    case "Portail battant":
+      inner = <>
+        <rect x="6" y="24" width="24" height="28" {...common}/>
+        <rect x="34" y="24" width="24" height="28" {...common}/>
+        <line x1="6" y1="52" x2="24" y2="24" stroke={stroke} strokeWidth={sw}/>
+        <line x1="58" y1="52" x2="40" y2="24" stroke={stroke} strokeWidth={sw}/>
+      </>;
+      break;
+    case "Portail coulissant":
+      inner = <>
+        <rect x="6" y="24" width="52" height="28" {...common}/>
+        <line x1="32" y1="38" x2="46" y2="38" stroke={stroke} strokeWidth={sw} markerEnd="url(#arrM)"/>
+      </>;
+      break;
+    case "Ensemble composé":
+      inner = <>
+        <rect x="10" y="12" width="44" height="40" {...common}/>
+        <line x1="32" y1="12" x2="32" y2="52" stroke={stroke} strokeWidth={sw}/>
+        <line x1="10" y1="32" x2="54" y2="32" stroke={stroke} strokeWidth={sw}/>
+        <line x1="10" y1="52" x2="32" y2="32" stroke={stroke} strokeWidth={sw*0.8}/>
+      </>;
+      break;
+    default:
+      inner = <rect x="10" y="12" width="44" height="40" {...common}/>;
+  }
+  return (
+    <svg viewBox="0 0 64 64" width={s} height={s}>
+      <defs>
+        <marker id="arrM" markerWidth="6" markerHeight="6" refX="4" refY="3" orient="auto">
+          <path d="M0,0 L6,3 L0,6 Z" fill={stroke}/>
+        </marker>
+      </defs>
+      {inner}
+    </svg>
+  );
+}
+
+const esc = (s) => String(s == null ? "" : s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+
+// Liste des cases à cocher réutilisables pour les ouvertures.
+const OPTIONS_STANDARD = ["Seuil alu", "Barillet sécurité"];
+
+// Choix du dormant (profil de départ) — logique extensible.
+const DORMANTS = ["D76", "Reno 40", "Reno 60", "ISO 100", "ISO 120", "ISO 140", "ISO 160"];
+
+// ============================================================
+//                CONFIGURATEUR GRAPHIQUE
+//  Géométrie partagée entre le dessin interactif (modal),
+//  l'export PNG (PDF + webhook) et l'aperçu dans la fiche.
+// ============================================================
+
+function grilleXs(o, Lmm) { return [0, ...(o.meneaux || []).map(Number).filter(n => n > 0).sort((a, b) => a - b), Lmm]; }
+function grilleYs(o, Hmm) { return [0, ...(o.traverses || []).map(Number).filter(n => n > 0).sort((a, b) => a - b), Hmm]; }
+
+// Récapitulatif des zones (numérotées de bas-gauche vers haut-droite, ligne par ligne)
+function zonesRecap(o) {
+  const Lmm = Number(o.largeur) || 0, Hmm = Number(o.hauteur) || 0;
+  if (!Lmm || !Hmm) return [];
+  const xs = grilleXs(o, Lmm), ys = grilleYs(o, Hmm);
+  const out = []; let n = 1;
+  for (let l = 0; l < ys.length - 1; l++)
+    for (let c = 0; c < xs.length - 1; c++)
+      out.push({ n: n++, col: c, lig: l, w: xs[c + 1] - xs[c], h: ys[l + 1] - ys[l], rempl: (o.zonesRempl || {})[c + "-" + l] || "Fixe" });
+  return out;
+}
+function zonesTexte(o) {
+  const zs = zonesRecap(o);
+  if (zs.length <= 1 && (!zs[0] || zs[0].rempl === "Fixe")) return "";
+  return zs.map(z => "Z" + z.n + " " + z.w + "×" + z.h + " : " + libelleRempl(z.rempl)).join(" · ");
+}
+
+// Vrai si au moins une zone du configurateur est un ouvrant à poignée
+// (OF/OB). On se base sur les zones réelles, pas sur le "Type d'ouvrant" du
+// haut — un fixe transformé en ouvrant via le configurateur doit lui aussi
+// donner accès au champ hauteur de poignée.
+function aUneZonePoignee(o) {
+  return Object.values(o.zonesRempl || {}).some(r => r === "OF-G" || r === "OF-D" || r === "OB-G" || r === "OB-D");
+}
+
+// Géométrie du schéma : échelle, marges, épaisseur du dormant selon matériau/pose
+function geomSchema(o, areaW, areaH, miroir) {
+  const Lmm = Math.max(300, Number(o.largeur) || 1200);
+  const Hmm = Math.max(300, Number(o.hauteur) || 1400);
+  const ML = 54, MR = 46, MT = 18, MB = 56;
+  const scale = Math.min(areaW / Lmm, areaH / Hmm);
+  const W = Lmm * scale, H = Hmm * scale;
+  let dtmm = gammeOf(o.materiau).dormant;                // largeur dormant selon la gamme
+  if (o.pose === "Applique") dtmm = dtmm * 1.3;          // Applique = dormant élargi
+  const dt = Math.max(4, dtmm * scale);
+  const dv = Math.max(3, gammeOf(o.materiau).ouvrant * scale); // largeur ouvrant (vantail)
+  const svgW = W + ML + MR, svgH = H + MT + MB;
+  // Miroir horizontal = vue extérieure (on travaille toujours en vue
+  // intérieure par défaut). Inverser ici, dans le calcul des coordonnées,
+  // propage correctement à tout le dessin (texte compris, jamais retourné).
+  const X = miroir ? (mm => ML + (Lmm - mm) * scale) : (mm => ML + mm * scale);
+  const Y = (mm) => MT + (Hmm - mm) * scale;             // mm mesurés depuis le bas
+  return { Lmm, Hmm, ML, MR, MT, MB, scale, W, H, dt, dv, svgW, svgH, X, Y, miroir: !!miroir, xs: grilleXs(o, Lmm), ys: grilleYs(o, Hmm) };
+}
+
+// Lignes du symbole d'un remplissage dans une boîte (pointe = côté charnières, vue intérieure)
+function lignesSymbole(rempl, x, y, w, h) {
+  const midY = y + h / 2, midX = x + w / 2;
+  const L = [];
+  if (rempl === "OF-G" || rempl === "OB-G") { L.push([x + w, y, x, midY]); L.push([x + w, y + h, x, midY]); }
+  if (rempl === "OF-D" || rempl === "OB-D") { L.push([x, y, x + w, midY]); L.push([x, y + h, x + w, midY]); }
+  if (rempl === "Soufflet" || rempl === "OB-G" || rempl === "OB-D") { L.push([x, y, midX, y + h]); L.push([x + w, y, midX, y + h]); }
+  if (rempl === "Coul") {
+    // Flèche horizontale = sens de coulissement (dessinée à la main, sans marker SVG)
+    L.push([x + w * 0.2, midY, x + w * 0.8, midY]);
+    L.push([x + w * 0.72, midY - h * 0.07, x + w * 0.8, midY]);
+    L.push([x + w * 0.72, midY + h * 0.07, x + w * 0.8, midY]);
+  }
+  if (rempl === "Porte-G" || rempl === "Porte-D") {
+    // Même principe pointe=poignée que OF (diagonale), + petit arc de
+    // balayage près du coin charnière en bas pour distinguer une porte
+    // d'une simple fenêtre (arc approximé par segments, pas de path SVG ici).
+    const versDroite = rempl === "Porte-D";
+    if (versDroite) { L.push([x, y, x + w, midY]); L.push([x, y + h, x + w, midY]); }
+    else { L.push([x + w, y, x, midY]); L.push([x + w, y + h, x, midY]); }
+    const xCharniere = versDroite ? x : x + w;
+    const rArc = Math.min(w, h) * 0.28;
+    const sens = versDroite ? 1 : -1;
+    const nSeg = 6;
+    let prev = [xCharniere, y + h];
+    for (let i = 1; i <= nSeg; i++) {
+      const ang = (Math.PI / 2) * (i / nSeg);
+      const pt = [xCharniere + sens * rArc * Math.sin(ang), (y + h) - rArc * Math.cos(ang)];
+      L.push([prev[0], prev[1], pt[0], pt[1]]);
+      prev = pt;
+    }
+  }
+  return L;
+}
+
+// Construit le schéma technique en chaîne SVG (sans poignées d'interaction).
+// fixed=true : attributs width/height en px (nécessaire pour l'export canvas).
+function buildSchemaSvgString(o, fixed, areaW, areaH, miroir) {
+  const g = geomSchema(o, areaW || 440, areaH || 380, miroir);
+  const s = [];
+  // id unique pour ne jamais entrer en collision si deux schémas sont
+  // affichés en même temps sur la même page (aperçu + configurateur ouvert).
+  const gradId = 'vg' + Math.random().toString(36).slice(2, 9);
+  s.push(
+    '<defs><linearGradient id="' + gradId + '" x1="0%" y1="0%" x2="100%" y2="100%">' +
+    '<stop offset="0%" stop-color="#EAF3FA"/>' +
+    '<stop offset="45%" stop-color="#BFDCEE"/>' +
+    '<stop offset="100%" stop-color="#7FB2D4"/>' +
+    '</linearGradient></defs>'
+  );
+  const vitrageFill = 'url(#' + gradId + ')';
+  const rect = (x, y, w, h, fill, stroke, sw, dash) =>
+    s.push('<rect x="' + x + '" y="' + y + '" width="' + Math.max(0, w) + '" height="' + Math.max(0, h) + '" fill="' + fill + '" stroke="' + stroke + '" stroke-width="' + sw + '" stroke-linejoin="round"' + (dash ? ' stroke-dasharray="' + dash + '"' : '') + '/>');
+  const line = (x1, y1, x2, y2, stroke, sw, dash) =>
+    s.push('<line x1="' + x1 + '" y1="' + y1 + '" x2="' + x2 + '" y2="' + y2 + '" stroke="' + stroke + '" stroke-width="' + sw + '" stroke-linecap="round"' + (dash ? ' stroke-dasharray="' + dash + '"' : '') + '/>');
+  const text = (x, y, t, fs, fill, anchor, transform) =>
+    s.push('<text x="' + x + '" y="' + y + '" font-size="' + fs + '" font-family="Helvetica, Arial, sans-serif" font-weight="700" fill="' + fill + '" text-anchor="' + (anchor || 'middle') + '"' + (transform ? ' transform="' + transform + '"' : '') + '>' + esc(t) + '</text>');
+
+  // Couleur réelle du profilé (respecte la teinte/RAL choisis) + contour
+  // technique neutre pour que le trait reste lisible quelle que soit la teinte.
+  const frameColor = couleurSchema(o);
+  const contour = "#2B2B2B";
+
+  // Repère en titre
+  if ((o.repere || "").trim()) text(g.ML, g.MT - 5, o.repere.trim(), 11, C.white, 'start');
+  if (g.miroir) text(g.X(g.Lmm / 2), g.MT - 5, "◀ VUE EXTÉRIEURE", 9, C.rouge, 'middle');
+
+  // Aile de recouvrement en pose Rénovation
+  if (o.pose === "Rénovation") {
+    const a = Math.max(3, 30 * g.scale);
+    rect(g.X(0) - a, g.Y(g.Hmm) - a, g.W + 2 * a, g.H + 2 * a, 'none', C.muted, 1.2);
+  }
+
+  // Dormant : bande extérieure à la couleur réelle du profilé, vitrage neutre
+  // au centre (+ ligne médiane PVC en accent neutre).
+  rect(g.X(0), g.Y(g.Hmm), g.W, g.H, frameColor, contour, 1.2);
+  rect(g.X(0) + g.dt, g.Y(g.Hmm) + g.dt, g.W - 2 * g.dt, g.H - 2 * g.dt, vitrageFill, contour, 1.2);
+  if (o.materiau !== "Alu") {
+    const d2 = g.dt * 0.5;
+    rect(g.X(0) + d2, g.Y(g.Hmm) + d2, g.W - 2 * d2, g.H - 2 * d2, 'none', contour, 0.6);
+  }
+
+  // Zones : cadre ouvrant réel (vantail) + symbole, ou "F" pour les fixes.
+  // Les zones fixes adjacentes dont la frontière commune (meneau OU
+  // traverse) est coupée sont fusionnées en une seule zone continue — union-
+  // find sur la grille, rendu une seule fois par groupe (boîte englobante).
+  const nCols = g.xs.length - 1, nRows = g.ys.length - 1;
+  const idxCell = (c, l) => l * nCols + c;
+  const parent = Array.from({ length: nCols * nRows }, (_, i) => i);
+  const find = (i) => { while (parent[i] !== i) { parent[i] = parent[parent[i]]; i = parent[i]; } return i; };
+  const union = (i, j) => { const ri = find(i), rj = find(j); if (ri !== rj) parent[ri] = rj; };
+  const meneauActif = (mm, l) => !((o.meneauxCoupures || {})[mm] || []).includes(l);
+  const traverseActive = (mm, c) => !((o.traversesCoupures || {})[mm] || []).includes(c);
+  for (let l = 0; l < nRows; l++) {
+    const y0 = g.ys[l], y1 = g.ys[l + 1];
+    for (let c = 0; c < nCols; c++) {
+      const r = (o.zonesRempl || {})[c + "-" + l] || "Fixe";
+      if (r !== "Fixe") continue;
+      if (c + 1 < nCols) {
+        const rD = (o.zonesRempl || {})[(c + 1) + "-" + l] || "Fixe";
+        if (rD === "Fixe" && !meneauActif(g.xs[c + 1], l)) union(idxCell(c, l), idxCell(c + 1, l));
+      }
+      if (l + 1 < nRows) {
+        const rH = (o.zonesRempl || {})[c + "-" + (l + 1)] || "Fixe";
+        if (rH === "Fixe" && !traverseActive(g.ys[l + 1], c)) union(idxCell(c, l), idxCell(c, l + 1));
+      }
+    }
+  }
+  const bounds = {};
+  for (let l = 0; l < nRows; l++) {
+    for (let c = 0; c < nCols; c++) {
+      if (((o.zonesRempl || {})[c + "-" + l] || "Fixe") !== "Fixe") continue;
+      const root = find(idxCell(c, l));
+      if (!bounds[root]) bounds[root] = { cMin: c, cMax: c, lMin: l, lMax: l, cle: c + "-" + l };
+      else {
+        const b = bounds[root];
+        if (c < b.cMin) b.cMin = c; if (c > b.cMax) b.cMax = c;
+        if (l < b.lMin) b.lMin = l; if (l > b.lMax) b.lMax = l;
+      }
+    }
+  }
+  const dejaDessine = new Set();
+
+  for (let l = 0; l < nRows; l++) {
+    for (let c = 0; c < nCols; c++) {
+      const r = (o.zonesRempl || {})[c + "-" + l] || "Fixe";
+      let x0, x1, y0, y1, cle;
+      if (r === "Fixe") {
+        const root = find(idxCell(c, l));
+        if (dejaDessine.has(root)) continue;
+        dejaDessine.add(root);
+        const b = bounds[root];
+        x0 = g.xs[b.cMin]; x1 = g.xs[b.cMax + 1];
+        y0 = g.ys[b.lMin]; y1 = g.ys[b.lMax + 1];
+        cle = b.cle; // clé de la cellule représentante (vitrage/petit bois de tout le groupe)
+      } else {
+        x0 = g.xs[c]; x1 = g.xs[c + 1]; y0 = g.ys[l]; y1 = g.ys[l + 1];
+        cle = c + "-" + l;
+      }
+      const px = g.X(x0), py = g.Y(y1);
+      const pw = (x1 - x0) * g.scale, ph = (y1 - y0) * g.scale;
+      const estPanneau = !!((o.zonesVitrage || {})[cle] || {}).panneau;
+      const pc = Math.min(Math.max(0.7, 15 * g.scale), pw / 6, ph / 6); // parclose : ~15mm réels
+      let glassX = px, glassY = py, glassW = pw, glassH = ph;
+      if (r === "Fixe") {
+        if (estPanneau) {
+          rect(px, py, pw, ph, frameColor, contour, 1);
+          text(px + pw / 2, py + ph / 2 + 4, "panneau", Math.min(11, ph / 5, pw / 22), "#ffffffaa");
+        } else {
+          text(px + pw / 2, py + ph / 2 + 4, "fixe", Math.min(13, ph / 4, pw / 20), "#8a97a8");
+        }
+        // Parclose : fin liseré tenant le vitrage/panneau dans le dormant
+        rect(px + pc, py + pc, pw - 2 * pc, ph - 2 * pc, 'none', contour, 0.6);
+      } else {
+        // Vantail = même construction que le dormant (bande de profilé colorée
+        // + vitrage visible au centre, ou panneau opaque si réglé ainsi),
+        // pour garder la même apparence que les zones fixes.
+        const iv = Math.min(g.dv, pw / 3, ph / 3);
+        rect(px, py, pw, ph, frameColor, contour, 1.1);
+        rect(px + iv, py + iv, pw - 2 * iv, ph - 2 * iv, estPanneau ? frameColor : vitrageFill, contour, 1);
+        glassX = px + iv; glassY = py + iv; glassW = pw - 2 * iv; glassH = ph - 2 * iv;
+        // Parclose : fin liseré tenant le vitrage/panneau dans l'ouvrant,
+        // 3e niveau imbriqué (dormant → ouvrant → parclose → vitrage).
+        const pc2 = Math.min(pc, glassW / 5, glassH / 5);
+        rect(glassX + pc2, glassY + pc2, glassW - 2 * pc2, glassH - 2 * pc2, 'none', contour, 0.6);
+        const iSym = iv * 1.5;
+        lignesSymbole(r, px + iSym, py + iSym, pw - 2 * iSym, ph - 2 * iSym)
+          .forEach(li => line(li[0], li[1], li[2], li[3], contour, 1.3, "6,4"));
+      }
+      // Petits bois (couleur menuiserie) — décoratifs, uniquement sur du
+      // vitrage réel (pas de sens sur un panneau opaque déjà plein).
+      if (!estPanneau) {
+        const pb = (o.zonesPetitBois || {})[cle];
+        if (pb && ((pb.vBars && pb.vBars.length) || (pb.hBars && pb.hBars.length))) {
+          const lp = Math.max(1.2, (pb.largeur || 18) * g.scale);
+          (pb.vBars || []).forEach(mm => {
+            const bx = glassX + (Number(mm) || 0) * g.scale;
+            rect(bx - lp / 2, glassY, lp, glassH, frameColor, contour, 0.6);
+          });
+          (pb.hBars || []).forEach(mm => {
+            const by = glassY + glassH - (Number(mm) || 0) * g.scale;
+            rect(glassX, by - lp / 2, glassW, lp, frameColor, contour, 0.6);
+          });
+        }
+      }
+    }
+  }
+
+  // Hauteur de poignée : trait de cote + levier doré, par zone — chaque
+  // ouvrant a sa propre hauteur (o.hauteursPoignee, clé "col-lig"), avec
+  // repli sur o.hauteurPoignee (valeur globale/historique) si la zone n'a
+  // pas encore de valeur propre.
+  for (let l = 0; l < g.ys.length - 1; l++) {
+    for (let c = 0; c < g.xs.length - 1; c++) {
+      const r = (o.zonesRempl || {})[c + "-" + l] || "Fixe";
+      if (r !== "OF-G" && r !== "OF-D" && r !== "OB-G" && r !== "OB-D" && r !== "Porte-G" && r !== "Porte-D") continue;
+      const cle = c + "-" + l;
+      if ((o.ouvrantsSecondaires || {})[cle]) continue; // ouvrant secondaire d'une paire : pas de poignée dessinée
+      const hpEntry = (o.hauteursPoignee || {})[cle] ?? o.hauteurPoignee;
+      const estDefinie = hpEntry != null && hpEntry !== "" && Number(hpEntry) > 0;
+      const y0 = g.ys[l], y1 = g.ys[l + 1];
+      // Sans valeur réglée : poignée quand même dessinée (grisée) à mi-hauteur
+      // de la zone, pour un rendu complet — jamais de cote inventée affichée.
+      const hp = estDefinie ? Math.max(y0 + 1, Math.min(y1 - 1, Number(hpEntry))) : (y0 + y1) / 2;
+      const yhp = g.Y(hp);
+      const x0 = g.xs[c], x1 = g.xs[c + 1];
+      const px0 = g.X(x0), px1 = g.X(x1);
+      const poigneeADroite = r.endsWith("-D"); // la poignée est du même côté que la pointe du symbole (charnières à l'opposé)
+      const lp = Math.max(10, Math.min(22, (x1 - x0) * g.scale * 0.22));
+      const xEdge = poigneeADroite ? px1 - lp : px0;
+
+      if (estDefinie) {
+        // Trait + étiquette de cote, limités à cette zone uniquement
+        s.push('<line x1="' + px0 + '" y1="' + yhp + '" x2="' + px1 + '" y2="' + yhp + '" stroke="' + C.or + '" stroke-width="1.3" stroke-dasharray="5,3"/>');
+        s.push('<rect x="' + xEdge + '" y="' + (yhp - 2.4) + '" width="' + lp + '" height="4.8" rx="1.6" fill="' + C.or + '" stroke="' + contour + '" stroke-width="0.6"/>');
+        text((px0 + px1) / 2, yhp - 6, "🔑 " + Math.round(hp), 8, C.cote, 'middle');
+      } else {
+        // Poignée grisée, non définie — pas de cote associée
+        s.push('<rect x="' + xEdge + '" y="' + (yhp - 2.4) + '" width="' + lp + '" height="4.8" rx="1.6" fill="#B9BFC8" stroke="' + contour + '" stroke-width="0.6"/>');
+      }
+    }
+  }
+
+  // Meneaux et traverses (barres de dormant, même couleur que le reste du
+  // profilé), dessinés segment par segment — pleins par défaut, chaque
+  // segment (entre deux traverses pour un meneau, entre deux meneaux pour une
+  // traverse) peut être coupé indépendamment, n'importe où, pas seulement aux
+  // extrémités (meneauxCoupures / traversesCoupures : liste d'index coupés).
+  (o.meneaux || []).map(Number).filter(n => n > 0).forEach(m => {
+    for (let l = 0; l < nRows; l++) {
+      if (!meneauActif(m, l)) continue;
+      rect(g.X(m) - g.dt / 2, g.Y(g.ys[l + 1]), g.dt, g.Y(g.ys[l]) - g.Y(g.ys[l + 1]), frameColor, contour, 1.2);
+    }
+  });
+  (o.traverses || []).map(Number).filter(n => n > 0).forEach(t => {
+    for (let c = 0; c < nCols; c++) {
+      if (!traverseActive(t, c)) continue;
+      rect(g.X(g.xs[c]), g.Y(t) - g.dt / 2, g.X(g.xs[c + 1]) - g.X(g.xs[c]), g.dt, frameColor, contour, 1.2);
+    }
+  });
+
+  // Cotes largeur : segments (si divisions) + totale
+  const coteH = (x1, x2, y, label, fs) => {
+    line(x1, y - 4, x1, y + 4, C.cote, 1); line(x2, y - 4, x2, y + 4, C.cote, 1); line(x1, y, x2, y, C.cote, 1);
+    text((x1 + x2) / 2, y + fs + 3, label, fs, C.cote);
+  };
+  const coteV = (y1, y2, x, label, fs) => {
+    line(x - 4, y1, x + 4, y1, C.cote, 1); line(x - 4, y2, x + 4, y2, C.cote, 1); line(x, y1, x, y2, C.cote, 1);
+    const cy = (y1 + y2) / 2;
+    text(x - 5, cy, label, fs, C.cote, 'middle', 'rotate(-90 ' + (x - 5) + ' ' + cy + ')');
+  };
+  if (g.xs.length > 2) g.xs.slice(0, -1).forEach((x0, i) => coteH(g.X(x0), g.X(g.xs[i + 1]), g.MT + g.H + 12, String(g.xs[i + 1] - x0), 9));
+  coteH(g.X(0), g.X(g.Lmm), g.MT + g.H + (g.xs.length > 2 ? 32 : 16), g.Lmm + " mm", 11);
+  if (g.ys.length > 2) g.ys.slice(0, -1).forEach((y0, i) => coteV(g.Y(g.ys[i + 1]), g.Y(y0), g.ML - 14, String(g.ys[i + 1] - y0), 9));
+  coteV(g.Y(g.Hmm), g.Y(0), g.ML - (g.ys.length > 2 ? 34 : 18), g.Hmm + " mm", 11);
+
+  const dims = fixed ? 'width="' + g.svgW + '" height="' + g.svgH + '"' : 'width="100%"';
+  return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' + g.svgW + ' ' + g.svgH + '" ' + dims + '>' + s.join('') + '</svg>';
+}
+
+// Conversion SVG -> PNG dataURL (résolution x3, fond blanc)
+function svgVersPng(svgStr, wPx, hPx) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const k = 3;
+      const cv = document.createElement('canvas');
+      cv.width = Math.round(wPx * k); cv.height = Math.round(hPx * k);
+      const ctx = cv.getContext('2d');
+      ctx.fillStyle = '#FFFFFF'; ctx.fillRect(0, 0, cv.width, cv.height);
+      ctx.drawImage(img, 0, 0, cv.width, cv.height);
+      resolve(cv.toDataURL('image/png'));
+    };
+    img.onerror = reject;
+    img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svgStr);
+  });
+}
+
+// Descripteur JSON du configurateur (v1 + clés additives : materiau, pose, zonesRempl)
+function descripteurConfig(o) {
+  return {
+    repere: (o.repere || "").trim(),
+    largeur: Number(o.largeur) || 0,
+    hauteur: Number(o.hauteur) || 0,
+    materiau: o.materiau || "",
+    pose: o.pose || "",
+    pieceAppui: o.pieceAppui || "",
+    couleur: {
+      teintePvc: o.teintePvc || "", capotAlu: !!o.capotAlu, ralCapot: o.ralCapot || "", finitionCapot: o.finitionCapot || "",
+      ralAlu: o.ralAlu || "", finitionAlu: o.finitionAlu || "",
+    },
+    meneaux: (o.meneaux || []).map(Number).filter(n => n > 0).sort((a, b) => a - b),
+    traverses: (o.traverses || []).map(Number).filter(n => n > 0).sort((a, b) => a - b),
+    zonesRempl: o.zonesRempl || {},
+    hauteursPoignee: o.hauteursPoignee || {},
+    zonesVitrage: o.zonesVitrage || {},
+    zonesPetitBois: o.zonesPetitBois || {},
+    meneauxCoupures: o.meneauxCoupures || {},
+    ouvrantsSecondaires: o.ouvrantsSecondaires || {},
+    traversesCoupures: o.traversesCoupures || {},
+    zones: zonesRecap(o).map(z => ({ colonne: z.col + 1, ligne: z.lig + 1, largeur: z.w, hauteur: z.h, remplissage: z.rempl })),
+  };
+}
+
+// ---- Aperçu miniature d'un remplissage (picker de zone) ----
+function MiniRempl({ rempl, size }) {
+  const s = size || 48;
+  const lignes = lignesSymbole(rempl, 3, 3, 58, 42);
+  return (
+    <svg viewBox="0 0 64 48" width={s} height={s * 0.75}>
+      <rect x="3" y="3" width="58" height="42" fill={C.vitre} stroke={C.white} strokeWidth="2.5" strokeLinejoin="round"/>
+      {lignes.map((l, i) => <line key={i} x1={l[0]} y1={l[1]} x2={l[2]} y2={l[3]} stroke={C.white} strokeWidth="2" strokeLinecap="round"/>)}
+      {rempl === "Fixe" && <text x="32" y="28" fontSize="12" fontWeight="800" fill={C.muted} textAnchor="middle">F</text>}
+    </svg>
+  );
+}
+
+// ---- Picker de remplissage d'une zone ----
+// Types de remplissage qui ont une poignée réglable (OF/OB uniquement).
+const REMPLISSAGES_POIGNEE = ["OF-G", "OF-D", "OB-G", "OB-D", "Porte-G", "Porte-D"];
+
+// Fenêtre hauteur de poignée, réutilisée à deux endroits : quand on choisit
+// un ouvrant dans le configurateur (ZonePicker) ET quand on choisit un type
+// à poignée directement via "Type d'ouvrant" en haut (OuvertureModal). Montre
+// un aperçu du dessin en direct avec le levier doré, pour que la
+// représentation soit visible pendant la saisie (demande explicite).
+function HauteurPoigneeModal({ o, contexte, currentHp, estPorte, onValider, onClose }) {
+  const [hp, setHp] = React.useState(currentHp || "");
+  const valider = () => { if (hp) onValider(hp); onClose(); };
+  const previewO = { ...o, hauteurPoignee: hp || 0 };
+  const svgStr = (o.largeur && o.hauteur) ? buildSchemaSvgString(previewO, false, 320, 240) : null;
+  const presets = estPorte ? ["980", "1045"] : ["150", "200", "300", "500"];
+
+  return (
+    <div style={{position:"fixed",inset:0,zIndex:6000,background:"rgba(0,0,0,0.5)",display:"flex",alignItems:"flex-end",justifyContent:"center"}}
+      onClick={e => e.target === e.currentTarget && onClose()}>
+      <div style={{background:"#fff",borderRadius:"16px 16px 0 0",width:"560px",maxWidth:"100%",padding:"18px 18px 26px",maxHeight:"90vh",overflowY:"auto"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"6px"}}>
+          <h2 style={{fontSize:"14px",color:C.white,fontWeight:"900"}}>🔑 Hauteur de poignée</h2>
+          <button onClick={onClose} style={{background:"none",border:"none",fontSize:"18px",color:C.muted,cursor:"pointer"}}>✕</button>
+        </div>
+        <div style={{fontSize:"11px",color:C.muted,marginBottom:"12px"}}>{contexte} À quelle hauteur (depuis le bas) se trouve la poignée ?</div>
+        {svgStr && (
+          <div style={{border:"1.5px solid "+C.border,borderRadius:"10px",padding:"6px",marginBottom:"12px",display:"flex",justifyContent:"center"}}
+            dangerouslySetInnerHTML={{ __html: svgStr }}/>
+        )}
+        <input type="number" inputMode="numeric" autoFocus value={hp} onChange={e => setHp(e.target.value)} placeholder="ex : 1050" style={{marginBottom:"8px",fontSize:"16px"}}/>
+        <div style={{display:"flex",gap:"6px",marginBottom:"14px"}}>
+          {presets.map(v => (
+            <button key={v} type="button" onClick={() => setHp(v)}
+              style={{flex:1,padding:"7px",background:hp===v?C.orDim:"#fff",border:"1.5px solid "+(hp===v?C.orBord:C.border),color:hp===v?"#8a6d1f":C.muted,borderRadius:"7px",fontWeight:"700",fontSize:"11px",cursor:"pointer"}}>
+              {v}
+            </button>
+          ))}
+        </div>
+        <div style={{display:"flex",gap:"8px"}}>
+          <button type="button" onClick={onClose} style={{flex:1,padding:"12px",background:"#fff",border:"1.5px solid "+C.border,color:C.muted,borderRadius:"10px",fontWeight:"800",fontSize:"12px",cursor:"pointer"}}>Passer</button>
+          <button type="button" onClick={valider} style={{flex:2,padding:"12px",background:C.or,color:"#111",border:"none",borderRadius:"10px",fontWeight:"900",fontSize:"13px",cursor:"pointer"}}>Valider</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ZonePicker({ o, zoneKey, current, hauteursPoignee, zonesVitrage, zonesPetitBois, zoneWmm, zoneHmm, ouvrantsSecondaires, onSelect, onSetHpZone, onSetVitrageZone, onSetPbZone, onSplit2, onSetSecondaire, onClose }) {
+  const [modeHp, setModeHp] = React.useState(false); // affiche la fenêtre hauteur poignée (nouvelle sélection ou modification)
+  const [choisi, setChoisi] = React.useState(current);
+
+  const choisir = (v) => {
+    onSelect(v);
+    setChoisi(v);
+    if (REMPLISSAGES_POIGNEE.includes(v)) { setModeHp(true); return; } // étape 2 : demander la hauteur
+    onClose();
+  };
+
+  const hpActuelle = (hauteursPoignee || {})[zoneKey] ?? o.hauteurPoignee;
+  const vZone = (zonesVitrage || {})[zoneKey] || {};
+  const pbZone = (zonesPetitBois || {})[zoneKey] || { largeur: 18, vBars: [], hBars: [] };
+  const ECART_PB = 60; // écart mini entre deux petits bois, plus fin qu'entre meneaux
+
+  const ajouterBarre = (axe) => {
+    const dim = axe === 'v' ? zoneWmm : zoneHmm;
+    const liste = (axe === 'v' ? pbZone.vBars : pbZone.hBars) || [];
+    const bornes = [0, ...liste.slice().sort((a, b) => a - b), dim];
+    for (let i = 0; i < bornes.length - 1; i++) {
+      if (bornes[i + 1] - bornes[i] >= ECART_PB * 2) {
+        const v = Math.round((bornes[i] + bornes[i + 1]) / 2);
+        onSetPbZone(zoneKey, axe === 'v' ? { vBars: [...liste, v] } : { hBars: [...liste, v] });
+        return;
+      }
+    }
+    alert("Plus de place pour un petit bois dans cette zone.");
+  };
+  const majBarre = (axe, i, val) => {
+    const v = Math.round(Number(val) || 0);
+    const liste = ((axe === 'v' ? pbZone.vBars : pbZone.hBars) || []).map((b, idx) => idx === i ? v : b);
+    onSetPbZone(zoneKey, axe === 'v' ? { vBars: liste } : { hBars: liste });
+  };
+  const supprBarre = (axe, i) => {
+    const liste = ((axe === 'v' ? pbZone.vBars : pbZone.hBars) || []).filter((_, idx) => idx !== i);
+    onSetPbZone(zoneKey, axe === 'v' ? { vBars: liste } : { hBars: liste });
+  };
+  const egaliserBarres = (axe) => {
+    const dim = axe === 'v' ? zoneWmm : zoneHmm;
+    const liste = (axe === 'v' ? pbZone.vBars : pbZone.hBars) || [];
+    if (liste.length === 0) return;
+    const n = liste.length + 1, pas = dim / n;
+    const nouvelles = []; for (let i = 1; i < n; i++) nouvelles.push(Math.round(pas * i));
+    onSetPbZone(zoneKey, axe === 'v' ? { vBars: nouvelles } : { hBars: nouvelles });
+  };
+
+  if (modeHp) {
+    return (
+      <HauteurPoigneeModal o={o} currentHp={hpActuelle} estPorte={(choisi || "").startsWith("Porte")} onValider={(v) => onSetHpZone(zoneKey, v)} onClose={onClose}
+        contexte={"Zone réglée en " + libelleRempl(choisi) + "."}/>
+    );
+  }
+
+  return (
+    <div style={{position:"fixed",inset:0,zIndex:5000,background:"rgba(0,0,0,0.5)",display:"flex",alignItems:"flex-end",justifyContent:"center"}}
+      onClick={e => e.target === e.currentTarget && onClose()}>
+      <div style={{background:"#fff",borderRadius:"16px 16px 0 0",width:"560px",maxWidth:"100%",padding:"18px 18px 26px",maxHeight:"90vh",overflowY:"auto"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"10px"}}>
+          <h2 style={{fontSize:"14px",color:C.white,fontWeight:"900"}}>🪟 Remplissage de la zone</h2>
+          <button onClick={onClose} style={{background:"none",border:"none",fontSize:"18px",color:C.muted,cursor:"pointer"}}>✕</button>
+        </div>
+        {o.largeur && o.hauteur && (
+          <div style={{border:"1.5px solid "+C.orBord,borderRadius:"10px",padding:"6px",marginBottom:"14px",display:"flex",justifyContent:"center"}}
+            dangerouslySetInnerHTML={{ __html: buildSchemaSvgString(o, false, 280, 200) }}/>
+        )}
+        <div style={{display:"flex",gap:"8px",marginBottom:"14px"}}>
+          <button type="button" onClick={() => onSplit2("OF-D", "OF-G")}
+            style={{flex:1,padding:"10px 6px",background:C.orDim,border:"1.5px solid "+C.orBord,color:"#8a6d1f",borderRadius:"9px",fontWeight:"800",fontSize:"11px",cursor:"pointer"}}>
+            🪟 2 vantaux (fenêtre)
+          </button>
+          <button type="button" onClick={() => onSplit2("Porte-D", "Porte-G")}
+            style={{flex:1,padding:"10px 6px",background:C.orDim,border:"1.5px solid "+C.orBord,color:"#8a6d1f",borderRadius:"9px",fontWeight:"800",fontSize:"11px",cursor:"pointer"}}>
+            🚪 2 vantaux (porte-fenêtre)
+          </button>
+        </div>
+        <div style={{fontSize:"9.5px",color:C.muted,textAlign:"center",marginBottom:"12px"}}>Scinde cette zone en 2, tirants se rejoignant au centre — ou choisis un remplissage simple ci-dessous.</div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(3, 1fr)",gap:"8px",marginBottom:"10px"}}>
+          {REMPLISSAGES.map(r => (
+            <button key={r.v} type="button" onClick={() => choisir(r.v)}
+              style={{display:"flex",flexDirection:"column",alignItems:"center",gap:"5px",padding:"10px 4px",borderRadius:"10px",cursor:"pointer",
+                border:"1.5px solid " + (current === r.v ? C.or : C.border), background: current === r.v ? C.orDim : "#fff"}}>
+              <MiniRempl rempl={r.v} size={52}/>
+              <span style={{fontSize:"10px",fontWeight:"700",color:current === r.v ? C.white : C.muted,textAlign:"center",lineHeight:"1.2"}}>{r.l}</span>
+            </button>
+          ))}
+        </div>
+        {REMPLISSAGES_POIGNEE.includes(current) && (
+          <>
+            <button type="button" onClick={() => setModeHp(true)}
+              style={{width:"100%",padding:"11px",background:C.orDim,border:"1.5px solid "+C.orBord,color:"#8a6d1f",borderRadius:"9px",fontWeight:"800",fontSize:"12px",cursor:"pointer",marginBottom:"8px"}}>
+              🔑 {hpActuelle ? "Modifier la hauteur de poignée (" + hpActuelle + " mm)" : "Régler la hauteur de poignée"}
+            </button>
+            <label onClick={() => onSetSecondaire(zoneKey, !((ouvrantsSecondaires || {})[zoneKey]))}
+              style={{display:"flex",alignItems:"center",gap:"8px",padding:"9px 12px",borderRadius:"8px",cursor:"pointer",marginBottom:"14px",
+                border:"1.5px solid "+C.border, background:"#fff",fontSize:"11px",fontWeight:"700",color:C.muted}}>
+              <input type="checkbox" checked={!(ouvrantsSecondaires || {})[zoneKey]} onChange={() => {}} style={{width:"14px",accentColor:C.or}}/>
+              Poignée visible sur cette zone (décoche si c'est l'ouvrant secondaire d'une paire)
+            </label>
+          </>
+        )}
+
+        <div style={{borderTop:"1px solid "+C.border,paddingTop:"14px",marginBottom:"14px"}}>
+          <label style={{fontSize:"11px",fontWeight:"700",color:C.muted,display:"block",marginBottom:"6px"}}>Remplissage de cette zone</label>
+          <label onClick={() => onSetVitrageZone(zoneKey, { panneau: !vZone.panneau })}
+            style={{display:"flex",alignItems:"center",gap:"8px",padding:"9px 12px",borderRadius:"8px",cursor:"pointer",marginBottom: vZone.panneau ? "0" : "10px",
+              border:"1.5px solid "+(vZone.panneau?C.or:C.border), background:vZone.panneau?C.orDim:"#fff",fontSize:"12px",fontWeight:"700",color:vZone.panneau?C.white:C.muted}}>
+            <input type="checkbox" checked={!!vZone.panneau} onChange={() => {}} style={{width:"14px",accentColor:C.or}}/>
+            Panneau opaque 28mm (couleur menuiserie), au lieu du vitrage
+          </label>
+          {!vZone.panneau && (
+            <select value={vZone.type || ""} onChange={e => onSetVitrageZone(zoneKey, { type: e.target.value })}>
+              <option value="">Type de vitrage — sélectionner</option>
+              {TYPES_VITRAGE.filter(v => v !== "Autre").map(v => <option key={v} value={v}>{v}</option>)}
+            </select>
+          )}
+        </div>
+
+        {!vZone.panneau && zoneWmm > 0 && zoneHmm > 0 && (
+          <div style={{borderTop:"1px solid "+C.border,paddingTop:"14px"}}>
+            <label style={{fontSize:"11px",fontWeight:"700",color:C.muted,display:"block",marginBottom:"8px"}}>🪵 Petits bois (couleur menuiserie)</label>
+            <ChoiceButtons label="Largeur (mm)" value={String(pbZone.largeur || 18)} onChange={v => onSetPbZone(zoneKey, { largeur: Number(v) })} choices={["10","18","26","45"]}/>
+            <div style={{display:"flex",gap:"8px",marginBottom:"10px"}}>
+              <button type="button" onClick={() => ajouterBarre('v')} style={{flex:1,padding:"9px",background:C.orDim,border:"1.5px solid "+C.orBord,color:"#8a6d1f",borderRadius:"8px",fontWeight:"800",fontSize:"11px",cursor:"pointer"}}>┃ + Vertical</button>
+              <button type="button" onClick={() => ajouterBarre('h')} style={{flex:1,padding:"9px",background:C.orDim,border:"1.5px solid "+C.orBord,color:"#8a6d1f",borderRadius:"8px",fontWeight:"800",fontSize:"11px",cursor:"pointer"}}>━ + Horizontal</button>
+            </div>
+            {(pbZone.vBars || []).length > 0 && (
+              <div style={{display:"flex",justifyContent:"flex-end",marginBottom:"4px"}}>
+                <button type="button" onClick={() => egaliserBarres('v')} style={{padding:"4px 8px",background:C.bleuDim,border:"1px solid rgba(37,99,235,0.3)",color:C.bleu,borderRadius:"6px",fontSize:"9.5px",fontWeight:"800",cursor:"pointer"}}>⚖️ Égaliser verticaux</button>
+              </div>
+            )}
+            {(pbZone.vBars || []).map((b, i) => (
+              <div key={"pv"+i} style={{display:"flex",alignItems:"center",gap:"8px",marginBottom:"6px"}}>
+                <span style={{fontSize:"10px",color:C.muted,width:"58px",flexShrink:0}}>┃ Vert. {i+1}</span>
+                <input type="number" inputMode="numeric" value={b} onChange={e => majBarre('v', i, e.target.value)} style={{flex:1}}/>
+                <span style={{fontSize:"10px",color:C.muted,flexShrink:0}}>mm</span>
+                <button type="button" onClick={() => supprBarre('v', i)} style={{background:C.rougeDim,border:"1px solid rgba(220,38,38,0.25)",color:C.rouge,borderRadius:"7px",padding:"5px 9px",fontSize:"11px",fontWeight:"700",cursor:"pointer",flexShrink:0}}>✕</button>
+              </div>
+            ))}
+            {(pbZone.hBars || []).length > 0 && (
+              <div style={{display:"flex",justifyContent:"flex-end",marginBottom:"4px"}}>
+                <button type="button" onClick={() => egaliserBarres('h')} style={{padding:"4px 8px",background:C.bleuDim,border:"1px solid rgba(37,99,235,0.3)",color:C.bleu,borderRadius:"6px",fontSize:"9.5px",fontWeight:"800",cursor:"pointer"}}>⚖️ Égaliser horizontaux</button>
+              </div>
+            )}
+            {(pbZone.hBars || []).map((b, i) => (
+              <div key={"ph"+i} style={{display:"flex",alignItems:"center",gap:"8px",marginBottom:"6px"}}>
+                <span style={{fontSize:"10px",color:C.muted,width:"58px",flexShrink:0}}>━ Horiz. {i+1}</span>
+                <input type="number" inputMode="numeric" value={b} onChange={e => majBarre('h', i, e.target.value)} style={{flex:1}}/>
+                <span style={{fontSize:"10px",color:C.muted,flexShrink:0}}>mm</span>
+                <button type="button" onClick={() => supprBarre('h', i)} style={{background:C.rougeDim,border:"1px solid rgba(220,38,38,0.25)",color:C.rouge,borderRadius:"7px",padding:"5px 9px",fontSize:"11px",fontWeight:"700",cursor:"pointer",flexShrink:0}}>✕</button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ---- CONFIGURATEUR (remplace l'ancien TraverseModal) ----
+// Dessin statique (chaîne SVG partagée avec les exports) + couche
+// d'interaction transparente par-dessus : tap zone = remplissage,
+// glisser une poignée dorée = déplacer meneau / traverse.
+function ConfigurateurModal({ o, set, onClose }) {
+  const [drag, setDrag] = React.useState(null); // { kind:'m'|'t', index }
+  const [picker, setPicker] = React.useState(null); // { col, lig }
+  const [vw, setVw] = React.useState(window.innerWidth);
+  const [vueExt, setVueExt] = React.useState(false); // false = vue intérieure (référence), true = vue extérieure (miroir)
+  const overlayRef = React.useRef(null);
+
+  React.useEffect(() => {
+    const onResize = () => setVw(window.innerWidth);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+
+  const areaW = Math.min(520, vw - 70) - 70;
+  const areaH = Math.max(240, Math.round(window.innerHeight * 0.42));
+  const g = geomSchema(o, areaW, areaH, vueExt);
+  const svgStr = buildSchemaSvgString(o, true, areaW, areaH, vueExt);
+  const meneaux = o.meneaux || [], traverses = o.traverses || [];
+
+  const majDivision = (kind, i, val) => {
+    const v = Math.round(Number(val) || 0);
+    if (kind === 'm') set('meneaux', meneaux.map((m, idx) => idx === i ? v : m));
+    else set('traverses', traverses.map((t, idx) => idx === i ? v : t));
+  };
+  const supprDivision = (kind, i) => {
+    if (!avertirSiZonesConfigurees()) return;
+    if (kind === 'm') set('meneaux', meneaux.filter((_, idx) => idx !== i));
+    else set('traverses', traverses.filter((_, idx) => idx !== i));
+  };
+  // Avertit si des zones sont déjà configurées avant toute action qui ajoute
+  // une division (décale les index de colonne/ligne des zones suivantes).
+  // Retourne true si on peut continuer (rien à signaler, ou confirmé).
+  const avertirSiZonesConfigurees = () => {
+    const zonesConfigurees = Object.values(o.zonesRempl || {}).some(v => v && v !== "Fixe")
+      || Object.keys(o.zonesVitrage || {}).length > 0 || Object.keys(o.zonesPetitBois || {}).length > 0;
+    if (!zonesConfigurees) return true;
+    return confirm("Des zones sont déjà configurées (ouvrant, vitrage, petit bois...). Ajouter une division maintenant peut décaler ces réglages sur la mauvaise case.\n\nMieux vaut ajouter toutes tes divisions D'ABORD, et configurer les zones EN DERNIER.\n\nContinuer quand même ?");
+  };
+
+  const ajouter = (kind) => {
+    if (!avertirSiZonesConfigurees()) return;
+    const bornes = kind === 'm' ? g.xs : g.ys;
+    for (let i = 0; i < bornes.length - 1; i++) {
+      if (bornes[i + 1] - bornes[i] >= ECART_MIN * 2) {
+        const v = Math.round((bornes[i] + bornes[i + 1]) / 2);
+        if (kind === 'm') set('meneaux', [...meneaux, v]); else set('traverses', [...traverses, v]);
+        return;
+      }
+    }
+    alert("Plus de place (écart mini " + ECART_MIN + " mm).");
+  };
+
+  // Raccourci "2 vantaux" : scinde LA zone touchée en deux (ajoute un meneau
+  // pile au milieu de cette zone) et règle les deux moitiés d'un coup — même
+  // résultat que faire + Meneau puis régler chaque côté à la main, protégé
+  // par le même avertissement.
+  const scinderZone = (col, lig, valGauche, valDroit) => {
+    if (!avertirSiZonesConfigurees()) return;
+    const x0 = g.xs[col], x1 = g.xs[col + 1];
+    if (x1 - x0 < ECART_MIN * 2) { alert("Zone trop étroite pour 2 vantaux (mini " + (ECART_MIN * 2) + " mm)."); return; }
+    const nv = Math.round((x0 + x1) / 2);
+    set('meneaux', [...meneaux, nv]);
+    set('zonesRempl', Object.assign({}, o.zonesRempl || {}, { [col + "-" + lig]: valGauche, [(col + 1) + "-" + lig]: valDroit }));
+    // Ouvrant principal à droite par défaut (une seule poignée) — l'ouvrant
+    // gauche devient secondaire, modifiable ensuite dans le picker de chaque zone.
+    set('ouvrantsSecondaires', Object.assign({}, o.ouvrantsSecondaires || {}, { [col + "-" + lig]: true }));
+    setPicker(null);
+  };
+
+  // Égalise les segments (répartition uniforme) — ne change ni le nombre ni
+  // l'ordre des divisions, donc aucun risque de décalage des zones déjà
+  // configurées, contrairement à ajouter/scinder.
+  const egaliserLargeurs = () => {
+    if (meneaux.length === 0) { alert("Aucun meneau à égaliser."); return; }
+    const n = meneaux.length + 1, pas = g.Lmm / n;
+    const nouvelles = []; for (let i = 1; i < n; i++) nouvelles.push(Math.round(pas * i));
+    set('meneaux', nouvelles);
+  };
+  const egaliserHauteurs = () => {
+    if (traverses.length === 0) { alert("Aucune traverse à égaliser."); return; }
+    const n = traverses.length + 1, pas = g.Hmm / n;
+    const nouvelles = []; for (let i = 1; i < n; i++) nouvelles.push(Math.round(pas * i));
+    set('traverses', nouvelles);
+  };
+
+  // Coupe/rétablit un segment précis d'un meneau (ligne l) ou d'une traverse
+  // (colonne c) — clic direct sur le morceau concerné dans le dessin. Aucun
+  // meneau/traverse n'est coupé par défaut, c'est un choix explicite au clic.
+  const toggleSegmentMeneau = (mVal, l) => {
+    const liste = (o.meneauxCoupures || {})[mVal] || [];
+    const next = liste.includes(l) ? liste.filter(x => x !== l) : [...liste, l];
+    set('meneauxCoupures', Object.assign({}, o.meneauxCoupures || {}, { [mVal]: next }));
+  };
+  const toggleSegmentTraverse = (tVal, c) => {
+    const liste = (o.traversesCoupures || {})[tVal] || [];
+    const next = liste.includes(c) ? liste.filter(x => x !== c) : [...liste, c];
+    set('traversesCoupures', Object.assign({}, o.traversesCoupures || {}, { [tVal]: next }));
+  };
+
+  const pointerToMm = (e) => {
+    const rect = overlayRef.current.getBoundingClientRect();
+    const pxX = e.clientX - rect.left - g.ML;
+    return {
+      x: Math.round(g.miroir ? g.Lmm - pxX / g.scale : pxX / g.scale),
+      y: Math.round(g.Hmm - (e.clientY - rect.top - g.MT) / g.scale),
+    };
+  };
+  const onMove = (e) => {
+    if (!drag) return;
+    const p = pointerToMm(e);
+    if (drag.kind === 'm') {
+      const tri = meneaux.map(Number).sort((a, b) => a - b);
+      const pos = tri.indexOf(Number(meneaux[drag.index]));
+      const lo = (pos > 0 ? tri[pos - 1] : 0) + ECART_MIN;
+      const hi = (pos < tri.length - 1 ? tri[pos + 1] : g.Lmm) - ECART_MIN;
+      majDivision('m', drag.index, Math.max(lo, Math.min(hi, p.x)));
+    } else {
+      const tri = traverses.map(Number).sort((a, b) => a - b);
+      const pos = tri.indexOf(Number(traverses[drag.index]));
+      const lo = (pos > 0 ? tri[pos - 1] : 0) + ECART_MIN;
+      const hi = (pos < tri.length - 1 ? tri[pos + 1] : g.Hmm) - ECART_MIN;
+      majDivision('t', drag.index, Math.max(lo, Math.min(hi, p.y)));
+    }
+  };
+
+  const btn = (bg, color, bord) => ({ padding: "9px 13px", background: bg, color, border: bord ? "1.5px solid " + bord : "none", borderRadius: "9px", fontSize: "12px", fontWeight: "800", cursor: "pointer" });
+
+  // Édition rapide d'une cote de segment en tapant directement sur le chiffre
+  // dans le dessin. Règle simple et générale, valable pour n'importe quel
+  // nombre de divisions : modifier un segment déplace la division à SA
+  // DROITE ; pour le tout dernier segment (pas de division à droite, juste
+  // le bord du cadre), ça déplace celle de gauche à la place. Bornée par
+  // l'écart mini pour ne jamais faire se croiser deux divisions.
+  const editerSegmentH = (i) => {
+    if (meneaux.length === 0) return;
+    const val = Math.round(g.xs[i + 1] - g.xs[i]);
+    const nv = prompt("Nouvelle valeur pour ce segment (mm) :", String(val));
+    if (nv === null) return;
+    const n = Math.round(Number(nv));
+    if (!n || n <= 0) return;
+    const dernier = i === g.xs.length - 2;
+    if (!dernier) {
+      // Déplace la division à droite du segment, borne par la division encore plus à droite
+      const idx = meneaux.findIndex(m => Number(m) === g.xs[i + 1]);
+      const hi = g.xs[i + 2] - ECART_MIN;
+      majDivision('m', idx, Math.max(g.xs[i] + ECART_MIN, Math.min(hi, g.xs[i] + n)));
+    } else {
+      // Dernier segment : déplace la division à gauche, bornée par celle encore plus à gauche
+      const idx = meneaux.findIndex(m => Number(m) === g.xs[i]);
+      const lo = g.xs[i - 1] + ECART_MIN;
+      majDivision('m', idx, Math.max(lo, Math.min(g.Lmm - ECART_MIN, g.Lmm - n)));
+    }
+  };
+  const editerSegmentV = (i) => {
+    if (traverses.length === 0) return;
+    const val = Math.round(g.ys[i + 1] - g.ys[i]);
+    const nv = prompt("Nouvelle valeur pour ce segment (mm) :", String(val));
+    if (nv === null) return;
+    const n = Math.round(Number(nv));
+    if (!n || n <= 0) return;
+    const dernier = i === g.ys.length - 2;
+    if (!dernier) {
+      const idx = traverses.findIndex(t => Number(t) === g.ys[i + 1]);
+      const hi = g.ys[i + 2] - ECART_MIN;
+      majDivision('t', idx, Math.max(g.ys[i] + ECART_MIN, Math.min(hi, g.ys[i] + n)));
+    } else {
+      const idx = traverses.findIndex(t => Number(t) === g.ys[i]);
+      const lo = g.ys[i - 1] + ECART_MIN;
+      majDivision('t', idx, Math.max(lo, Math.min(g.Hmm - ECART_MIN, g.Hmm - n)));
+    }
+  };
+
+  return (
+    <div style={{position:"fixed",inset:0,zIndex:4000,background:"rgba(0,0,0,0.6)",display:"flex",alignItems:"center",justifyContent:"center",padding:"14px"}}
+      onClick={e => e.target === e.currentTarget && onClose()}>
+      <div style={{background:"#fff",borderRadius:"16px",width:"620px",maxWidth:"100%",maxHeight:"94vh",overflowY:"auto",padding:"20px"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"10px"}}>
+          <h2 style={{fontSize:"15px",color:C.white,fontWeight:"900"}}>📐 Configurateur — {o.materiau}{o.pose ? " · " + o.pose : ""}</h2>
+          <button onClick={onClose} style={{background:"none",border:"none",fontSize:"18px",color:C.muted,cursor:"pointer"}}>✕</button>
+        </div>
+
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"8px",marginBottom:"10px"}}>
+          <div>
+            <label style={{fontSize:"11px",fontWeight:"700",color:C.muted,display:"block",marginBottom:"5px"}}>Largeur (mm)</label>
+            <input type="number" inputMode="numeric" value={o.largeur} onChange={e => set('largeur', e.target.value)}/>
+          </div>
+          <div>
+            <label style={{fontSize:"11px",fontWeight:"700",color:C.muted,display:"block",marginBottom:"5px"}}>Hauteur (mm)</label>
+            <input type="number" inputMode="numeric" value={o.hauteur} onChange={e => set('hauteur', e.target.value)}/>
+          </div>
+        </div>
+
+        <div style={{display:"flex",gap:"8px",marginBottom:"10px"}}>
+          <button type="button" onClick={() => ajouter('m')} style={btn(C.orDim, "#8a6d1f", C.orBord)}>┃ + Meneau</button>
+          <button type="button" onClick={() => ajouter('t')} style={btn(C.orDim, "#8a6d1f", C.orBord)}>━ + Traverse</button>
+          <div style={{flex:1}}/>
+          <button type="button" onClick={() => setVueExt(!vueExt)}
+            style={btn(vueExt ? C.rougeDim : "#fff", vueExt ? C.rouge : C.muted, vueExt ? "rgba(220,38,38,0.3)" : C.border)}>
+            {vueExt ? "🔄 Vue extérieure" : "🔄 Vue intérieure"}
+          </button>
+        </div>
+
+        {/* Dessin statique + couche d'interaction */}
+        <div style={{display:"flex",justifyContent:"center",marginBottom:"6px"}}>
+          <div style={{position:"relative",width:g.svgW,height:g.svgH,maxWidth:"100%"}}>
+            <div dangerouslySetInnerHTML={{ __html: svgStr }}/>
+            <svg ref={overlayRef} width={g.svgW} height={g.svgH}
+              style={{position:"absolute",inset:0,touchAction:"none"}}
+              onPointerMove={onMove} onPointerUp={() => setDrag(null)} onPointerLeave={() => setDrag(null)}>
+              {/* Zones cliquables */}
+              {g.ys.slice(0, -1).map((y0, l) => g.xs.slice(0, -1).map((x0, c) => {
+                const x1 = g.xs[c + 1], y1 = g.ys[l + 1];
+                return (
+                  <rect key={c + "-" + l} x={g.X(x0)} y={g.Y(y1)} width={(x1 - x0) * g.scale} height={(y1 - y0) * g.scale}
+                    fill="transparent" style={{cursor:"pointer"}} onClick={() => setPicker({ col: c, lig: l })}/>
+                );
+              }))}
+              {/* Meneaux : un rect cliquable par segment (ligne) pour couper/rétablir
+                  ce morceau précis, + une poignée de glisser réduite au centre. */}
+              {meneaux.map((m, i) => {
+                const mVal = Number(m) || 0;
+                const px = g.X(mVal);
+                const cy = g.MT + g.H / 2;
+                const nRowsLoc = g.ys.length - 1;
+                return (
+                  <g key={"m" + i}>
+                    {Array.from({ length: nRowsLoc }).map((_, l) => {
+                      const yTop = g.Y(g.ys[l + 1]), yBot = g.Y(g.ys[l]);
+                      const actif = !((o.meneauxCoupures || {})[mVal] || []).includes(l);
+                      return (
+                        <rect key={"seg" + l} x={px - Math.max(14, g.dt)} y={yTop} width={Math.max(28, g.dt * 2)} height={yBot - yTop}
+                          fill={actif ? "transparent" : "rgba(220,38,38,0.12)"}
+                          stroke={actif ? "none" : "#DC2626"} strokeWidth={actif ? 0 : 1} strokeDasharray={actif ? "" : "4,3"}
+                          style={{cursor:"pointer"}} onClick={() => toggleSegmentMeneau(mVal, l)}/>
+                      );
+                    })}
+                    <rect x={px - Math.max(15, g.dt)} y={cy - 22} width={Math.max(30, g.dt * 2)} height={44} fill="transparent"
+                      style={{cursor:"ew-resize"}} onPointerDown={(e) => { e.preventDefault(); setDrag({ kind: 'm', index: i }); }}/>
+                    <circle cx={px} cy={cy} r="9" fill={C.or} opacity="0.92" style={{pointerEvents:"none"}}/>
+                    <text x={px} y={cy + 3.5} fontSize="10" fontWeight="900" fill={C.white} textAnchor="middle" style={{pointerEvents:"none"}}>⇔</text>
+                  </g>
+                );
+              })}
+              {/* Traverses : idem, un rect cliquable par segment (colonne). */}
+              {traverses.map((t, i) => {
+                const tVal = Number(t) || 0;
+                const py = g.Y(tVal);
+                const cx = g.ML + g.W / 2;
+                const nColsLoc = g.xs.length - 1;
+                return (
+                  <g key={"t" + i}>
+                    {Array.from({ length: nColsLoc }).map((_, c) => {
+                      const xLeft = g.X(g.xs[c]), xRight = g.X(g.xs[c + 1]);
+                      const actif = !((o.traversesCoupures || {})[tVal] || []).includes(c);
+                      return (
+                        <rect key={"seg" + c} x={xLeft} y={py - Math.max(14, g.dt)} width={xRight - xLeft} height={Math.max(28, g.dt * 2)}
+                          fill={actif ? "transparent" : "rgba(220,38,38,0.12)"}
+                          stroke={actif ? "none" : "#DC2626"} strokeWidth={actif ? 0 : 1} strokeDasharray={actif ? "" : "4,3"}
+                          style={{cursor:"pointer"}} onClick={() => toggleSegmentTraverse(tVal, c)}/>
+                      );
+                    })}
+                    <rect x={cx - 22} y={py - Math.max(15, g.dt)} width={44} height={Math.max(30, g.dt * 2)} fill="transparent"
+                      style={{cursor:"ns-resize"}} onPointerDown={(e) => { e.preventDefault(); setDrag({ kind: 't', index: i }); }}/>
+                    <circle cx={cx} cy={py} r="9" fill={C.or} opacity="0.92" style={{pointerEvents:"none"}}/>
+                    <text x={cx} y={py + 3.5} fontSize="10" fontWeight="900" fill={C.white} textAnchor="middle" style={{pointerEvents:"none"}}>⇕</text>
+                  </g>
+                );
+              })}
+              {/* Cotes de segment cliquables — tous les segments, pas
+                  seulement les bords (règle générale ci-dessus). */}
+              {meneaux.length > 0 && g.xs.slice(0, -1).map((x0, i) => {
+                const cx = (g.X(x0) + g.X(g.xs[i + 1])) / 2;
+                const cy = g.MT + g.H + 12;
+                return (
+                  <rect key={"chx" + i} x={cx - 20} y={cy - 10} width={40} height={20} rx={5} fill="transparent"
+                    style={{cursor:"pointer"}} onClick={() => editerSegmentH(i)}/>
+                );
+              })}
+              {traverses.length > 0 && g.ys.slice(0, -1).map((y0, i) => {
+                const cy = (g.Y(y0) + g.Y(g.ys[i + 1])) / 2;
+                const cx = g.ML - 14;
+                return (
+                  <rect key={"chy" + i} x={cx - 14} y={cy - 20} width={28} height={40} rx={5} fill="transparent"
+                    style={{cursor:"pointer"}} onClick={() => editerSegmentV(i)}/>
+                );
+              })}
+            </svg>
+          </div>
+        </div>
+        <div style={{fontSize:"10px",color:C.muted,textAlign:"center",marginBottom:"12px",lineHeight:"1.5"}}>
+          👆 Touche une zone pour choisir son ouvrant · glisse les poignées dorées.<br/>
+          Convention : la pointe du symbole indique le côté de la poignée (charnières à l'opposé), vue intérieure.<br/>
+          ⚠️ Ajoute toutes tes divisions <b>d'abord</b>, configure les zones <b>en dernier</b> — dans cet ordre, aucun décalage possible.
+        </div>
+
+        {/* Edition précise des divisions */}
+        {(meneaux.length > 0 || traverses.length > 0) && (
+          <div style={{border:"1px solid "+C.border,borderRadius:"10px",padding:"12px",marginBottom:"14px"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"8px"}}>
+              <div style={{fontSize:"11px",fontWeight:"800",color:C.white}}>Position exacte des divisions</div>
+              <div style={{display:"flex",gap:"6px"}}>
+                {meneaux.length > 0 && (
+                  <button type="button" onClick={egaliserLargeurs} title="Répartit les largeurs uniformément"
+                    style={{padding:"5px 9px",background:C.bleuDim,border:"1px solid rgba(37,99,235,0.3)",color:C.bleu,borderRadius:"7px",fontSize:"10px",fontWeight:"800",cursor:"pointer"}}>⚖️ Largeurs</button>
+                )}
+                {traverses.length > 0 && (
+                  <button type="button" onClick={egaliserHauteurs} title="Répartit les hauteurs uniformément"
+                    style={{padding:"5px 9px",background:C.bleuDim,border:"1px solid rgba(37,99,235,0.3)",color:C.bleu,borderRadius:"7px",fontSize:"10px",fontWeight:"800",cursor:"pointer"}}>⚖️ Hauteurs</button>
+                )}
+              </div>
+            </div>
+            {meneaux.map((m, i) => {
+              const mVal = Number(m) || 0;
+              const coupes = ((o.meneauxCoupures || {})[mVal] || []).length;
+              return (
+                <div key={"em" + i} style={{marginBottom:"8px",paddingBottom:"8px",borderBottom: traverses.length > 0 ? "1px dashed "+C.border : "none"}}>
+                  <div style={{display:"flex",alignItems:"center",gap:"8px"}}>
+                    <span style={{fontSize:"11px",color:C.muted,width:"108px",flexShrink:0}}>┃ Meneau {i + 1} (dep. gauche)</span>
+                    <input type="number" inputMode="numeric" value={m} onChange={e => majDivision('m', i, e.target.value)} style={{flex:1}}/>
+                    <span style={{fontSize:"11px",color:C.muted,flexShrink:0}}>mm</span>
+                    <button type="button" onClick={() => supprDivision('m', i)} style={{background:C.rougeDim,border:"1px solid rgba(220,38,38,0.25)",color:C.rouge,borderRadius:"7px",padding:"6px 9px",fontSize:"11px",fontWeight:"700",cursor:"pointer",flexShrink:0}}>✕</button>
+                  </div>
+                  {traverses.length > 0 && (
+                    <div style={{marginTop:"6px",marginLeft:"116px",display:"flex",alignItems:"center",gap:"8px"}}>
+                      <span style={{fontSize:"10px",color:coupes?"#DC2626":C.muted}}>
+                        {coupes ? "✂️ " + coupes + " morceau" + (coupes>1?"x":"") + " coupé" + (coupes>1?"s":"") + " — tape sur le dessin pour ajuster" : "Plein — tape un morceau sur le dessin pour le couper"}
+                      </span>
+                      {coupes > 0 && (
+                        <button type="button" onClick={() => set('meneauxCoupures', Object.assign({}, o.meneauxCoupures || {}, { [mVal]: [] }))}
+                          style={{padding:"4px 8px",background:C.rougeDim,border:"1px solid rgba(220,38,38,0.25)",color:C.rouge,borderRadius:"6px",fontSize:"9.5px",fontWeight:"700",cursor:"pointer",flexShrink:0}}>Tout réactiver</button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+            {traverses.map((t, i) => {
+              const tVal = Number(t) || 0;
+              const coupes = ((o.traversesCoupures || {})[tVal] || []).length;
+              return (
+                <div key={"et" + i} style={{marginBottom:"8px",paddingBottom:"8px",borderBottom: meneaux.length > 0 ? "1px dashed "+C.border : "none"}}>
+                  <div style={{display:"flex",alignItems:"center",gap:"8px"}}>
+                    <span style={{fontSize:"11px",color:C.muted,width:"108px",flexShrink:0}}>━ Traverse {i + 1} (dep. bas)</span>
+                    <input type="number" inputMode="numeric" value={t} onChange={e => majDivision('t', i, e.target.value)} style={{flex:1}}/>
+                    <span style={{fontSize:"11px",color:C.muted,flexShrink:0}}>mm</span>
+                    <button type="button" onClick={() => supprDivision('t', i)} style={{background:C.rougeDim,border:"1px solid rgba(220,38,38,0.25)",color:C.rouge,borderRadius:"7px",padding:"6px 9px",fontSize:"11px",fontWeight:"700",cursor:"pointer",flexShrink:0}}>✕</button>
+                  </div>
+                  {meneaux.length > 0 && (
+                    <div style={{marginTop:"6px",marginLeft:"116px",display:"flex",alignItems:"center",gap:"8px"}}>
+                      <span style={{fontSize:"10px",color:coupes?"#DC2626":C.muted}}>
+                        {coupes ? "✂️ " + coupes + " morceau" + (coupes>1?"x":"") + " coupé" + (coupes>1?"s":"") + " — tape sur le dessin pour ajuster" : "Pleine — tape un morceau sur le dessin pour le couper"}
+                      </span>
+                      {coupes > 0 && (
+                        <button type="button" onClick={() => set('traversesCoupures', Object.assign({}, o.traversesCoupures || {}, { [tVal]: [] }))}
+                          style={{padding:"4px 8px",background:C.rougeDim,border:"1px solid rgba(220,38,38,0.25)",color:C.rouge,borderRadius:"6px",fontSize:"9.5px",fontWeight:"700",cursor:"pointer",flexShrink:0}}>Tout réactiver</button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        <button onClick={onClose} style={{width:"100%",padding:"12px",background:C.white,color:"#fff",border:"none",borderRadius:"10px",fontWeight:"900",fontSize:"13px",cursor:"pointer"}}>
+          Valider et fermer
+        </button>
+      </div>
+
+      {picker && (
+        <ZonePicker o={o} zoneKey={picker.col + "-" + picker.lig} current={(o.zonesRempl || {})[picker.col + "-" + picker.lig] || "Fixe"}
+          hauteursPoignee={o.hauteursPoignee} zonesVitrage={o.zonesVitrage} zonesPetitBois={o.zonesPetitBois} ouvrantsSecondaires={o.ouvrantsSecondaires}
+          zoneWmm={g.xs[picker.col + 1] - g.xs[picker.col]} zoneHmm={g.ys[picker.lig + 1] - g.ys[picker.lig]}
+          onSelect={(v) => set('zonesRempl', Object.assign({}, o.zonesRempl || {}, { [picker.col + "-" + picker.lig]: v }))}
+          onSetHpZone={(key, v) => set('hauteursPoignee', Object.assign({}, o.hauteursPoignee || {}, { [key]: v }))}
+          onSetVitrageZone={(key, patch) => set('zonesVitrage', Object.assign({}, o.zonesVitrage || {}, { [key]: Object.assign({}, (o.zonesVitrage || {})[key], patch) }))}
+          onSetPbZone={(key, patch) => set('zonesPetitBois', Object.assign({}, o.zonesPetitBois || {}, { [key]: Object.assign({ largeur: 18, vBars: [], hBars: [] }, (o.zonesPetitBois || {})[key], patch) }))}
+          onSplit2={(valGauche, valDroit) => scinderZone(picker.col, picker.lig, valGauche, valDroit)}
+          onSetSecondaire={(key, val) => set('ouvrantsSecondaires', Object.assign({}, o.ouvrantsSecondaires || {}, { [key]: val }))}
+          onClose={() => setPicker(null)}/>
+      )}
+    </div>
+  );
+}
+
+function genererNumero() {
+  return 'MET-' + new Date().getFullYear() + '-' + (Math.floor(Math.random()*9000)+1000);
+}
+
+// PDF : schéma du configurateur inséré pour chaque ouverture cotée (async)
+// Dessine une carte "ouverture" dans le PDF (position x,y, taille w,h en mm).
+// Ordre demandé : repère, dimension, image, quantité, couleur, puis le reste
+// des options en compact en dessous.
+async function dessinerCarteOuverture(doc, index, o, x, y, w, h) {
+  doc.setDrawColor(226, 226, 226); doc.setLineWidth(0.3);
+  doc.rect(x, y, w, h);
+  doc.setFillColor(0, 26, 66);
+  doc.rect(x, y, w, 6.5, 'F');
+  doc.setTextColor(218, 178, 57); doc.setFont('helvetica', 'bold'); doc.setFontSize(9.5);
+  doc.text((index + 1) + '. ' + (o.repere || o.type), x + 2.5, y + 4.6);
+
+  const padX = x + 3;
+  const rowTop = y + 9.5;
+  const rowH = 34; // hauteur réservée à la ligne image + infos clés
+
+  // Image (schéma du configurateur), bornée en largeur ET hauteur pour ne
+  // jamais déborder sur la colonne d'infos ni la ligne suivante.
+  let imgW = 0;
+  if (o.largeur && o.hauteur) {
+    try {
+      const g = geomSchema(o, 300, 220);
+      const ratio = g.svgW / g.svgH;
+      let iw, ih;
+      if (ratio >= 1) { iw = 38; ih = 38 / ratio; } else { ih = rowH - 2; iw = ih * ratio; }
+      imgW = iw;
+      const png = await svgVersPng(buildSchemaSvgString(o, true, 300, 220), g.svgW, g.svgH);
+      doc.addImage(png, 'PNG', padX, rowTop, iw, ih);
+    } catch (e) { /* pas de schéma dispo : on continue sans bloquer */ }
+  }
+
+  // Infos clés à droite de l'image : dimension, quantité, couleur.
+  const xInfo = padX + (imgW > 0 ? imgW + 3.5 : 0);
+  const wInfo = (x + w - 3) - xInfo;
+  let yInfo = rowTop + 3.5;
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(8.2); doc.setTextColor(0, 26, 66);
+  doc.text(o.type + (o.pose ? ' · ' + o.pose : ''), xInfo, yInfo, { maxWidth: wInfo }); yInfo += 4.3;
+  doc.setFontSize(7.6);
+  const infoLigne = (label, val) => {
+    doc.setFont('helvetica', 'bold'); doc.setTextColor(90, 90, 90); doc.text(label, xInfo, yInfo);
+    doc.setFont('helvetica', 'normal'); doc.setTextColor(20, 20, 20);
+    const txt = doc.splitTextToSize(String(val || '—'), wInfo - 13);
+    doc.text(txt, xInfo + 13, yInfo);
+    yInfo += Math.max(3.6, txt.length * 3.6);
+  };
+  infoLigne('Dim.', (o.largeur || '—') + '×' + (o.hauteur || '—') + ' mm');
+  infoLigne('Qté', o.quantite || '1');
+  infoLigne('Couleur', o.couleur || '—');
+
+  // Séparateur puis le reste des options, en compact, tronqué proprement si
+  // la carte est trop petite pour tout afficher (mieux vaut couper net que
+  // déborder sur la carte suivante).
+  let yy = y + 9.5 + rowH;
+  doc.setDrawColor(235, 235, 235); doc.setLineWidth(0.25);
+  doc.line(padX, yy, x + w - 3, yy); yy += 3;
+
+  const menStr = (o.meneaux && o.meneaux.filter(Boolean).length) ? o.meneaux.filter(Boolean).map(m => m + ' mm').join(' / ') : null;
+  const autres = [
+    ['Traverse(s)', (o.traverses && o.traverses.filter(Boolean).length) ? o.traverses.filter(Boolean).map(t => t + ' mm').join(' / ') : null],
+    ['Meneau(x)', menStr],
+    ['Vitrage', o.vitrage],
+    ['Dormant', o.dormant],
+    ['Options standard', (o.optionsStandard && o.optionsStandard.length) ? o.optionsStandard.join(', ') : null],
+    ['Serrure', o.serrure], ['Cylindre', (o.cylindreSecu && o.cylindreSecu.length) ? o.cylindreSecu.join(', ') : null],
+    ['Hauteur poignée', o.hauteurPoignee ? o.hauteurPoignee + ' mm' : null],
+    ['Ventilation', o.ventilation], ['Type volet', o.typeVolet],
+    ['Options', o.options], ['Note', o.note],
+  ];
+  const yLimite = y + h - 2.5;
+  doc.setFontSize(7.2);
+  for (const [label, val] of autres) {
+    if (!val) continue;
+    if (yy > yLimite - 3) { doc.setFont('helvetica', 'italic'); doc.setTextColor(150, 150, 150); doc.text('… voir PDF complet', padX, yy); break; }
+    doc.setFont('helvetica', 'bold'); doc.setTextColor(90, 90, 90); doc.text(label + ' :', padX, yy);
+    doc.setFont('helvetica', 'normal'); doc.setTextColor(20, 20, 20);
+    const txt = doc.splitTextToSize(String(val), (x + w - 3) - (padX + 24));
+    doc.text(txt.slice(0, 2), padX + 24, yy); // max 2 lignes par champ pour ne pas déborder
+    yy += Math.max(3.4, Math.min(txt.length, 2) * 3.4);
+  }
+}
+
+// PDF principal : grille de 4 cartes (2×2) par page A4 portrait, dans l'ordre
+// demandé (repère, dimension, image, quantité, couleur, puis reste des
+// options). En-tête de page : N° dossier, client, fiche, agence.
+async function genererPdfMetre(fiche, ouvertures) {
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+  const M = 10, PAGE_W = 210, PAGE_H = 297, GAP = 5, COLS = 2, ROWS = 2;
+  const cardW = (PAGE_W - 2 * M - GAP) / COLS;
+  const gridTop = M + 18;
+  const cardH = (PAGE_H - gridTop - M - GAP) / ROWS;
+
+  const dessinerHeaderPage = () => {
+    let y = M + 4;
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(14); doc.setTextColor(0, 26, 66);
+    doc.text('RSIA IKO — Fiche de prise de côtes', M, y); y += 4.5;
+    doc.setDrawColor(218, 178, 57); doc.setLineWidth(0.6);
+    doc.line(M, y, PAGE_W - M, y); y += 4;
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(8.6); doc.setTextColor(20, 20, 20);
+    const champs = [];
+    if (fiche.numeroDossier) champs.push('N° dossier : ' + fiche.numeroDossier);
+    champs.push('Client : ' + (fiche.client || '—'));
+    champs.push('Fiche : ' + fiche.numero);
+    champs.push('Agence : ' + (fiche.agence || '—'));
+    doc.text(champs.join('     ·     '), M, y);
+  };
+
+  for (let i = 0; i < ouvertures.length; i++) {
+    const posInPage = i % (COLS * ROWS);
+    if (posInPage === 0) {
+      if (i > 0) doc.addPage();
+      dessinerHeaderPage();
+    }
+    const col = posInPage % COLS, row = Math.floor(posInPage / COLS);
+    const cx = M + col * (cardW + GAP);
+    const cy = gridTop + row * (cardH + GAP);
+    await dessinerCarteOuverture(doc, i, ouvertures[i], cx, cy, cardW, cardH);
+  }
+  if (ouvertures.length === 0) dessinerHeaderPage();
+
+  doc.save((fiche.numero || 'fiche-metre') + '.pdf');
+}
+
+// ============================================================
+//                RÉSUMÉ BE (synthétique, saisie rapide)
+// Contrairement à genererPdfMetre (exhaustif, destiné à l'atelier de
+// fabrication), ce document ne garde que ce dont le BE a besoin pour sa
+// saisie : couleur, hauteur de poignée, schéma. Compact, tient sur peu de
+// pages même avec beaucoup d'ouvertures.
+// ============================================================
+
+// Construit le document (sans l'exporter) pour pouvoir le réutiliser à la
+// fois pour l'impression (aperçu navigateur) et l'enregistrement (téléchargement).
+async function construireResumeBE(fiche, ouvertures) {
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+  const marge = 16;
+  let y = 20;
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(15);
+  doc.setTextColor(0, 26, 66);
+  doc.text('RSIA IKO — Résumé BE', marge, y); y += 5.5;
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(90, 90, 90);
+  doc.text('Saisie rapide — couleur, hauteur poignée, schéma', marge, y); y += 5;
+  doc.setDrawColor(218, 178, 57); doc.setLineWidth(0.7);
+  doc.line(marge, y, 210 - marge, y); y += 7;
+
+  doc.setFontSize(9.5); doc.setTextColor(20, 20, 20);
+  const ligne = (label, valeur) => {
+    doc.setFont('helvetica', 'bold'); doc.text(label, marge, y);
+    doc.setFont('helvetica', 'normal'); doc.text(String(valeur || '—'), marge + 26, y);
+    y += 5;
+  };
+  ligne('Fiche :', fiche.numero);
+  if (fiche.numeroDossier) ligne('N° dossier :', fiche.numeroDossier);
+  ligne('Client :', fiche.client + (fiche.adresse ? ' — ' + fiche.adresse : ''));
+  ligne('Agence :', fiche.agence);
+  y += 2;
+
+  const THUMB = 34; // largeur du schéma en mm, volontairement petit (synthétique)
+  for (let i = 0; i < ouvertures.length; i++) {
+    const o = ouvertures[i];
+    const g = geomSchema(o, 300, 220);
+    const thumbH = THUMB * g.svgH / g.svgW;
+    const blocH = Math.max(thumbH + 4, 22);
+    if (y + blocH > 280) { doc.addPage(); y = 20; }
+
+    doc.setDrawColor(226, 226, 226); doc.setLineWidth(0.3);
+    doc.rect(marge, y, 210 - 2 * marge, blocH);
+
+    if (o.largeur && o.hauteur) {
+      try {
+        const png = await svgVersPng(buildSchemaSvgString(o, true, 300, 220), g.svgW, g.svgH);
+        doc.addImage(png, 'PNG', marge + 3, y + 2, THUMB, thumbH);
+      } catch (e) { /* pas de schéma dispo, on continue sans bloquer */ }
+    }
+
+    const xText = marge + THUMB + 10;
+    let yy = y + 6;
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(10.5); doc.setTextColor(0, 26, 66);
+    doc.text((i + 1) + '. ' + (o.repere || o.type), xText, yy); yy += 5.5;
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(20, 20, 20);
+    doc.text(o.type + ' · ' + o.materiau + (o.pose ? ' · ' + o.pose : '') + ' · ' + (o.largeur || '—') + '×' + (o.hauteur || '—') + ' mm', xText, yy); yy += 5;
+    doc.setFont('helvetica', 'bold'); doc.text('Couleur : ', xText, yy);
+    doc.setFont('helvetica', 'normal'); doc.text(o.couleur || '—', xText + 16, yy); yy += 5;
+    doc.setFont('helvetica', 'bold'); doc.text('Hauteur poignée : ', xText, yy);
+    doc.setFont('helvetica', 'normal'); doc.text(o.hauteurPoignee ? o.hauteurPoignee + ' mm' : '—', xText + 32, yy);
+
+    y += blocH + 4;
+  }
+
+  return doc;
+}
+
+async function telechargerResumeBE(fiche, ouvertures) {
+  const doc = await construireResumeBE(fiche, ouvertures);
+  doc.save((fiche.numero || 'fiche') + '-resume-BE.pdf');
+}
+
+async function imprimerResumeBE(fiche, ouvertures) {
+  const doc = await construireResumeBE(fiche, ouvertures);
+  // Ouvre le PDF dans un nouvel onglet : sur mobile (Safari/Chrome), le
+  // visualiseur PDF natif propose directement Imprimer/Partager, sans avoir
+  // à gérer une mise en page d'impression CSS séparée.
+  window.open(doc.output('bloburl'), '_blank');
+}
+
+// Contenu HTML compact pour l'email au BE (même esprit que buildOuverturesHtml
+// mais réduit à couleur + hauteur poignée, pas les 30 champs de fabrication).
+function htmlResumeBE(ouvertures) {
+  return ouvertures.map((o, i) => (
+    '<table width="100%" cellpadding="6" cellspacing="0" style="font-size:12px;border:1px solid #E5E7EB;border-radius:6px;margin-bottom:8px;">' +
+    '<tr style="background:#F8FAFC;"><td colspan="2" style="font-weight:900;color:#001A42;padding:6px 8px;">' + (i + 1) + '. ' + esc(o.repere || o.type) + ' — ' + esc(o.type) + '</td></tr>' +
+    '<tr><td style="color:#64748B;width:140px;padding:4px 8px;">Couleur</td><td style="padding:4px 8px;">' + esc(o.couleur || '—') + '</td></tr>' +
+    '<tr><td style="color:#64748B;padding:4px 8px;">Hauteur poignée</td><td style="padding:4px 8px;">' + esc(o.hauteurPoignee ? o.hauteurPoignee + ' mm' : '—') + '</td></tr>' +
+    '</table>'
+  )).join('');
+}
+
+function buildOuverturesHtml(ouvertures) {
+  return ouvertures.map((o, i) => (
+    '<table width="100%" cellpadding="6" cellspacing="0" style="font-size:12px;border:1px solid #E5E7EB;border-radius:6px;margin-bottom:10px;">' +
+    '<tr style="background:#F8FAFC;"><td colspan="2" style="font-weight:900;color:#001A42;padding:8px;">' + (i+1) + '. ' + esc(o.repere || o.type) + ' — ' + esc(o.type) + '</td></tr>' +
+    '<tr><td style="color:#64748B;width:140px;padding:4px 8px;">Matériau</td><td style="padding:4px 8px;">' + esc(o.materiau || '—') + '</td></tr>' +
+    (o.pose ? '<tr><td style="color:#64748B;padding:4px 8px;">Pose</td><td style="padding:4px 8px;">' + esc(o.pose) + '</td></tr>' : '') +
+    '<tr><td style="color:#64748B;padding:4px 8px;">Dimensions</td><td style="padding:4px 8px;">' + (o.largeur || '—') + ' x ' + (o.hauteur || '—') + ' mm</td></tr>' +
+    ((o.traverses && o.traverses.filter(Boolean).length) ? '<tr><td style="color:#64748B;padding:4px 8px;">Traverse(s)</td><td style="padding:4px 8px;">' + esc(o.traverses.filter(Boolean).map(t => t + ' mm').join(' / ')) + '</td></tr>' : '') +
+    ((o.meneaux && o.meneaux.filter(Boolean).length) ? '<tr><td style="color:#64748B;padding:4px 8px;">Meneau(x)</td><td style="padding:4px 8px;">' + esc(o.meneaux.filter(Boolean).map(m => m + ' mm').join(' / ')) + '</td></tr>' : '') +
+    (zonesTexte(o) ? '<tr><td style="color:#64748B;padding:4px 8px;">Zones</td><td style="padding:4px 8px;">' + esc(zonesTexte(o)) + '</td></tr>' : '') +
+    '<tr><td style="color:#64748B;padding:4px 8px;">Couleur / RAL</td><td style="padding:4px 8px;">' + esc(o.couleur || '—') + '</td></tr>' +
+    '<tr><td style="color:#64748B;padding:4px 8px;">Vitrage</td><td style="padding:4px 8px;">' + esc(o.vitrage || '—') + '</td></tr>' +
+    ((o.optionsStandard && o.optionsStandard.length) ? '<tr><td style="color:#64748B;padding:4px 8px;">Options standard</td><td style="padding:4px 8px;">' + esc(o.optionsStandard.join(', ')) + '</td></tr>' : '') +
+    (o.dormant ? '<tr><td style="color:#64748B;padding:4px 8px;">Dormant</td><td style="padding:4px 8px;">' + esc(o.dormant) + '</td></tr>' : '') +
+    ((o.couleurInt || o.couleurExt) ? '<tr><td style="color:#64748B;padding:4px 8px;">Couleur int / ext</td><td style="padding:4px 8px;">' + esc((o.couleurInt||'—') + ' / ' + (o.couleurExt||'—')) + '</td></tr>' : '') +
+    (o.quantite ? '<tr><td style="color:#64748B;padding:4px 8px;">Quantité</td><td style="padding:4px 8px;">' + esc(o.quantite) + '</td></tr>' : '') +
+    (o.serrure ? '<tr><td style="color:#64748B;padding:4px 8px;">Serrure</td><td style="padding:4px 8px;">' + esc(o.serrure) + '</td></tr>' : '') +
+    ((o.cylindreSecu && o.cylindreSecu.length) ? '<tr><td style="color:#64748B;padding:4px 8px;">Cylindre</td><td style="padding:4px 8px;">' + esc(o.cylindreSecu.join(', ')) + '</td></tr>' : '') +
+    (o.patteFixationNeuf ? '<tr><td style="color:#64748B;padding:4px 8px;">Patte fixation neuf</td><td style="padding:4px 8px;">' + esc(o.patteFixationNeuf) + '</td></tr>' : '') +
+    ((o.dormantTrHaut || o.dormantTrBas) ? '<tr><td style="color:#64748B;padding:4px 8px;">Dormant traverse H/B</td><td style="padding:4px 8px;">' + esc((o.dormantTrHaut||'—') + ' / ' + (o.dormantTrBas||'—')) + '</td></tr>' : '') +
+    ((o.dormantMtGauche || o.dormantMtDroit) ? '<tr><td style="color:#64748B;padding:4px 8px;">Dormant montant G/D</td><td style="padding:4px 8px;">' + esc((o.dormantMtGauche||'—') + ' / ' + (o.dormantMtDroit||'—')) + '</td></tr>' : '') +
+    (o.hauteurPoignee ? '<tr><td style="color:#64748B;padding:4px 8px;">Hauteur poignée</td><td style="padding:4px 8px;">' + esc(o.hauteurPoignee) + ' mm</td></tr>' : '') +
+    (o.axeMeneaux ? '<tr><td style="color:#64748B;padding:4px 8px;">Axe meneaux</td><td style="padding:4px 8px;">' + esc(o.axeMeneaux) + '</td></tr>' : '') +
+    (o.appuiSeuilBalai ? '<tr><td style="color:#64748B;padding:4px 8px;">Appui seuil balai</td><td style="padding:4px 8px;">' + esc(o.appuiSeuilBalai) + '</td></tr>' : '') +
+    (o.ref4319 ? '<tr><td style="color:#64748B;padding:4px 8px;">Réf. 4319</td><td style="padding:4px 8px;">' + esc(o.ref4319) + '</td></tr>' : '') +
+    (o.calageDormantHabillage ? '<tr><td style="color:#64748B;padding:4px 8px;">Calage dormant/habillage</td><td style="padding:4px 8px;">' + esc(o.calageDormantHabillage) + '</td></tr>' : '') +
+    (o.petitBois ? '<tr><td style="color:#64748B;padding:4px 8px;">Petit bois</td><td style="padding:4px 8px;">' + esc(o.petitBois) + '</td></tr>' : '') +
+    (o.remplBas ? '<tr><td style="color:#64748B;padding:4px 8px;">Remplissage bas</td><td style="padding:4px 8px;">' + esc(o.remplBas) + '</td></tr>' : '') +
+    (o.ventilation ? '<tr><td style="color:#64748B;padding:4px 8px;">Ventilation</td><td style="padding:4px 8px;">' + esc(o.ventilation) + '</td></tr>' : '') +
+    (o.typeVolet ? '<tr><td style="color:#64748B;padding:4px 8px;">Type volet</td><td style="padding:4px 8px;">' + esc(o.typeVolet) + '</td></tr>' : '') +
+    ((o.delignageInt || o.delignageExt) ? '<tr><td style="color:#64748B;padding:4px 8px;">Délignage int/ext</td><td style="padding:4px 8px;">' + esc((o.delignageInt||'—') + ' / ' + (o.delignageExt||'—')) + '</td></tr>' : '') +
+    (o.tapee ? '<tr><td style="color:#64748B;padding:4px 8px;">Tapée</td><td style="padding:4px 8px;">' + esc(o.tapee) + ' mm</td></tr>' : '') +
+    (o.platCoupe ? '<tr><td style="color:#64748B;padding:4px 8px;">Plat - coupe</td><td style="padding:4px 8px;">' + esc(o.platCoupe) + '</td></tr>' : '') +
+    (o.platDimensions ? '<tr><td style="color:#64748B;padding:4px 8px;">Plat - dimensions</td><td style="padding:4px 8px;">' + esc(o.platDimensions) + '</td></tr>' : '') +
+    (o.corniere ? '<tr><td style="color:#64748B;padding:4px 8px;">Cornière</td><td style="padding:4px 8px;">' + esc(o.corniere) + '</td></tr>' : '') +
+    (o.corniereAppuiSeuil ? '<tr><td style="color:#64748B;padding:4px 8px;">Cornière appui seuil</td><td style="padding:4px 8px;">' + esc(o.corniereAppuiSeuil) + '</td></tr>' : '') +
+    '<tr><td style="color:#64748B;padding:4px 8px;">Options</td><td style="padding:4px 8px;white-space:pre-wrap;">' + esc(o.options || '—') + '</td></tr>' +
+    '<tr><td style="color:#64748B;padding:4px 8px;">Note</td><td style="padding:4px 8px;white-space:pre-wrap;">' + esc(o.note || '—') + '</td></tr>' +
+    '</table>'
+  )).join('');
+}
+
+// ---- PETITS COMPOSANTS REUTILISABLES POUR LA FICHE FABRICATION DETAILLEE ----
+function FoldSection({ title, summary, children, defaultOpen }) {
+  const [open, setOpen] = React.useState(!!defaultOpen);
+  return (
+    <div style={{border:"1px solid "+(!open && summary ? C.orBord : C.border),borderRadius:"10px",marginBottom:"12px",overflow:"hidden"}}>
+      <button type="button" onClick={() => setOpen(!open)}
+        style={{width:"100%",display:"flex",justifyContent:"space-between",alignItems:"center",gap:"10px",padding:"10px 12px",background:"#F8FAFC",border:"none",cursor:"pointer"}}>
+        <span style={{display:"flex",flexDirection:"column",alignItems:"flex-start",gap:"2px",minWidth:0,textAlign:"left"}}>
+          <span style={{fontSize:"12px",fontWeight:"800",color:C.white}}>{title}</span>
+          {!open && summary && (
+            <span style={{fontSize:"10px",fontWeight:"600",color:"#8a6d1f",maxWidth:"100%",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{summary}</span>
+          )}
+        </span>
+        <span style={{fontSize:"11px",color:C.muted,flexShrink:0}}>{open ? "▲" : "▼"}</span>
+      </button>
+      {open && <div style={{padding:"14px"}}>{children}</div>}
+    </div>
+  );
+}
+
+function ChoiceButtons({ label, value, onChange, choices }) {
+  return (
+    <div style={{marginBottom:"12px"}}>
+      <label style={{fontSize:"11px",fontWeight:"700",color:C.muted,display:"block",marginBottom:"6px"}}>{label}</label>
+      <div style={{display:"flex",flexWrap:"wrap",gap:"6px"}}>
+        {choices.map(c => (
+          <button key={c} type="button" onClick={() => onChange(value===c ? "" : c)}
+            style={{padding:"6px 12px",borderRadius:"7px",cursor:"pointer",fontSize:"11px",fontWeight:"700",
+              border:"1.5px solid "+(value===c?C.or:C.border), background:value===c?C.orDim:"#fff", color:value===c?C.white:C.muted}}>
+            {c}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function MultiChoiceButtons({ label, value, onChange, choices }) {
+  const arr = value || [];
+  const toggle = (c) => onChange(arr.includes(c) ? arr.filter(x => x !== c) : [...arr, c]);
+  return (
+    <div style={{marginBottom:"12px"}}>
+      <label style={{fontSize:"11px",fontWeight:"700",color:C.muted,display:"block",marginBottom:"6px"}}>{label}</label>
+      <div style={{display:"flex",flexWrap:"wrap",gap:"6px"}}>
+        {choices.map(c => (
+          <button key={c} type="button" onClick={() => toggle(c)}
+            style={{padding:"6px 12px",borderRadius:"7px",cursor:"pointer",fontSize:"11px",fontWeight:"700",
+              border:"1.5px solid "+(arr.includes(c)?C.or:C.border), background:arr.includes(c)?C.orDim:"#fff", color:arr.includes(c)?C.white:C.muted}}>
+            {c}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function FieldText({ label, value, onChange, placeholder, type }) {
+  return (
+    <div style={{marginBottom:"12px"}}>
+      <label style={{fontSize:"11px",fontWeight:"700",color:C.muted,display:"block",marginBottom:"6px"}}>{label}</label>
+      <input type={type||"text"} value={value||""} onChange={e => onChange(e.target.value)} placeholder={placeholder||""}/>
+    </div>
+  );
+}
+
+// ---- MODAL AJOUT / EDITION D'UNE OUVERTURE ----
+// Partie haute = minimum vital du métré + configurateur graphique.
+// Chaque information n'existe qu'à un seul endroit (dédoublonné).
+function OuvertureModal({ initial, onClose, onSave }) {
+  const [o, setO] = React.useState(() => {
+    if (initial) return initial;
+    const z = zonesFromType("OB1", 1200); // dessin initial cohérent avec le type par défaut
+    return {
+      repere: "", type: "OB1", materiau: "PVC", pose: "", largeur: "", hauteur: "", couleur: "", vitrage: "", dormant: "", pieceAppui: "", options: "", optionsStandard: [], note: "", photoPreview: null,
+      traverses: [], meneaux: z.meneaux, zonesRempl: z.zonesRempl, hauteursPoignee: {}, zonesVitrage: {}, zonesPetitBois: {}, meneauxCoupures: {}, ouvrantsSecondaires: {}, traversesCoupures: {},
+      teintePvc: "", capotAlu: false, ralCapot: "", finitionCapot: "",
+      ralAlu: "", finitionAlu: "",
+      couleurInt: "", couleurExt: "", quantite: "",
+      serrure: "", cylindreSecu: [], patteFixationNeuf: "",
+      dormantTrHaut: "", dormantTrBas: "", dormantMtGauche: "", dormantMtDroit: "", hauteurPoignee: "", axeMeneaux: "",
+      appuiSeuilBalai: "", ref4319: "", calageDormantHabillage: "",
+      petitBois: "", remplBas: "",
+      ventilation: "", typeVolet: "",
+      delignageInt: "", delignageExt: "", tapee: "", platCoupe: "", platDimensions: "", corniere: "", corniereAppuiSeuil: "",
+    };
+  });
+  const [showConfig, setShowConfig] = React.useState(false);
+  const [askHp, setAskHp] = React.useState(null); // objet ouverture à jour, en attente de saisie hauteur poignée
+  const [showTypePicker, setShowTypePicker] = React.useState(false);
+  const set = (k, v) => setO(prev => ({ ...prev, [k]: v }));
+
+  // Recalcule automatiquement le résumé "Couleur / RAL" (utilisé par le PDF,
+  // l'email atelier et le champ Airtable existant) à partir des champs
+  // structurés ci-dessous, pour ne pas avoir à créer de nouvelles colonnes.
+  React.useEffect(() => {
+    let txt = "";
+    if (o.materiau === "Alu") {
+      txt = o.ralAlu ? "RAL " + libelleRal(o.ralAlu) + (o.finitionAlu ? " (" + o.finitionAlu + ")" : "") : "";
+    } else {
+      txt = o.teintePvc || "";
+      if (o.capotAlu) txt += (txt ? " + " : "") + "capot alu" + (o.ralCapot ? " RAL " + libelleRal(o.ralCapot) : "") + (o.finitionCapot ? " (" + o.finitionCapot + ")" : "");
+    }
+    if (txt !== o.couleur) set('couleur', txt);
+  }, [o.materiau, o.teintePvc, o.capotAlu, o.ralCapot, o.finitionCapot, o.ralAlu, o.finitionAlu]);
+
+  const onPhoto = (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => set('photoPreview', reader.result);
+    reader.readAsDataURL(file);
+  };
+
+  const valide = o.repere.trim() && o.largeur && o.hauteur;
+
+  // Résumés des accordéons fermés (champs remplis uniquement)
+  const resume = (...vals) => vals.filter(Boolean).join(" · ");
+  const resumeCouleur = resume(o.couleur, o.couleurInt && "Int " + o.couleurInt, o.couleurExt && "Ext " + o.couleurExt, o.quantite && "Qté " + o.quantite);
+  const resumeVitrage = resume(o.vitrage, o.petitBois && "PB " + o.petitBois, o.remplBas);
+  const resumeQuincaillerie = resume((o.optionsStandard||[]).join(", "), o.serrure && "Serrure " + o.serrure, (o.cylindreSecu||[]).join(", "), o.patteFixationNeuf && "Patte " + o.patteFixationNeuf, o.options);
+  const resumeDormant = resume(o.dormant, (o.dormantTrHaut||o.dormantTrBas) && "Trav " + (o.dormantTrHaut||"—") + "/" + (o.dormantTrBas||"—"), (o.dormantMtGauche||o.dormantMtDroit) && "Mont " + (o.dormantMtGauche||"—") + "/" + (o.dormantMtDroit||"—"), o.hauteurPoignee && "Poignée " + o.hauteurPoignee + " mm", o.axeMeneaux);
+  const resumeCalage = resume(o.appuiSeuilBalai, o.ref4319 && "4319 " + o.ref4319, o.calageDormantHabillage);
+  const resumeDivers = resume(o.ventilation && "Ventil. " + o.ventilation, o.typeVolet && "Volet " + o.typeVolet);
+  const resumeHabillage = resume(o.delignageInt && "Dél. int " + o.delignageInt, o.delignageExt && "Dél. ext " + o.delignageExt, o.tapee && "Tapée " + o.tapee, o.platCoupe, o.platDimensions, o.corniere, o.corniereAppuiSeuil);
+
+  const nbZones = zonesRecap(o).length;
+  const resumeConfig = resume(
+    (o.meneaux||[]).filter(Boolean).length && (o.meneaux.filter(Boolean).length + " meneau" + (o.meneaux.filter(Boolean).length > 1 ? "x" : "")),
+    (o.traverses||[]).filter(Boolean).length && (o.traverses.filter(Boolean).length + " traverse" + (o.traverses.filter(Boolean).length > 1 ? "s" : "")),
+    nbZones > 1 && nbZones + " zones"
+  );
+
+  return (
+    <div style={{position:"fixed",inset:0,zIndex:3000,background:"rgba(0,0,0,0.5)",display:"flex",alignItems:"center",justifyContent:"center",padding:"16px"}}
+      onClick={e => e.target === e.currentTarget && onClose()}>
+      <div style={{background:"#fff",borderRadius:"16px",width:"560px",maxWidth:"100%",maxHeight:"92vh",overflowY:"auto",padding:"22px"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"14px"}}>
+          <h2 style={{fontSize:"15px",color:C.white,fontWeight:"900"}}>📐 Ouverture</h2>
+          <button onClick={onClose} style={{background:"none",border:"none",fontSize:"18px",color:C.muted,cursor:"pointer"}}>✕</button>
+        </div>
+
+        <label style={{fontSize:"11px",fontWeight:"700",color:C.muted,display:"block",marginBottom:"6px"}}>Repère (ex : Salon — Fenêtre 1)</label>
+        <input value={o.repere} onChange={e => set('repere', e.target.value)} placeholder="Repère" style={{marginBottom:"14px"}}/>
+
+        <label style={{fontSize:"11px",fontWeight:"700",color:C.muted,display:"block",marginBottom:"8px"}}>Type d'ouvrant</label>
+        <button type="button" onClick={() => setShowTypePicker(true)}
+          style={{display:"flex",alignItems:"center",gap:"10px",width:"100%",padding:"10px 12px",borderRadius:"10px",cursor:"pointer",
+            border:"1.5px solid "+C.border,background:"#fff",marginBottom:"16px"}}>
+          <IconOuverture type={o.type} active={true} size={32}/>
+          <span style={{flex:1,textAlign:"left",fontSize:"13px",fontWeight:"800",color:C.white}}>{(TYPES.find(t => t.v===o.type)||{}).l || o.type}</span>
+          <span style={{fontSize:"11px",color:C.muted,fontWeight:"700"}}>Changer ›</span>
+        </button>
+
+        <div style={{display:"flex",gap:"8px",marginBottom:"12px"}}>
+          {["Alu","PVC"].map(m => (
+            <button key={m} type="button" onClick={() => set('materiau', m)}
+              style={{flex:1,padding:"10px",borderRadius:"8px",cursor:"pointer",fontWeight:"800",fontSize:"12px",
+                border:"1.5px solid " + (o.materiau===m ? C.or : C.border), background:o.materiau===m ? C.or : "#fff", color:o.materiau===m ? "#111" : C.muted}}>
+              {m}
+            </button>
+          ))}
+        </div>
+
+        <ChoiceButtons label="Type de pose" value={o.pose} onChange={v => set('pose', v)} choices={POSES}/>
+
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"10px",marginBottom:"14px"}}>
+          <div>
+            <label style={{fontSize:"11px",fontWeight:"700",color:C.muted,display:"block",marginBottom:"6px"}}>Largeur (mm)</label>
+            <input type="number" value={o.largeur} onChange={e => set('largeur', e.target.value)} placeholder="ex : 1200"/>
+          </div>
+          <div>
+            <label style={{fontSize:"11px",fontWeight:"700",color:C.muted,display:"block",marginBottom:"6px"}}>Hauteur (mm)</label>
+            <input type="number" value={o.hauteur} onChange={e => set('hauteur', e.target.value)} placeholder="ex : 1400"/>
+          </div>
+        </div>
+
+        {/* Configurateur graphique : accessible pour tous les types (pas
+            réservé à "Ensemble composé") — aperçu en direct + accès au
+            dessin interactif pour ajouter meneaux/traverses/zones. */}
+        <div style={{marginBottom:"18px"}}>
+          <label style={{fontSize:"11px",fontWeight:"700",color:C.muted,display:"block",marginBottom:"8px"}}>Dessin de la menuiserie</label>
+          {(o.largeur && o.hauteur) ? (
+            <div onClick={() => setShowConfig(true)}
+              style={{border:"1.5px solid "+C.orBord,borderRadius:"10px",padding:"8px",cursor:"pointer",background:"#FCFCFC"}}
+              dangerouslySetInnerHTML={{ __html: buildSchemaSvgString(o, false, 300, 220) }}/>
+          ) : null}
+          <button type="button" onClick={() => { if (!o.largeur || !o.hauteur) { alert("Renseigne d'abord Largeur et Hauteur."); return; } setShowConfig(true); }}
+            style={{width:"100%",marginTop:"8px",display:"flex",alignItems:"center",justifyContent:"center",gap:"8px",padding:"12px",background:C.orDim,border:"1.5px dashed "+C.orBord,color:"#8a6d1f",borderRadius:"10px",fontWeight:"800",fontSize:"12px",cursor:"pointer"}}>
+            📐 {resumeConfig ? "Ouvrir le configurateur (" + resumeConfig + ")" : "Ouvrir le configurateur (meneaux, traverses, ouvrants)"}
+          </button>
+        </div>
+
+        <div style={{fontSize:"11px",fontWeight:"800",color:C.white,margin:"18px 0 8px"}}>📋 Fiche fabrication</div>
+
+        <FoldSection title="🎨 Couleur" summary={resumeCouleur}>
+          {o.materiau === "Alu" ? (
+            <>
+              <div style={{marginBottom:"12px"}}>
+                <label style={{fontSize:"11px",fontWeight:"700",color:C.muted,display:"block",marginBottom:"6px"}}>RAL laquage</label>
+                <select value={o.ralAlu} onChange={e => set('ralAlu', e.target.value)}>
+                  <option value="">— Sélectionner —</option>
+                  {RAL_LIST.map(r => <option key={r.v} value={r.v}>{r.l}</option>)}
+                </select>
+              </div>
+              <ChoiceButtons label="Finition" value={o.finitionAlu} onChange={v => set('finitionAlu', v)} choices={FINITIONS_ALU}/>
+            </>
+          ) : (
+            <>
+              <ChoiceButtons label="Teinte PVC" value={o.teintePvc} onChange={v => set('teintePvc', v)} choices={TEINTES_PVC}/>
+              <label onClick={() => set('capotAlu', !o.capotAlu)}
+                style={{display:"flex",alignItems:"center",gap:"8px",padding:"9px 12px",borderRadius:"8px",cursor:"pointer",marginBottom: o.capotAlu ? "12px" : "0",
+                  border:"1.5px solid "+(o.capotAlu?C.or:C.border), background:o.capotAlu?C.orDim:"#fff",fontSize:"12px",fontWeight:"700",color:o.capotAlu?C.white:C.muted}}>
+                <input type="checkbox" checked={o.capotAlu} onChange={() => {}} style={{width:"14px",accentColor:C.or}}/>
+                Capot alu clipable extérieur
+              </label>
+              {o.capotAlu && (
+                <>
+                  <div style={{marginBottom:"12px"}}>
+                    <label style={{fontSize:"11px",fontWeight:"700",color:C.muted,display:"block",marginBottom:"6px"}}>RAL du capot</label>
+                    <select value={o.ralCapot} onChange={e => set('ralCapot', e.target.value)}>
+                      <option value="">— Sélectionner —</option>
+                      {RAL_LIST.map(r => <option key={r.v} value={r.v}>{r.l}</option>)}
+                    </select>
+                  </div>
+                  <ChoiceButtons label="Finition capot" value={o.finitionCapot} onChange={v => set('finitionCapot', v)} choices={FINITIONS_ALU}/>
+                </>
+              )}
+            </>
+          )}
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"10px",marginTop:"12px"}}>
+            <FieldText label="Couleur intérieure" value={o.couleurInt} onChange={v => set('couleurInt', v)} placeholder="ex : Blanc 9016"/>
+            <FieldText label="Couleur extérieure" value={o.couleurExt} onChange={v => set('couleurExt', v)} placeholder="ex : Gris 7016"/>
+          </div>
+          <FieldText label="Quantité" type="number" value={o.quantite} onChange={v => set('quantite', v)} placeholder="ex : 1"/>
+        </FoldSection>
+
+        <FoldSection title="🪟 Vitrage" summary={resumeVitrage}>
+          <div style={{marginBottom:"12px"}}>
+            <label style={{fontSize:"11px",fontWeight:"700",color:C.muted,display:"block",marginBottom:"6px"}}>Type de vitrage</label>
+            <select value={TYPES_VITRAGE.includes(o.vitrage) ? o.vitrage : (o.vitrage ? "Autre" : "")}
+              onChange={e => set('vitrage', e.target.value === "Autre" ? "" : e.target.value)}>
+              <option value="">— Sélectionner —</option>
+              {TYPES_VITRAGE.map(v => <option key={v} value={v}>{v}</option>)}
+            </select>
+          </div>
+          {!TYPES_VITRAGE.includes(o.vitrage) && (
+            <FieldText label="Préciser la composition" value={o.vitrage} onChange={v => set('vitrage', v)} placeholder="ex : 4/16/4 argon"/>
+          )}
+          <FieldText label="Petit bois (dim / H / V)" value={o.petitBois} onChange={v => set('petitBois', v)} placeholder="ex : Dim 10 · H 18 · V 26"/>
+          <ChoiceButtons label="Remplissage bas" value={o.remplBas} onChange={v => set('remplBas', v)} choices={["Panneau sandwich","Verre"]}/>
+        </FoldSection>
+
+        <FoldSection title="🔒 Quincaillerie & options" summary={resumeQuincaillerie}>
+          {TYPES_PORTE.includes(o.type) ? (
+            <>
+              <MultiChoiceButtons label="Options standard" value={o.optionsStandard} onChange={v => set('optionsStandard', v)} choices={OPTIONS_STANDARD}/>
+              <ChoiceButtons label="Serrure" value={o.serrure} onChange={v => set('serrure', v)} choices={["Non","Relevage","Ferco"]}/>
+              <MultiChoiceButtons label="Cylindre" value={o.cylindreSecu} onChange={v => set('cylindreSecu', v)} choices={["Sécu 1","Sécu 2","Sécu 3","S'entrouvrant","Moleté"]}/>
+            </>
+          ) : (
+            <div style={{fontSize:"10.5px",color:C.muted,fontStyle:"italic",marginBottom:"12px"}}>Barillet, serrure et seuil alu réservés aux portes (Porte d'entrée / Porte-fenêtre).</div>
+          )}
+          <ChoiceButtons label="Patte fixation neuf" value={o.patteFixationNeuf} onChange={v => set('patteFixationNeuf', v)} choices={["Oui","Non"]}/>
+          <div>
+            <label style={{fontSize:"11px",fontWeight:"700",color:C.muted,display:"block",marginBottom:"6px"}}>Autres options / quincaillerie</label>
+            <textarea value={o.options} onChange={e => set('options', e.target.value)} rows={2} placeholder="Poignée crémone, moustiquaire..." style={{resize:"vertical"}}/>
+          </div>
+        </FoldSection>
+
+        <FoldSection title="📐 Dormant & structure" summary={resumeDormant}>
+          <ChoiceButtons label="Choix du dormant" value={o.dormant} onChange={v => set('dormant', v)} choices={DORMANTS}/>
+          {o.pose === "Neuf" && (
+            <ChoiceButtons label="Pièce d'appui" value={o.pieceAppui} onChange={v => set('pieceAppui', v)} choices={["Long", "Court"]}/>
+          )}
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"10px"}}>
+            <FieldText label="Dormant traverse Haut" value={o.dormantTrHaut} onChange={v => set('dormantTrHaut', v)}/>
+            <FieldText label="Dormant traverse Bas" value={o.dormantTrBas} onChange={v => set('dormantTrBas', v)}/>
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"10px"}}>
+            <FieldText label="Dormant montant Gauche" value={o.dormantMtGauche} onChange={v => set('dormantMtGauche', v)}/>
+            <FieldText label="Dormant montant Droit" value={o.dormantMtDroit} onChange={v => set('dormantMtDroit', v)}/>
+          </div>
+          <div style={{display:"grid",gridTemplateColumns: (TYPES_POIGNEE.includes(o.type) || aUneZonePoignee(o)) ? "1fr 1fr" : "1fr",gap:"10px"}}>
+            {(TYPES_POIGNEE.includes(o.type) || aUneZonePoignee(o)) && (
+              <FieldText label="Hauteur poignée (mm)" type="number" value={o.hauteurPoignee} onChange={v => set('hauteurPoignee', v)}/>
+            )}
+            <FieldText label="Axe meneaux" value={o.axeMeneaux} onChange={v => set('axeMeneaux', v)} placeholder="ex : vitrages égaux"/>
+          </div>
+        </FoldSection>
+
+        <FoldSection title="🔧 Calage & fixation" summary={resumeCalage}>
+          <FieldText label="Appui seuil balai" value={o.appuiSeuilBalai} onChange={v => set('appuiSeuilBalai', v)} placeholder="référence"/>
+          <ChoiceButtons label="Réf. 4319" value={o.ref4319} onChange={v => set('ref4319', v)} choices={["Oui","Non"]}/>
+          <FieldText label="Calage dormant / habillage" value={o.calageDormantHabillage} onChange={v => set('calageDormantHabillage', v)} placeholder="référence"/>
+        </FoldSection>
+
+        <FoldSection title="💨 Divers" summary={resumeDivers}>
+          <ChoiceButtons label="Ventilation" value={o.ventilation} onChange={v => set('ventilation', v)} choices={["Non","Normale","Hygro","RB"]}/>
+          <ChoiceButtons label="Type volet" value={o.typeVolet} onChange={v => set('typeVolet', v)} choices={["Existant","Bloc neuf"]}/>
+        </FoldSection>
+
+        <FoldSection title="🪚 Habillage" summary={resumeHabillage}>
+          <ChoiceButtons label="Délignage ailes intérieur" value={o.delignageInt} onChange={v => set('delignageInt', v)} choices={["TB","TH","MG","MD"]}/>
+          <ChoiceButtons label="Délignage ailes extérieur" value={o.delignageExt} onChange={v => set('delignageExt', v)} choices={["TB","TH","MG","MD"]}/>
+          <ChoiceButtons label="Tapée (mm)" value={o.tapee} onChange={v => set('tapee', v)} choices={["15","35","55","75","95","115","135"]}/>
+          <ChoiceButtons label="Plat - coupe intérieure" value={o.platCoupe} onChange={v => set('platCoupe', v)} choices={["Onglet","Surlongueur"]}/>
+          <FieldText label="Plat - dimensions (int / ext / nb côtés)" value={o.platDimensions} onChange={v => set('platDimensions', v)} placeholder="ex : Int 20 · Ext 30 · 2 côtés"/>
+          <FieldText label="Cornière (int / ext / nb côtés)" value={o.corniere} onChange={v => set('corniere', v)} placeholder="ex : Int 20 · Ext 30 · 2 côtés"/>
+          <FieldText label="Cornière appui seuil" value={o.corniereAppuiSeuil} onChange={v => set('corniereAppuiSeuil', v)} placeholder="ex : 80 x 50"/>
+        </FoldSection>
+
+        <label style={{fontSize:"11px",fontWeight:"700",color:C.muted,display:"block",marginBottom:"6px"}}>Photo (aperçu local)</label>
+        <input type="file" accept="image/*" capture="environment" onChange={onPhoto} style={{marginBottom:"10px",border:"none",padding:0}}/>
+        {o.photoPreview && <img src={o.photoPreview} style={{width:"100%",maxHeight:"160px",objectFit:"cover",borderRadius:"8px",marginBottom:"14px"}}/>}
+
+        <label style={{fontSize:"11px",fontWeight:"700",color:C.muted,display:"block",marginBottom:"6px"}}>Note</label>
+        <textarea value={o.note} onChange={e => set('note', e.target.value)} rows={2} placeholder="Remarque particulière..." style={{marginBottom:"18px",resize:"vertical"}}/>
+
+        <button onClick={() => valide && onSave(o)} disabled={!valide}
+          style={{width:"100%",padding:"13px",background:valide?C.or:"#D1D5DB",color:"#111",border:"none",borderRadius:"10px",fontWeight:"900",fontSize:"13px",cursor:valide?"pointer":"not-allowed"}}>
+          {initial ? "Mettre à jour l'ouverture" : "Ajouter l'ouverture"}
+        </button>
+      </div>
+
+      {showConfig && (
+        <ConfigurateurModal o={o} set={set} onClose={() => setShowConfig(false)}/>
+      )}
+      {showTypePicker && (
+        <TypeModal value={o.type} onSelect={(v) => {
+          // Sélection explicite d'un type -> le dessin doit toujours correspondre
+          // au picto choisi (c'est le point remonté par Stéphane), donc on
+          // resynchronise systématiquement zones + meneaux, sans exception.
+          const Lmm = Math.max(300, Number(o.largeur) || 1200);
+          const z = zonesFromType(v, Lmm);
+          const nextO = { ...o, type: v, meneaux: z.meneaux, zonesRempl: z.zonesRempl };
+          setO(nextO);
+          // Type à poignée choisi directement en haut (sans passer par le
+          // configurateur) -> on demande quand même la hauteur, avec le
+          // dessin en aperçu, au lieu de laisser le champ caché dans un accordéon.
+          if (aUneZonePoignee(nextO)) setAskHp(nextO);
+        }} onClose={() => setShowTypePicker(false)}/>
+      )}
+      {askHp && (
+        <HauteurPoigneeModal o={askHp} currentHp={o.hauteurPoignee}
+          estPorte={Object.values(askHp.zonesRempl || {}).some(v => (v || "").startsWith("Porte"))}
+          contexte={"Type réglé en " + ((TYPES.find(t => t.v === askHp.type) || {}).l || askHp.type) + "."}
+          onValider={(v) => {
+            // Applique la valeur à toutes les zones à poignée de cet ouvrant
+            // (ex : OB2 = 2 vantaux, les deux reçoivent la même hauteur de
+            // départ, modifiable ensuite zone par zone dans le configurateur).
+            const next = { ...(o.hauteursPoignee || {}) };
+            Object.keys(askHp.zonesRempl || {}).forEach(k => { if (REMPLISSAGES_POIGNEE.includes(askHp.zonesRempl[k])) next[k] = v; });
+            set('hauteursPoignee', next);
+            set('hauteurPoignee', v);
+          }} onClose={() => setAskHp(null)}/>
+      )}
+    </div>
+  );
+}
+
+// ---- MODAL SELECTION DU TYPE D'OUVRANT ----
+function TypeModal({ value, onSelect, onClose }) {
+  return (
+    <div style={{position:"fixed",inset:0,zIndex:4000,background:"rgba(0,0,0,0.6)",display:"flex",alignItems:"center",justifyContent:"center",padding:"16px"}}
+      onClick={e => e.target === e.currentTarget && onClose()}>
+      <div style={{background:"#fff",borderRadius:"16px",width:"560px",maxWidth:"100%",maxHeight:"92vh",overflowY:"auto",padding:"22px"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"14px"}}>
+          <h2 style={{fontSize:"15px",color:C.white,fontWeight:"900"}}>🔲 Type d'ouvrant</h2>
+          <button onClick={onClose} style={{background:"none",border:"none",fontSize:"18px",color:C.muted,cursor:"pointer"}}>✕</button>
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(4, 1fr)",gap:"8px"}}>
+          {TYPES.map(t => (
+            <button key={t.v} type="button" onClick={() => { onSelect(t.v); onClose(); }}
+              style={{display:"flex",flexDirection:"column",alignItems:"center",gap:"4px",padding:"8px 4px",borderRadius:"10px",cursor:"pointer",
+                border:"1.5px solid " + (value===t.v ? C.or : C.border), background:value===t.v ? C.orDim : "#fff"}}>
+              <IconOuverture type={t.v} active={value===t.v} size={36}/>
+              <span style={{fontSize:"9px",fontWeight:"700",color:value===t.v?C.white:C.muted,textAlign:"center",lineHeight:"1.2"}}>{t.l}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---- LOGIN ----
+function Login({ onLogin }) {
+  const [pwd, setPwd] = React.useState("");
+  const [error, setError] = React.useState(false);
+  const [show, setShow] = React.useState(false);
+  const tenter = () => {
+    const access = PASSWORDS[pwd.trim()];
+    if (access) { onLogin(access); }
+    else { setError(true); setTimeout(() => setError(false), 2000); }
+  };
+  return (
+    <div style={{minHeight:"100vh",background:C.bg,display:"flex",alignItems:"center",justifyContent:"center",padding:"24px",position:"relative"}}>
+      <button onClick={() => window.location.href = "/"} title="Fermer"
+        style={{position:"absolute",top:"20px",right:"20px",background:"rgba(220,38,38,0.08)",border:"1px solid rgba(220,38,38,0.25)",color:"rgba(220,38,38,0.85)",borderRadius:"8px",width:"34px",height:"34px",cursor:"pointer",fontSize:"16px",display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>
+      <div style={{width:"100%",maxWidth:"340px"}}>
+        <div style={{textAlign:"center",marginBottom:"36px"}}>
+          <div style={{width:"190px",height:"100px",background:"#FFFFFF",borderRadius:"16px",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 16px",boxShadow:"0 8px 32px rgba(218,178,57,0.3)",padding:"8px",boxSizing:"border-box"}}>
+            <span style={{fontSize:"26px",fontWeight:"900",color:"#111111",letterSpacing:"1px"}}>RSIA IKO</span>
+          </div>
+          <div style={{fontSize:"11px",color:C.muted,marginTop:"6px",letterSpacing:"2px",textTransform:"uppercase"}}>📐 Module Métreur</div>
+        </div>
+        <div style={{background:C.card,border:"1px solid "+(error?"rgba(220,38,38,0.4)":C.orBord),borderRadius:"16px",padding:"24px"}}>
+          <div style={{position:"relative",marginBottom:"14px"}}>
+            <input type={show?"text":"password"} placeholder="Mot de passe agence" value={pwd}
+              onChange={e => setPwd(e.target.value)} onKeyDown={e => e.key==="Enter"&&tenter()}
+              style={{paddingRight:"40px",fontSize:"16px",textAlign:"center",letterSpacing:"2px"}}/>
+            <button onClick={() => setShow(!show)} style={{position:"absolute",right:"12px",top:"50%",transform:"translateY(-50%)",background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:"16px",width:"auto",padding:"0"}}>
+              {show?"🙈":"👁️"}
+            </button>
+          </div>
+          {error && <div style={{fontSize:"11px",color:C.rouge,marginBottom:"10px",textAlign:"center"}}>Mot de passe incorrect</div>}
+          <button onClick={tenter} style={{width:"100%",padding:"14px",background:C.or,color:"#111",border:"none",borderRadius:"10px",fontSize:"14px",fontWeight:"900",cursor:"pointer"}}>
+            Accéder →
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---- FICHE (creation / edition) ----
+function FicheMetre({ agenceAccess, ficheInit, onBack }) {
+  const [fiche, setFiche] = React.useState(ficheInit.fiche);
+  const [ouvertures, setOuvertures] = React.useState(ficheInit.ouvertures || []);
+  const [modalOuverture, setModalOuverture] = React.useState(null); // { index } ou { index: -1 } pour ajout
+  const [saving, setSaving] = React.useState(false);
+  const [sending, setSending] = React.useState(false);
+  const [sendingBE, setSendingBE] = React.useState(false);
+  const [statutMsg, setStatutMsg] = React.useState("");
+
+  const setF = (k, v) => setFiche(prev => ({ ...prev, [k]: v }));
+
+  const ajouterOuverture = (o) => {
+    setOuvertures(prev => modalOuverture.index === -1 ? [...prev, o] : prev.map((x,i) => i===modalOuverture.index ? o : x));
+    setModalOuverture(null);
+  };
+  const supprimerOuverture = (i) => {
+    if (!confirm("Supprimer cette ouverture ?")) return;
+    setOuvertures(prev => prev.filter((_,idx) => idx!==i));
+  };
+
+  // Enregistre la fiche (+ ouvertures pas encore synchronisées) dans Airtable.
+  const sauvegarder = async (statutFinal) => {
+    setSaving(true);
+    try {
+      let ficheId = fiche.airtableId;
+      const ficheFields = {
+        "Name": fiche.numero,
+        "N° dossier": fiche.numeroDossier,
+        "Client": fiche.client,
+        "Adresse": fiche.adresse,
+        "Téléphone": fiche.telephone,
+        "Agence": fiche.agence,
+        "Métreur": fiche.metreur,
+        "Date métrage": fiche.date,
+        "Note générale": fiche.noteGenerale,
+        "Statut": statutFinal || "Brouillon",
+      };
+      if (statutFinal === "Envoyé à l'atelier") {
+        ficheFields["Envoyé le"] = new Date().toISOString();
+      }
+      if (!ficheId) {
+        const resp = await fetch('/api/airtable/' + encodeURIComponent(TABLE_METRES), {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fields: ficheFields })
+        });
+        const data = await resp.json();
+        ficheId = data.id;
+        setFiche(prev => ({ ...prev, airtableId: ficheId }));
+      } else {
+        await fetch('/api/airtable/' + encodeURIComponent(TABLE_METRES) + '/' + ficheId, {
+          method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fields: ficheFields })
+        });
+      }
+
+      const nouvellesOuvertures = [...ouvertures];
+      for (let i = 0; i < nouvellesOuvertures.length; i++) {
+        const o = nouvellesOuvertures[i];
+        const ouvertureFields = {
+          "Repère": o.repere, "Métré": [ficheId], "Type": o.type, "Matériau": o.materiau,
+          "Largeur mm": Number(o.largeur) || null, "Hauteur mm": Number(o.hauteur) || null,
+          "Couleur / RAL": o.couleur, "Vitrage": o.vitrage, "Options": o.options, "Note": o.note,
+          "Traverses (mm)": (o.traverses || []).filter(Boolean).join(", "),
+          "Meneaux (mm)": (o.meneaux || []).filter(Boolean).join(", "),
+          "Pose": o.pose || null,
+          "Configurateur JSON": JSON.stringify(descripteurConfig(o)),
+          "Options standard": o.optionsStandard || [],
+          "Dormant": o.dormant || null,
+          "Couleur intérieure": o.couleurInt || "", "Couleur extérieure": o.couleurExt || "",
+          "Quantité": Number(o.quantite) || null,
+          "Serrure": o.serrure || null, "Cylindre sécu": o.cylindreSecu || [], "Patte fixation neuf": o.patteFixationNeuf || null,
+          "Dormant traverse Haut": o.dormantTrHaut || "", "Dormant traverse Bas": o.dormantTrBas || "",
+          "Dormant montant Gauche": o.dormantMtGauche || "", "Dormant montant Droit": o.dormantMtDroit || "",
+          "Hauteur poignée": Number(o.hauteurPoignee) || null, "Axe meneaux": o.axeMeneaux || "",
+          "Appui seuil balai": o.appuiSeuilBalai || "", "Réf. 4319": o.ref4319 || null, "Calage dormant / habillage": o.calageDormantHabillage || "",
+          "Petit bois": o.petitBois || "", "Remplissage bas": o.remplBas || null,
+          "Ventilation": o.ventilation || null, "Type volet": o.typeVolet || null,
+          "Délignage ailes intérieur": o.delignageInt || null, "Délignage ailes extérieur": o.delignageExt || null,
+          "Tapée": o.tapee || null, "Plat - coupe intérieure": o.platCoupe || null, "Plat - dimensions": o.platDimensions || "",
+          "Cornière": o.corniere || "", "Cornière appui seuil": o.corniereAppuiSeuil || "",
+        };
+        if (o.airtableId) {
+          await fetch('/api/airtable/' + encodeURIComponent(TABLE_OUVERTURES) + '/' + o.airtableId, {
+            method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ fields: ouvertureFields })
+          });
+        } else {
+          const resp = await fetch('/api/airtable/' + encodeURIComponent(TABLE_OUVERTURES), {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ fields: ouvertureFields })
+          });
+          const data = await resp.json();
+          nouvellesOuvertures[i] = { ...o, airtableId: data.id };
+        }
+      }
+      setOuvertures(nouvellesOuvertures);
+      return ficheId;
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const enregistrerBrouillon = async () => {
+    await sauvegarder("Brouillon");
+    setStatutMsg("✅ Brouillon enregistré.");
+    setTimeout(() => setStatutMsg(""), 2500);
+  };
+
+  const envoyerAtelier = async () => {
+    if (ouvertures.length === 0) { alert("Ajoute au moins une ouverture avant l'envoi."); return; }
+    setSending(true);
+    try {
+      await sauvegarder("Envoyé à l'atelier");
+      // Schémas PNG du configurateur pour chaque ouverture cotée
+      let schemas = [];
+      try {
+        schemas = await Promise.all(
+          ouvertures.filter(o => o.largeur && o.hauteur).map(async (o) => {
+            const g = geomSchema(o, 440, 380);
+            const png = await svgVersPng(buildSchemaSvgString(o, true, 440, 380), g.svgW, g.svgH);
+            return { repere: o.repere || o.type, png };
+          })
+        );
+      } catch (e) { schemas = []; }
+      await fetch(WEBHOOK, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'metreur_envoye',
+          fiche: fiche.numero, nom: fiche.client, adresse: fiche.adresse, agence: fiche.agence,
+          metreur: fiche.metreur, dateMetrage: fiche.date,
+          ouverturesHtml: buildOuverturesHtml(ouvertures),
+          schemas: schemas,
+        })
+      });
+      setStatutMsg("✅ Fiche envoyée à l'atelier par email.");
+    } catch (e) {
+      setStatutMsg("⚠️ Erreur lors de l'envoi.");
+    } finally {
+      setSending(false);
+      setTimeout(() => setStatutMsg(""), 4000);
+    }
+  };
+
+  // Envoie le résumé synthétique au BE par email. Réutilise le même webhook
+  // Make que l'envoi atelier, avec une action distincte ('resume_be_envoye')
+  // pour permettre de brancher un routage différent côté scénario Make.
+  // ⚠️ L'adresse email du BE destinataire doit être configurée côté Make —
+  // ce code envoie la donnée, pas la destination finale.
+  const envoyerResumeBE = async () => {
+    if (ouvertures.length === 0) { alert("Ajoute au moins une ouverture avant l'envoi."); return; }
+    setSendingBE(true);
+    try {
+      await sauvegarder(fiche.statut || "Brouillon");
+      let schemas = [];
+      try {
+        schemas = await Promise.all(
+          ouvertures.filter(o => o.largeur && o.hauteur).map(async (o) => {
+            const g = geomSchema(o, 300, 220);
+            const png = await svgVersPng(buildSchemaSvgString(o, true, 300, 220), g.svgW, g.svgH);
+            return { repere: o.repere || o.type, png };
+          })
+        );
+      } catch (e) { schemas = []; }
+      await fetch(WEBHOOK, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'resume_be_envoye',
+          fiche: fiche.numero, numeroDossier: fiche.numeroDossier, nom: fiche.client, adresse: fiche.adresse, agence: fiche.agence,
+          metreur: fiche.metreur, dateMetrage: fiche.date,
+          resumeHtml: htmlResumeBE(ouvertures),
+          schemas: schemas,
+        })
+      });
+      setStatutMsg("✅ Résumé envoyé au BE par email.");
+    } catch (e) {
+      setStatutMsg("⚠️ Erreur lors de l'envoi au BE.");
+    } finally {
+      setSendingBE(false);
+      setTimeout(() => setStatutMsg(""), 4000);
+    }
+  };
+
+  const valideFiche = fiche.client.trim() && fiche.adresse.trim();
+
+  return (
+    <div style={{maxWidth:"760px",margin:"0 auto",padding:"20px"}}>
+      <button onClick={onBack} style={{background:"none",border:"none",color:C.muted,fontSize:"12px",fontWeight:"700",cursor:"pointer",marginBottom:"14px"}}>← Retour aux fiches</button>
+
+      <div style={{background:C.card,border:"1px solid "+C.border,borderRadius:"14px",padding:"20px",marginBottom:"16px"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"14px"}}>
+          <h2 style={{fontSize:"14px",color:C.white,fontWeight:"900"}}>🏗️ Fiche chantier — {fiche.numero}</h2>
+          {fiche.statut && <span style={{fontSize:"10px",fontWeight:"800",padding:"3px 9px",borderRadius:"20px",background:fiche.statut==="Envoyé à l'atelier"?C.vertDim:C.orDim,color:fiche.statut==="Envoyé à l'atelier"?C.vert:"#8a6d1f"}}>{fiche.statut}</span>}
+        </div>
+        <label style={{fontSize:"11px",fontWeight:"700",color:C.muted,display:"block",marginBottom:"6px"}}>N° dossier</label>
+        <input value={fiche.numeroDossier} onChange={e => setF('numeroDossier', e.target.value)} placeholder="Réf. dossier commercial" style={{marginBottom:"10px"}}/>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"10px",marginBottom:"10px"}}>
+          <div>
+            <label style={{fontSize:"11px",fontWeight:"700",color:C.muted,display:"block",marginBottom:"6px"}}>Client</label>
+            <input value={fiche.client} onChange={e => setF('client', e.target.value)} placeholder="Nom du client"/>
+          </div>
+          <div>
+            <label style={{fontSize:"11px",fontWeight:"700",color:C.muted,display:"block",marginBottom:"6px"}}>Téléphone</label>
+            <input value={fiche.telephone} onChange={e => setF('telephone', e.target.value)} placeholder="Téléphone"/>
+          </div>
+        </div>
+        <label style={{fontSize:"11px",fontWeight:"700",color:C.muted,display:"block",marginBottom:"6px"}}>Adresse du chantier</label>
+        <input value={fiche.adresse} onChange={e => setF('adresse', e.target.value)} placeholder="Adresse complète" style={{marginBottom:"10px"}}/>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:"10px"}}>
+          <div>
+            <label style={{fontSize:"11px",fontWeight:"700",color:C.muted,display:"block",marginBottom:"6px"}}>Agence</label>
+            {agenceAccess === "global" ? (
+              <select value={fiche.agence} onChange={e => setF('agence', e.target.value)}>
+                {AGENCES.map(a => <option key={a}>{a}</option>)}
+              </select>
+            ) : <input value={fiche.agence} disabled/>}
+          </div>
+          <div>
+            <label style={{fontSize:"11px",fontWeight:"700",color:C.muted,display:"block",marginBottom:"6px"}}>Métreur</label>
+            <input value={fiche.metreur} onChange={e => setF('metreur', e.target.value)} placeholder="Nom"/>
+          </div>
+          <div>
+            <label style={{fontSize:"11px",fontWeight:"700",color:C.muted,display:"block",marginBottom:"6px"}}>Date</label>
+            <input type="date" value={fiche.date} onChange={e => setF('date', e.target.value)}/>
+          </div>
+        </div>
+      </div>
+
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"10px"}}>
+        <h3 style={{fontSize:"13px",color:C.white,fontWeight:"900"}}>Ouvertures ({ouvertures.length})</h3>
+        <button onClick={() => setModalOuverture({ index: -1 })} style={{background:C.or,color:"#111",border:"none",borderRadius:"8px",padding:"8px 14px",fontSize:"12px",fontWeight:"900",cursor:"pointer"}}>
+          + Ajouter une ouverture
+        </button>
+      </div>
+
+      {ouvertures.length === 0 && (
+        <div style={{textAlign:"center",color:C.muted,fontSize:"12px",padding:"30px",background:C.card,border:"1px dashed "+C.border,borderRadius:"12px",marginBottom:"16px"}}>
+          Aucune ouverture pour l'instant.
+        </div>
+      )}
+
+      <div style={{display:"flex",flexDirection:"column",gap:"8px",marginBottom:"20px"}}>
+        {ouvertures.map((o, i) => {
+          const nz = zonesRecap(o).length;
+          return (
+            <div key={i} style={{background:C.card,border:"1px solid "+C.border,borderRadius:"10px",padding:"10px 14px",display:"flex",alignItems:"center",gap:"12px"}}>
+              <IconOuverture type={o.type} active={true} size={34}/>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontSize:"12px",fontWeight:"800",color:C.white}}>{o.repere}</div>
+                <div style={{fontSize:"11px",color:C.muted}}>
+                  {o.type} · {o.materiau}{o.pose ? " · " + o.pose : ""} · {o.largeur||"—"}×{o.hauteur||"—"} mm
+                  {nz > 1 ? " · " + nz + " zones" : ""}{o.couleur ? " · " + o.couleur : ""}
+                </div>
+              </div>
+              <button onClick={() => setModalOuverture({ index: i })} style={{background:C.orDim,border:"1px solid "+C.orBord,color:"#8a6d1f",borderRadius:"7px",padding:"6px 10px",fontSize:"11px",fontWeight:"700",cursor:"pointer"}}>Modifier</button>
+              <button onClick={() => supprimerOuverture(i)} style={{background:C.rougeDim,border:"1px solid rgba(220,38,38,0.25)",color:C.rouge,borderRadius:"7px",padding:"6px 10px",fontSize:"11px",fontWeight:"700",cursor:"pointer"}}>✕</button>
+            </div>
+          );
+        })}
+      </div>
+
+      {statutMsg && <div style={{textAlign:"center",fontSize:"12px",fontWeight:"700",color:C.white,marginBottom:"12px"}}>{statutMsg}</div>}
+
+      <div style={{display:"flex",gap:"10px",flexWrap:"wrap"}}>
+        <button onClick={async () => { await genererPdfMetre(fiche, ouvertures); }} disabled={ouvertures.length===0}
+          style={{flex:"1 1 160px",padding:"13px",background:"#fff",border:"1.5px solid "+C.border,color:C.text,borderRadius:"10px",fontWeight:"800",fontSize:"12px",cursor:ouvertures.length?"pointer":"not-allowed"}}>
+          📄 Télécharger PDF
+        </button>
+        <button onClick={enregistrerBrouillon} disabled={!valideFiche || saving}
+          style={{flex:"1 1 160px",padding:"13px",background:C.orDim,border:"1.5px solid "+C.orBord,color:"#8a6d1f",borderRadius:"10px",fontWeight:"800",fontSize:"12px",cursor:valideFiche?"pointer":"not-allowed"}}>
+          {saving ? "..." : "💾 Enregistrer brouillon"}
+        </button>
+        <button onClick={envoyerAtelier} disabled={!valideFiche || sending}
+          style={{flex:"1 1 200px",padding:"13px",background:C.white,border:"none",color:"#fff",borderRadius:"10px",fontWeight:"900",fontSize:"12px",cursor:valideFiche?"pointer":"not-allowed"}}>
+          {sending ? "Envoi en cours..." : "📤 Envoyer à l'atelier"}
+        </button>
+      </div>
+
+      <div style={{marginTop:"18px",paddingTop:"16px",borderTop:"1px dashed "+C.border}}>
+        <div style={{fontSize:"12px",fontWeight:"900",color:C.white,marginBottom:"10px"}}>📋 Résumé BE — couleur, hauteur poignée, schéma</div>
+        <div style={{display:"flex",gap:"10px",flexWrap:"wrap"}}>
+          <button onClick={() => imprimerResumeBE(fiche, ouvertures)} disabled={ouvertures.length===0}
+            style={{flex:"1 1 140px",padding:"12px",background:"#fff",border:"1.5px solid "+C.border,color:C.text,borderRadius:"10px",fontWeight:"800",fontSize:"12px",cursor:ouvertures.length?"pointer":"not-allowed"}}>
+            🖨️ Imprimer
+          </button>
+          <button onClick={() => telechargerResumeBE(fiche, ouvertures)} disabled={ouvertures.length===0}
+            style={{flex:"1 1 140px",padding:"12px",background:"#fff",border:"1.5px solid "+C.border,color:C.text,borderRadius:"10px",fontWeight:"800",fontSize:"12px",cursor:ouvertures.length?"pointer":"not-allowed"}}>
+            💾 Enregistrer
+          </button>
+          <button onClick={envoyerResumeBE} disabled={!valideFiche || sendingBE}
+            style={{flex:"1 1 160px",padding:"12px",background:C.bleu,border:"none",color:"#fff",borderRadius:"10px",fontWeight:"900",fontSize:"12px",cursor:valideFiche?"pointer":"not-allowed"}}>
+            {sendingBE ? "Envoi en cours..." : "✉️ Envoyer au BE"}
+          </button>
+        </div>
+      </div>
+
+      {modalOuverture && (
+        <OuvertureModal
+          initial={modalOuverture.index >= 0 ? ouvertures[modalOuverture.index] : null}
+          onClose={() => setModalOuverture(null)}
+          onSave={ajouterOuverture}
+        />
+      )}
+    </div>
+  );
+}
+
+// ---- LISTE DES FICHES ----
+function Metreur({ agenceAccess, onClose }) {
+  const [fiches, setFiches] = React.useState([]);
+  const [loading, setLoading] = React.useState(true);
+  const [ouverte, setOuverte] = React.useState(null); // { fiche, ouvertures } ou null
+
+  const charger = async () => {
+    setLoading(true);
+    try {
+      const filtre = agenceAccess !== "global" ? '?filterByFormula=' + encodeURIComponent('{Agence}="' + agenceAccess + '"') + '&sort[0][field]=Date métrage&sort[0][direction]=desc' : '?sort[0][field]=Date métrage&sort[0][direction]=desc';
+      const resp = await fetch('/api/airtable/' + encodeURIComponent(TABLE_METRES) + filtre);
+      const data = await resp.json();
+      setFiches(data.records || []);
+    } catch (e) { console.error(e); }
+    setLoading(false);
+  };
+  React.useEffect(() => { charger(); }, [agenceAccess]);
+
+  const nouvelleFiche = () => {
+    setOuverte({
+      fiche: {
+        numero: genererNumero(), numeroDossier: "", client: "", adresse: "", telephone: "",
+        agence: agenceAccess !== "global" ? agenceAccess : AGENCES[0],
+        metreur: "", date: new Date().toISOString().split('T')[0], noteGenerale: "", airtableId: null, statut: "Brouillon",
+      },
+      ouvertures: [],
+    });
+  };
+
+  const ouvrirFiche = async (record) => {
+    setLoading(true);
+    try {
+      const formula = encodeURIComponent('FIND("' + record.fields.Name + '", ARRAYJOIN({Métré}))');
+      const resp = await fetch('/api/airtable/' + encodeURIComponent(TABLE_OUVERTURES) + '?filterByFormula=' + formula);
+      const data = await resp.json();
+      const ouvertures = (data.records || []).map(r => {
+        let zonesRempl = {}, cCouleur = {}, cHp = {}, cVitrage = {}, cPb = {}, cMc = {}, cOs = {}, cPa = "", cTc = {};
+        try {
+          const cj = JSON.parse(r.fields["Configurateur JSON"] || "{}");
+          zonesRempl = cj.zonesRempl || {};
+          cCouleur = cj.couleur || {};
+          cHp = cj.hauteursPoignee || {};
+          cVitrage = cj.zonesVitrage || {};
+          cPb = cj.zonesPetitBois || {};
+          cMc = cj.meneauxCoupures || {};
+          cOs = cj.ouvrantsSecondaires || {};
+          cPa = cj.pieceAppui || "";
+          cTc = cj.traversesCoupures || {};
+        } catch (e) { zonesRempl = {}; cCouleur = {}; cHp = {}; cVitrage = {}; cPb = {}; cMc = {}; cOs = {}; cPa = ""; cTc = {}; }
+        return {
+          airtableId: r.id, repere: r.fields["Repère"] || "", type: r.fields["Type"] || "OB1", materiau: r.fields["Matériau"] || "PVC",
+          pose: r.fields["Pose"] || "",
+          largeur: r.fields["Largeur mm"] || "", hauteur: r.fields["Hauteur mm"] || "", couleur: r.fields["Couleur / RAL"] || "",
+          teintePvc: cCouleur.teintePvc || "", capotAlu: !!cCouleur.capotAlu, ralCapot: cCouleur.ralCapot || "", finitionCapot: cCouleur.finitionCapot || "",
+          ralAlu: cCouleur.ralAlu || "", finitionAlu: cCouleur.finitionAlu || "",
+          vitrage: r.fields["Vitrage"] || "", options: r.fields["Options"] || "", note: r.fields["Note"] || "",
+          traverses: (r.fields["Traverses (mm)"] || "").split(",").map(s => s.trim()).filter(Boolean),
+          meneaux: (r.fields["Meneaux (mm)"] || "").split(",").map(s => s.trim()).filter(Boolean),
+          zonesRempl: zonesRempl,
+          hauteursPoignee: cHp,
+          zonesVitrage: cVitrage,
+          zonesPetitBois: cPb,
+          meneauxCoupures: cMc,
+          ouvrantsSecondaires: cOs,
+          pieceAppui: cPa,
+          traversesCoupures: cTc,
+          optionsStandard: r.fields["Options standard"] || [],
+          dormant: r.fields["Dormant"] || "",
+          couleurInt: r.fields["Couleur intérieure"] || "", couleurExt: r.fields["Couleur extérieure"] || "",
+          quantite: r.fields["Quantité"] || "",
+          serrure: r.fields["Serrure"] || "", cylindreSecu: r.fields["Cylindre sécu"] || [], patteFixationNeuf: r.fields["Patte fixation neuf"] || "",
+          dormantTrHaut: r.fields["Dormant traverse Haut"] || "", dormantTrBas: r.fields["Dormant traverse Bas"] || "",
+          dormantMtGauche: r.fields["Dormant montant Gauche"] || "", dormantMtDroit: r.fields["Dormant montant Droit"] || "",
+          hauteurPoignee: r.fields["Hauteur poignée"] || "", axeMeneaux: r.fields["Axe meneaux"] || "",
+          appuiSeuilBalai: r.fields["Appui seuil balai"] || "", ref4319: r.fields["Réf. 4319"] || "", calageDormantHabillage: r.fields["Calage dormant / habillage"] || "",
+          petitBois: r.fields["Petit bois"] || "", remplBas: r.fields["Remplissage bas"] || "",
+          ventilation: r.fields["Ventilation"] || "", typeVolet: r.fields["Type volet"] || "",
+          delignageInt: r.fields["Délignage ailes intérieur"] || "", delignageExt: r.fields["Délignage ailes extérieur"] || "",
+          tapee: r.fields["Tapée"] || "", platCoupe: r.fields["Plat - coupe intérieure"] || "", platDimensions: r.fields["Plat - dimensions"] || "",
+          corniere: r.fields["Cornière"] || "", corniereAppuiSeuil: r.fields["Cornière appui seuil"] || "",
+        };
+      });
+      setOuverte({
+        fiche: {
+          numero: record.fields.Name, numeroDossier: record.fields["N° dossier"] || "", client: record.fields.Client || "", adresse: record.fields.Adresse || "",
+          telephone: record.fields["Téléphone"] || "", agence: record.fields.Agence || AGENCES[0],
+          metreur: record.fields["Métreur"] || "", date: record.fields["Date métrage"] || "",
+          noteGenerale: record.fields["Note générale"] || "", airtableId: record.id, statut: record.fields.Statut || "Brouillon",
+        },
+        ouvertures,
+      });
+    } catch (e) { console.error(e); }
+    setLoading(false);
+  };
+
+  if (ouverte) {
+    return (
+      <div style={{minHeight:"100vh",background:C.bg}}>
+        <Header agenceAccess={agenceAccess} onClose={onClose}/>
+        <FicheMetre agenceAccess={agenceAccess} ficheInit={ouverte} onBack={() => { setOuverte(null); charger(); }}/>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{minHeight:"100vh",background:C.bg}}>
+      <Header agenceAccess={agenceAccess} onClose={onClose}/>
+      <div style={{maxWidth:"760px",margin:"0 auto",padding:"20px"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"16px"}}>
+          <h2 style={{fontSize:"15px",color:C.white,fontWeight:"900"}}>📐 Fiches métré</h2>
+          <button onClick={nouvelleFiche} style={{background:C.or,color:"#111",border:"none",borderRadius:"8px",padding:"10px 18px",fontSize:"12px",fontWeight:"900",cursor:"pointer"}}>
+            + Nouvelle fiche
+          </button>
+        </div>
+        {loading && <div style={{textAlign:"center",color:C.muted,fontSize:"12px",padding:"30px"}}>Chargement...</div>}
+        {!loading && fiches.length === 0 && (
+          <div style={{textAlign:"center",color:C.muted,fontSize:"12px",padding:"30px",background:C.card,border:"1px dashed "+C.border,borderRadius:"12px"}}>
+            Aucune fiche pour l'instant. Clique sur "+ Nouvelle fiche" pour commencer.
+          </div>
+        )}
+        <div style={{display:"flex",flexDirection:"column",gap:"8px"}}>
+          {fiches.map(f => (
+            <div key={f.id} onClick={() => ouvrirFiche(f)} style={{background:C.card,border:"1px solid "+C.border,borderRadius:"10px",padding:"12px 16px",display:"flex",alignItems:"center",gap:"12px",cursor:"pointer"}}>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{display:"flex",alignItems:"center",gap:"8px",marginBottom:"3px"}}>
+                  <span style={{fontSize:"12px",fontWeight:"900",color:C.or,fontFamily:"monospace"}}>{f.fields.Name}</span>
+                  <span style={{fontSize:"10px",fontWeight:"800",padding:"2px 8px",borderRadius:"20px",background:f.fields.Statut==="Envoyé à l'atelier"?C.vertDim:C.orDim,color:f.fields.Statut==="Envoyé à l'atelier"?C.vert:"#8a6d1f"}}>{f.fields.Statut||"Brouillon"}</span>
+                </div>
+                <div style={{fontSize:"12px",color:C.text}}>{f.fields.Client} — {f.fields.Adresse}</div>
+                <div style={{fontSize:"10px",color:C.muted}}>{f.fields.Agence} · {f.fields["Date métrage"]}{f.fields["N° dossier"] ? " · Dossier " + f.fields["N° dossier"] : ""}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Header({ agenceAccess, onClose }) {
+  return (
+    <div style={{background:C.card,borderBottom:"1px solid "+C.border,padding:"12px 24px",display:"flex",alignItems:"center",justifyContent:"space-between",position:"sticky",top:0,zIndex:100}}>
+      <div style={{display:"flex",alignItems:"center",gap:"12px"}}>
+        <div style={{width:"96px",height:"46px",background:"#FFFFFF",borderRadius:"8px",display:"flex",alignItems:"center",justifyContent:"center",padding:"3px",boxSizing:"border-box"}}>
+          <span style={{fontSize:"13px",fontWeight:"900",color:"#111111",letterSpacing:"0.5px"}}>RSIA IKO</span>
+        </div>
+        <div style={{fontSize:"13px",fontWeight:"700",color:C.muted}}>Module Métreur {agenceAccess !== "global" ? "— " + agenceAccess : ""}</div>
+      </div>
+      <button onClick={onClose} title="Fermer la session" style={{background:"rgba(220,38,38,0.08)",border:"1px solid rgba(220,38,38,0.25)",color:"rgba(220,38,38,0.85)",borderRadius:"8px",width:"30px",height:"30px",cursor:"pointer",fontSize:"14px",display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>
+    </div>
+  );
+}
+
+function App() {
+  const [access, setAccess] = React.useState(null);
+  return access ? <Metreur agenceAccess={access} onClose={() => setAccess(null)}/> : <Login onLogin={setAccess}/>;
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+</body>
+</html>

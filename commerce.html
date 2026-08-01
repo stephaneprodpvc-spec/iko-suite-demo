@@ -1,0 +1,596 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Falliero — Espace Commercial</title>
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#DAB239">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Falliero Commerce">
+<link rel="apple-touch-icon" href="/icon-192.png">
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Segoe UI', sans-serif; background: #F5F5F5; min-height: 100vh; }
+#rdv-widget-actions {
+  position: fixed; bottom: 28px; left: 28px; z-index: 9999;
+  display: flex; align-items: center; gap: 12px;
+}
+#rdv-widget-btn {
+  height: 58px; padding: 0 28px; background: #DAB239; border-radius: 34px;
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  cursor: pointer; box-shadow: 0 6px 28px rgba(0,0,0,0.35); border: none;
+  transition: transform 0.2s; font-family: 'Segoe UI', sans-serif;
+  font-size: 17px; font-weight: 700; color: #001A42; white-space: nowrap; letter-spacing: 0.3px;
+}
+#rdv-widget-btn:hover { transform: scale(1.04); }
+#rdv-widget-panel {
+  position: fixed; bottom: 84px; left: 24px; width: 400px; height: 620px;
+  border-radius: 18px; overflow: hidden; box-shadow: 0 8px 40px rgba(0,0,0,0.22);
+  z-index: 9998; display: none; flex-direction: column; background: #F5F5F5;
+}
+#rdv-widget-panel.open { display: flex; }
+@media (max-width: 700px) {
+  #rdv-widget-actions { bottom: 16px; left: 16px; right: 16px; justify-content: flex-start; }
+  #rdv-widget-btn { height: 50px; padding: 0 20px; font-size: 14px; }
+  /* 100vh sur Chrome Android = hauteur de l'ecran SANS la barre d'adresse
+     (le pire cas), ce qui deborde sous la barre visible et rend le bas du
+     panneau (bouton d'envoi, champ de saisie) inaccessible. 100dvh suit la
+     hauteur REELLEMENT visible et se met a jour quand la barre apparait/
+     disparait. */
+  #rdv-widget-panel { bottom: 0; left: 0; width: 100vw; height: 100vh; height: 100dvh; border-radius: 0; }
+}
+</style>
+</head>
+<body>
+<div id="stef-gate" style="position:fixed;inset:0;z-index:999999;background:#F5F5F5;display:flex;align-items:center;justify-content:center;font-family:'Segoe UI',sans-serif;padding:24px;box-sizing:border-box;">
+  <div style="width:100%;max-width:340px;">
+    <div style="text-align:center;margin-bottom:36px;">
+      <div style="width:190px;height:100px;background:#fff;border-radius:16px;display:flex;align-items:center;justify-content:center;margin:0 auto 16px;box-shadow:0 8px 32px rgba(218,178,57,.3);padding:8px;box-sizing:border-box;">
+        <img src="/falliero-logo.png" alt="Falliero" style="width:100%;height:100%;object-fit:contain;" />
+      </div>
+      <div style="color:#5B6472;font-size:11px;margin-top:6px;letter-spacing:2px;text-transform:uppercase;">Espace Commercial</div>
+    </div>
+    <div style="background:#fff;border:1px solid rgba(218,178,57,.3);border-radius:16px;padding:24px;box-sizing:border-box;">
+      <input id="stef-gate-pw" type="password" placeholder="Mot de passe" autocomplete="off" style="width:100%;box-sizing:border-box;padding:11px 14px;border:1px solid #d1d5db;border-radius:10px;font-size:16px;text-align:center;letter-spacing:2px;margin-bottom:10px;" />
+      <div id="stef-gate-err" style="color:#dc2626;font-size:11px;min-height:16px;margin-bottom:8px;text-align:center;"></div>
+      <button id="stef-gate-btn" style="width:100%;padding:14px;background:#DAB239;color:#111;border:none;border-radius:10px;font-weight:900;font-size:14px;cursor:pointer;">Entrer</button>
+    </div>
+  </div>
+</div>
+<script>
+(function(){
+  var TEMP_PASSWORD = "admin";
+  var gate = document.getElementById('stef-gate');
+  var pw = document.getElementById('stef-gate-pw');
+  var err = document.getElementById('stef-gate-err');
+  var btn = document.getElementById('stef-gate-btn');
+  function submit(){
+    if (pw.value === TEMP_PASSWORD) {
+      sessionStorage.setItem('commerceGateUnlocked', '1');
+      gate.remove();
+    } else {
+      err.textContent = "Mot de passe incorrect.";
+      pw.value = '';
+      pw.focus();
+    }
+  }
+  var navEntries = (window.performance && performance.getEntriesByType) ? performance.getEntriesByType('navigation') : [];
+  var isReload = navEntries && navEntries.length && navEntries[0].type === 'reload';
+  if (!isReload && sessionStorage.getItem('commerceGateUnlocked') === '1') {
+    gate.remove();
+  } else {
+    sessionStorage.removeItem('commerceGateUnlocked');
+    btn.addEventListener('click', submit);
+    pw.addEventListener('keydown', function(e){ if (e.key === 'Enter') submit(); });
+    setTimeout(function(){ pw.focus(); }, 100);
+  }
+})();
+</script>
+
+<div style="min-height:100vh;background:#FFFFFF;position:relative;overflow:hidden;">
+  <svg style="position:absolute;top:0;left:0;width:100%;height:100%;" viewBox="0 0 680 420" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
+    <rect x="0" y="0" width="680" height="420" fill="#FFFFFF"/>
+    <rect x="310" y="0" width="370" height="420" fill="#001A42"/>
+    <polygon points="290,0 350,0 310,420 250,420" fill="#001A42" opacity="0.06"/>
+  </svg>
+  <div style="position:relative;z-index:2;display:flex;flex-direction:column;justify-content:center;min-height:100vh;padding:60px;">
+    <div style="max-width:360px;">
+      <div style="display:flex;justify-content:center;margin-bottom:48px;">
+        <div style="width:170px;height:90px;background:#fff;border-radius:16px;display:flex;align-items:center;justify-content:center;box-shadow:0 8px 32px rgba(218,178,57,.25);padding:8px;box-sizing:border-box;">
+          <img src="/falliero-logo.png" alt="Falliero" style="width:100%;height:100%;object-fit:contain;" />
+        </div>
+      </div>
+      <h1 style="color:#001A42;font-size:40px;font-weight:900;line-height:1.15;margin-bottom:20px;font-family:'Segoe UI',sans-serif;">
+        Votre projet<br/><span style="color:#DAB239;">commence ici.</span>
+      </h1>
+      <div style="width:90px;height:2.5px;background:#DAB239;border-radius:2px;margin-bottom:24px;"></div>
+      <p style="color:rgba(0,26,66,0.65);font-size:13px;line-height:1.8;margin-bottom:36px;">
+        Rendez-vous personnalisé · Devis sur mesure<br/>17 produits · 4 agences
+      </p>
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:32px;">
+        <div style="width:8px;height:8px;background:#2ECC71;border-radius:50%;flex-shrink:0;box-shadow:0 0 8px rgba(46,204,113,0.5);"></div>
+        <span style="color:rgba(0,26,66,0.55);font-size:12px;">Un commercial vous recontacte sous 48h</span>
+      </div>
+    </div>
+  </div>
+  <div style="position:absolute;bottom:0;left:0;right:0;z-index:2;padding:12px 60px;border-top:1px solid rgba(218,178,57,0.12);display:flex;justify-content:space-between;">
+    <span style="color:rgba(0,26,66,0.35);font-size:10px;">© 2025 Falliero — Solutions IA pour les PME du bâtiment</span>
+    <span style="color:rgba(218,178,57,0.4);font-size:10px;">falliero-chatbot-sav.vercel.app</span>
+  </div>
+</div>
+
+<div id="rdv-widget-panel">
+  <div id="rdv-root" style="height:100%;display:flex;flex-direction:column;"></div>
+</div>
+
+<div id="rdv-widget-actions">
+  <button id="rdv-widget-btn" onclick="toggleRdvWidget()" title="Prendre rendez-vous avec un commercial">
+    <span style="font-size:20px;">🤝</span>
+    <span id="rdv-btn-label">Prendre RDV</span>
+  </button>
+</div>
+
+<script>
+let rdvWidgetOpen = false;
+let rdvReactMounted = false;
+
+function toggleRdvWidget() {
+  rdvWidgetOpen = !rdvWidgetOpen;
+  const panel = document.getElementById('rdv-widget-panel');
+  const label = document.getElementById('rdv-btn-label');
+  if (rdvWidgetOpen) {
+    panel.classList.add('open');
+    label.textContent = 'Fermer';
+    if (!rdvReactMounted) {
+      rdvReactMounted = true;
+      setTimeout(function() { mountRdvWidget(); }, 50);
+    }
+  } else {
+    panel.classList.remove('open');
+    label.textContent = 'Prendre RDV';
+    if (window.__rdvReset) window.__rdvReset();
+  }
+}
+</script>
+
+<script>
+// Ajoute un secret partage sur tous les appels au proxy Airtable, pour
+// empecher un acces direct a l'API sans passer par cette page (voir
+// api/airtable-proxy.js pour le detail et les limites de cette protection).
+(function() {
+  var APP_SECRET = "97960bb3f41d75c71ba3e831a7acb90ab324549734e27d6a";
+  var _fetch = window.fetch;
+  window.fetch = function(url, opts) {
+    if (typeof url === "string" && url.indexOf("/api/airtable") === 0) {
+      opts = opts || {};
+      opts.headers = Object.assign({}, opts.headers || {}, { "X-App-Secret": APP_SECRET });
+    }
+    return _fetch(url, opts);
+  };
+})();
+</script>
+<script type="text/babel">
+
+const F = {
+  marine: "#001A42", or: "#DAB239", orClair: "#F0DFA8",
+  blanc: "#FFFFFF", grisClair: "#F5F5F5", grisBord: "#E5E5E5",
+  rouge: "#DC2626", rougeClair: "#FEE2E2", vert: "#15803D", vertClair: "#F0FDF4",
+};
+
+const AGENCES = [
+  { id: "ibos", label: "📍 Ibos", ville: "Ibos (65)" },
+  { id: "lescar", label: "📍 Lescar", ville: "Lescar (64)" },
+  { id: "tarnos", label: "📍 Tarnos", ville: "Tarnos (40)" },
+  { id: "saint_gaudens", label: "📍 Saint-Gaudens", ville: "Saint-Gaudens (31)" },
+];
+
+const PRODUITS_RDV = [
+  "🪟 Fenêtre PVC", "↔️ Coulissant PVC", "↔️ Coulissant Alu", "🪟 Fenêtre Alu",
+  "⬛ Volet roulant", "🚪 Volet battant", "🦟 Moustiquaire", "☂️ Pergola",
+  "🏡 Véranda", "🚗 Carport", "🚪 Portail battant", "🚪 Portail coulissant",
+  "🧱 Clôture", "⚙️ Motorisation", "🏠 Porte de garage sectionnelle",
+  "🏠 Porte de garage enroulable", "🚪 Porte d'entrée PVC ou Alu",
+];
+
+async function envoyerWebhookRdv(data) {
+  const resp = await fetch('https://hook.eu1.make.com/xczscdk40wh653mmnxnx7x63kawjcgx4', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action: 'rdv_commercial', ...data })
+  });
+  if (!resp.ok) throw new Error('Erreur webhook RDV');
+  return true;
+}
+
+function CreneauPickerCommercial({ agenceVille, onSelect }) {
+  const [typeCreneau, setTypeCreneau] = React.useState(null);
+  const [dates, setDates] = React.useState([]);
+  const [loading, setLoading] = React.useState(false);
+
+  const CRENEAUX = [
+    { id: "matin", label: "🌅 Matin", heure: "8h30 — 12h00", valeur: "Matin (8h30 — 12h00)" },
+    { id: "apres_midi", label: "🌇 Après-midi", heure: "13h00 — 17h00", valeur: "Après-midi (13h00 — 17h00)" },
+  ];
+  const DELAI_MIN_JOURS = 3;
+
+  const charger = async (c) => {
+    setLoading(true);
+    setDates([]);
+    try {
+      const f = encodeURIComponent('AND({Agence}="' + agenceVille + '",{Créneau}="' + c.valeur + '",{Statut}="Libre")');
+      const url = '/api/airtable/Planning%20Commercial?filterByFormula=' + f + '&sort[0][field]=Date&sort[0][direction]=asc&maxRecords=60';
+      const r = await fetch(url, { });
+      const json = await r.json();
+      const auPlusTot = new Date();
+      auPlusTot.setDate(auPlusTot.getDate() + DELAI_MIN_JOURS);
+      const auPlusTotStr = auPlusTot.toISOString().split('T')[0];
+      const map = {};
+      (json.records || []).forEach(rec => {
+        const d = rec.fields.Date;
+        if (d < auPlusTotStr) return;
+        if (!map[d]) map[d] = { date: d, ids: [] };
+        map[d].ids.push(rec.id);
+      });
+      setDates(Object.values(map).slice(0, 5));
+    } catch(e) { console.error(e); }
+    setLoading(false);
+  };
+
+  const choisir = async (dateInfo) => {
+    try {
+      await fetch('/api/airtable/Planning%20Commercial/' + dateInfo.ids[0], {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fields: { Statut: 'Pris' } })
+      });
+    } catch(e) { console.error(e); }
+    const d = new Date(dateInfo.date + 'T12:00:00');
+    const label = d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+    onSelect(typeCreneau.label + ' (' + typeCreneau.heure + ') — ' + label, dateInfo.ids[0]);
+  };
+
+  if (!typeCreneau) {
+    return (
+      <div style={{background:F.blanc,borderRadius:"12px",padding:"12px 14px",border:"1px solid " + F.grisBord}}>
+        <div style={{fontSize:"11px",fontWeight:"700",color:F.marine,marginBottom:"10px",borderLeft:"3px solid " + F.or,paddingLeft:"8px"}}>Quel créneau vous convient ?</div>
+        <div style={{fontSize:"10px",color:"#64748B",marginBottom:"10px"}}>Matin ou après-midi ?</div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"8px"}}>
+          {CRENEAUX.map(c => (
+            <button key={c.id} onClick={() => { setTypeCreneau(c); charger(c); }}
+              style={{padding:"14px 10px",border:"2px solid " + F.grisBord,borderRadius:"12px",background:F.blanc,cursor:"pointer",textAlign:"center"}}>
+              <div style={{fontSize:"12px",fontWeight:"700",color:F.marine}}>{c.label}</div>
+              <div style={{fontSize:"11px",color:"#64748B",marginTop:"2px"}}>{c.heure}</div>
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{background:F.blanc,borderRadius:"12px",padding:"12px 14px",border:"1px solid " + F.grisBord}}>
+      <div style={{display:"flex",alignItems:"center",gap:"8px",marginBottom:"8px"}}>
+        <span style={{fontSize:"11px",color:F.or,fontWeight:"700"}}>{typeCreneau.label}</span>
+        <button onClick={() => { setTypeCreneau(null); setDates([]); }}
+          style={{fontSize:"10px",color:"#94A3B8",background:"none",border:"none",cursor:"pointer"}}>← Changer</button>
+      </div>
+      <div style={{fontSize:"10px",color:"#94A3B8",marginBottom:"10px"}}>Premières disponibilités à partir de {DELAI_MIN_JOURS} jours</div>
+      {loading && <div style={{textAlign:"center",padding:"16px",color:"#64748B",fontSize:"12px"}}>⏳ Chargement des disponibilités...</div>}
+      {!loading && dates.length === 0 && (
+        <div style={{textAlign:"center",padding:"16px",color:F.rouge,fontSize:"12px"}}>Aucune disponibilité. Essayez l'autre créneau.</div>
+      )}
+      {!loading && dates.length > 0 && (
+        <div style={{display:"flex",flexDirection:"column",gap:"6px"}}>
+          {dates.map((d, i) => {
+            const dateObj = new Date(d.date + 'T12:00:00');
+            const label = dateObj.toLocaleDateString('fr-FR', { weekday:'long', day:'numeric', month:'long' });
+            return (
+              <button key={i} onClick={() => choisir(d)}
+                style={{padding:"12px 14px",border:"2px solid " + F.grisBord,borderRadius:"10px",background:F.blanc,cursor:"pointer",textAlign:"left",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                <div style={{fontSize:"12px",fontWeight:"700",color:F.marine,textTransform:"capitalize"}}>{label}</div>
+                <span style={{color:F.or,fontSize:"16px"}}>→</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function RdvApp() {
+  const [etape, setEtape] = React.useState("agence");
+  const [agence, setAgence] = React.useState(null);
+  const [client, setClient] = React.useState({ nom: "", adresse: "", codePostal: "", ville: "", tel: "", email: "" });
+  const adresseComplete = client.adresse.trim() + (client.codePostal || client.ville ? ', ' + client.codePostal + ' ' + client.ville : '');
+  const [erreurs, setErreurs] = React.useState({});
+  const [produit, setProduit] = React.useState(null);
+  const [creneau, setCreneau] = React.useState(null);
+  const [planningId, setPlanningId] = React.useState(null);
+  const [commentaire, setCommentaire] = React.useState("");
+  const [rdv, setRdv] = React.useState(null);
+  const [envoi, setEnvoi] = React.useState(null);
+  const [sending, setSending] = React.useState(false);
+  const bottomRef = React.useRef(null);
+
+  React.useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [etape]);
+  React.useEffect(() => { window.__rdvReset = reset; }, []);
+
+  const validerInfos = () => {
+    const e = {};
+    if (!client.nom.trim()) e.nom = true;
+    if (!client.adresse.trim()) e.adresse = true;
+    if (!client.codePostal.trim() || !/^\d{5}$/.test(client.codePostal.trim())) e.codePostal = true;
+    if (!client.ville.trim()) e.ville = true;
+    if (!client.tel.trim()) e.tel = true;
+    if (!client.email.trim()) e.email = true;
+    setErreurs(e);
+    return Object.keys(e).length === 0;
+  };
+
+  const libererCreneauSiBesoin = async () => {
+    if (!planningId) return;
+    try {
+      await fetch('/api/airtable/Planning%20Commercial/' + planningId, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fields: { Statut: 'Libre' } })
+      });
+    } catch(e) { console.error(e); }
+  };
+
+  const goBack = async () => {
+    if (etape === "coordonnees") setEtape("agence");
+    else if (etape === "produit") setEtape("coordonnees");
+    else if (etape === "creneau") setEtape("produit");
+    else if (etape === "recapitulatif") { await libererCreneauSiBesoin(); setCreneau(null); setPlanningId(null); setEtape("creneau"); }
+  };
+
+  const confirmer = async () => {
+    setSending(true);
+    const num = 'RDV-' + new Date().getFullYear() + '-' + (Math.floor(Math.random()*9000)+1000);
+    setRdv(num);
+    try {
+      const resp = await fetch('/api/airtable/RDV%20Commercial', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fields: {
+          Name: num,
+          Statut: 'Nouveau',
+          Agence: agence.ville,
+          Client: client.nom,
+          "Téléphone": client.tel,
+          Email: client.email,
+          Adresse: adresseComplete,
+          Produit: produit,
+          "Créneau": creneau,
+          PlanningID: planningId || '',
+          Commentaire: commentaire.trim(),
+        } })
+      });
+      if (!resp.ok) throw new Error('creation rdv failed');
+      await envoyerWebhookRdv({
+        rdv: num, agence: agence.ville, nom: client.nom, tel: client.tel, "e-mail": client.email,
+        adresse: adresseComplete, produit, creneau, commentaire: commentaire.trim(),
+      });
+      setEnvoi('ok');
+    } catch(e) { setEnvoi('err'); }
+    setSending(false);
+    setEtape('merci');
+  };
+
+  const reset = () => {
+    setEtape("agence"); setAgence(null);
+    setClient({ nom: "", adresse: "", codePostal: "", ville: "", tel: "", email: "" });
+    setErreurs({}); setProduit(null); setCreneau(null); setPlanningId(null);
+    setCommentaire(""); setRdv(null); setEnvoi(null); setSending(false);
+  };
+
+  return (
+    <div style={{fontFamily:"'Segoe UI',sans-serif",background:F.grisClair,height:"100%",display:"flex",flexDirection:"column",width:"100%"}}>
+      <div style={{background:F.marine,padding:"12px 16px 8px",flexShrink:0}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+          <div style={{display:"flex",alignItems:"center",gap:"10px"}}>
+            <div style={{width:"65px",height:"34px",background:"#FFFFFF",borderRadius:"8px",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,padding:"3px",boxSizing:"border-box"}}>
+              <img src="/falliero-logo.png" alt="Falliero" style={{width:"100%",height:"100%",objectFit:"contain"}}/>
+            </div>
+            <div>
+              <div style={{color:"rgba(255,255,255,0.4)",fontSize:"8px",letterSpacing:"2px",textTransform:"uppercase",marginTop:"2px"}}>Espace Commercial</div>
+            </div>
+          </div>
+          <div style={{display:"flex",alignItems:"center",gap:"8px"}}>
+            {etape !== "agence" && etape !== "merci" && (
+              <button onClick={goBack} style={{background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.25)",color:"rgba(255,255,255,0.85)",borderRadius:"8px",padding:"4px 9px",fontSize:"10px",cursor:"pointer"}}>← Retour</button>
+            )}
+            {etape !== "agence" && etape !== "merci" && (
+              <button onClick={reset} style={{background:"rgba(218,178,57,0.15)",border:"1px solid " + F.or,color:F.or,borderRadius:"8px",padding:"4px 9px",fontSize:"10px",cursor:"pointer"}}>↩ Début</button>
+            )}
+            <button onClick={() => window.toggleRdvWidget()} style={{background:"rgba(255,255,255,0.1)",border:"1px solid rgba(255,255,255,0.2)",color:"rgba(255,255,255,0.7)",borderRadius:"8px",width:"28px",height:"28px",cursor:"pointer",fontSize:"14px",display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>
+          </div>
+        </div>
+        <div style={{marginTop:"6px",display:"flex",alignItems:"center",gap:"6px"}}>
+          <div style={{width:"7px",height:"7px",background:"#2ECC71",borderRadius:"50%"}}></div>
+          <span style={{color:F.orClair,fontSize:"11px",fontWeight:"500"}}>Un commercial vous recontacte</span>
+        </div>
+      </div>
+      <div style={{height:"3px",background:"linear-gradient(90deg," + F.or + "," + F.orClair + "," + F.or + ")",flexShrink:0}} />
+
+      <div style={{flex:1,overflowY:"auto",padding:"14px",display:"flex",flexDirection:"column",gap:"10px"}}>
+
+        {etape === "agence" && (
+          <>
+            <div style={{display:"flex",gap:"8px",alignItems:"flex-end"}}>
+              <div style={{width:"30px",height:"30px",background:F.marine,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"14px",flexShrink:0,border:"2px solid " + F.or}}>🤝</div>
+              <div style={{background:F.blanc,borderRadius:"16px 16px 16px 4px",padding:"10px 14px",fontSize:"12px",lineHeight:"1.6",boxShadow:"0 1px 4px rgba(0,0,0,0.08)",border:"1px solid " + F.grisBord}}>
+                Quelle agence souhaitez-vous contacter ?
+              </div>
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"8px"}}>
+              {AGENCES.map(a => (
+                <button key={a.id} onClick={() => { setAgence(a); setEtape("coordonnees"); }}
+                  style={{background:F.blanc,border:"2px solid " + F.grisBord,borderRadius:"12px",padding:"14px 10px",fontSize:"13px",fontWeight:"700",color:F.marine,cursor:"pointer",textAlign:"center",lineHeight:"1.5"}}>
+                  {a.label}<br/><span style={{fontSize:"10px",fontWeight:"400",color:"#64748B"}}>{a.ville}</span>
+                </button>
+              ))}
+            </div>
+          </>
+        )}
+
+        {etape === "coordonnees" && (
+          <>
+            <div style={{background:"#EFF6FF",border:"1px solid #BFDBFE",borderRadius:"10px",padding:"8px 12px",fontSize:"11px"}}>
+              📍 <strong>{agence?.ville}</strong>
+            </div>
+            <div style={{background:F.blanc,borderRadius:"12px",padding:"12px 14px",border:"1px solid " + F.grisBord}}>
+              <div style={{fontSize:"11px",fontWeight:"700",color:F.marine,marginBottom:"10px",borderLeft:"3px solid " + F.or,paddingLeft:"8px"}}>Vos coordonnées</div>
+              {[{key:"nom",label:"Nom et prénom",ph:"Ex : Jean Dupont",type:"text"},{key:"adresse",label:"Adresse (n° et rue)",ph:"Ex : 12 rue des Lilas",type:"text"}].map(f => (
+                <div key={f.key} style={{marginBottom:"8px"}}>
+                  <label style={{fontSize:"10px",fontWeight:"600",color:"#64748B",display:"block",marginBottom:"3px"}}>{f.label} *</label>
+                  <input type={f.type} placeholder={f.ph} value={client[f.key]} onChange={e => setClient({...client,[f.key]:e.target.value})}
+                    style={{width:"100%",padding:"8px 10px",border:"1.5px solid " + (erreurs[f.key]?F.rouge:F.grisBord),borderRadius:"8px",fontSize:"12px",boxSizing:"border-box",outline:"none"}} />
+                  {erreurs[f.key] && <span style={{fontSize:"10px",color:F.rouge}}>Champ obligatoire</span>}
+                </div>
+              ))}
+              <div style={{display:"grid",gridTemplateColumns:"1fr 2fr",gap:"8px",marginBottom:"8px"}}>
+                <div>
+                  <label style={{fontSize:"10px",fontWeight:"600",color:"#64748B",display:"block",marginBottom:"3px"}}>Code postal *</label>
+                  <input type="text" inputMode="numeric" maxLength={5} placeholder="65000" value={client.codePostal} onChange={e => setClient({...client,codePostal:e.target.value.replace(/\D/g,'')})}
+                    style={{width:"100%",padding:"8px 10px",border:"1.5px solid " + (erreurs.codePostal?F.rouge:F.grisBord),borderRadius:"8px",fontSize:"12px",boxSizing:"border-box",outline:"none"}} />
+                  {erreurs.codePostal && <span style={{fontSize:"10px",color:F.rouge}}>5 chiffres requis</span>}
+                </div>
+                <div>
+                  <label style={{fontSize:"10px",fontWeight:"600",color:"#64748B",display:"block",marginBottom:"3px"}}>Ville *</label>
+                  <input type="text" placeholder="Tarbes" value={client.ville} onChange={e => setClient({...client,ville:e.target.value})}
+                    style={{width:"100%",padding:"8px 10px",border:"1.5px solid " + (erreurs.ville?F.rouge:F.grisBord),borderRadius:"8px",fontSize:"12px",boxSizing:"border-box",outline:"none"}} />
+                  {erreurs.ville && <span style={{fontSize:"10px",color:F.rouge}}>Champ obligatoire</span>}
+                </div>
+              </div>
+              {[{key:"tel",label:"Téléphone",ph:"Ex : 06 12 34 56 78",type:"tel"},{key:"email",label:"Email",ph:"Ex : jean.dupont@gmail.com",type:"email"}].map(f => (
+                <div key={f.key} style={{marginBottom:"8px"}}>
+                  <label style={{fontSize:"10px",fontWeight:"600",color:"#64748B",display:"block",marginBottom:"3px"}}>{f.label} *</label>
+                  <input type={f.type} placeholder={f.ph} value={client[f.key]} onChange={e => setClient({...client,[f.key]:e.target.value})}
+                    style={{width:"100%",padding:"8px 10px",border:"1.5px solid " + (erreurs[f.key]?F.rouge:F.grisBord),borderRadius:"8px",fontSize:"12px",boxSizing:"border-box",outline:"none"}} />
+                  {erreurs[f.key] && <span style={{fontSize:"10px",color:F.rouge}}>Champ obligatoire</span>}
+                </div>
+              ))}
+              <button onClick={() => { if (validerInfos()) setEtape("produit"); }}
+                style={{width:"100%",padding:"11px",background:F.marine,color:F.blanc,border:"2px solid " + F.or,borderRadius:"10px",fontSize:"12px",fontWeight:"700",cursor:"pointer",marginTop:"4px"}}>
+                Continuer →
+              </button>
+            </div>
+          </>
+        )}
+
+        {etape === "produit" && (
+          <>
+            <div style={{background:F.vertClair,border:"1px solid #86EFAC",borderRadius:"10px",padding:"8px 12px",fontSize:"11px"}}>
+              <div style={{fontWeight:"700",color:F.marine}}>👤 {client.nom}</div>
+              <div style={{color:"#475569",fontSize:"10px"}}>{agence?.ville}</div>
+            </div>
+            <div style={{display:"flex",gap:"8px",alignItems:"flex-end"}}>
+              <div style={{width:"30px",height:"30px",background:F.marine,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"14px",flexShrink:0,border:"2px solid " + F.or}}>🤝</div>
+              <div style={{background:F.blanc,borderRadius:"16px 16px 16px 4px",padding:"10px 14px",fontSize:"12px",boxShadow:"0 1px 4px rgba(0,0,0,0.08)",border:"1px solid " + F.grisBord}}>
+                Pour quel produit souhaitez-vous un rendez-vous ?
+              </div>
+            </div>
+            {PRODUITS_RDV.map(p => (
+              <button key={p} onClick={() => { setProduit(p); setEtape("creneau"); }}
+                style={{background:F.blanc,border:"2px solid " + F.grisBord,borderRadius:"10px",padding:"11px 14px",fontSize:"12px",fontWeight:"600",color:F.marine,cursor:"pointer",textAlign:"left",boxShadow:"0 1px 4px rgba(0,0,0,0.06)"}}>
+                {p}
+              </button>
+            ))}
+          </>
+        )}
+
+        {etape === "creneau" && agence && (
+          <CreneauPickerCommercial agenceVille={agence.ville} onSelect={(c, pid) => { setCreneau(c); setPlanningId(pid); setEtape("recapitulatif"); }} />
+        )}
+
+        {etape === "recapitulatif" && (
+          <>
+            <div style={{background:F.blanc,borderRadius:"12px",border:"2px solid " + F.or,overflow:"hidden"}}>
+              <div style={{background:F.marine,padding:"10px 14px"}}>
+                <span style={{color:F.blanc,fontWeight:"700",fontSize:"12px"}}>Récapitulatif de votre demande de RDV</span>
+              </div>
+              <div style={{padding:"12px 14px"}}>
+                {[
+                  ["Agence", agence?.ville],
+                  ["Client", client.nom],
+                  ["Téléphone", client.tel],
+                  ["Email", client.email],
+                  ["Adresse", adresseComplete],
+                  ["Produit", produit],
+                  ["Créneau", creneau],
+                ].map(([lbl,val],i) => (
+                  <div key={i} style={{display:"flex",gap:"8px",padding:"6px 0",borderBottom:"1px solid " + F.grisBord}}>
+                    <span style={{fontSize:"10px",fontWeight:"700",color:"#64748B",minWidth:"80px",flexShrink:0}}>{lbl}</span>
+                    <span style={{fontSize:"11px",color:F.marine}}>{val}</span>
+                  </div>
+                ))}
+                <div style={{marginTop:"10px"}}>
+                  <label style={{fontSize:"10px",fontWeight:"600",color:"#64748B",display:"block",marginBottom:"4px"}}>Message pour le commercial (facultatif)</label>
+                  <textarea rows={3} placeholder="Précisez votre projet, vos disponibilités, etc." value={commentaire} onChange={e => setCommentaire(e.target.value)}
+                    style={{width:"100%",padding:"8px 10px",border:"1.5px solid " + F.grisBord,borderRadius:"8px",fontSize:"12px",resize:"vertical",boxSizing:"border-box"}} />
+                </div>
+              </div>
+            </div>
+            <button onClick={confirmer} disabled={sending}
+              style={{width:"100%",padding:"13px",background:sending?"#64748B":F.marine,color:F.blanc,border:"2px solid " + F.or,borderRadius:"10px",fontSize:"13px",fontWeight:"700",cursor:sending?"not-allowed":"pointer"}}>
+              {sending ? "⏳ Envoi en cours..." : "✅ Confirmer ma demande de RDV"}
+            </button>
+          </>
+        )}
+
+        {etape === "merci" && (
+          <>
+            <div style={{textAlign:"center",padding:"16px 0"}}>
+              <div style={{fontSize:"36px",marginBottom:"10px"}}>✅</div>
+              <div style={{fontSize:"18px",fontWeight:"900",color:F.marine,marginBottom:"4px"}}>Demande envoyée !</div>
+              <div style={{fontSize:"12px",color:"#64748B"}}>Votre demande de rendez-vous a bien été prise en compte.</div>
+            </div>
+            <div style={{background:F.marine,borderRadius:"12px",padding:"14px",textAlign:"center",border:"2px solid " + F.or}}>
+              <div style={{color:F.orClair,fontSize:"10px",fontWeight:"600",marginBottom:"6px",letterSpacing:"2px"}}>VOTRE NUMÉRO DE RDV</div>
+              <div style={{color:F.or,fontSize:"24px",fontWeight:"900",letterSpacing:"2px",fontFamily:"monospace"}}>{rdv}</div>
+            </div>
+            {envoi === 'ok' && (
+              <div style={{background:F.vertClair,border:"1px solid #86EFAC",borderRadius:"9px",padding:"8px 12px",fontSize:"11px",color:F.vert,fontWeight:"600"}}>
+                ✅ Demande enregistrée — le commercial de l'agence a été notifié
+              </div>
+            )}
+            {envoi === 'err' && (
+              <div style={{background:F.rougeClair,border:"1px solid #FCA5A5",borderRadius:"9px",padding:"8px 12px",fontSize:"11px",color:F.rouge,fontWeight:"600"}}>
+                ⚠️ Demande créée — erreur d'envoi, contactez l'agence directement
+              </div>
+            )}
+            <div style={{background:F.vertClair,border:"1px solid #86EFAC",borderRadius:"10px",padding:"10px 14px"}}>
+              <div style={{fontWeight:"700",fontSize:"12px",color:F.marine}}>🕐 Vous serez recontacté par l'agence</div>
+              <div style={{fontSize:"11px",color:"#475569",marginTop:"2px"}}>Créneau : {creneau}</div>
+            </div>
+            <button onClick={reset}
+              style={{width:"100%",padding:"11px",background:F.blanc,color:F.marine,border:"2px solid " + F.grisBord,borderRadius:"10px",fontSize:"12px",fontWeight:"600",cursor:"pointer"}}>
+              Nouvelle demande de RDV
+            </button>
+          </>
+        )}
+
+        <div ref={bottomRef} />
+      </div>
+
+      <div style={{background:F.marine,padding:"6px 14px",textAlign:"center",flexShrink:0}}>
+        <span style={{color:F.or,fontSize:"9px",opacity:0.8}}>© Falliero — Solutions IA pour les PME du bâtiment</span>
+      </div>
+    </div>
+  );
+}
+
+function mountRdvWidget() {
+  ReactDOM.createRoot(document.getElementById('rdv-root')).render(<RdvApp />);
+}
+
+</script>
+</body>
+</html>

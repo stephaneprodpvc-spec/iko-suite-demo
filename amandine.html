@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Falliero — Amandine SAV</title>
+<meta name="theme-color" content="#111111">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Falliero Amandine">
+<style>
+  :root {
+    --noir: #111111;
+    --noir-doux: #1C1C1C;
+    --orange: #FF6B00;
+    --orange-pale: #FFF1E6;
+    --gris: #6B7280;
+    --gris-clair: #E8E8E8;
+    --blanc: #FFFFFF;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    background: var(--noir);
+    color: var(--noir);
+    display: flex;
+    flex-direction: column;
+    height: 100dvh;
+    overflow: hidden;
+  }
+
+  /* En-tête */
+  header {
+    background: var(--noir);
+    color: var(--blanc);
+    padding: calc(env(safe-area-inset-top) + 14px) 18px 14px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-shrink: 0;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+  }
+  .logo {
+    background: var(--blanc);
+    color: var(--noir);
+    font-weight: 900;
+    font-size: 13px;
+    letter-spacing: 0.5px;
+    padding: 7px 11px;
+    border-radius: 7px;
+    flex-shrink: 0;
+  }
+  .titre { font-size: 14px; font-weight: 700; }
+  .sous-titre { font-size: 11px; color: #9CA3AF; margin-top: 2px; }
+  .pastille {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--orange);
+    margin-left: auto;
+    flex-shrink: 0;
+    box-shadow: 0 0 0 3px rgba(255,107,0,0.18);
+  }
+
+  /* Fil de conversation */
+  #fil {
+    flex: 1;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    background: #FAFAFA;
+    padding: 20px 16px 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .bulle {
+    max-width: 82%;
+    padding: 12px 15px;
+    border-radius: 16px;
+    font-size: 14.5px;
+    line-height: 1.55;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    animation: apparait 0.25s ease;
+  }
+  @keyframes apparait {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: none; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .bulle { animation: none; }
+  }
+  .conseiller {
+    align-self: flex-start;
+    background: var(--blanc);
+    border: 1px solid var(--gris-clair);
+    border-bottom-left-radius: 5px;
+  }
+  .visiteur {
+    align-self: flex-end;
+    background: var(--noir);
+    color: var(--blanc);
+    border-bottom-right-radius: 5px;
+  }
+  .erreur {
+    align-self: center;
+    background: #FEF2F2;
+    border: 1px solid #FECACA;
+    color: #B91C1C;
+    font-size: 13px;
+    max-width: 92%;
+    text-align: center;
+  }
+
+  /* Indicateur de frappe */
+  .frappe { display: flex; gap: 4px; align-items: center; padding: 14px 16px; }
+  .frappe span {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--gris);
+    animation: rebond 1.3s infinite;
+  }
+  .frappe span:nth-child(2) { animation-delay: 0.16s; }
+  .frappe span:nth-child(3) { animation-delay: 0.32s; }
+  @keyframes rebond {
+    0%, 60%, 100% { opacity: 0.28; transform: translateY(0); }
+    30% { opacity: 1; transform: translateY(-4px); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .frappe span { animation: none; opacity: 0.5; }
+  }
+
+  /* Suggestions de démarrage */
+  #suggestions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 4px 16px 14px;
+    background: #FAFAFA;
+    flex-shrink: 0;
+  }
+  #suggestions button {
+    background: var(--blanc);
+    border: 1.5px solid var(--gris-clair);
+    color: var(--noir);
+    border-radius: 999px;
+    padding: 9px 14px;
+    font-size: 12.5px;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s;
+  }
+  #suggestions button:hover,
+  #suggestions button:focus-visible {
+    border-color: var(--orange);
+    background: var(--orange-pale);
+  }
+
+  /* Zone de saisie */
+  #zone-saisie {
+    background: var(--blanc);
+    border-top: 1px solid var(--gris-clair);
+    padding: 12px 14px calc(env(safe-area-inset-bottom) + 12px);
+    display: flex;
+    gap: 10px;
+    align-items: flex-end;
+    flex-shrink: 0;
+  }
+  #saisie {
+    flex: 1;
+    border: 1.5px solid var(--gris-clair);
+    border-radius: 22px;
+    padding: 11px 16px;
+    font-size: 16px; /* 16px minimum : évite le zoom automatique sur iOS */
+    font-family: inherit;
+    resize: none;
+    max-height: 120px;
+    line-height: 1.4;
+    outline: none;
+  }
+  #saisie:focus { border-color: var(--orange); }
+  #envoyer {
+    background: var(--orange);
+    color: var(--blanc);
+    border: none;
+    border-radius: 50%;
+    width: 44px; height: 44px;
+    font-size: 19px;
+    cursor: pointer;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  #envoyer:disabled { background: var(--gris-clair); cursor: default; }
+  :focus-visible { outline: 2px solid var(--orange); outline-offset: 2px; }
+
+  /* Boutons vocaux — masqués si le navigateur ne sait pas les gérer */
+  #micro {
+    background: var(--blanc);
+    border: 1.5px solid var(--gris-clair);
+    border-radius: 50%;
+    width: 44px; height: 44px;
+    font-size: 17px;
+    cursor: pointer;
+    flex-shrink: 0;
+    display: none; /* activé par le script si l'appareil le permet */
+    align-items: center;
+    justify-content: center;
+  }
+  #micro.dispo { display: flex; }
+  #micro.ecoute {
+    background: var(--orange);
+    border-color: var(--orange);
+    animation: pulse 1.4s infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(255,107,0,0.45); }
+    50% { box-shadow: 0 0 0 8px rgba(255,107,0,0); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    #micro.ecoute { animation: none; }
+  }
+  .btn-entete {
+    background: rgba(255,255,255,0.08);
+    border: none;
+    color: var(--blanc);
+    border-radius: 50%;
+    width: 36px; height: 36px;
+    font-size: 15px;
+    cursor: pointer;
+    margin-left: auto;
+    flex-shrink: 0;
+    display: none;
+    align-items: center;
+    justify-content: center;
+  }
+  .btn-entete.dispo { display: flex; }
+  .btn-entete[aria-pressed="true"] { background: var(--orange); }
+
+  .mention {
+    text-align: center;
+    font-size: 10.5px;
+    color: var(--gris);
+    padding: 0 16px 8px;
+    background: var(--blanc);
+    flex-shrink: 0;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">Falliero</div>
+  <div>
+    <div class="titre">Amandine — SAV</div>
+    <div class="sous-titre">Suivi de dossier · Prise de rendez-vous · Assistance</div>
+  </div>
+  <button id="lecture" class="btn-entete" aria-pressed="false" title="Lire les réponses à voix haute">🔇</button>
+</header>
+
+<main id="fil" role="log" aria-live="polite" aria-label="Conversation"></main>
+
+<div id="suggestions"></div>
+
+<div id="zone-saisie">
+  <button id="micro" aria-label="Dicter votre message" title="Dicter">🎙️</button>
+  <textarea id="saisie" rows="1" placeholder="Décrivez votre projet…" aria-label="Votre message"></textarea>
+  <button id="envoyer" aria-label="Envoyer">↑</button>
+</div>
+<div class="mention">Assistant automatisé — pour un devis, un conseiller vous rappellera.</div>
+
+<script>
+(function () {
+  const fil = document.getElementById('fil');
+  const saisie = document.getElementById('saisie');
+  const boutonEnvoyer = document.getElementById('envoyer');
+  const zoneSuggestions = document.getElementById('suggestions');
+
+  // Historique complet envoyé à chaque tour : le modèle n'a pas de mémoire
+  // entre deux appels, c'est nous qui lui redonnons le contexte.
+  const historique = [];
+  let enAttente = false;
+
+  const SUGGESTIONS = [
+  "Signaler une panne",
+      "Suivre ma demande",
+      "Prendre rendez-vous",
+      "Question facture",
+  ];
+
+  const ACCUEIL = "Bonjour, je suis Amandine, votre conseiller SAV Falliero. Je suis là pour vous accompagner et vous guider.";
+
+  function ajouterBulle(texte, type) {
+    const div = document.createElement('div');
+    div.className = 'bulle ' + type;
+    if (type === 'conseiller' && synthDispo) { var spanTxt = document.createElement('span'); spanTxt.textContent = texte; div.appendChild(spanTxt); var btnEcouter = document.createElement('button'); btnEcouter.type = 'button'; btnEcouter.textContent = ' 🔊'; btnEcouter.setAttribute('aria-label', 'Ecouter ce message'); btnEcouter.style.cssText = 'background:none;border:none;cursor:pointer;font-size:13px;margin-left:6px;vertical-align:middle;padding:0;'; btnEcouter.addEventListener('click', function () { window.speechSynthesis.cancel(); var u = new SpeechSynthesisUtterance(texte); u.lang = 'fr-FR'; if (voixPreferee) u.voice = voixPreferee; window.speechSynthesis.speak(u); }); div.appendChild(btnEcouter); } else { div.textContent = texte; }
+    fil.appendChild(div);
+    fil.scrollTop = fil.scrollHeight;
+    return div;
+  }
+
+  function afficherSuggestions(actives) {
+    zoneSuggestions.innerHTML = '';
+    if (!actives) return;
+    SUGGESTIONS.forEach(function (s) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.textContent = s;
+      b.addEventListener('click', function () { envoyer(s); });
+      zoneSuggestions.appendChild(b);
+    });
+  }
+
+  function indicateurFrappe() {
+    const div = document.createElement('div');
+    div.className = 'bulle conseiller frappe';
+    div.innerHTML = '<span></span><span></span><span></span>';
+    fil.appendChild(div);
+    fil.scrollTop = fil.scrollHeight;
+    return div;
+  }
+
+  async function envoyer(texteForce) {
+    const texte = (texteForce || saisie.value).trim();
+    if (!texte || enAttente) return;
+
+    enAttente = true;
+    boutonEnvoyer.disabled = true;
+    saisie.value = '';
+    saisie.style.height = 'auto';
+    afficherSuggestions(false);
+
+    ajouterBulle(texte, 'visiteur');
+    historique.push({ role: 'user', texte: texte });
+
+    const frappe = indicateurFrappe();
+
+    try {
+      const reponse = await fetch('/api/chat-amandine', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages: historique }),
+      });
+      const data = await reponse.json();
+      frappe.remove();
+
+      if (!reponse.ok) {
+        ajouterBulle(data.error || "Le service est momentanément indisponible. Réessayez dans un instant.", 'erreur');
+      } else {
+        ajouterBulle(data.reponse, 'conseiller');
+        historique.push({ role: 'assistant', texte: data.reponse });
+        lireAVoixHaute(data.reponse);
+      }
+    } catch (e) {
+      frappe.remove();
+      ajouterBulle("Connexion interrompue. Vérifiez votre réseau et réessayez.", 'erreur');
+    } finally {
+      enAttente = false;
+      boutonEnvoyer.disabled = false;
+      saisie.focus();
+    }
+  }
+
+  boutonEnvoyer.addEventListener('click', function () { envoyer(); });
+
+  saisie.addEventListener('keydown', function (e) {
+    // Entrée envoie, Maj+Entrée fait un retour à la ligne
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      envoyer();
+    }
+  });
+
+  // Le champ grandit avec le texte, jusqu'à la hauteur max définie en CSS
+  saisie.addEventListener('input', function () {
+    saisie.style.height = 'auto';
+    saisie.style.height = Math.min(saisie.scrollHeight, 120) + 'px';
+  });
+
+  // ---- Parole : dictée (entrée) et lecture à voix haute (sortie) ----
+  // Tout passe par le navigateur (Web Speech API) : aucun coût, aucune donnée
+  // envoyée ailleurs. Si l'appareil ne sait pas faire, les boutons restent
+  // simplement masqués et la conversation écrite fonctionne normalement.
+
+  const boutonMicro = document.getElementById('micro');
+  const boutonLecture = document.getElementById('lecture');
+  let lectureActive = localStorage.getItem('rsiaLectureActive') === 'true'; let synthDeverrouille = false;
+
+  // -- Lecture à voix haute des réponses --
+  const synthDispo = 'speechSynthesis' in window;
+  let voixPreferee = null;
+  function choisirVoix() {
+    const voix = window.speechSynthesis.getVoices();
+    voixPreferee = voix.find(function (v) { return v.name === 'Google français'; })
+      || voix.find(function (v) { return /^fr/i.test(v.lang) && /google/i.test(v.name); })
+      || voix.find(function (v) { return /^fr/i.test(v.lang) && /natural|online/i.test(v.name); })
+      || voix.find(function (v) { return /^fr/i.test(v.lang) && /audrey|amélie|amelie|aurélie|aurelie|marie|julie|céline|celine/i.test(v.name); }) || voix.find(function (v) { return /^fr/i.test(v.lang); })
+      || null;
+  }
+  if (synthDispo) {
+    choisirVoix();
+    window.speechSynthesis.onvoiceschanged = choisirVoix;
+  }
+  if (synthDispo) {
+    boutonLecture.classList.add('dispo');
+    boutonLecture.setAttribute('aria-pressed', String(lectureActive));
+    boutonLecture.textContent = lectureActive ? '🔊' : '🔇';
+    if (!lectureActive) window.speechSynthesis.cancel();
+    boutonLecture.addEventListener('click', function () {
+      lectureActive = !lectureActive;
+      localStorage.setItem('rsiaLectureActive', String(lectureActive));
+      boutonLecture.setAttribute('aria-pressed', String(lectureActive));
+      boutonLecture.textContent = lectureActive ? '🔊' : '🔇';
+      if (!lectureActive) { window.speechSynthesis.cancel(); } else { window.speechSynthesis.cancel(); var testVoixIPad = new SpeechSynthesisUtterance('Voix activée.'); testVoixIPad.lang = 'fr-FR'; if (voixPreferee) testVoixIPad.voice = voixPreferee; window.speechSynthesis.speak(testVoixIPad); }
+    });
+  }
+
+  if (synthDispo) { document.addEventListener('click', function debloquerVoixIPad() { if (lectureActive && !synthDeverrouille) { synthDeverrouille = true; window.speechSynthesis.cancel(); var amorceVoix = new SpeechSynthesisUtterance('Voix activee.'); amorceVoix.lang = 'fr-FR'; if (voixPreferee) amorceVoix.voice = voixPreferee; window.speechSynthesis.speak(amorceVoix); } document.removeEventListener('click', debloquerVoixIPad); }, { once: true }); } function lireAVoixHaute(texte) {
+    if (!lectureActive || !synthDispo) return;
+    window.speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(texte);
+    u.lang = 'fr-FR';
+    u.rate = 1.02;
+        if (voixPreferee) u.voice = voixPreferee;
+window.speechSynthesis.speak(u);
+  }
+
+  // -- Dictée --
+  const Reco = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (Reco) {
+    const reco = new Reco();
+    reco.lang = 'fr-FR';
+    reco.continuous = false;
+    reco.interimResults = true;
+    let enEcoute = false;
+    let texteDicte = '';
+
+    boutonMicro.classList.add('dispo');
+    boutonMicro.addEventListener('click', function () {
+      if (enEcoute) { reco.stop(); return; }
+      if (synthDispo) window.speechSynthesis.cancel(); // ne pas s'écouter parler
+      try { reco.start(); } catch (e) { /* déjà démarré : sans effet */ }
+    });
+
+    reco.addEventListener('start', function () {
+      enEcoute = true;
+      texteDicte = '';
+      boutonMicro.classList.add('ecoute');
+      boutonMicro.setAttribute('aria-label', "Arrêter la dictée");
+    });
+    reco.addEventListener('end', function () {
+      enEcoute = false;
+      boutonMicro.classList.remove('ecoute');
+      boutonMicro.setAttribute('aria-label', "Dicter votre message");
+      // Envoi à la fin de l'écoute : plus fiable que d'attendre un signal
+      // intermédiaire, qui n'arrive pas de la même façon selon le navigateur.
+      if (texteDicte.trim()) {
+        saisie.value = texteDicte.trim();
+        envoyer();
+        texteDicte = '';
+      }
+    });
+    reco.addEventListener('result', function (e) {
+      let texte = '';
+      for (let i = 0; i < e.results.length; i++) texte += e.results[i][0].transcript;
+      texteDicte = texte;
+      // Aperçu en direct pendant que la personne parle
+      saisie.value = texte;
+      saisie.style.height = 'auto';
+      saisie.style.height = Math.min(saisie.scrollHeight, 120) + 'px';
+      // Phrase terminée : on arrête l'écoute, l'envoi se fait dans 'end'
+      if (e.results[e.results.length - 1].isFinal && texte.trim()) {
+        reco.stop();
+      }
+    });
+    reco.addEventListener('error', function (e) {
+      boutonMicro.classList.remove('ecoute');
+      console.warn('Dictée — erreur reconnaissance vocale :', e.error);
+      if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
+        ajouterBulle("Micro refusé. Autorisez l'accès au micro dans les réglages du navigateur, ou écrivez votre message.", 'erreur');
+      } else if (e.error === 'no-speech') {
+        ajouterBulle("Aucune voix détectée. Vérifiez le micro sélectionné (icône micro dans la barre d'adresse Chrome) et reparlez juste après avoir cliqué.", 'erreur');
+      } else if (e.error === 'audio-capture') {
+        ajouterBulle("Aucun micro détecté par le navigateur. Vérifiez qu'un micro est bien branché et activé.", 'erreur');
+      } else if (e.error === 'network') {
+        ajouterBulle("Erreur réseau pendant la reconnaissance vocale. Réessayez.", 'erreur');
+      }
+    });
+  }
+
+  // Démarrage
+  ajouterBulle(ACCUEIL, 'conseiller');
+  historique.push({ role: 'assistant', texte: ACCUEIL });
+  afficherSuggestions(true);
+})();
+</script>
+
+</body>
+</html>
