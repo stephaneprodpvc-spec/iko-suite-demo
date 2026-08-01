@@ -183,10 +183,10 @@ const F = {
 };
 
 const AGENCES = [
-  { id: "ibos", label: "📍 Ibos", ville: "Ibos (65)" },
-  { id: "lescar", label: "📍 Lescar", ville: "Lescar (64)" },
-  { id: "tarnos", label: "📍 Tarnos", ville: "Tarnos (40)" },
-  { id: "saint_gaudens", label: "📍 Saint-Gaudens", ville: "Saint-Gaudens (31)" },
+  { id: "agence1", label: "📍 Agence 1", ville: "Agence 1" },
+  { id: "agence3", label: "📍 Agence 3", ville: "Agence 3" },
+  { id: "agence2", label: "📍 Agence 2", ville: "Agence 2" },
+  { id: "agence4", label: "📍 Agence 4", ville: "Agence 4" },
 ];
 
 const PRODUITS_RDV = [
@@ -458,7 +458,7 @@ function RdvApp() {
               <div style={{display:"grid",gridTemplateColumns:"1fr 2fr",gap:"8px",marginBottom:"8px"}}>
                 <div>
                   <label style={{fontSize:"10px",fontWeight:"600",color:"#64748B",display:"block",marginBottom:"3px"}}>Code postal *</label>
-                  <input type="text" inputMode="numeric" maxLength={5} placeholder="65000" value={client.codePostal} onChange={e => setClient({...client,codePostal:e.target.value.replace(/\D/g,'')})}
+                  <input type="text" inputMode="numeric" maxLength={5} placeholder="75000" value={client.codePostal} onChange={e => setClient({...client,codePostal:e.target.value.replace(/\D/g,'')})}
                     style={{width:"100%",padding:"8px 10px",border:"1.5px solid " + (erreurs.codePostal?F.rouge:F.grisBord),borderRadius:"8px",fontSize:"12px",boxSizing:"border-box",outline:"none"}} />
                   {erreurs.codePostal && <span style={{fontSize:"10px",color:F.rouge}}>5 chiffres requis</span>}
                 </div>

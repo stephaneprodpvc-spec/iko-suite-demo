@@ -258,10 +258,10 @@ const F = {
 };
 
 const AGENCES = [
-  { id: "ibos", label: "📍 Ibos", ville: "Ibos (65)" },
-  { id: "lescar", label: "📍 Lescar", ville: "Lescar (64)" },
-  { id: "tarnos", label: "📍 Tarnos", ville: "Tarnos (40)" },
-  { id: "saint_gaudens", label: "📍 Saint-Gaudens", ville: "Saint-Gaudens (31)" },
+  { id: "agence1", label: "📍 Agence 1", ville: "Agence 1" },
+  { id: "agence3", label: "📍 Agence 3", ville: "Agence 3" },
+  { id: "agence2", label: "📍 Agence 2", ville: "Agence 2" },
+  { id: "agence4", label: "📍 Agence 4", ville: "Agence 4" },
 ];
 
 const PRODUITS = [
@@ -656,7 +656,7 @@ function App() {
                 {garantie === true && (
                   <div style={{marginTop:"10px"}}>
                     <label style={{fontSize:"10px",fontWeight:"700",color:F.marine,display:"block",marginBottom:"4px"}}>N° de facture *</label>
-                    <input type="text" placeholder="Ex : FAL-2024-00842" value={facture} onChange={e => setFacture(e.target.value)}
+                    <input type="text" placeholder="Ex : IKO-2024-00842" value={facture} onChange={e => setFacture(e.target.value)}
                       style={{width:"100%",padding:"8px 10px",border:"1.5px solid " + (erreurs.facture?F.rouge:F.or),borderRadius:"8px",fontSize:"12px",boxSizing:"border-box",outline:"none"}} />
                     <label style={{display:"block",marginTop:"10px",border:"2px dashed " + F.or,borderRadius:"10px",padding:"12px",textAlign:"center",cursor:"pointer",background:"#FFFDF5"}}>
                       <input type="file" accept="image/*,.pdf,.jpg,.jpeg,.png" style={{display:"none"}}
@@ -692,7 +692,7 @@ function App() {
                 <div style={{display:"grid",gridTemplateColumns:"1fr 2fr",gap:"8px",marginBottom:"8px"}}>
                   <div>
                     <label style={{fontSize:"10px",fontWeight:"600",color:"#64748B",display:"block",marginBottom:"3px"}}>Code postal *</label>
-                    <input type="text" inputMode="numeric" maxLength={5} placeholder="65000" value={client.codePostal} onChange={e => setClient({...client,codePostal:e.target.value.replace(/\D/g,'')})}
+                    <input type="text" inputMode="numeric" maxLength={5} placeholder="75000" value={client.codePostal} onChange={e => setClient({...client,codePostal:e.target.value.replace(/\D/g,'')})}
                       style={{width:"100%",padding:"8px 10px",border:"1.5px solid " + (erreurs.codePostal?F.rouge:F.grisBord),borderRadius:"8px",fontSize:"12px",boxSizing:"border-box",outline:"none"}} />
                     {erreurs.codePostal && <span style={{fontSize:"10px",color:F.rouge}}>5 chiffres requis</span>}
                   </div>

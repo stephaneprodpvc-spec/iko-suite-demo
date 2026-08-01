@@ -1,11 +1,11 @@
 {
-  "name": "Falliero SAV",
-  "short_name": "Falliero",
-  "description": "SAV Menuiserie Falliero — Ticket automatique, suivi temps réel, 4 agences",
+  "name": "Iko Suite SAV",
+  "short_name": "Iko Suite",
+  "description": "SAV Menuiserie Iko Suite — Ticket automatique, suivi temps réel, 4 agences",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#001A42",
-  "theme_color": "#DAB239",
+  "background_color": "#0D0D0D",
+  "theme_color": "#FF6B00",
   "icons": [
     {
       "src": "/icon-192.png",

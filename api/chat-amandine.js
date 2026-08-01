@@ -19,7 +19,7 @@ const AIRTABLE_BASE = "app1AcRl9r6vB7W6e";
 const MAKE_WEBHOOK = "https://hook.eu1.make.com/xczscdk40wh653mmnxnx7x63kawjcgx4";
 const DELAI_MIN_JOURS = 7;
 
-const AGENCES_VALIDES = ["Ibos (65)", "Lescar (64)", "Tarnos (40)", "Saint-Gaudens (31)"];
+const AGENCES_VALIDES = ["Agence 1", "Agence 3", "Agence 2", "Agence 4"];
 const CRENEAUX = {
     matin: "Matin (8h30 — 12h00)",
     apres_midi: "Après-midi (13h00 — 17h00)",
@@ -52,8 +52,8 @@ ticket (ex: SAV-2026-1234, jamais **SAV-2026-1234**).
 
 DEROULE POUR OUVRIR UN TICKET / PRENDRE RDV
 1. Comprendre le probleme (quel produit, quelle panne, depuis quand).
-2. Demander l'agence du client parmi : Ibos (65), Lescar (64), Tarnos (40),
-   Saint-Gaudens (31). Si le client donne juste sa ville, associe-la a
+2. Demander l'agence du client parmi : Agence 1, Agence 2, Agence 3,
+   Agence 4. Si le client donne juste sa ville, associe-la a
       l'agence la plus proche parmi ces 4-la.
       3. Recuperer nom complet, telephone, e-mail, adresse complete (rue, code
          postal, ville).
