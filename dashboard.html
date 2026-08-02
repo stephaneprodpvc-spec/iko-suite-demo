@@ -1403,6 +1403,18 @@ function Dashboard({ agenceAccess, onClose }) {
   };
 
   // ---- Amandine vocale : ecoute, comprend, agit directement sur le dashboard ----
+  // iOS Safari bloque silencieusement speechSynthesis.speak() si l'appel
+  // n'est pas synchrone avec le geste de l'utilisateur (clic/tap). Comme
+  // notre reponse vocale arrive apres un appel reseau (asynchrone), on
+  // "debloque" l'audio des le clic avec un utterance quasi silencieux.
+  const debloquerVoixIOS = () => {
+    try {
+      const u = new SpeechSynthesisUtterance(' ');
+      u.volume = 0;
+      window.speechSynthesis.speak(u);
+    } catch (e) {}
+  };
+
   const parlerAmandine = (texte) => {
     try {
       if (!texte || !('speechSynthesis' in window)) return;
@@ -1562,17 +1574,17 @@ function Dashboard({ agenceAccess, onClose }) {
         <div style={{marginTop:"26px",width:"90%",maxWidth:"380px",display:"flex",gap:"8px"}}>
           <input id="ikoChampTexte" type="text" value={amandineTexte}
             onChange={e => setAmandineTexte(e.target.value)}
-            onKeyDown={e => { if (e.key === "Enter" && amandineTexte.trim()) { envoyerAmandine(amandineTexte.trim()); setAmandineTexte(""); } }}
+            onKeyDown={e => { if (e.key === "Enter" && amandineTexte.trim()) { debloquerVoixIOS(); envoyerAmandine(amandineTexte.trim()); setAmandineTexte(""); } }}
             placeholder="Tapez ou dictez (🎤 sur le clavier)"
             style={{flex:1,padding:"12px 14px",borderRadius:"10px",background:"#1a1a1a",border:"1px solid rgba(255,107,0,0.3)",color:"#fff",fontSize:"14px"}}/>
-          <button onClick={() => { if (amandineTexte.trim()) { envoyerAmandine(amandineTexte.trim()); setAmandineTexte(""); } }}
+          <button onClick={() => { if (amandineTexte.trim()) { debloquerVoixIOS(); envoyerAmandine(amandineTexte.trim()); setAmandineTexte(""); } }}
             style={{padding:"12px 16px",borderRadius:"10px",background:"#FF6B00",border:"none",color:"#111",fontWeight:"800",cursor:"pointer"}}>
             →
           </button>
         </div>
 
         <div style={{position:"fixed",bottom:"36px",left:"36px"}}>
-          <button onClick={lancerEcouteAmandine}
+          <button onClick={() => { debloquerVoixIOS(); lancerEcouteAmandine(); }}
             style={{width:"64px",height:"64px",borderRadius:"50%",background:amandineEcoute?"#DC2626":"#FF6B00",border:"none",color:"#111",cursor:"pointer",fontSize:"26px",boxShadow:"0 6px 24px rgba(255,107,0,0.4)"}}>
             🎙️
           </button>
@@ -1777,10 +1789,10 @@ function Dashboard({ agenceAccess, onClose }) {
             <div style={{display:"flex",gap:"6px",marginTop:"10px"}}>
               <input type="text" value={amandineTexte}
                 onChange={e => setAmandineTexte(e.target.value)}
-                onKeyDown={e => { if (e.key === "Enter" && amandineTexte.trim()) { envoyerAmandine(amandineTexte.trim()); setAmandineTexte(""); } }}
+                onKeyDown={e => { if (e.key === "Enter" && amandineTexte.trim()) { debloquerVoixIOS(); envoyerAmandine(amandineTexte.trim()); setAmandineTexte(""); } }}
                 placeholder="Tapez ou dictez (🎤 clavier)"
                 style={{flex:1,padding:"8px 10px",borderRadius:"8px",background:"#1a1a1a",border:"1px solid "+C.orBord,color:"#fff",fontSize:"12px"}}/>
-              <button onClick={() => { if (amandineTexte.trim()) { envoyerAmandine(amandineTexte.trim()); setAmandineTexte(""); } }}
+              <button onClick={() => { if (amandineTexte.trim()) { debloquerVoixIOS(); envoyerAmandine(amandineTexte.trim()); setAmandineTexte(""); } }}
                 style={{padding:"8px 12px",borderRadius:"8px",background:C.or,border:"none",color:"#111",fontWeight:"800",cursor:"pointer"}}>→</button>
             </div>
           </div>
@@ -1793,7 +1805,7 @@ function Dashboard({ agenceAccess, onClose }) {
           {amandineOuverte && (
             <button onClick={() => setAmandineOuverte(false)} style={{width:"36px",height:"36px",borderRadius:"50%",background:C.card,border:"1px solid "+C.border,color:C.muted,cursor:"pointer",fontSize:"14px"}}>✕</button>
           )}
-          <button onClick={() => { setAmandineOuverte(true); lancerEcouteAmandine(); }}
+          <button onClick={() => { debloquerVoixIOS(); setAmandineOuverte(true); lancerEcouteAmandine(); }}
             style={{width:"58px",height:"58px",borderRadius:"50%",background:amandineEcoute?C.rouge:C.or,border:"none",color:"#111",cursor:"pointer",fontSize:"24px",boxShadow:"0 6px 20px rgba(255,107,0,0.4)",animation:amandineEcoute?"pulse 1.2s infinite":"none"}}>
             🎙️
           </button>
