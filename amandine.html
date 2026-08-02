@@ -68,7 +68,7 @@
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
     background: #FAFAFA;
-    padding: 20px 16px 8px;
+    padding: 20px 16px calc(env(safe-area-inset-bottom) + 76px);
     display: flex;
     flex-direction: column;
     gap: 12px;
@@ -134,7 +134,7 @@
     display: flex;
     flex-wrap: wrap;
     gap: 8px;
-    padding: 4px 16px 14px;
+    padding: 4px 16px calc(env(safe-area-inset-bottom) + 90px);
     background: #FAFAFA;
     flex-shrink: 0;
   }
@@ -272,19 +272,22 @@
   body:not(.amandine-mode-chat) header,
   body:not(.amandine-mode-chat) main,
   body:not(.amandine-mode-chat) #suggestions,
-  body:not(.amandine-mode-chat) #zone-saisie,
   body:not(.amandine-mode-chat) .mention { display: none; }
+  #zone-saisie {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 600;
+  }
 </style>
 </head>
 <body>
 
 <div id="amandine-landing">
   <div class="amandine-sphere" id="amandine-sphere-btn"></div>
-  <div class="amandine-landing-texte">Bonjour, je suis Amandine. Dites-moi ce qui vous amène, ou tapez votre message.</div>
-  <button class="amandine-landing-bouton" id="amandine-landing-bouton">💬 Discuter</button>
+  <div class="amandine-landing-texte" id="amandine-landing-texte">Bonjour, je suis Amandine. Dites-moi ce qui vous amène, ou tapez votre message.</div>
+  <button class="amandine-landing-bouton" id="amandine-landing-bouton">💬 Voir la conversation</button>
 </div>
 
 <header>
+  <button id="amandine-retour-sphere" class="btn-entete" title="Retour à la sphère vocale" style="margin-right:2px;">🔮</button>
   <div class="logo">Iko</div>
   <div>
     <div class="titre">Amandine — SAV</div>
@@ -367,6 +370,8 @@
 
     ajouterBulle(texte, 'visiteur');
     historique.push({ role: 'user', texte: texte });
+    const texteSphere = document.getElementById('amandine-landing-texte');
+    if (texteSphere) texteSphere.textContent = '...';
 
     const frappe = indicateurFrappe();
 
@@ -380,15 +385,20 @@
       frappe.remove();
 
       if (!reponse.ok) {
-        ajouterBulle(data.error || "Le service est momentanément indisponible. Réessayez dans un instant.", 'erreur');
+        const msg = data.error || "Le service est momentanément indisponible. Réessayez dans un instant.";
+        ajouterBulle(msg, 'erreur');
+        if (texteSphere) texteSphere.textContent = msg;
       } else {
         ajouterBulle(data.reponse, 'conseiller');
         historique.push({ role: 'assistant', texte: data.reponse });
+        if (texteSphere) texteSphere.textContent = data.reponse;
         lireAVoixHaute(data.reponse);
       }
     } catch (e) {
       frappe.remove();
-      ajouterBulle("Connexion interrompue. Vérifiez votre réseau et réessayez.", 'erreur');
+      const msg = "Connexion interrompue. Vérifiez votre réseau et réessayez.";
+      ajouterBulle(msg, 'erreur');
+      if (texteSphere) texteSphere.textContent = msg;
     } finally {
       enAttente = false;
       boutonEnvoyer.disabled = false;
@@ -550,19 +560,21 @@
   historique.push({ role: 'assistant', texte: ACCUEIL });
   afficherSuggestions(true);
 
-  // ---- Transition écran d'accueil (sphère) -> conversation ----
-  function passerEnModeChat(lancerMicro) {
+  // ---- Sphère persistante : le clic lance juste le micro, sans changer
+  // de vue. Seul le bouton dédié ouvre/ferme la conversation écrite. ----
+  function ouvrirConversation() {
     document.body.classList.add('amandine-mode-chat');
-    if (lancerMicro && boutonMicro) {
-      setTimeout(function () { boutonMicro.click(); }, 150);
-    } else if (saisie) {
-      setTimeout(function () { saisie.focus(); }, 150);
-    }
+    if (saisie) setTimeout(function () { saisie.focus(); }, 150);
+  }
+  function retournerSphere() {
+    document.body.classList.remove('amandine-mode-chat');
   }
   const sphereBtn = document.getElementById('amandine-sphere-btn');
   const landingBtn = document.getElementById('amandine-landing-bouton');
-  if (sphereBtn) sphereBtn.addEventListener('click', function () { passerEnModeChat(true); });
-  if (landingBtn) landingBtn.addEventListener('click', function () { passerEnModeChat(false); });
+  const retourBtn = document.getElementById('amandine-retour-sphere');
+  if (sphereBtn) sphereBtn.addEventListener('click', function () { debloquerAudioIOS(); if (boutonMicro) boutonMicro.click(); });
+  if (landingBtn) landingBtn.addEventListener('click', ouvrirConversation);
+  if (retourBtn) retourBtn.addEventListener('click', retournerSphere);
 })();
 </script>
 
