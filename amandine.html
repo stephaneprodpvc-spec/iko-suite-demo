@@ -328,7 +328,7 @@
   function ajouterBulle(texte, type) {
     const div = document.createElement('div');
     div.className = 'bulle ' + type;
-    if (type === 'conseiller' && synthDispo) { var spanTxt = document.createElement('span'); spanTxt.textContent = texte; div.appendChild(spanTxt); var btnEcouter = document.createElement('button'); btnEcouter.type = 'button'; btnEcouter.textContent = ' 🔊'; btnEcouter.setAttribute('aria-label', 'Ecouter ce message'); btnEcouter.style.cssText = 'background:none;border:none;cursor:pointer;font-size:13px;margin-left:6px;vertical-align:middle;padding:0;'; btnEcouter.addEventListener('click', function () { window.speechSynthesis.cancel(); var u = new SpeechSynthesisUtterance(texte); u.lang = 'fr-FR'; if (voixPreferee) u.voice = voixPreferee; window.speechSynthesis.speak(u); }); div.appendChild(btnEcouter); } else { div.textContent = texte; }
+    if (type === 'conseiller' && synthDispo) { var spanTxt = document.createElement('span'); spanTxt.textContent = texte; div.appendChild(spanTxt); var btnEcouter = document.createElement('button'); btnEcouter.type = 'button'; btnEcouter.textContent = ' 🔊'; btnEcouter.setAttribute('aria-label', 'Ecouter ce message'); btnEcouter.style.cssText = 'background:none;border:none;cursor:pointer;font-size:13px;margin-left:6px;vertical-align:middle;padding:0;'; btnEcouter.addEventListener('click', function () { debloquerAudioIOS(); lireAVoixHauteForce(texte); }); div.appendChild(btnEcouter); } else { div.textContent = texte; }
     fil.appendChild(div);
     fil.scrollTop = fil.scrollHeight;
     return div;
@@ -421,43 +421,65 @@
   const boutonLecture = document.getElementById('lecture');
   let lectureActive = localStorage.getItem('rsiaLectureActive') === 'true'; let synthDeverrouille = false;
 
-  // -- Lecture à voix haute des réponses --
-  const synthDispo = 'speechSynthesis' in window;
-  let voixPreferee = null;
-  function choisirVoix() {
-    const voix = window.speechSynthesis.getVoices();
-    voixPreferee = voix.find(function (v) { return v.name === 'Google français'; })
-      || voix.find(function (v) { return /^fr/i.test(v.lang) && /google/i.test(v.name); })
-      || voix.find(function (v) { return /^fr/i.test(v.lang) && /natural|online/i.test(v.name); })
-      || voix.find(function (v) { return /^fr/i.test(v.lang) && /audrey|amélie|amelie|aurélie|aurelie|marie|julie|céline|celine/i.test(v.name); }) || voix.find(function (v) { return /^fr/i.test(v.lang); })
-      || null;
+  // -- Lecture à voix haute des réponses (ElevenLabs, voix "Amandine") --
+  const synthDispo = true; // ElevenLabs cote serveur : toujours disponible (pas de dependance navigateur)
+  const VOICE_ID_AMANDINE = "EXAVITQu4vr4xnSDxMaL";
+  const SILENCE_WAV = "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=";
+  let lecteurAudio = document.getElementById('amandine-audio-player');
+  if (!lecteurAudio) {
+    lecteurAudio = document.createElement('audio');
+    lecteurAudio.id = 'amandine-audio-player';
+    lecteurAudio.style.display = 'none';
+    document.body.appendChild(lecteurAudio);
   }
-  if (synthDispo) {
-    choisirVoix();
-    window.speechSynthesis.onvoiceschanged = choisirVoix;
+  function debloquerAudioIOS() {
+    try { lecteurAudio.src = SILENCE_WAV; lecteurAudio.play().catch(function () {}); } catch (e) {}
   }
-  if (synthDispo) {
-    boutonLecture.classList.add('dispo');
-    boutonLecture.setAttribute('aria-pressed', String(lectureActive));
-    boutonLecture.textContent = lectureActive ? '🔊' : '🔇';
-    if (!lectureActive) window.speechSynthesis.cancel();
-    boutonLecture.addEventListener('click', function () {
-      lectureActive = !lectureActive;
-      localStorage.setItem('rsiaLectureActive', String(lectureActive));
-      boutonLecture.setAttribute('aria-pressed', String(lectureActive));
-      boutonLecture.textContent = lectureActive ? '🔊' : '🔇';
-      if (!lectureActive) { window.speechSynthesis.cancel(); } else { window.speechSynthesis.cancel(); var testVoixIPad = new SpeechSynthesisUtterance('Voix activée.'); testVoixIPad.lang = 'fr-FR'; if (voixPreferee) testVoixIPad.voice = voixPreferee; window.speechSynthesis.speak(testVoixIPad); }
-    });
+  async function lireAVoixHaute(texte) {
+    if (!lectureActive || !texte) return;
+    try {
+      const r = await fetch('/api/tts', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ texte: texte, voice_id: VOICE_ID_AMANDINE }),
+      });
+      if (!r.ok) return;
+      const blob = await r.blob();
+      const url = URL.createObjectURL(blob);
+      lecteurAudio.src = url;
+      lecteurAudio.play().catch(function () {});
+    } catch (e) {}
   }
 
-  if (synthDispo) { document.addEventListener('click', function debloquerVoixIPad() { if (lectureActive && !synthDeverrouille) { synthDeverrouille = true; window.speechSynthesis.cancel(); var amorceVoix = new SpeechSynthesisUtterance('Voix activee.'); amorceVoix.lang = 'fr-FR'; if (voixPreferee) amorceVoix.voice = voixPreferee; window.speechSynthesis.speak(amorceVoix); } document.removeEventListener('click', debloquerVoixIPad); }, { once: true }); } function lireAVoixHaute(texte) {
-    if (!lectureActive || !synthDispo) return;
-    window.speechSynthesis.cancel();
-    const u = new SpeechSynthesisUtterance(texte);
-    u.lang = 'fr-FR';
-    u.rate = 1.02;
-        if (voixPreferee) u.voice = voixPreferee;
-window.speechSynthesis.speak(u);
+  boutonLecture.classList.add('dispo');
+  boutonLecture.setAttribute('aria-pressed', String(lectureActive));
+  boutonLecture.textContent = lectureActive ? '🔊' : '🔇';
+  boutonLecture.addEventListener('click', function () {
+    lectureActive = !lectureActive;
+    localStorage.setItem('rsiaLectureActive', String(lectureActive));
+    boutonLecture.setAttribute('aria-pressed', String(lectureActive));
+    boutonLecture.textContent = lectureActive ? '🔊' : '🔇';
+    debloquerAudioIOS();
+    if (lectureActive) lireAVoixHaute('Voix activée.');
+  });
+
+  document.addEventListener('click', function debloquerVoixIPad() {
+    debloquerAudioIOS();
+    document.removeEventListener('click', debloquerVoixIPad);
+  }, { once: true });
+
+  async function lireAVoixHauteForce(texte) {
+    if (!texte) return;
+    try {
+      const r = await fetch('/api/tts', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ texte: texte, voice_id: VOICE_ID_AMANDINE }),
+      });
+      if (!r.ok) return;
+      const blob = await r.blob();
+      const url = URL.createObjectURL(blob);
+      lecteurAudio.src = url;
+      lecteurAudio.play().catch(function () {});
+    } catch (e) {}
   }
 
   // -- Dictée --
@@ -473,7 +495,7 @@ window.speechSynthesis.speak(u);
     boutonMicro.classList.add('dispo');
     boutonMicro.addEventListener('click', function () {
       if (enEcoute) { reco.stop(); return; }
-      if (synthDispo) window.speechSynthesis.cancel(); // ne pas s'écouter parler
+      try { lecteurAudio.pause(); } catch (e) {} // ne pas s'écouter parler
       try { reco.start(); } catch (e) { /* déjà démarré : sans effet */ }
     });
 

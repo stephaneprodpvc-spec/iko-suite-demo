@@ -1407,22 +1407,29 @@ function Dashboard({ agenceAccess, onClose }) {
   // n'est pas synchrone avec le geste de l'utilisateur (clic/tap). Comme
   // notre reponse vocale arrive apres un appel reseau (asynchrone), on
   // "debloque" l'audio des le clic avec un utterance quasi silencieux.
+  const ikoAudioRef = React.useRef(null);
+  const VOICE_ID_IKO = "pNInz6obpgDQGcFmaJgB";
+  const SILENCE_WAV = "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=";
+
   const debloquerVoixIOS = () => {
     try {
-      const u = new SpeechSynthesisUtterance(' ');
-      u.volume = 0;
-      window.speechSynthesis.speak(u);
+      const a = ikoAudioRef.current;
+      if (a) { a.src = SILENCE_WAV; a.play().catch(() => {}); }
     } catch (e) {}
   };
 
-  const parlerAmandine = (texte) => {
+  const parlerAmandine = async (texte) => {
     try {
-      if (!texte || !('speechSynthesis' in window)) return;
-      const u = new SpeechSynthesisUtterance(texte);
-      u.lang = 'fr-FR';
-      u.rate = 1.02;
-      window.speechSynthesis.cancel();
-      window.speechSynthesis.speak(u);
+      if (!texte) return;
+      const r = await fetch('/api/tts', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ texte, voice_id: VOICE_ID_IKO }),
+      });
+      if (!r.ok) return;
+      const blob = await r.blob();
+      const url = URL.createObjectURL(blob);
+      const a = ikoAudioRef.current;
+      if (a) { a.src = url; a.play().catch(() => {}); }
     } catch (e) {}
   };
 
@@ -1559,6 +1566,7 @@ function Dashboard({ agenceAccess, onClose }) {
   if (vueMode === "vocal") {
     return (
       <div style={{position:"fixed",inset:0,background:"#0D0D0D",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",zIndex:100}}>
+        <audio ref={ikoAudioRef} style={{display:"none"}}/>
         <div style={{position:"absolute",top:"20px",left:"50%",transform:"translateX(-50%)",color:"#8a8a8a",fontSize:"12px",letterSpacing:"2px",textTransform:"uppercase"}}>
           {agenceFilter === "global" ? "Toutes agences" : agenceFilter}
         </div>
@@ -1778,6 +1786,7 @@ function Dashboard({ agenceAccess, onClose }) {
       </div>
 
       {/* Widget vocal IKO */}
+      <audio ref={ikoAudioRef} style={{display:"none"}}/>
       <div style={{position:"fixed",bottom:"24px",right:"24px",zIndex:200,display:"flex",flexDirection:"column",alignItems:"flex-end",gap:"10px"}}>
         {amandineOuverte && (
           <div style={{width:"280px",background:C.card,border:"1px solid "+C.orBord,borderRadius:"14px",padding:"16px",boxShadow:"0 10px 40px rgba(0,0,0,0.35)"}}>
