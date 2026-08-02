@@ -934,12 +934,16 @@ if ('serviceWorker' in navigator) {
 // Pour revenir en arriere definitivement, il suffit de supprimer ce bloc
 // et de remettre la ligne <script type="module" src="stef-widget.js?v=3">.
 (function(){
+  // Mascotte 3D desactivee (allegement page + demande explicite).
+  // Pour reactiver : decommenter le bloc ci-dessous.
+  /*
   var useVideo2 = /(?:^|[?&])stef=video2(?:&|$)/.test(location.search);
   var useVideo = !useVideo2 && /(?:^|[?&])stef=video(?:&|$)/.test(location.search);
   var s = document.createElement('script');
   s.type = 'module';
   s.src = useVideo2 ? 'stef-widget-video-2.js?v=17' : (useVideo ? 'stef-widget-video.js?v=1' : 'stef-widget.js?v=3');
   document.body.appendChild(s);
+  */
 })();
 </script>
 </body>

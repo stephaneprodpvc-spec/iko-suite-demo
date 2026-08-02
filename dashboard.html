@@ -1118,6 +1118,11 @@ function Dashboard({ agenceAccess, onClose }) {
   const [urgentOnly, setUrgentOnly] = React.useState(false);
   const [messagesOnly, setMessagesOnly] = React.useState(false);
   const [openMessageTicketId, setOpenMessageTicketId] = React.useState(null);
+  const [amandineOuverte, setAmandineOuverte] = React.useState(false);
+  const [amandineEcoute, setAmandineEcoute] = React.useState(false);
+  const [amandineEnCours, setAmandineEnCours] = React.useState(false);
+  const [amandineDernier, setAmandineDernier] = React.useState("");
+  const [amandineErreur, setAmandineErreur] = React.useState("");
   const [sortBy, setSortBy] = React.useState("date");
   const [lastRefresh, setLastRefresh] = React.useState(null);
   const [showModalRdv, setShowModalRdv] = React.useState(false);
@@ -1395,6 +1400,79 @@ function Dashboard({ agenceAccess, onClose }) {
     });
   };
 
+  // ---- Amandine vocale : ecoute, comprend, agit directement sur le dashboard ----
+  const parlerAmandine = (texte) => {
+    try {
+      if (!texte || !('speechSynthesis' in window)) return;
+      const u = new SpeechSynthesisUtterance(texte);
+      u.lang = 'fr-FR';
+      u.rate = 1.02;
+      window.speechSynthesis.cancel();
+      window.speechSynthesis.speak(u);
+    } catch (e) {}
+  };
+
+  const executerActionsAmandine = (actions) => {
+    (actions || []).forEach(a => {
+      if (a.name === 'filtrer_agence') {
+        setAgenceFilter(a.input.agence === 'toutes' ? 'global' : a.input.agence);
+      } else if (a.name === 'rechercher') {
+        setSearch(a.input.requete || '');
+        setStatutFilter('tous'); setUrgentOnly(false); setMessagesOnly(false);
+      } else if (a.name === 'changer_statut' && a.input.ticket_id) {
+        updateStatus(a.input.ticket_id, a.input.nouveau_statut);
+      } else if (a.name === 'filtrer_statut') {
+        setStatutFilter(a.input.statut); setUrgentOnly(false); setMessagesOnly(false);
+      }
+    });
+  };
+
+  const envoyerAmandine = async (transcript) => {
+    setAmandineEnCours(true);
+    setAmandineErreur("");
+    try {
+      const contexteTickets = tickets.slice(0, 150).map(t => ({
+        id: t.id,
+        numero: t.fields?.Name || "",
+        client: t.fields?.Client || "",
+        agence: t.fields?.Agence || "",
+        statut: t.fields?.Statut || "Nouveau",
+        produit: t.fields?.Produit || "",
+      }));
+      const r = await fetch('/api/chat-dashboard', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ message: transcript, tickets: contexteTickets, agenceActuelle: agenceFilter })
+      });
+      const data = await r.json();
+      if (data.erreur) { setAmandineErreur(data.erreur); setAmandineEnCours(false); return; }
+      executerActionsAmandine(data.actions || []);
+      const texte = data.reponse || "C'est fait.";
+      setAmandineDernier(texte);
+      parlerAmandine(texte);
+    } catch (e) {
+      setAmandineErreur("Connexion impossible. Réessayez.");
+    }
+    setAmandineEnCours(false);
+  };
+
+  const lancerEcouteAmandine = () => {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) { setAmandineErreur("Reconnaissance vocale non supportée sur ce navigateur."); return; }
+    const reco = new SR();
+    reco.lang = 'fr-FR';
+    reco.continuous = false;
+    reco.interimResults = false;
+    reco.onstart = () => { setAmandineEcoute(true); setAmandineErreur(""); };
+    reco.onerror = () => { setAmandineEcoute(false); };
+    reco.onend = () => setAmandineEcoute(false);
+    reco.onresult = (e) => {
+      const transcript = e.results[0][0].transcript;
+      setAmandineDernier(transcript);
+      envoyerAmandine(transcript);
+    };
+    reco.start();
+  };
+
   const confirmerAnnulation = async (ticket, motif) => {
     const fields = { Statut: "Annulé", Commentaire: "Annulé : " + motif.trim() };
     const planningId = ticket?.fields?.PlanningID;
@@ -1630,6 +1708,29 @@ function Dashboard({ agenceAccess, onClose }) {
 
         {vue === "planning" && <PlanningView agenceFilter={agenceFilter}/>}
       </div>
+
+      {/* Widget vocal Amandine */}
+      <div style={{position:"fixed",bottom:"24px",right:"24px",zIndex:200,display:"flex",flexDirection:"column",alignItems:"flex-end",gap:"10px"}}>
+        {amandineOuverte && (
+          <div style={{width:"280px",background:C.card,border:"1px solid "+C.orBord,borderRadius:"14px",padding:"16px",boxShadow:"0 10px 40px rgba(0,0,0,0.35)"}}>
+            <div style={{fontSize:"12px",fontWeight:"800",color:C.or,marginBottom:"8px",letterSpacing:"1px"}}>AMANDINE</div>
+            <div style={{fontSize:"12px",color:C.muted,minHeight:"36px"}}>
+              {amandineEcoute ? "Je vous écoute..." : amandineEnCours ? "..." : amandineDernier ? amandineDernier : "Dites par exemple : \"Filtre sur Agence 2\" ou \"Passe le ticket SAV-2026-1552 en terminé\"."}
+            </div>
+            {amandineErreur && <div style={{fontSize:"11px",color:C.rouge,marginTop:"6px"}}>{amandineErreur}</div>}
+          </div>
+        )}
+        <div style={{display:"flex",gap:"10px",alignItems:"center"}}>
+          {amandineOuverte && (
+            <button onClick={() => setAmandineOuverte(false)} style={{width:"36px",height:"36px",borderRadius:"50%",background:C.card,border:"1px solid "+C.border,color:C.muted,cursor:"pointer",fontSize:"14px"}}>✕</button>
+          )}
+          <button onClick={() => { setAmandineOuverte(true); lancerEcouteAmandine(); }}
+            style={{width:"58px",height:"58px",borderRadius:"50%",background:amandineEcoute?C.rouge:C.or,border:"none",color:"#111",cursor:"pointer",fontSize:"24px",boxShadow:"0 6px 20px rgba(255,107,0,0.4)",animation:amandineEcoute?"pulse 1.2s infinite":"none"}}>
+            🎙️
+          </button>
+        </div>
+      </div>
+      <style>{`@keyframes pulse{0%,100%{transform:scale(1);}50%{transform:scale(1.08);}}`}</style>
     </div>
   );
 }
