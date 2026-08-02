@@ -1986,6 +1986,12 @@ function FicheMetre({ agenceAccess, ficheInit, onBack }) {
   const [sending, setSending] = React.useState(false);
   const [sendingBE, setSendingBE] = React.useState(false);
   const [statutMsg, setStatutMsg] = React.useState("");
+  const [toiseOuvert, setToiseOuvert] = React.useState(false);
+  const [toiseEcoute, setToiseEcoute] = React.useState(false);
+  const [toiseEnCours, setToiseEnCours] = React.useState(false);
+  const [toiseDernier, setToiseDernier] = React.useState("");
+  const [toiseErreur, setToiseErreur] = React.useState("");
+  const [toiseTexte, setToiseTexte] = React.useState("");
 
   const setF = (k, v) => setFiche(prev => ({ ...prev, [k]: v }));
 
@@ -1996,6 +2002,100 @@ function FicheMetre({ agenceAccess, ficheInit, onBack }) {
   const supprimerOuverture = (i) => {
     if (!confirm("Supprimer cette ouverture ?")) return;
     setOuvertures(prev => prev.filter((_,idx) => idx!==i));
+  };
+
+  // ---- Toise, l'assistante vocale du métreur ----
+  const debloquerVoixIOS = () => {
+    try {
+      const u = new SpeechSynthesisUtterance(' ');
+      u.volume = 0;
+      window.speechSynthesis.speak(u);
+    } catch (e) {}
+  };
+
+  const parlerToise = (texte) => {
+    try {
+      if (!texte || !('speechSynthesis' in window)) return;
+      const u = new SpeechSynthesisUtterance(texte);
+      u.lang = 'fr-FR';
+      u.rate = 1.02;
+      window.speechSynthesis.cancel();
+      window.speechSynthesis.speak(u);
+    } catch (e) {}
+  };
+
+  const executerActionsToise = (actions) => {
+    (actions || []).forEach(a => {
+      if (a.name === 'renseigner_fiche') {
+        setFiche(prev => ({
+          ...prev,
+          ...(a.input.client ? { client: a.input.client } : {}),
+          ...(a.input.adresse ? { adresse: a.input.adresse } : {}),
+          ...(a.input.telephone ? { telephone: a.input.telephone } : {}),
+          ...(a.input.numeroDossier ? { numeroDossier: a.input.numeroDossier } : {}),
+        }));
+      } else if (a.name === 'ajouter_ouverture') {
+        const i = a.input;
+        setOuvertures(prev => [...prev, {
+          repere: i.repere || ("P" + (prev.length + 1)),
+          type: i.type || "",
+          largeur: i.largeur || "",
+          hauteur: i.hauteur || "",
+          couleur: i.couleur || "",
+          vitrage: i.vitrage || "",
+          note: i.note || "",
+        }]);
+      }
+    });
+  };
+
+  const envoyerToise = async (transcript) => {
+    setToiseEnCours(true);
+    setToiseErreur("");
+    try {
+      const contexteOuvertures = ouvertures.map(o => ({
+        repere: o.repere, type: o.type, largeur: o.largeur, hauteur: o.hauteur, couleur: o.couleur, vitrage: o.vitrage,
+      }));
+      const r = await fetch('/api/chat-metreur', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({
+          message: transcript,
+          fiche: { client: fiche.client, adresse: fiche.adresse, telephone: fiche.telephone, numeroDossier: fiche.numeroDossier },
+          ouvertures: contexteOuvertures,
+        })
+      });
+      const data = await r.json();
+      if (data.erreur) { setToiseErreur(data.erreur); setToiseEnCours(false); return; }
+      executerActionsToise(data.actions || []);
+      const texte = data.reponse || "C'est noté.";
+      setToiseDernier(texte);
+      parlerToise(texte);
+    } catch (e) {
+      setToiseErreur("Connexion impossible. Réessayez.");
+    }
+    setToiseEnCours(false);
+  };
+
+  const lancerEcouteToise = () => {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) {
+      const champ = document.getElementById('toiseChampTexte');
+      if (champ) champ.focus();
+      return;
+    }
+    const reco = new SR();
+    reco.lang = 'fr-FR';
+    reco.continuous = false;
+    reco.interimResults = false;
+    reco.onstart = () => { setToiseEcoute(true); setToiseErreur(""); };
+    reco.onerror = () => setToiseEcoute(false);
+    reco.onend = () => setToiseEcoute(false);
+    reco.onresult = (e) => {
+      const transcript = e.results[0][0].transcript;
+      setToiseDernier(transcript);
+      envoyerToise(transcript);
+    };
+    reco.start();
   };
 
   // Enregistre la fiche (+ ouvertures pas encore synchronisées) dans Airtable.
@@ -2280,6 +2380,38 @@ function FicheMetre({ agenceAccess, ficheInit, onBack }) {
           onSave={ajouterOuverture}
         />
       )}
+
+      {/* Widget vocal Toise */}
+      <div style={{position:"fixed",bottom:"24px",right:"24px",zIndex:200,display:"flex",flexDirection:"column",alignItems:"flex-end",gap:"10px"}}>
+        {toiseOuvert && (
+          <div style={{width:"270px",background:C.card,border:"1px solid "+C.orBord,borderRadius:"14px",padding:"16px",boxShadow:"0 10px 40px rgba(0,0,0,0.2)"}}>
+            <div style={{fontSize:"12px",fontWeight:"800",color:C.or,marginBottom:"8px",letterSpacing:"1px"}}>TOISE</div>
+            <div style={{fontSize:"12px",color:C.muted,minHeight:"36px"}}>
+              {toiseEcoute ? "Je vous écoute..." : toiseEnCours ? "..." : toiseDernier ? toiseDernier : "Dictez par exemple : \"Fenêtre P1, 120 par 100, blanc, double vitrage\"."}
+            </div>
+            {toiseErreur && <div style={{fontSize:"11px",color:C.rouge,marginTop:"6px"}}>{toiseErreur}</div>}
+            <div style={{display:"flex",gap:"6px",marginTop:"10px"}}>
+              <input id="toiseChampTexte" type="text" value={toiseTexte}
+                onChange={e => setToiseTexte(e.target.value)}
+                onKeyDown={e => { if (e.key === "Enter" && toiseTexte.trim()) { debloquerVoixIOS(); envoyerToise(toiseTexte.trim()); setToiseTexte(""); } }}
+                placeholder="Tapez ou dictez (🎤 clavier)"
+                style={{flex:1,padding:"8px 10px",borderRadius:"8px",background:C.bg,border:"1px solid "+C.border,color:C.text,fontSize:"12px"}}/>
+              <button onClick={() => { if (toiseTexte.trim()) { debloquerVoixIOS(); envoyerToise(toiseTexte.trim()); setToiseTexte(""); } }}
+                style={{padding:"8px 12px",borderRadius:"8px",background:C.or,border:"none",color:"#fff",fontWeight:"800",cursor:"pointer"}}>→</button>
+            </div>
+          </div>
+        )}
+        <div style={{display:"flex",gap:"10px",alignItems:"center"}}>
+          {toiseOuvert && (
+            <button onClick={() => setToiseOuvert(false)} style={{width:"36px",height:"36px",borderRadius:"50%",background:C.card,border:"1px solid "+C.border,color:C.muted,cursor:"pointer",fontSize:"14px"}}>✕</button>
+          )}
+          <button onClick={() => { debloquerVoixIOS(); setToiseOuvert(true); lancerEcouteToise(); }}
+            style={{width:"58px",height:"58px",borderRadius:"50%",background:"radial-gradient(circle at 35% 30%, #E8D4B0, #C9A876 55%, #8a6d1f 100%)",border:"none",color:"#3a2e10",cursor:"pointer",fontSize:"24px",boxShadow:"0 0 26px rgba(255,107,0,0.35)",animation:toiseEcoute?"pulseToise 1.2s infinite":"none"}}>
+            🎙️
+          </button>
+        </div>
+      </div>
+      <style>{`@keyframes pulseToise{0%,100%{transform:scale(1);}50%{transform:scale(1.08);}}`}</style>
     </div>
   );
 }
