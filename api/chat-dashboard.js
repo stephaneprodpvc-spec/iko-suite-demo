@@ -1,3 +1,5 @@
+import { verifierOrigine, verifierDebit, reponseBloquee } from "./_securite.js";
+
 // api/chat-dashboard.js
 // Relais serveur entre le widget vocal Amandine (dashboard.html) et l'API
 // Claude (Anthropic). La cle ANTHROPIC_API_KEY reste ici (cote serveur).
@@ -108,6 +110,9 @@ export default async function handler(req, res) {
   if (req.method !== "POST") {
     return res.status(405).json({ erreur: "Methode non autorisee" });
   }
+
+  if (!verifierOrigine(req)) return reponseBloquee(res, "origine");
+  if (!verifierDebit(req)) return reponseBloquee(res, "debit");
 
   const cle = process.env.ANTHROPIC_API_KEY;
   if (!cle) {

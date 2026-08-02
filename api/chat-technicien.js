@@ -1,3 +1,5 @@
+import { verifierOrigine, verifierDebit, reponseBloquee } from "./_securite.js";
+
 // api/chat-technicien.js
 // Relais serveur entre le widget vocal Max (technicien.html) et l'API
 // Claude (Anthropic). Meme principe que chat-dashboard.js : les tickets
@@ -83,6 +85,9 @@ export default async function handler(req, res) {
   if (req.method !== "POST") {
     return res.status(405).json({ erreur: "Methode non autorisee" });
   }
+
+  if (!verifierOrigine(req)) return reponseBloquee(res, "origine");
+  if (!verifierDebit(req)) return reponseBloquee(res, "debit");
 
   const cle = process.env.ANTHROPIC_API_KEY;
   if (!cle) {
