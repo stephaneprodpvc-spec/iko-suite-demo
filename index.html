@@ -208,6 +208,11 @@ let reactMounted = false;
     amandineOpen = !amandineOpen;
     const p = document.getElementById('amandine-widget-panel');
     p.style.display = amandineOpen ? 'block' : 'none';
+    // Logique d'usage : un seul panneau visible a la fois. Si on ouvre
+    // Amandine, on ferme le formulaire SAV manuel s'il etait ouvert.
+    if (amandineOpen && typeof widgetOpen !== 'undefined' && widgetOpen) {
+      toggleWidget();
+    }
   }
     
 
@@ -218,6 +223,13 @@ function toggleWidget() {
   const iconClose = document.getElementById('icon-close');
   const btnLabel = document.getElementById('btn-label');
   if (widgetOpen) {
+    // Logique d'usage : un seul panneau visible a la fois. Si on ouvre le
+    // formulaire SAV manuel, on ferme Amandine si elle etait ouverte.
+    if (typeof amandineOpen !== 'undefined' && amandineOpen) {
+      amandineOpen = false;
+      const ap = document.getElementById('amandine-widget-panel');
+      if (ap) ap.style.display = 'none';
+    }
     panel.classList.add('open');
     iconChat.style.display = 'none';
     btnLabel.style.display = 'none';
