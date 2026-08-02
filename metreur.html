@@ -1992,6 +1992,7 @@ function FicheMetre({ agenceAccess, ficheInit, onBack }) {
   const [toiseDernier, setToiseDernier] = React.useState("");
   const [toiseErreur, setToiseErreur] = React.useState("");
   const [toiseTexte, setToiseTexte] = React.useState("");
+  const [vueMode, setVueMode] = React.useState("vocal");
 
   const setF = (k, v) => setFiche(prev => ({ ...prev, [k]: v }));
 
@@ -2262,6 +2263,53 @@ function FicheMetre({ agenceAccess, ficheInit, onBack }) {
 
   const valideFiche = fiche.client.trim() && fiche.adresse.trim();
 
+  if (vueMode === "vocal") {
+    return (
+      <div style={{position:"fixed",inset:0,background:"#0D0D0D",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",zIndex:100}}>
+        <div style={{position:"absolute",top:"20px",left:"50%",transform:"translateX(-50%)",color:"#8a8a8a",fontSize:"12px",letterSpacing:"2px",textTransform:"uppercase"}}>
+          {fiche.client ? fiche.client : "Nouvelle fiche"}
+        </div>
+        <div style={{width:"220px",height:"220px",borderRadius:"50%",
+          background:"radial-gradient(circle at 35% 30%, #E8D4B0, #C9A876 55%, #8a6d1f 100%)",
+          boxShadow:"0 0 90px rgba(255,107,0,0.3)",
+          animation: toiseEcoute ? "pulseToiseEcran 1s ease-in-out infinite" : "respireToise 3.2s ease-in-out infinite"}}/>
+        <div style={{marginTop:"32px",color:"#b8b8b8",fontSize:"14px",maxWidth:"340px",textAlign:"center",minHeight:"40px",lineHeight:"1.5"}}>
+          {toiseEcoute ? "Je vous écoute..." : toiseEnCours ? "..." : toiseDernier ? toiseDernier : "Dictez à Toise : \"Fenêtre P1, 120 par 100, blanc, double vitrage\"..."}
+        </div>
+        {toiseErreur && <div style={{color:"#DC2626",fontSize:"12px",marginTop:"10px"}}>{toiseErreur}</div>}
+
+        <div style={{marginTop:"26px",width:"90%",maxWidth:"380px",display:"flex",gap:"8px"}}>
+          <input id="toiseChampTexte" type="text" value={toiseTexte}
+            onChange={e => setToiseTexte(e.target.value)}
+            onKeyDown={e => { if (e.key === "Enter" && toiseTexte.trim()) { debloquerVoixIOS(); envoyerToise(toiseTexte.trim()); setToiseTexte(""); } }}
+            placeholder="Tapez ou dictez (🎤 sur le clavier)"
+            style={{flex:1,padding:"12px 14px",borderRadius:"10px",background:"#1a1a1a",border:"1px solid rgba(255,107,0,0.3)",color:"#fff",fontSize:"14px"}}/>
+          <button onClick={() => { if (toiseTexte.trim()) { debloquerVoixIOS(); envoyerToise(toiseTexte.trim()); setToiseTexte(""); } }}
+            style={{padding:"12px 16px",borderRadius:"10px",background:"#FF6B00",border:"none",color:"#111",fontWeight:"800",cursor:"pointer"}}>
+            →
+          </button>
+        </div>
+
+        <div style={{position:"fixed",bottom:"36px",left:"36px"}}>
+          <button onClick={() => { debloquerVoixIOS(); lancerEcouteToise(); }}
+            style={{width:"64px",height:"64px",borderRadius:"50%",background:toiseEcoute?"#DC2626":"radial-gradient(circle at 35% 30%, #E8D4B0, #C9A876 55%, #8a6d1f 100%)",border:"none",color:"#3a2e10",cursor:"pointer",fontSize:"26px",boxShadow:"0 6px 24px rgba(255,107,0,0.3)"}}>
+            🎙️
+          </button>
+        </div>
+        <div style={{position:"fixed",bottom:"36px",right:"36px"}}>
+          <button onClick={() => setVueMode("fiche")}
+            style={{padding:"16px 22px",borderRadius:"30px",background:"#1a1a1a",border:"1px solid rgba(255,107,0,0.35)",color:"#fff",cursor:"pointer",fontSize:"13px",fontWeight:"700"}}>
+            📐 Voir la fiche
+          </button>
+        </div>
+        <style>{`
+          @keyframes respireToise{0%,100%{transform:scale(1);}50%{transform:scale(1.06);}}
+          @keyframes pulseToiseEcran{0%,100%{transform:scale(1);}50%{transform:scale(1.12);}}
+        `}</style>
+      </div>
+    );
+  }
+
   return (
     <div style={{maxWidth:"760px",margin:"0 auto",padding:"20px"}}>
       <button onClick={onBack} style={{background:"none",border:"none",color:C.muted,fontSize:"12px",fontWeight:"700",cursor:"pointer",marginBottom:"14px"}}>← Retour aux fiches</button>
@@ -2405,6 +2453,10 @@ function FicheMetre({ agenceAccess, ficheInit, onBack }) {
           {toiseOuvert && (
             <button onClick={() => setToiseOuvert(false)} style={{width:"36px",height:"36px",borderRadius:"50%",background:C.card,border:"1px solid "+C.border,color:C.muted,cursor:"pointer",fontSize:"14px"}}>✕</button>
           )}
+          <button onClick={() => setVueMode("vocal")} title="Écran vocal Toise"
+            style={{width:"36px",height:"36px",borderRadius:"50%",background:C.card,border:"2px solid "+C.or,color:C.or,cursor:"pointer",fontSize:"15px"}}>
+            🔮
+          </button>
           <button onClick={() => { debloquerVoixIOS(); setToiseOuvert(true); lancerEcouteToise(); }}
             style={{width:"58px",height:"58px",borderRadius:"50%",background:"radial-gradient(circle at 35% 30%, #E8D4B0, #C9A876 55%, #8a6d1f 100%)",border:"none",color:"#3a2e10",cursor:"pointer",fontSize:"24px",boxShadow:"0 0 26px rgba(255,107,0,0.35)",animation:toiseEcoute?"pulseToise 1.2s infinite":"none"}}>
             🎙️

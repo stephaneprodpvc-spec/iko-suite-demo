@@ -246,9 +246,43 @@
     background: var(--blanc);
     flex-shrink: 0;
   }
+
+  /* ---- Écran d'accueil vocal (sphère), affiché avant la conversation ---- */
+  #amandine-landing {
+    position: fixed; inset: 0; z-index: 500;
+    background: var(--noir);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+  }
+  .amandine-sphere {
+    width: 200px; height: 200px; border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, #FFFFFF, #F5F0E8 55%, #FFB067 130%);
+    box-shadow: 0 0 90px rgba(255,107,0,0.35);
+    animation: respireAmandine 3.2s ease-in-out infinite;
+    cursor: pointer;
+  }
+  @keyframes respireAmandine { 0%,100% { transform: scale(1); } 50% { transform: scale(1.06); } }
+  .amandine-landing-texte {
+    margin-top: 28px; color: #b8b8b8; font-size: 14px; max-width: 300px; text-align: center; line-height: 1.5;
+  }
+  .amandine-landing-bouton {
+    margin-top: 26px; padding: 14px 26px; border-radius: 30px;
+    background: var(--orange); color: #111; border: none; font-weight: 800; font-size: 14px; cursor: pointer;
+  }
+  body.amandine-mode-chat #amandine-landing { display: none; }
+  body:not(.amandine-mode-chat) header,
+  body:not(.amandine-mode-chat) main,
+  body:not(.amandine-mode-chat) #suggestions,
+  body:not(.amandine-mode-chat) #zone-saisie,
+  body:not(.amandine-mode-chat) .mention { display: none; }
 </style>
 </head>
 <body>
+
+<div id="amandine-landing">
+  <div class="amandine-sphere" id="amandine-sphere-btn"></div>
+  <div class="amandine-landing-texte">Bonjour, je suis Amandine. Dites-moi ce qui vous amène, ou tapez votre message.</div>
+  <button class="amandine-landing-bouton" id="amandine-landing-bouton">💬 Discuter</button>
+</div>
 
 <header>
   <div class="logo">Iko</div>
@@ -493,6 +527,20 @@ window.speechSynthesis.speak(u);
   ajouterBulle(ACCUEIL, 'conseiller');
   historique.push({ role: 'assistant', texte: ACCUEIL });
   afficherSuggestions(true);
+
+  // ---- Transition écran d'accueil (sphère) -> conversation ----
+  function passerEnModeChat(lancerMicro) {
+    document.body.classList.add('amandine-mode-chat');
+    if (lancerMicro && boutonMicro) {
+      setTimeout(function () { boutonMicro.click(); }, 150);
+    } else if (saisie) {
+      setTimeout(function () { saisie.focus(); }, 150);
+    }
+  }
+  const sphereBtn = document.getElementById('amandine-sphere-btn');
+  const landingBtn = document.getElementById('amandine-landing-bouton');
+  if (sphereBtn) sphereBtn.addEventListener('click', function () { passerEnModeChat(true); });
+  if (landingBtn) landingBtn.addEventListener('click', function () { passerEnModeChat(false); });
 })();
 </script>
 
