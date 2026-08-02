@@ -2032,6 +2032,20 @@ function FicheMetre({ agenceAccess, ficheInit, onBack }) {
     } catch (e) {}
   };
 
+  // Traduit les libelles francais dictes par Toise vers les codes internes
+  // du configurateur graphique (memes codes que TYPE_ZONES plus haut).
+  const REMPLISSAGE_VERS_CODE = {
+    "Fixe": "Fixe",
+    "Ouvrant à la française gauche": "OF-G",
+    "Ouvrant à la française droite": "OF-D",
+    "Oscillo-battant gauche": "OB-G",
+    "Oscillo-battant droite": "OB-D",
+    "Coulissant": "Coul",
+    "Porte gauche": "Porte-G",
+    "Porte droite": "Porte-D",
+    "Soufflet": "Soufflet",
+  };
+
   const executerActionsToise = (actions) => {
     (actions || []).forEach(a => {
       if (a.name === 'renseigner_fiche') {
@@ -2044,15 +2058,29 @@ function FicheMetre({ agenceAccess, ficheInit, onBack }) {
         }));
       } else if (a.name === 'ajouter_ouverture') {
         const i = a.input;
-        setOuvertures(prev => [...prev, {
-          repere: i.repere || ("P" + (prev.length + 1)),
+        const nouvelleOuverture = {
           type: i.type || "",
           largeur: i.largeur || "",
           hauteur: i.hauteur || "",
           couleur: i.couleur || "",
           vitrage: i.vitrage || "",
           note: i.note || "",
-        }]);
+        };
+        // Ensemble composé dicté : traduit meneaux/traverses/zones vers le
+        // format attendu par le configurateur graphique existant.
+        if (i.type === "Ensemble composé") {
+          if (Array.isArray(i.meneaux) && i.meneaux.length) nouvelleOuverture.meneaux = i.meneaux.map(Number);
+          if (Array.isArray(i.traverses) && i.traverses.length) nouvelleOuverture.traverses = i.traverses.map(Number);
+          if (Array.isArray(i.zones) && i.zones.length) {
+            const zonesRempl = {};
+            i.zones.forEach(z => {
+              const code = REMPLISSAGE_VERS_CODE[z.remplissage] || "Fixe";
+              zonesRempl[z.colonne + "-" + z.ligne] = code;
+            });
+            nouvelleOuverture.zonesRempl = zonesRempl;
+          }
+        }
+        setOuvertures(prev => [...prev, { ...nouvelleOuverture, repere: i.repere || ("P" + (prev.length + 1)) }]);
       }
     });
   };

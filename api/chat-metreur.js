@@ -10,7 +10,8 @@ import { verifierOrigine, verifierDebit, reponseBloquee } from "./_securite.js";
 const MODELE = "claude-haiku-4-5-20251001";
 const MAX_CHARS_MESSAGE = 600;
 
-const TYPES_VALIDES = ["Fixe", "Fenêtre", "Porte-fenêtre", "Coulissant", "Porte", "Volet roulant", "Portail", "Véranda", "Autre"];
+const TYPES_VALIDES = ["Fixe", "Fenêtre", "Porte-fenêtre", "Coulissant", "Porte", "Volet roulant", "Portail", "Véranda", "Ensemble composé", "Autre"];
+const REMPLISSAGES_VALIDES = ["Fixe", "Ouvrant à la française gauche", "Ouvrant à la française droite", "Oscillo-battant gauche", "Oscillo-battant droite", "Coulissant", "Porte gauche", "Porte droite", "Soufflet"];
 
 const SYSTEM_PROMPT = `
 Tu es Toise, l'assistante vocale du métreur sur le terrain, dans
@@ -39,12 +40,43 @@ REGLES
 - Reponses vocales tres courtes (1 phrase), sans markdown, sans
   emoji, tutoiement direct comme un collegue sur chantier.
 - Un seul outil a la fois.
+
+ENSEMBLES COMPOSES (plusieurs vantaux dans une meme ouverture)
+Un "Ensemble composé" est une ouverture decoupee en plusieurs zones,
+chacune avec son propre remplissage (fixe, ouvrant, coulissant...).
+La decoupe se fait avec :
+- meneaux : liste des positions verticales (en mm depuis la gauche)
+  qui separent l'ouverture en colonnes. Ex: pour une fenetre de
+  2400mm de large coupee au milieu, meneaux = [1200].
+- traverses : liste des positions horizontales (en mm depuis le bas)
+  qui separent l'ouverture en lignes. Vide si l'ensemble n'a qu'une
+  seule ligne (cas le plus frequent).
+- zones : une entree par case du quadrillage resultant, avec :
+  - colonne : 0 = la plus a gauche, 1 = suivante, etc.
+  - ligne : 0 = la plus basse, 1 = suivante, etc. (0 si une seule ligne)
+  - remplissage : un parmi "Fixe", "Ouvrant à la française gauche",
+    "Ouvrant à la française droite", "Oscillo-battant gauche",
+    "Oscillo-battant droite", "Coulissant", "Porte gauche",
+    "Porte droite", "Soufflet"
+
+Quand le metreur decrit un ensemble composé, utilise type
+"Ensemble composé" et remplis meneaux/traverses/zones en consequence.
+Exemple : "Ensemble composé F3, 2400 par 1500, un meneau au milieu,
+la partie gauche fixe, la partie droite oscillo-battant" donne :
+type: "Ensemble composé", largeur: 2400, hauteur: 1500,
+meneaux: [1200], zones: [
+  { colonne: 0, ligne: 0, remplissage: "Fixe" },
+  { colonne: 1, ligne: 0, remplissage: "Oscillo-battant droite" }
+].
+Si le metreur decrit un ensemble sans preciser le remplissage de
+chaque partie, demande-le avant d'ajouter (via reponse_vocale) plutot
+que de deviner.
 `;
 
 const TOOLS = [
   {
     name: "ajouter_ouverture",
-    description: "Ajoute une nouvelle ouverture (fenetre, porte, etc.) a la fiche de metre, avec les informations dictees. N'appelle cet outil que si le type ET les deux dimensions (largeur et hauteur) sont connus.",
+    description: "Ajoute une nouvelle ouverture (fenetre, porte, etc.) a la fiche de metre, avec les informations dictees. N'appelle cet outil que si le type ET les deux dimensions (largeur et hauteur) sont connus. Pour un 'Ensemble composé', ajoute aussi meneaux/traverses/zones (voir instructions).",
     input_schema: {
       type: "object",
       properties: {
@@ -55,6 +87,21 @@ const TOOLS = [
         couleur: { type: "string", description: "Couleur ou reference RAL." },
         vitrage: { type: "string", description: "Type de vitrage (ex: double vitrage, triple vitrage)." },
         note: { type: "string", description: "Remarque libre du metreur, si utile." },
+        meneaux: { type: "array", items: { type: "number" }, description: "Ensemble composé uniquement : positions verticales en mm depuis la gauche qui separent les colonnes." },
+        traverses: { type: "array", items: { type: "number" }, description: "Ensemble composé uniquement : positions horizontales en mm depuis le bas qui separent les lignes." },
+        zones: {
+          type: "array",
+          description: "Ensemble composé uniquement : le remplissage de chaque case du quadrillage.",
+          items: {
+            type: "object",
+            properties: {
+              colonne: { type: "integer", description: "0 = colonne la plus a gauche." },
+              ligne: { type: "integer", description: "0 = ligne la plus basse." },
+              remplissage: { type: "string", enum: REMPLISSAGES_VALIDES },
+            },
+            required: ["colonne", "ligne", "remplissage"],
+          },
+        },
       },
       required: ["type", "largeur", "hauteur"],
     },
