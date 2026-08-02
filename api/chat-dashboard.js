@@ -17,7 +17,7 @@ const AGENCES_VALIDES = ["Agence 1", "Agence 2", "Agence 3", "Agence 4"];
 const STATUTS_VALIDES = ["Nouveau", "En cours", "Terminé", "Annulé"];
 
 const SYSTEM_PROMPT = `
-Tu es Amandine, l'assistante vocale integree au dashboard SAV d'Iko Suite.
+Tu es IKO, l'assistant vocal integre au dashboard SAV d'Iko Suite.
 La personne qui te parle est un responsable ou une personne d'agence en
 train de travailler sur le dashboard. Elle te donne des commandes ou
 questions a l'oral, et tu dois soit AGIR sur le dashboard (filtrer,
@@ -150,7 +150,7 @@ export default async function handler(req, res) {
     if (!reponse.ok) {
       const detail = await reponse.text();
       console.error("Erreur API Anthropic:", reponse.status, detail);
-      return res.status(502).json({ erreur: "Amandine est momentanement indisponible." });
+      return res.status(502).json({ erreur: "IKO est momentanément indisponible." });
     }
 
     const data = await reponse.json();
