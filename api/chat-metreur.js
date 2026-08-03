@@ -8,10 +8,13 @@ import { verifierOrigine, verifierDebit, reponseBloquee } from "./_securite.js";
 // elle le signale au metreur au lieu d'inventer une valeur.
 
 const MODELE = "claude-haiku-4-5-20251001";
+const MODELE_PHOTO = "claude-sonnet-5"; // lecture de graduation sur photo : precision prioritaire sur le cout
 const MAX_CHARS_MESSAGE = 600;
+const MAX_TAILLE_IMAGE = 5_000_000; // ~5 Mo en base64
 
 const TYPES_VALIDES = ["Fixe", "Fenêtre", "Porte-fenêtre", "Coulissant", "Porte", "Volet roulant", "Portail", "Véranda", "Ensemble composé", "Autre"];
 const REMPLISSAGES_VALIDES = ["Fixe", "Ouvrant à la française gauche", "Ouvrant à la française droite", "Oscillo-battant gauche", "Oscillo-battant droite", "Coulissant", "Porte gauche", "Porte droite", "Soufflet"];
+const POSES_VALIDES = ["Rénovation totale", "Rénovation partielle", "Neuf en applique", "Neuf en tunnel"];
 
 const SYSTEM_PROMPT = `
 Tu es Toise, l'assistante vocale du métreur sur le terrain, dans
@@ -45,6 +48,41 @@ REGLES
 - Reponses vocales tres courtes (1 phrase), sans markdown, sans
   emoji, tutoiement direct comme un collegue sur chantier.
 - Un seul outil a la fois.
+
+TYPE DE POSE (essentiel, ne jamais deviner)
+Chaque ouverture doit avoir un type de pose, car il determine OU se
+prend la reference de mesure :
+- "Rénovation totale" : mesure sur le tableau brut (l'ouverture nue,
+  ancien dormant depose).
+- "Rénovation partielle" : mesure sur l'ancien dormant conserve.
+- "Neuf en applique" : mesure sur la face du mur, le dormant vient se
+  poser dessus.
+- "Neuf en tunnel" : mesure dans l'epaisseur du mur, dormant encastre.
+Si le metreur ne precise pas le type de pose pour une ouverture,
+demande-le via reponse_vocale avant d'ajouter — ne suppose jamais un
+type de pose par defaut, une erreur ici fausse toute la fabrication.
+
+LECTURE DE COTE SUR PHOTO (mètre ruban dans le cadre)
+Si une photo est fournie avec le message, le metreur a pris une photo
+de l'ouverture avec un metre ruban deroule dedans pour te donner une
+reference d'echelle reelle.
+- Lis PRECISEMENT la graduation visible sur le ruban dans la photo.
+  Ne jamais estimer une dimension "a l'oeil" a partir de la seule
+  photo sans metre ruban visible : sans graduation lisible, tu n'as
+  aucune echelle fiable.
+- Convertis la lecture en millimetres.
+- Si la graduation n'est pas clairement lisible sur l'image (flou,
+  angle, doigt qui cache le chiffre...), n'invente jamais un chiffre :
+  utilise reponse_vocale pour demander une nouvelle photo plus nette
+  ou la valeur a l'oral.
+- Associe toujours la lecture au type de pose dicte par le metreur
+  (voir section precedente), car la meme photo peut correspondre a
+  une mesure de tableau brut, d'ancien dormant, de mur ou de tunnel
+  selon ce qui a ete dit.
+- Une fois la cote lue avec certitude, utilise reponse_vocale pour la
+  confirmer a voix haute avant de l'enregistrer via ajouter_ouverture
+  ou modifier_ouverture (le metreur doit pouvoir corriger a l'oral si
+  la lecture est fausse).
 
 ENSEMBLES COMPOSES (plusieurs vantaux dans une meme ouverture)
 Un "Ensemble composé" est une ouverture decoupee en plusieurs zones,
@@ -81,12 +119,13 @@ que de deviner.
 const TOOLS = [
   {
     name: "ajouter_ouverture",
-    description: "Ajoute une nouvelle ouverture (fenetre, porte, etc.) a la fiche de metre, avec les informations dictees. N'appelle cet outil que si le type ET les deux dimensions (largeur et hauteur) sont connus. Pour un 'Ensemble composé', ajoute aussi meneaux/traverses/zones (voir instructions).",
+    description: "Ajoute une nouvelle ouverture (fenetre, porte, etc.) a la fiche de metre, avec les informations dictees. N'appelle cet outil que si le type, pose, ET les deux dimensions (largeur et hauteur) sont connus. Pour un 'Ensemble composé', ajoute aussi meneaux/traverses/zones (voir instructions).",
     input_schema: {
       type: "object",
       properties: {
         repere: { type: "string", description: "Repere de l'ouverture (ex: F1, P2). Laisser vide si non precise." },
         type: { type: "string", enum: TYPES_VALIDES },
+        pose: { type: "string", enum: POSES_VALIDES, description: "Type de pose, determine ou se prend la reference de mesure. Toujours demander si non precise." },
         largeur: { type: "number", description: "Largeur en millimetres." },
         hauteur: { type: "number", description: "Hauteur en millimetres." },
         couleur: { type: "string", description: "Couleur ou reference RAL." },
@@ -108,7 +147,7 @@ const TOOLS = [
           },
         },
       },
-      required: ["type", "largeur", "hauteur"],
+      required: ["type", "pose", "largeur", "hauteur"],
     },
   },
   {
@@ -123,6 +162,7 @@ const TOOLS = [
         couleur: { type: "string" },
         vitrage: { type: "string" },
         type: { type: "string", enum: TYPES_VALIDES },
+        pose: { type: "string", enum: POSES_VALIDES },
         note: { type: "string" },
       },
       required: ["repere"],
@@ -171,8 +211,12 @@ export default async function handler(req, res) {
   try {
     const body = req.body || {};
     const message = String(body.message || "").slice(0, MAX_CHARS_MESSAGE).trim();
-    if (!message) {
-      return res.status(400).json({ erreur: "Aucune commande recue" });
+    const image = body.image ? String(body.image) : "";
+    if (!message && !image) {
+      return res.status(400).json({ erreur: "Aucune commande ni photo recue" });
+    }
+    if (image && image.length > MAX_TAILLE_IMAGE) {
+      return res.status(400).json({ erreur: "Photo trop volumineuse." });
     }
     const fiche = body.fiche || {};
     const ouvertures = Array.isArray(body.ouvertures) ? body.ouvertures.slice(0, 60) : [];
@@ -186,7 +230,21 @@ export default async function handler(req, res) {
     const messageUtilisateur = "Fiche actuelle (JSON) : " + JSON.stringify(fiche) +
       "\n\nOuvertures deja ajoutees (JSON) : " + JSON.stringify(ouvertures) +
       blocHistorique +
-      "\n\nDictee du metreur : \"" + message + "\"";
+      (image
+        ? "\n\nUne photo est jointe (metre ruban dans le cadre). Dictee du metreur accompagnant la photo : \"" + (message || "(aucune, lis juste la photo)") + "\""
+        : "\n\nDictee du metreur : \"" + message + "\"");
+
+    // Contenu multimodal si une photo est fournie : image + texte, sinon texte seul.
+    let contenuMessage = messageUtilisateur;
+    if (image) {
+      const correspondance = image.match(/^data:(image\/[a-zA-Z]+);base64,(.+)$/);
+      if (correspondance) {
+        contenuMessage = [
+          { type: "image", source: { type: "base64", media_type: correspondance[1], data: correspondance[2] } },
+          { type: "text", text: messageUtilisateur },
+        ];
+      }
+    }
 
     const reponse = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
@@ -196,13 +254,13 @@ export default async function handler(req, res) {
         "anthropic-version": "2023-06-01",
       },
       body: JSON.stringify({
-        model: MODELE,
+        model: image ? MODELE_PHOTO : MODELE,
         max_tokens: 400,
         temperature: 0.2,
         system: SYSTEM_PROMPT,
         tools: TOOLS,
         tool_choice: { type: "any" },
-        messages: [{ role: "user", content: messageUtilisateur }],
+        messages: [{ role: "user", content: contenuMessage }],
       }),
     });
 
