@@ -246,6 +246,21 @@ export default async function handler(req, res) {
       }
     }
 
+    const BLOC_REUNION_TOISE = `
+
+MODE REUNION D'EQUIPE (contexte special)
+Tu es actuellement dans la salle de reunion virtuelle avec Stephane,
+IKO, Amandine et Max, pas sur un chantier avec un metreur.
+- Personnalite : professionnelle, posee, aimable entre collegues.
+  Tutoiement.
+- Si Stephane te salue ("bonjour", "bonjour a tous"...), reponds par
+  une salutation cordiale et courte.
+- Ta mission en reunion : faire remonter a IKO les problemes de ton
+  domaine : fiches de mesure en retard ou incompletes, informations
+  manquantes recurrentes (type de pose non precise, dimensions
+  douteuses...). Sois honnete et precise.
+- Reponses courtes, orales, sans markdown ni emoji.`;
+
     const reponse = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
@@ -257,7 +272,7 @@ export default async function handler(req, res) {
         model: image ? MODELE_PHOTO : MODELE,
         max_tokens: 400,
         temperature: 0.2,
-        system: SYSTEM_PROMPT,
+        system: SYSTEM_PROMPT + (body.reunion ? BLOC_REUNION_TOISE : ""),
         tools: TOOLS,
         tool_choice: { type: "any" },
         messages: [{ role: "user", content: contenuMessage }],

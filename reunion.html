@@ -52,6 +52,11 @@
   .sphere.max { background: radial-gradient(circle at 35% 30%, #4a4a4a, #0D0D0D 55%, #000000 100%); border: 2px solid #FF6B00; }
   .sphere.toise { background: radial-gradient(circle at 35% 30%, #E8D4B0, #C9A876 55%, #8a6d1f 100%); }
   .sphere.reflechit { animation: pulseSphere 0.9s ease-in-out infinite; box-shadow: 0 0 34px rgba(255,107,0,0.55); }
+  .sphere.parle {
+    transform: scale(1.35);
+    box-shadow: 0 0 50px rgba(255,107,0,0.75), 0 0 90px rgba(255,107,0,0.35);
+    z-index: 5;
+  }
   @keyframes pulseSphere { 0%,100% { transform: scale(1); } 50% { transform: scale(1.1); } }
   .nom-avatar { font-size: 11px; font-weight: 800; letter-spacing: 0.5px; color: #d8d8d8; }
   .role-avatar { font-size: 9.5px; color: #6f6f6f; text-align: center; }
@@ -154,6 +159,8 @@
   <button id="envoyer-reunion" title="Envoyer">→</button>
 </div>
 
+<audio id="lecteur-reunion" style="display:none"></audio>
+
 <script>
 (function () {
   const fil = document.getElementById('fil-reunion');
@@ -161,32 +168,76 @@
   const saisie = document.getElementById('saisie-reunion');
   const boutonEnvoyer = document.getElementById('envoyer-reunion');
   const boutonMicro = document.getElementById('micro-reunion');
+  const lecteur = document.getElementById('lecteur-reunion');
+  const SILENCE_WAV = "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=";
+
+  function debloquerAudioIOS() {
+    try { lecteur.src = SILENCE_WAV; lecteur.play().catch(function () {}); } catch (e) {}
+  }
 
   const ASSISTANTS = [
-    { id: 'iko', nom: 'IKO', endpoint: '/api/chat-dashboard', role: 'centralise le dashboard' },
-    { id: 'amandine', nom: 'Amandine', endpoint: '/api/chat-amandine', role: 'SAV client' },
-    { id: 'max', nom: 'Max', endpoint: '/api/chat-technicien', role: 'terrain technicien' },
-    { id: 'toise', nom: 'Toise', endpoint: '/api/chat-metreur', role: 'métreur' },
+    { id: 'iko', nom: 'IKO', endpoint: '/api/chat-dashboard', role: 'centralise le dashboard', voiceId: 'pNInz6obpgDQGcFmaJgB' },
+    { id: 'amandine', nom: 'Amandine', endpoint: '/api/chat-amandine', role: 'SAV client', voiceId: 'EXAVITQu4vr4xnSDxMaL' },
+    { id: 'max', nom: 'Max', endpoint: '/api/chat-technicien', role: 'terrain technicien', voiceId: 'VR6AewLTigWG4xSOukaG' },
+    { id: 'toise', nom: 'Toise', endpoint: '/api/chat-metreur', role: 'métreur', voiceId: 'ErXwobaYiN019PkySvjV' },
   ];
+
+  // Detecte si la question commence par le prenom d'un assistant (adressage
+  // direct, ex: "Max, tu en es ou ?") pour ne faire repondre que lui.
+  function detecterDestinataires(question) {
+    const debut = question.trim().toLowerCase().replace(/^[,;:.!?\s]+/, '');
+    const cible = ASSISTANTS.find(a => debut.startsWith(a.nom.toLowerCase()));
+    if (cible) return [cible];
+    return ASSISTANTS;
+  }
 
   function corpsRequete(assistantId, question) {
     if (assistantId === 'iko') {
-      return { message: question, tickets: [], agenceActuelle: 'global', historique: [] };
+      return { message: question, tickets: [], agenceActuelle: 'global', historique: [], reunion: true };
     }
     if (assistantId === 'max') {
-      return { message: question, tickets: [], ongletActuel: 'aujourd_hui', historique: [], historiqueClient: null };
+      return { message: question, tickets: [], ongletActuel: 'aujourd_hui', historique: [], historiqueClient: null, reunion: true };
     }
     if (assistantId === 'toise') {
-      return { message: question, fiche: {}, ouvertures: [], historique: [] };
+      return { message: question, fiche: {}, ouvertures: [], historique: [], reunion: true };
     }
     if (assistantId === 'amandine') {
-      return { messages: [{ role: 'user', texte: question }] };
+      return { messages: [{ role: 'user', texte: question }], reunion: true };
     }
   }
 
   function extraireReponse(assistantId, data) {
     if (data.erreur || data.error) return null;
     return data.reponse || null;
+  }
+
+  // File d'attente vocale : une seule voix a la fois, jamais de
+  // chevauchement, meme si plusieurs assistants ont fini de reflechir en
+  // meme temps.
+  let fileVocale = Promise.resolve();
+  function directOraliser(assistant, texte) {
+    fileVocale = fileVocale.then(() => oraliser(assistant, texte));
+  }
+  function oraliser(assistant, texte) {
+    if (!texte) return Promise.resolve();
+    return new Promise(async (resolve) => {
+      try {
+        const r = await fetch('/api/tts', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ texte: texte, voice_id: assistant.voiceId }),
+        });
+        if (!r.ok) { resolve(); return; }
+        const blob = await r.blob();
+        const url = URL.createObjectURL(blob);
+        const sphere = document.getElementById('sphere-' + assistant.id);
+        lecteur.onplay = () => sphere.classList.add('parle');
+        lecteur.onended = () => { sphere.classList.remove('parle'); resolve(); };
+        lecteur.onerror = () => { sphere.classList.remove('parle'); resolve(); };
+        lecteur.volume = 1.0;
+        lecteur.src = url;
+        lecteur.play().catch(() => resolve());
+      } catch (e) { resolve(); }
+    });
   }
 
   async function interrogerAssistant(assistant, question) {
@@ -239,14 +290,20 @@
     accueilMsg.style.display = 'none';
     boutonEnvoyer.disabled = true;
     saisie.value = '';
+    debloquerAudioIOS();
     ajouterBulleQuestion(question);
     fil.scrollIntoView({ behavior: 'smooth', block: 'end' });
 
-    // Les 4 assistants repondent en parallele, chacun affiche des qu'il est pret.
-    ASSISTANTS.forEach(async (assistant) => {
+    const destinataires = detecterDestinataires(question);
+
+    // Les assistants concernes repondent en parallele, chacun affiche des
+    // qu'il est pret, puis prend la parole (voix) l'un apres l'autre dans
+    // l'ordre ou ils ont fini de reflechir.
+    destinataires.forEach(async (assistant) => {
       const reponse = await interrogerAssistant(assistant, question);
       const bulle = ajouterBulleReponse(assistant, reponse);
       bulle.scrollIntoView({ behavior: 'smooth', block: 'end' });
+      directOraliser(assistant, reponse);
     });
 
     boutonEnvoyer.disabled = false;
@@ -258,6 +315,7 @@
   // Dictee (avec repli clavier iOS si SpeechRecognition indisponible, comme
   // sur les autres modules).
   boutonMicro.addEventListener('click', () => {
+    debloquerAudioIOS();
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SR) { saisie.focus(); return; }
     const reco = new SR();

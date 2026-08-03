@@ -126,6 +126,21 @@ export default async function handler(req, res) {
       blocHistoriqueClient +
       "\n\nCommande vocale du technicien : \"" + message + "\"";
 
+    const BLOC_REUNION_MAX = `
+
+MODE REUNION D'EQUIPE (contexte special)
+Tu es actuellement dans la salle de reunion virtuelle avec Stephane,
+IKO, Amandine et Toise, pas sur le terrain avec un technicien.
+- Personnalite : professionnel, sympa, direct entre collegues.
+  Tutoiement.
+- Si Stephane te salue ("bonjour", "bonjour a tous"...), reponds par
+  une salutation cordiale et courte.
+- Ta mission en reunion : faire remonter a IKO les problemes cote
+  terrain que tu detectes ou soupconnes : tickets d'intervention non
+  remplis par les techniciens, rendez-vous manques et leur raison
+  probable, retards recurrents. Sois honnete et precis, pas alarmiste.
+- Reponses courtes, orales, sans markdown ni emoji.`;
+
     const reponse = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
@@ -137,7 +152,7 @@ export default async function handler(req, res) {
         model: MODELE,
         max_tokens: 400,
         temperature: 0.3,
-        system: SYSTEM_PROMPT,
+        system: SYSTEM_PROMPT + (body.reunion ? BLOC_REUNION_MAX : ""),
         tools: TOOLS,
         tool_choice: { type: "any" },
         messages: [{ role: "user", content: messageUtilisateur }],
