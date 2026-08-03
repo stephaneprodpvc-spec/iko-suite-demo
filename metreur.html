@@ -2029,7 +2029,7 @@ function FicheMetre({ agenceAccess, ficheInit, onBack }) {
       const blob = await r.blob();
       const url = URL.createObjectURL(blob);
       const a = toiseAudioRef.current;
-      if (a) { a.src = url; a.play().catch(() => {}); }
+      if (a) { a.volume = 1.0; a.src = url; a.play().catch(() => {}); }
     } catch (e) {}
   };
 
@@ -2137,7 +2137,18 @@ function FicheMetre({ agenceAccess, ficheInit, onBack }) {
     reco.continuous = false;
     reco.interimResults = false;
     reco.onstart = () => { setToiseEcoute(true); setToiseErreur(""); };
-    reco.onerror = () => setToiseEcoute(false);
+    reco.onerror = (e) => {
+      setToiseEcoute(false);
+      if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
+        setToiseErreur("Micro refusé par le navigateur. Appuyez sur l'icône micro barrée à côté de l'adresse du site pour l'autoriser, puis réessayez.");
+      } else if (e.error === 'no-speech') {
+        setToiseErreur("Aucune voix détectée. Réessayez en parlant juste après avoir appuyé sur le micro.");
+      } else if (e.error === 'audio-capture') {
+        setToiseErreur("Aucun micro détecté sur cet appareil.");
+      } else {
+        setToiseErreur("Problème micro (" + e.error + "). Utilisez le champ texte en attendant.");
+      }
+    };
     reco.onend = () => setToiseEcoute(false);
     reco.onresult = (e) => {
       const transcript = e.results[0][0].transcript;

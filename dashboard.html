@@ -1430,7 +1430,7 @@ function Dashboard({ agenceAccess, onClose }) {
       const blob = await r.blob();
       const url = URL.createObjectURL(blob);
       const a = ikoAudioRef.current;
-      if (a) { a.src = url; a.play().catch(() => {}); }
+      if (a) { a.volume = 1.0; a.src = url; a.play().catch(() => {}); }
     } catch (e) {}
   };
 
@@ -1493,7 +1493,18 @@ function Dashboard({ agenceAccess, onClose }) {
     reco.continuous = false;
     reco.interimResults = false;
     reco.onstart = () => { setAmandineEcoute(true); setAmandineErreur(""); };
-    reco.onerror = () => { setAmandineEcoute(false); };
+    reco.onerror = (e) => {
+      setAmandineEcoute(false);
+      if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
+        setAmandineErreur("Micro refusé par le navigateur. Appuyez sur l'icône micro barrée à côté de l'adresse du site pour l'autoriser, puis réessayez.");
+      } else if (e.error === 'no-speech') {
+        setAmandineErreur("Aucune voix détectée. Réessayez en parlant juste après avoir appuyé sur le micro.");
+      } else if (e.error === 'audio-capture') {
+        setAmandineErreur("Aucun micro détecté sur cet appareil.");
+      } else {
+        setAmandineErreur("Problème micro (" + e.error + "). Utilisez le champ texte en attendant.");
+      }
+    };
     reco.onend = () => setAmandineEcoute(false);
     reco.onresult = (e) => {
       const transcript = e.results[0][0].transcript;

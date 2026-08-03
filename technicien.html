@@ -864,7 +864,7 @@ function Technicien({ agence, onClose }) {
       const blob = await r.blob();
       const url = URL.createObjectURL(blob);
       const a = maxAudioRef.current;
-      if (a) { a.src = url; a.play().catch(() => {}); }
+      if (a) { a.volume = 1.0; a.src = url; a.play().catch(() => {}); }
     } catch (e) {}
   };
 
@@ -923,7 +923,18 @@ function Technicien({ agence, onClose }) {
     reco.continuous = false;
     reco.interimResults = false;
     reco.onstart = () => { setMaxEcoute(true); setMaxErreur(""); };
-    reco.onerror = () => setMaxEcoute(false);
+    reco.onerror = (e) => {
+      setMaxEcoute(false);
+      if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
+        setMaxErreur("Micro refusé par le navigateur. Appuyez sur l'icône micro barrée à côté de l'adresse du site pour l'autoriser, puis réessayez.");
+      } else if (e.error === 'no-speech') {
+        setMaxErreur("Aucune voix détectée. Réessayez en parlant juste après avoir appuyé sur le micro.");
+      } else if (e.error === 'audio-capture') {
+        setMaxErreur("Aucun micro détecté sur cet appareil.");
+      } else {
+        setMaxErreur("Problème micro (" + e.error + "). Utilisez le champ texte en attendant.");
+      }
+    };
     reco.onend = () => setMaxEcoute(false);
     reco.onresult = (e) => {
       const transcript = e.results[0][0].transcript;

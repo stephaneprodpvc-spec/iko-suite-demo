@@ -455,6 +455,7 @@
       if (!r.ok) return;
       const blob = await r.blob();
       const url = URL.createObjectURL(blob);
+      lecteurAudio.volume = 1.0;
       lecteurAudio.src = url;
       lecteurAudio.play().catch(function () {});
     } catch (e) {}
@@ -487,6 +488,7 @@
       if (!r.ok) return;
       const blob = await r.blob();
       const url = URL.createObjectURL(blob);
+      lecteurAudio.volume = 1.0;
       lecteurAudio.src = url;
       lecteurAudio.play().catch(function () {});
     } catch (e) {}
