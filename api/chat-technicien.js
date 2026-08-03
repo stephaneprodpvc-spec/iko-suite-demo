@@ -103,10 +103,17 @@ export default async function handler(req, res) {
     }
     const ticketsContexte = Array.isArray(body.tickets) ? body.tickets.slice(0, MAX_TICKETS_CONTEXTE) : [];
     const ongletActuel = String(body.ongletActuel || "aujourd_hui").slice(0, 40);
+    const historique = Array.isArray(body.historique) ? body.historique.slice(-6) : [];
+
+    const blocHistorique = historique.length
+      ? "\n\nEchanges precedents de cette session (le plus recent en dernier) :\n" +
+        historique.map(h => (h.role === "user" ? "Technicien: " : "Toi: ") + String(h.texte || "").slice(0, 300)).join("\n")
+      : "";
 
     const messageUtilisateur = "Onglet actuellement affiche : " + ongletActuel +
       "\n\nTickets actuellement charges (JSON) :\n" +
       JSON.stringify(ticketsContexte) +
+      blocHistorique +
       "\n\nCommande vocale du technicien : \"" + message + "\"";
 
     const reponse = await fetch("https://api.anthropic.com/v1/messages", {

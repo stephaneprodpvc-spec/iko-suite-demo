@@ -36,6 +36,11 @@ REGLES
   precisement ce qui manque, en une phrase courte.
 - Pour les infos client (nom, adresse, telephone, numero de dossier),
   utilise renseigner_fiche.
+- Si le metreur corrige une ouverture DEJA dans la liste fournie (ex:
+  "corrige la largeur de F2 à 1300", "F1 c'est finalement en gris
+  anthracite"), utilise modifier_ouverture avec le repere exact et
+  uniquement les champs a changer. Ne recree jamais une ouverture qui
+  existe deja avec ajouter_ouverture.
 - Pour une question ou un doute, utilise reponse_vocale.
 - Reponses vocales tres courtes (1 phrase), sans markdown, sans
   emoji, tutoiement direct comme un collegue sur chantier.
@@ -107,6 +112,23 @@ const TOOLS = [
     },
   },
   {
+    name: "modifier_ouverture",
+    description: "Corrige une ou plusieurs valeurs d'une ouverture DEJA existante, identifiee par son repere (ex: F2). N'ajoute pas une nouvelle ouverture.",
+    input_schema: {
+      type: "object",
+      properties: {
+        repere: { type: "string", description: "Repere exact de l'ouverture a corriger (ex: F2), tel qu'il apparait dans la liste fournie." },
+        largeur: { type: "number" },
+        hauteur: { type: "number" },
+        couleur: { type: "string" },
+        vitrage: { type: "string" },
+        type: { type: "string", enum: TYPES_VALIDES },
+        note: { type: "string" },
+      },
+      required: ["repere"],
+    },
+  },
+  {
     name: "renseigner_fiche",
     description: "Met a jour les informations client de la fiche de metre.",
     input_schema: {
@@ -154,9 +176,16 @@ export default async function handler(req, res) {
     }
     const fiche = body.fiche || {};
     const ouvertures = Array.isArray(body.ouvertures) ? body.ouvertures.slice(0, 60) : [];
+    const historique = Array.isArray(body.historique) ? body.historique.slice(-6) : [];
+
+    const blocHistorique = historique.length
+      ? "\n\nEchanges precedents de cette session (le plus recent en dernier) :\n" +
+        historique.map(h => (h.role === "user" ? "Metreur: " : "Toi: ") + String(h.texte || "").slice(0, 300)).join("\n")
+      : "";
 
     const messageUtilisateur = "Fiche actuelle (JSON) : " + JSON.stringify(fiche) +
       "\n\nOuvertures deja ajoutees (JSON) : " + JSON.stringify(ouvertures) +
+      blocHistorique +
       "\n\nDictee du metreur : \"" + message + "\"";
 
     const reponse = await fetch("https://api.anthropic.com/v1/messages", {

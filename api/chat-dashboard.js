@@ -43,6 +43,8 @@ REGLES
   reponse_vocale.
 - Reponses vocales courtes (1 a 2 phrases), sans markdown, sans emoji,
   vouvoiement, ton professionnel et direct.
+- Tu recois parfois les echanges precedents de la session : utilise-les
+  pour comprendre une reference comme "celui d'avant" ou "le meme".
 - N'appelle jamais plus d'un outil d'action a la fois (une seule
   intention par commande).
 `;
@@ -128,10 +130,17 @@ export default async function handler(req, res) {
     }
     const ticketsContexte = Array.isArray(body.tickets) ? body.tickets.slice(0, MAX_TICKETS_CONTEXTE) : [];
     const agenceActuelle = String(body.agenceActuelle || "global").slice(0, 40);
+    const historique = Array.isArray(body.historique) ? body.historique.slice(-6) : [];
+
+    const blocHistorique = historique.length
+      ? "\n\nEchanges precedents de cette session (le plus recent en dernier) :\n" +
+        historique.map(h => (h.role === "user" ? "Utilisateur: " : "Toi: ") + String(h.texte || "").slice(0, 300)).join("\n")
+      : "";
 
     const messageUtilisateur = "Agence actuellement affichee : " + agenceActuelle +
       "\n\nTickets actuellement charges dans le dashboard (JSON) :\n" +
       JSON.stringify(ticketsContexte) +
+      blocHistorique +
       "\n\nCommande vocale de l'utilisateur : \"" + message + "\"";
 
     const reponse = await fetch("https://api.anthropic.com/v1/messages", {

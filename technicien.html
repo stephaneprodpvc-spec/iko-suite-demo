@@ -733,6 +733,7 @@ function Technicien({ agence, onClose }) {
   const [maxEcoute, setMaxEcoute] = React.useState(false);
   const [maxEnCours, setMaxEnCours] = React.useState(false);
   const [maxDernier, setMaxDernier] = React.useState("");
+  const [maxHistorique, setMaxHistorique] = React.useState([]);
   const [maxErreur, setMaxErreur] = React.useState("");
   const [maxTexte, setMaxTexte] = React.useState("");
   const [vueMode, setVueMode] = React.useState("vocal");
@@ -895,13 +896,14 @@ function Technicien({ agence, onClose }) {
       }));
       const r = await fetch('/api/chat-technicien', {
         method: 'POST', headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({ message: transcript, tickets: contexteTickets, ongletActuel: onglet })
+        body: JSON.stringify({ message: transcript, tickets: contexteTickets, ongletActuel: onglet, historique: maxHistorique.slice(-6) })
       });
       const data = await r.json();
       if (data.erreur) { setMaxErreur(data.erreur); setMaxEnCours(false); return; }
       executerActionsMax(data.actions || []);
       const texte = data.reponse || "C'est fait.";
       setMaxDernier(texte);
+      setMaxHistorique(prev => [...prev, { role: 'user', texte: transcript }, { role: 'assistant', texte }].slice(-8));
       parlerMax(texte);
     } catch (e) {
       setMaxErreur("Connexion impossible. Réessayez.");

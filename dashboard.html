@@ -1122,6 +1122,7 @@ function Dashboard({ agenceAccess, onClose }) {
   const [amandineEcoute, setAmandineEcoute] = React.useState(false);
   const [amandineEnCours, setAmandineEnCours] = React.useState(false);
   const [amandineDernier, setAmandineDernier] = React.useState("");
+  const [ikoHistorique, setIkoHistorique] = React.useState([]);
   const [amandineErreur, setAmandineErreur] = React.useState("");
   const [vueMode, setVueMode] = React.useState("vocal");
   const [amandineTexte, setAmandineTexte] = React.useState("");
@@ -1462,13 +1463,14 @@ function Dashboard({ agenceAccess, onClose }) {
       }));
       const r = await fetch('/api/chat-dashboard', {
         method: 'POST', headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({ message: transcript, tickets: contexteTickets, agenceActuelle: agenceFilter })
+        body: JSON.stringify({ message: transcript, tickets: contexteTickets, agenceActuelle: agenceFilter, historique: ikoHistorique.slice(-6) })
       });
       const data = await r.json();
       if (data.erreur) { setAmandineErreur(data.erreur); setAmandineEnCours(false); return; }
       executerActionsAmandine(data.actions || []);
       const texte = data.reponse || "C'est fait.";
       setAmandineDernier(texte);
+      setIkoHistorique(prev => [...prev, { role: 'user', texte: transcript }, { role: 'assistant', texte }].slice(-8));
       parlerAmandine(texte);
     } catch (e) {
       setAmandineErreur("Connexion impossible. Réessayez.");

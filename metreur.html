@@ -1990,6 +1990,7 @@ function FicheMetre({ agenceAccess, ficheInit, onBack }) {
   const [toiseEcoute, setToiseEcoute] = React.useState(false);
   const [toiseEnCours, setToiseEnCours] = React.useState(false);
   const [toiseDernier, setToiseDernier] = React.useState("");
+  const [toiseHistorique, setToiseHistorique] = React.useState([]);
   const [toiseErreur, setToiseErreur] = React.useState("");
   const [toiseTexte, setToiseTexte] = React.useState("");
   const [vueMode, setVueMode] = React.useState("vocal");
@@ -2081,6 +2082,16 @@ function FicheMetre({ agenceAccess, ficheInit, onBack }) {
           }
         }
         setOuvertures(prev => [...prev, { ...nouvelleOuverture, repere: i.repere || ("P" + (prev.length + 1)) }]);
+      } else if (a.name === 'modifier_ouverture') {
+        const i = a.input;
+        setOuvertures(prev => prev.map(o => {
+          if (o.repere !== i.repere) return o;
+          const maj = { ...o };
+          ['largeur', 'hauteur', 'couleur', 'vitrage', 'type', 'note'].forEach(champ => {
+            if (i[champ] !== undefined && i[champ] !== null && i[champ] !== "") maj[champ] = i[champ];
+          });
+          return maj;
+        }));
       }
     });
   };
@@ -2098,6 +2109,7 @@ function FicheMetre({ agenceAccess, ficheInit, onBack }) {
           message: transcript,
           fiche: { client: fiche.client, adresse: fiche.adresse, telephone: fiche.telephone, numeroDossier: fiche.numeroDossier },
           ouvertures: contexteOuvertures,
+          historique: toiseHistorique.slice(-6),
         })
       });
       const data = await r.json();
@@ -2105,6 +2117,7 @@ function FicheMetre({ agenceAccess, ficheInit, onBack }) {
       executerActionsToise(data.actions || []);
       const texte = data.reponse || "C'est noté.";
       setToiseDernier(texte);
+      setToiseHistorique(prev => [...prev, { role: 'user', texte: transcript }, { role: 'assistant', texte }].slice(-8));
       parlerToise(texte);
     } catch (e) {
       setToiseErreur("Connexion impossible. Réessayez.");
