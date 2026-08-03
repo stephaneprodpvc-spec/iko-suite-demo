@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Salle de réunion — Iko Suite</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body {
+    background: #0D0D0D;
+    color: #fff;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    min-height: 100vh;
+    min-height: 100dvh;
+    display: flex;
+    flex-direction: column;
+  }
+  header {
+    padding: 18px 20px 14px;
+    text-align: center;
+    flex-shrink: 0;
+  }
+  header .titre { font-size: 17px; font-weight: 800; letter-spacing: 0.3px; }
+  header .sous-titre { font-size: 12px; color: #8a8a8a; margin-top: 4px; }
+
+  #salle {
+    flex: 1;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 10px 16px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .rangee-avatars {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    max-width: 640px;
+    margin: 6px auto 4px;
+    width: 100%;
+  }
+  .avatar-bloc { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+  .sphere {
+    width: 64px; height: 64px; border-radius: 50%;
+    box-shadow: 0 0 22px rgba(255,107,0,0.25);
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+  }
+  .sphere.iko { background: radial-gradient(circle at 35% 30%, #FFB067, #FF6B00 55%, #7a3200 100%); }
+  .sphere.amandine { background: radial-gradient(circle at 35% 30%, #FFFFFF, #FDEBF1 45%, #F5A9C5 78%, #FF6B00 135%); }
+  .sphere.max { background: radial-gradient(circle at 35% 30%, #4a4a4a, #0D0D0D 55%, #000000 100%); border: 2px solid #FF6B00; }
+  .sphere.toise { background: radial-gradient(circle at 35% 30%, #E8D4B0, #C9A876 55%, #8a6d1f 100%); }
+  .sphere.reflechit { animation: pulseSphere 0.9s ease-in-out infinite; box-shadow: 0 0 34px rgba(255,107,0,0.55); }
+  @keyframes pulseSphere { 0%,100% { transform: scale(1); } 50% { transform: scale(1.1); } }
+  .nom-avatar { font-size: 11px; font-weight: 800; letter-spacing: 0.5px; color: #d8d8d8; }
+  .role-avatar { font-size: 9.5px; color: #6f6f6f; text-align: center; }
+
+  .bulle-reponse {
+    max-width: 640px;
+    margin: 0 auto;
+    width: 100%;
+    background: #161616;
+    border-radius: 14px;
+    padding: 14px 16px;
+    border-left: 3px solid #FF6B00;
+    animation: apparition 0.25s ease;
+  }
+  .bulle-reponse.amandine { border-left-color: #F5A9C5; }
+  .bulle-reponse.max { border-left-color: #ffffff; }
+  .bulle-reponse.toise { border-left-color: #C9A876; }
+  .bulle-entete { font-size: 11px; font-weight: 800; letter-spacing: 0.5px; margin-bottom: 6px; }
+  .bulle-entete.iko { color: #FF6B00; }
+  .bulle-entete.amandine { color: #F5A9C5; }
+  .bulle-entete.max { color: #ffffff; }
+  .bulle-entete.toise { color: #C9A876; }
+  .bulle-texte { font-size: 14px; line-height: 1.5; color: #e8e8e8; }
+  .bulle-vide { font-size: 13px; color: #6f6f6f; font-style: italic; }
+  @keyframes apparition { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+
+  .accueil {
+    max-width: 500px;
+    margin: 30px auto;
+    text-align: center;
+    color: #8a8a8a;
+    font-size: 13px;
+    line-height: 1.6;
+  }
+
+  #question-echangee {
+    max-width: 640px;
+    margin: 0 auto;
+    width: 100%;
+    text-align: right;
+    font-size: 13px;
+    color: #b8b8b8;
+    padding: 8px 16px;
+    background: rgba(255,107,0,0.08);
+    border-radius: 12px;
+  }
+
+  #zone-saisie {
+    flex-shrink: 0;
+    padding: 12px 16px calc(env(safe-area-inset-bottom) + 12px);
+    background: #161616;
+    border-top: 1px solid #262626;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+  #micro-reunion {
+    width: 44px; height: 44px; border-radius: 50%; flex-shrink: 0;
+    background: #FF6B00; border: none; color: #111; font-size: 18px; cursor: pointer;
+  }
+  #micro-reunion.ecoute { background: #DC2626; animation: pulseSphere 1s infinite; }
+  #saisie-reunion {
+    flex: 1; padding: 11px 14px; border-radius: 22px; border: 1.5px solid #333;
+    background: #0D0D0D; color: #fff; font-size: 15px; font-family: inherit;
+  }
+  #envoyer-reunion {
+    width: 44px; height: 44px; border-radius: 50%; flex-shrink: 0;
+    background: #FF6B00; border: none; color: #111; font-size: 18px; cursor: pointer;
+  }
+  #envoyer-reunion:disabled { opacity: 0.5; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="titre">🗓️ Salle de réunion</div>
+  <div class="sous-titre">IKO · Amandine · Max · Toise — le point à quatre voix</div>
+</header>
+
+<div id="salle">
+  <div class="rangee-avatars">
+    <div class="avatar-bloc"><div class="sphere iko" id="sphere-iko"></div><div class="nom-avatar">IKO</div><div class="role-avatar">Dashboard</div></div>
+    <div class="avatar-bloc"><div class="sphere amandine" id="sphere-amandine"></div><div class="nom-avatar">AMANDINE</div><div class="role-avatar">SAV client</div></div>
+    <div class="avatar-bloc"><div class="sphere max" id="sphere-max"></div><div class="nom-avatar">MAX</div><div class="role-avatar">Technicien</div></div>
+    <div class="avatar-bloc"><div class="sphere toise" id="sphere-toise"></div><div class="nom-avatar">TOISE</div><div class="role-avatar">Métreur</div></div>
+  </div>
+
+  <div class="accueil" id="accueil-msg">
+    Posez une question ou lancez un point ("Comment s'est passée la semaine ?", "Qu'est-ce qui bloque en ce moment ?") — les 4 assistants répondent chacun depuis leur domaine.
+    <br><br>
+    <span style="opacity:0.7;font-size:12px;">Sans ticket ni fiche ouverts ici, leurs réponses restent générales — ce n'est pas une analyse de données en direct.</span>
+  </div>
+
+  <div id="fil-reunion"></div>
+</div>
+
+<div id="zone-saisie">
+  <button id="micro-reunion" title="Dicter">🎙️</button>
+  <input id="saisie-reunion" type="text" placeholder="Posez votre question aux 4 assistants..." autocomplete="off"/>
+  <button id="envoyer-reunion" title="Envoyer">→</button>
+</div>
+
+<script>
+(function () {
+  const fil = document.getElementById('fil-reunion');
+  const accueilMsg = document.getElementById('accueil-msg');
+  const saisie = document.getElementById('saisie-reunion');
+  const boutonEnvoyer = document.getElementById('envoyer-reunion');
+  const boutonMicro = document.getElementById('micro-reunion');
+
+  const ASSISTANTS = [
+    { id: 'iko', nom: 'IKO', endpoint: '/api/chat-dashboard', role: 'centralise le dashboard' },
+    { id: 'amandine', nom: 'Amandine', endpoint: '/api/chat-amandine', role: 'SAV client' },
+    { id: 'max', nom: 'Max', endpoint: '/api/chat-technicien', role: 'terrain technicien' },
+    { id: 'toise', nom: 'Toise', endpoint: '/api/chat-metreur', role: 'métreur' },
+  ];
+
+  function corpsRequete(assistantId, question) {
+    if (assistantId === 'iko') {
+      return { message: question, tickets: [], agenceActuelle: 'global', historique: [] };
+    }
+    if (assistantId === 'max') {
+      return { message: question, tickets: [], ongletActuel: 'aujourd_hui', historique: [], historiqueClient: null };
+    }
+    if (assistantId === 'toise') {
+      return { message: question, fiche: {}, ouvertures: [], historique: [] };
+    }
+    if (assistantId === 'amandine') {
+      return { messages: [{ role: 'user', texte: question }] };
+    }
+  }
+
+  function extraireReponse(assistantId, data) {
+    if (data.erreur || data.error) return null;
+    return data.reponse || null;
+  }
+
+  async function interrogerAssistant(assistant, question) {
+    const sphere = document.getElementById('sphere-' + assistant.id);
+    sphere.classList.add('reflechit');
+    try {
+      const r = await fetch(assistant.endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(corpsRequete(assistant.id, question)),
+      });
+      const data = await r.json();
+      sphere.classList.remove('reflechit');
+      return extraireReponse(assistant.id, data);
+    } catch (e) {
+      sphere.classList.remove('reflechit');
+      return null;
+    }
+  }
+
+  function ajouterBulleQuestion(texte) {
+    const div = document.createElement('div');
+    div.id = 'question-echangee';
+    div.textContent = texte;
+    fil.appendChild(div);
+  }
+
+  function ajouterBulleReponse(assistant, texte) {
+    const bloc = document.createElement('div');
+    bloc.className = 'bulle-reponse ' + assistant.id;
+    const entete = document.createElement('div');
+    entete.className = 'bulle-entete ' + assistant.id;
+    entete.textContent = assistant.nom.toUpperCase();
+    bloc.appendChild(entete);
+    const corps = document.createElement('div');
+    if (texte) {
+      corps.className = 'bulle-texte';
+      corps.textContent = texte;
+    } else {
+      corps.className = 'bulle-vide';
+      corps.textContent = "N'a pas pu répondre pour le moment.";
+    }
+    bloc.appendChild(corps);
+    fil.appendChild(bloc);
+    return bloc;
+  }
+
+  async function lancerTourDeTable(question) {
+    if (!question.trim()) return;
+    accueilMsg.style.display = 'none';
+    boutonEnvoyer.disabled = true;
+    saisie.value = '';
+    ajouterBulleQuestion(question);
+    fil.scrollIntoView({ behavior: 'smooth', block: 'end' });
+
+    // Les 4 assistants repondent en parallele, chacun affiche des qu'il est pret.
+    ASSISTANTS.forEach(async (assistant) => {
+      const reponse = await interrogerAssistant(assistant, question);
+      const bulle = ajouterBulleReponse(assistant, reponse);
+      bulle.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    });
+
+    boutonEnvoyer.disabled = false;
+  }
+
+  boutonEnvoyer.addEventListener('click', () => lancerTourDeTable(saisie.value));
+  saisie.addEventListener('keydown', (e) => { if (e.key === 'Enter') lancerTourDeTable(saisie.value); });
+
+  // Dictee (avec repli clavier iOS si SpeechRecognition indisponible, comme
+  // sur les autres modules).
+  boutonMicro.addEventListener('click', () => {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) { saisie.focus(); return; }
+    const reco = new SR();
+    reco.lang = 'fr-FR';
+    reco.continuous = false;
+    reco.interimResults = false;
+    reco.onstart = () => boutonMicro.classList.add('ecoute');
+    reco.onerror = () => boutonMicro.classList.remove('ecoute');
+    reco.onend = () => boutonMicro.classList.remove('ecoute');
+    reco.onresult = (e) => { saisie.value = e.results[0][0].transcript; };
+    reco.start();
+  });
+})();
+</script>
+
+</body>
+</html>
