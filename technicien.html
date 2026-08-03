@@ -881,6 +881,37 @@ function Technicien({ agence, onClose }) {
     });
   };
 
+  // Jumeau numerique : cherche l'historique des ouvertures mesurees/posees
+  // pour le client du ticket actuellement ouvert, pour que Max le connaisse
+  // deja sans que le client ait a tout redecrire sur place.
+  const chercherHistoriqueClientMax = async (nomClient) => {
+    if (!nomClient) return null;
+    try {
+      const formuleFiche = "FIND(LOWER(\"" + nomClient.replace(/"/g, '\\"') + "\"),LOWER({Client}))";
+      const rFiches = await fetch('/api/airtable/' + encodeURIComponent("Métrés") +
+        '?filterByFormula=' + encodeURIComponent(formuleFiche) + '&sort[0][field]=Date&sort[0][direction]=desc&maxRecords=2');
+      const jsonFiches = await rFiches.json();
+      if (!rFiches.ok || !jsonFiches.records || jsonFiches.records.length === 0) return null;
+
+      const dossiers = [];
+      for (const fiche of jsonFiches.records) {
+        const formuleOuv = "FIND(\"" + fiche.id + "\",ARRAYJOIN({Métré}))";
+        const rOuv = await fetch('/api/airtable/' + encodeURIComponent("Ouvertures Métré") +
+          '?filterByFormula=' + encodeURIComponent(formuleOuv) + '&maxRecords=20');
+        const jsonOuv = await rOuv.json();
+        const ouvertures = (jsonOuv.records || []).map(o => ({
+          repere: o.fields["Repère"] || "", type: o.fields["Type"] || "", pose: o.fields["Pose"] || "",
+          dimensions: (o.fields["Largeur mm"] || "?") + "x" + (o.fields["Hauteur mm"] || "?") + " mm",
+          couleur: o.fields["Couleur / RAL"] || "",
+        }));
+        dossiers.push({ adresse: fiche.fields["Adresse"] || "", date_mesure: fiche.fields["Date"] || "", ouvertures });
+      }
+      return dossiers.length ? dossiers : null;
+    } catch (e) {
+      return null;
+    }
+  };
+
   const envoyerMax = async (transcript) => {
     setMaxEnCours(true);
     setMaxErreur("");
@@ -894,9 +925,10 @@ function Technicien({ agence, onClose }) {
         creneau: t.fields?.Créneau || "",
         urgent: t.fields?.Qualification === "Oui",
       }));
+      const historiqueClient = selectedTicket ? await chercherHistoriqueClientMax(selectedTicket.fields?.Client) : null;
       const r = await fetch('/api/chat-technicien', {
         method: 'POST', headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({ message: transcript, tickets: contexteTickets, ongletActuel: onglet, historique: maxHistorique.slice(-6) })
+        body: JSON.stringify({ message: transcript, tickets: contexteTickets, ongletActuel: onglet, historique: maxHistorique.slice(-6), historiqueClient })
       });
       const data = await r.json();
       if (data.erreur) { setMaxErreur(data.erreur); setMaxEnCours(false); return; }

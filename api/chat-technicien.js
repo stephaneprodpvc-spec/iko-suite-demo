@@ -37,6 +37,10 @@ REGLES
   toi-meme a partir de la liste fournie et utilise reponse_vocale.
 - Reponses vocales tres courtes (1 phrase si possible), sans markdown,
   sans emoji, tutoiement naturel et direct comme un collegue.
+- Si un historique du client concerne t'est fourni (mesures/poses
+  precedentes par Toise), utilise-le naturellement : tu connais deja
+  le repere, le type de pose, les dimensions — pas besoin de faire
+  redecrire au technicien ce qui a deja ete mesure.
 - Un seul outil d'action a la fois.
 `;
 
@@ -104,16 +108,22 @@ export default async function handler(req, res) {
     const ticketsContexte = Array.isArray(body.tickets) ? body.tickets.slice(0, MAX_TICKETS_CONTEXTE) : [];
     const ongletActuel = String(body.ongletActuel || "aujourd_hui").slice(0, 40);
     const historique = Array.isArray(body.historique) ? body.historique.slice(-6) : [];
+    const historiqueClient = Array.isArray(body.historiqueClient) ? body.historiqueClient.slice(0, 3) : null;
 
     const blocHistorique = historique.length
       ? "\n\nEchanges precedents de cette session (le plus recent en dernier) :\n" +
         historique.map(h => (h.role === "user" ? "Technicien: " : "Toi: ") + String(h.texte || "").slice(0, 300)).join("\n")
       : "";
 
+    const blocHistoriqueClient = historiqueClient && historiqueClient.length
+      ? "\n\nHistorique du client concerne (mesures/poses precedentes, si connu) :\n" + JSON.stringify(historiqueClient)
+      : "";
+
     const messageUtilisateur = "Onglet actuellement affiche : " + ongletActuel +
       "\n\nTickets actuellement charges (JSON) :\n" +
       JSON.stringify(ticketsContexte) +
       blocHistorique +
+      blocHistoriqueClient +
       "\n\nCommande vocale du technicien : \"" + message + "\"";
 
     const reponse = await fetch("https://api.anthropic.com/v1/messages", {
