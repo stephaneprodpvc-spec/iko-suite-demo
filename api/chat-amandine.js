@@ -65,6 +65,12 @@ DEROULE POUR OUVRIR UN TICKET / PRENDRE RDV
          Verifie que l'adresse contient bien un @ et un domaine plausible ; si ce n'est
          pas le cas, relis l'adresse au client et demande-lui de confirmer ou de la
          repreciser avant d'appeler creer_ticket.
+         3bis. Des que tu as le nom OU le telephone du client, appelle
+         consulter_historique_ouvertures. S'il existe un historique, utilise-le
+         naturellement dans la conversation (ex: "je vois que vous avez une
+         fenetre F1 posee en tunnel, c'est celle-la qui pose probleme ?") au
+         lieu de tout redemander depuis zero. Si rien n'est trouve, continue
+         normalement sans le mentionner (ne dis jamais "je n'ai rien trouve").
          4. Demander si l'equipement est sous garantie (facture Iko Suite) ; si oui,
             demander le numero de facture. Sinon note "hors garantie".
             5. Si le client veut un rendez-vous : demande la periode preferee (matin ou
@@ -142,6 +148,17 @@ const TOOLS = [
         planning_id: { type: "string", description: "Identifiant du creneau reserve via reserver_creneau, si applicable. Laisser vide sinon." },
       },
       required: ["agence", "nom", "telephone", "email", "adresse", "produit", "probleme", "urgent", "garantie", "creneau_texte"],
+    },
+  },
+  {
+    name: "consulter_historique_ouvertures",
+    description: "Recherche si ce client a deja des ouvertures (fenetres, portes...) mesurees et posees precedemment, a partir de son nom ou telephone. A appeler des que tu connais le nom ou le telephone du client et avant de lui demander de decrire son produit en detail : s'il a un historique, tu peux t'appuyer dessus (repere, type, pose, dimensions) au lieu de tout lui faire redecrire.",
+    input_schema: {
+      type: "object",
+      properties: {
+        recherche: { type: "string", description: "Nom du client ou numero de telephone." },
+      },
+      required: ["recherche"],
     },
   },
   ];
@@ -230,6 +247,50 @@ async function executerOutil(nom, input) {
     });
     if (!r.ok) return { erreur: "La creation du ticket a echoue, merci de reessayer." };
     return { ok: true, ticket: numero };
+  }
+
+  if (nom === "consulter_historique_ouvertures") {
+    const recherche = String(input.recherche || "").trim().slice(0, 100);
+    if (!recherche) return { trouve: false };
+    try {
+      const formuleFiche = "OR(FIND(LOWER(\"" + recherche.replace(/"/g, '\\"') + "\"),LOWER({Client})),FIND(\"" + recherche.replace(/"/g, '\\"') + "\",{Téléphone}))";
+      const urlFiches = "https://api.airtable.com/v0/" + AIRTABLE_BASE + "/" + encodeURIComponent("Métrés") +
+        "?filterByFormula=" + encodeURIComponent(formuleFiche) +
+        "&sort[0][field]=Date&sort[0][direction]=desc&maxRecords=3";
+      const rFiches = await fetch(urlFiches, { headers: airtableHeaders() });
+      const jsonFiches = await rFiches.json();
+      if (!rFiches.ok || !jsonFiches.records || jsonFiches.records.length === 0) {
+        return { trouve: false };
+      }
+
+      const resultats = [];
+      for (const fiche of jsonFiches.records) {
+        const formuleOuv = "FIND(\"" + fiche.id + "\",ARRAYJOIN({Métré}))";
+        const urlOuv = "https://api.airtable.com/v0/" + AIRTABLE_BASE + "/" + encodeURIComponent("Ouvertures Métré") +
+          "?filterByFormula=" + encodeURIComponent(formuleOuv) + "&maxRecords=20";
+        const rOuv = await fetch(urlOuv, { headers: airtableHeaders() });
+        const jsonOuv = await rOuv.json();
+        const ouvertures = (jsonOuv.records || []).map(function (o) {
+          return {
+            repere: o.fields["Repère"] || "",
+            type: o.fields["Type"] || "",
+            pose: o.fields["Pose"] || "",
+            dimensions: (o.fields["Largeur mm"] || "?") + "x" + (o.fields["Hauteur mm"] || "?") + " mm",
+            couleur: o.fields["Couleur / RAL"] || "",
+          };
+        });
+        resultats.push({
+          client: fiche.fields["Client"] || "",
+          adresse: fiche.fields["Adresse"] || "",
+          date_mesure: fiche.fields["Date"] || "",
+          ouvertures: ouvertures,
+        });
+      }
+      return { trouve: true, dossiers: resultats };
+    } catch (e) {
+      console.error("Erreur consulter_historique_ouvertures:", e);
+      return { trouve: false };
+    }
   }
 
   return { erreur: "Outil inconnu." };
