@@ -17,7 +17,7 @@ const MAX_MESSAGES = 60; // garde-fou : longueur max d'une conversation
 const MAX_CHARS_MESSAGE = 2000; // garde-fou : taille max d'un message
 const MAX_TOOL_ROUNDS = 5; // garde-fou : nombre d'aller-retours d'outils par tour de conversation
 
-const AIRTABLE_BASE = "app1AcRl9r6vB7W6e";
+const AIRTABLE_BASE = "appkI8RKHkYNWY86U";
 const MAKE_WEBHOOK = "https://hook.eu1.make.com/xczscdk40wh653mmnxnx7x63kawjcgx4";
 const DELAI_MIN_JOURS = 7;
 

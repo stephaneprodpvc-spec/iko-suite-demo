@@ -27,7 +27,7 @@ export default async function handler(req, res) {
   }
 
   const suffix = req.url.replace(/^\/api\/airtable\//, '');
-  const airtableUrl = 'https://api.airtable.com/v0/app1AcRl9r6vB7W6e/' + suffix;
+  const airtableUrl = 'https://api.airtable.com/v0/appkI8RKHkYNWY86U/' + suffix;
 
   const init = {
     method: req.method,
