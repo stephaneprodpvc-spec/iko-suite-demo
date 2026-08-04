@@ -23,16 +23,6 @@ const DELAI_MIN_JOURS = 7;
 
 const AGENCES_VALIDES = ["Agence 1", "Agence 3", "Agence 2", "Agence 4"];
 
-// La base Airtable garde encore les vrais noms d'agence en interne (verifie
-// le 4 aout 2026 sur la table Métrés). Amandine ne doit jamais les
-// prononcer ni les voir ailleurs que dans cette table de correspondance,
-// utilisee uniquement pour interroger Airtable correctement.
-const AGENCE_VERS_AIRTABLE = {
-  "Agence 1": "Ibos (65)",
-  "Agence 2": "Tarnos (40)",
-  "Agence 3": "Lescar (64)",
-  "Agence 4": "Saint-Gaudens (31)",
-};
 const CRENEAUX = {
     matin: "Matin (8h30 — 12h00)",
     apres_midi: "Après-midi (13h00 — 17h00)",
@@ -188,7 +178,7 @@ async function executerOutil(nom, input) {
       if (!AGENCES_VALIDES.includes(input.agence) || !valeurCreneau) {
         return { erreur: "Agence ou periode invalide." };
       }
-      const agenceAirtable = AGENCE_VERS_AIRTABLE[input.agence];
+      const agenceAirtable = input.agence;
       const formule = "AND({Agence}=\"" + agenceAirtable + "\",{Créneau}=\"" + valeurCreneau + "\",{Statut}=\"Libre\")";
       const url = "https://api.airtable.com/v0/" + AIRTABLE_BASE + "/Planning?filterByFormula=" + encodeURIComponent(formule) + "&sort[0][field]=Date&sort[0][direction]=asc&maxRecords=60";
       const r = await fetch(url, { headers: airtableHeaders() });

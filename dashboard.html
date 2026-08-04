@@ -61,16 +61,6 @@ const PASSWORDS = {
 
 const AGENCES = ["Agence 1", "Agence 2", "Agence 3", "Agence 4"];
 
-// La base Airtable garde encore les vrais noms d'agence en interne (verifie
-// le 4 aout 2026 sur la table Metres). Ce mapping traduit les labels
-// generiques affiches (Agence 1-4) vers les vraies valeurs stockees, pour
-// que les filtres fonctionnent reellement.
-const AGENCE_VERS_AIRTABLE = {
-  "Agence 1": "Ibos (65)",
-  "Agence 2": "Tarnos (40)",
-  "Agence 3": "Lescar (64)",
-  "Agence 4": "Saint-Gaudens (31)",
-};
 const PRODUITS = ["Fenêtre","Coulissant","Volet roulant","Portail","Porte de garage","Véranda","Autre"];
 const PROBLEMES = {
   "Fenêtre": [{l:"Fermeture difficile"},{l:"Infiltration d'eau",u:true},{l:"Courant d'air / joint usé"},{l:"Vitrage fissuré"},{l:"Fenêtre bloquée ouverte",u:true},{l:"Autre"}],
@@ -431,7 +421,7 @@ function ModalRdv({ agenceAccess, onClose, onSuccess }) {
       const adresseComplete = form.adresse.trim() + (form.codePostal || form.ville ? ', ' + form.codePostal + ' ' + form.ville : '');
       const num = 'SAV-' + new Date().getFullYear() + '-' + (Math.floor(Math.random()*9000)+1000);
       const dateLabel = form.creneau === "Matin (8h30 — 12h00)" ? "Matin (8h30 — 12h00)" : "Après-midi (13h00 — 17h00)";
-      const filterPlanning = encodeURIComponent('AND({Agence}="'+AGENCE_VERS_AIRTABLE[form.agence]+'",{Créneau}="'+dateLabel+'",{Date}="'+form.date+'",{Statut}="Libre")');
+      const filterPlanning = encodeURIComponent('AND({Agence}="'+form.agence+'",{Créneau}="'+dateLabel+'",{Date}="'+form.date+'",{Statut}="Libre")');
       const planResp = await fetch('/api/airtable/Planning?filterByFormula=' + filterPlanning + '&maxRecords=1', {});
       const planJson = await planResp.json();
       let planningId = '';
@@ -741,8 +731,8 @@ function ModalGestionDevis({ tickets, onClose, onRefresh }) {
     { id: "refuse", label: "Refusé", statut: "Devis refusé", couleur: "#DC2626" },
   ];
 
-  const compteur = (statut) => tickets.filter(t => t.fields?.Statut === statut && (agenceFiltreDevis==="global" || t.fields?.Agence===AGENCE_VERS_AIRTABLE[agenceFiltreDevis])).length;
-  const listeActuelle = tickets.filter(t => t.fields?.Statut === STATUTS_DEVIS.find(s => s.id === sousOnglet)?.statut && (agenceFiltreDevis==="global" || t.fields?.Agence===AGENCE_VERS_AIRTABLE[agenceFiltreDevis]));
+  const compteur = (statut) => tickets.filter(t => t.fields?.Statut === statut && (agenceFiltreDevis==="global" || t.fields?.Agence===agenceFiltreDevis)).length;
+  const listeActuelle = tickets.filter(t => t.fields?.Statut === STATUTS_DEVIS.find(s => s.id === sousOnglet)?.statut && (agenceFiltreDevis==="global" || t.fields?.Agence===agenceFiltreDevis));
 
   const changerStatut = async (ticketId, nouveauStatut) => {
     setChanging(ticketId);
@@ -852,7 +842,7 @@ function ModalNotes({ tickets, onClose }) {
   const [exportFinNotes, setExportFinNotes] = React.useState("");
 
   const notes = tickets
-    .filter(t => typeof t.fields?.Note === "number" && (agenceFiltreNotes==="global" || t.fields?.Agence===AGENCE_VERS_AIRTABLE[agenceFiltreNotes]))
+    .filter(t => typeof t.fields?.Note === "number" && (agenceFiltreNotes==="global" || t.fields?.Agence===agenceFiltreNotes))
     .filter(t => {
       const d = parseDateCreneau(t.fields?.Créneau);
       const matchDebut = !exportDebutNotes || d >= new Date(exportDebutNotes+'T00:00:00');
@@ -1035,7 +1025,7 @@ function PlanningView({ agenceFilter }) {
     setLoading(true);
     try {
       let filter = agenceFilter !== "global"
-        ? encodeURIComponent('AND({Agence}="'+AGENCE_VERS_AIRTABLE[agenceFilter]+'",{Statut}="Pris")')
+        ? encodeURIComponent('AND({Agence}="'+agenceFilter+'",{Statut}="Pris")')
         : encodeURIComponent('{Statut}="Pris"');
       const r = await fetch('/api/airtable/Planning?filterByFormula='+filter+'&sort[0][field]=Date&sort[0][direction]=asc&maxRecords=50', {});
       const json = await r.json();
@@ -1178,7 +1168,7 @@ function Dashboard({ agenceAccess, onClose }) {
     isFetchingRef.current = true;
     setLoading(true);
     try {
-      let filter = agenceFilter !== "global" ? encodeURIComponent('{Agence}="'+AGENCE_VERS_AIRTABLE[agenceFilter]+'"') : "";
+      let filter = agenceFilter !== "global" ? encodeURIComponent('{Agence}="'+agenceFilter+'"') : "";
       const url = '/api/airtable/Tickets SAV?'+(filter?'filterByFormula='+filter+'&':'')+'sort[0][field]=Name&sort[0][direction]=desc&maxRecords=200';
       const r = await fetch(url, {});
       const json = await r.json();
@@ -1303,7 +1293,7 @@ function Dashboard({ agenceAccess, onClose }) {
   // Jeu de données pour l'export : respecte agence + statut + recherche + plage de dates
   const getExportData = () => {
     return tickets.filter(t => {
-      const matchAgence = agenceFilter==="global" || t.fields?.Agence===AGENCE_VERS_AIRTABLE[agenceFilter];
+      const matchAgence = agenceFilter==="global" || t.fields?.Agence===agenceFilter;
       const matchStatut = statutFilter==="tous" || (statutFilter==="devis" ? ["Devis à faire","Devis envoyé","Devis - Suivi","Devis - Attente fournisseur","Devis refusé"].includes(t.fields?.Statut) : t.fields?.Statut===statutFilter) || (!t.fields?.Statut&&statutFilter==="Nouveau");
       const matchUrgent = !urgentOnly || (t.fields?.Qualification === "Oui" && !isStatutClos(t.fields?.Statut));
       const q = search.toLowerCase();
@@ -1545,7 +1535,7 @@ function Dashboard({ agenceAccess, onClose }) {
   };
 
   const filtered = tickets.filter(t => {
-    const matchAgence = agenceFilter==="global" || t.fields?.Agence===AGENCE_VERS_AIRTABLE[agenceFilter];
+    const matchAgence = agenceFilter==="global" || t.fields?.Agence===agenceFilter;
     const matchStatut = statutFilter==="tous" ? t.fields?.Statut !== "Terminé" : (statutFilter==="devis" ? ["Devis à faire","Devis envoyé","Devis - Suivi","Devis - Attente fournisseur","Devis refusé"].includes(t.fields?.Statut) : t.fields?.Statut===statutFilter) || (!t.fields?.Statut&&statutFilter==="Nouveau");
     const matchUrgent = !urgentOnly || (t.fields?.Qualification === "Oui" && !isStatutClos(t.fields?.Statut));
     const matchMessages = !messagesOnly || t.fields?.["Message client non lu"] || t.id === openMessageTicketId;
@@ -1585,7 +1575,7 @@ function Dashboard({ agenceAccess, onClose }) {
   stats.nbNotes = ticketsNotes.length;
 
   const byAgence = {};
-  AGENCES.forEach(a => { byAgence[a] = tickets.filter(t => t.fields?.Agence===AGENCE_VERS_AIRTABLE[a] && t.fields?.Statut !== "Terminé").length; });
+  AGENCES.forEach(a => { byAgence[a] = tickets.filter(t => t.fields?.Agence===a && t.fields?.Statut !== "Terminé").length; });
 
   if (vueMode === "vocal") {
     return (
