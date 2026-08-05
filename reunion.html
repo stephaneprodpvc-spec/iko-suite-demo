@@ -160,6 +160,7 @@
 </div>
 
 <audio id="lecteur-reunion" style="display:none"></audio>
+<div id="alerte-son" style="display:none;position:fixed;bottom:110px;left:50%;transform:translateX(-50%);z-index:1000;background:#DC2626;color:#fff;padding:10px 18px;border-radius:22px;font-size:13px;font-weight:800;cursor:pointer;box-shadow:0 6px 20px rgba(220,38,38,0.4);">🔇 Son bloqué — appuie ici pour l'activer</div>
 
 <script>
 (function () {
@@ -169,11 +170,30 @@
   const boutonEnvoyer = document.getElementById('envoyer-reunion');
   const boutonMicro = document.getElementById('micro-reunion');
   const lecteur = document.getElementById('lecteur-reunion');
+  const alerteSon = document.getElementById('alerte-son');
   const SILENCE_WAV = "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=";
 
+  function afficherAlerteSon() { alerteSon.style.display = 'block'; }
+  function masquerAlerteSon() { alerteSon.style.display = 'none'; }
+
   function debloquerAudioIOS() {
-    try { lecteur.src = SILENCE_WAV; lecteur.play().catch(function () {}); } catch (e) {}
+    try { lecteur.muted = false; lecteur.src = SILENCE_WAV; lecteur.play().catch(function () {}); } catch (e) {}
   }
+
+  // Ceinture et bretelles : sur iPad/Safari, l'autoplay peut rester bloque
+  // meme apres un premier deblocage si le geste initial (dictee clavier,
+  // par exemple) n'est pas reconnu comme une vraie interaction. On tente
+  // donc de debloquer sur CHAQUE tap sur la page, pas seulement sur les
+  // boutons dedies.
+  document.addEventListener('touchend', debloquerAudioIOS, { passive: true });
+  document.addEventListener('click', debloquerAudioIOS);
+
+  // Si le son est bloque, appuyer sur la bannière relance la derniere
+  // reponse en attente au lieu de rester silencieux sans recours.
+  alerteSon.addEventListener('click', () => {
+    debloquerAudioIOS();
+    if (lecteur.src) { lecteur.play().then(masquerAlerteSon).catch(() => {}); }
+  });
 
   const ASSISTANTS = [
     { id: 'iko', nom: 'IKO', endpoint: '/api/chat-dashboard', role: 'centralise le dashboard', voiceId: 'pNInz6obpgDQGcFmaJgB' },
@@ -181,6 +201,29 @@
     { id: 'max', nom: 'Max', endpoint: '/api/chat-technicien', role: 'terrain technicien', voiceId: 'VR6AewLTigWG4xSOukaG' },
     { id: 'toise', nom: 'Toise', endpoint: '/api/chat-metreur', role: 'métreur', voiceId: 'ErXwobaYiN019PkySvjV' },
   ];
+
+  // Les IA ne peuvent pas tenir une vraie reunion sans les vraies donnees :
+  // sans ca elles ne font que se demander des precisions en boucle. On
+  // charge les tickets reels au demarrage de la salle et on les
+  // rafraichit avant chaque question pour rester a jour.
+  let ticketsReunion = [];
+  async function chargerTicketsReunion() {
+    try {
+      const r = await fetch('/api/airtable/Tickets%20SAV?sort[0][field]=Name&sort[0][direction]=desc&maxRecords=100');
+      const json = await r.json();
+      ticketsReunion = (json.records || []).map(t => ({
+        id: t.id,
+        numero: t.fields?.Name || "",
+        client: t.fields?.Client || "",
+        statut: t.fields?.Statut || "",
+        produit: t.fields?.Produit || "",
+        creneau: t.fields?.["Créneau"] || "",
+        agence: t.fields?.Agence || "",
+        urgent: t.fields?.Urgent === true || t.fields?.Urgent === "Oui",
+      }));
+    } catch (e) { ticketsReunion = []; }
+  }
+  chargerTicketsReunion();
 
   // Ordre professionnel du tour de table : les 3 assistants terrain
   // remontent d'abord chacun leur tour, IKO cloture toujours en dernier en
@@ -204,10 +247,10 @@
           rapportsPrecedents.map(r => r.nom.toUpperCase() + " : " + r.texte).join("\n\n") +
           "\n\nStephane a demande : \"" + question + "\"\n\nFais la synthese de ce qui remonte, en tant que meneur de reunion. Si un probleme a ete signale, propose une piste d'action concrete. Ne redemande pas aux autres de repeter, base-toi sur ce qu'ils viennent de dire."
         : question;
-      return { message: question_iko, tickets: [], agenceActuelle: 'global', historique: [], reunion: true };
+      return { message: question_iko, tickets: ticketsReunion, agenceActuelle: 'global', historique: [], reunion: true };
     }
     if (assistantId === 'max') {
-      return { message: question, tickets: [], ongletActuel: 'aujourd_hui', historique: [], historiqueClient: null, reunion: true };
+      return { message: question, tickets: ticketsReunion, ongletActuel: 'aujourd_hui', historique: [], historiqueClient: null, reunion: true };
     }
     if (assistantId === 'toise') {
       return { message: question, fiche: {}, ouvertures: [], historique: [], reunion: true };
@@ -224,7 +267,9 @@
 
   // Lecture vocale d'une reponse. Utilisee de facon sequentielle (await)
   // dans lancerTourDeTable : chaque assistant termine de parler avant que
-  // le suivant ne prenne la parole.
+  // le suivant ne prenne la parole. Si la lecture echoue (autoplay bloque
+  // par le navigateur), on l'affiche clairement au lieu de rester
+  // silencieux sans explication.
   function oraliser(assistant, texte) {
     if (!texte) return Promise.resolve();
     return new Promise(async (resolve) => {
@@ -233,17 +278,18 @@
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ texte: texte, voice_id: assistant.voiceId }),
         });
-        if (!r.ok) { resolve(); return; }
+        if (!r.ok) { afficherAlerteSon(); resolve(); return; }
         const blob = await r.blob();
         const url = URL.createObjectURL(blob);
         const sphere = document.getElementById('sphere-' + assistant.id);
-        lecteur.onplay = () => sphere.classList.add('parle');
+        lecteur.onplay = () => { masquerAlerteSon(); sphere.classList.add('parle'); };
         lecteur.onended = () => { sphere.classList.remove('parle'); resolve(); };
-        lecteur.onerror = () => { sphere.classList.remove('parle'); resolve(); };
+        lecteur.onerror = () => { sphere.classList.remove('parle'); afficherAlerteSon(); resolve(); };
+        lecteur.muted = false;
         lecteur.volume = 1.0;
         lecteur.src = url;
-        lecteur.play().catch(() => resolve());
-      } catch (e) { resolve(); }
+        lecteur.play().then(masquerAlerteSon).catch(() => { afficherAlerteSon(); resolve(); });
+      } catch (e) { afficherAlerteSon(); resolve(); }
     });
   }
 
@@ -300,6 +346,8 @@
     debloquerAudioIOS();
     ajouterBulleQuestion(question);
     fil.scrollIntoView({ behavior: 'smooth', block: 'end' });
+
+    await chargerTicketsReunion();
 
     const destinataires = detecterDestinataires(question);
     const estUneReunionComplete = destinataires.length > 1;
