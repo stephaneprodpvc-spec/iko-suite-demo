@@ -2100,7 +2100,59 @@ function FicheMetre({ agenceAccess, ficheInit, onBack }) {
 
   const [toisePhoto, setToisePhoto] = React.useState(null);
 
-  const envoyerToise = async (transcript, imageBase64) => {
+  const [toiseFileAttente, setToiseFileAttente] = React.useState(() => {
+    try { return JSON.parse(localStorage.getItem('toiseFileAttente') || '[]'); } catch (e) { return []; }
+  });
+  const [toiseHorsLigne, setToiseHorsLigne] = React.useState(!navigator.onLine);
+
+  const sauvegarderFileAttente = (file) => {
+    setToiseFileAttente(file);
+    try { localStorage.setItem('toiseFileAttente', JSON.stringify(file)); } catch (e) {}
+  };
+
+  React.useEffect(() => {
+    const surEnLigne = () => { setToiseHorsLigne(false); resynchroniserToise(); };
+    const surHorsLigne = () => setToiseHorsLigne(true);
+    window.addEventListener('online', surEnLigne);
+    window.addEventListener('offline', surHorsLigne);
+    if (navigator.onLine && toiseFileAttente.length) resynchroniserToise();
+    return () => {
+      window.removeEventListener('online', surEnLigne);
+      window.removeEventListener('offline', surHorsLigne);
+    };
+    // eslint-disable-next-line
+  }, []);
+
+  const resynchroniserToise = async () => {
+    let file;
+    try { file = JSON.parse(localStorage.getItem('toiseFileAttente') || '[]'); } catch (e) { file = []; }
+    if (!file.length) return;
+    setToiseDernier("Reconnexion... envoi de " + file.length + " mesure(s) en attente.");
+    for (let i = 0; i < file.length; i++) {
+      try {
+        await envoyerToise(file[i].transcript, file[i].imageBase64, true);
+        // Succes : on retire cet element precis de la file persistee.
+        const restante = file.slice(i + 1);
+        sauvegarderFileAttente(restante);
+      } catch (e) {
+        // Echec (toujours hors ligne, ou erreur reseau) : on arrete la
+        // resynchronisation ici, le reste repartira au prochain "online".
+        break;
+      }
+    }
+  };
+
+  const envoyerToise = async (transcript, imageBase64, depuisFileAttente) => {
+    if (!navigator.onLine && !depuisFileAttente) {
+      // Hors ligne : on met de cote plutot que d'echouer silencieusement.
+      // Le metreur continue son chantier, tout part des que le reseau revient.
+      const item = { transcript, imageBase64, horodatage: Date.now() };
+      const nouvelleFile = [...toiseFileAttente, item];
+      sauvegarderFileAttente(nouvelleFile);
+      setToiseDernier("Hors ligne : mesure mise en attente, elle partira automatiquement dès que le réseau revient.");
+      setToisePhoto(null);
+      return;
+    }
     setToiseEnCours(true);
     setToiseErreur("");
     try {
@@ -2124,9 +2176,25 @@ function FicheMetre({ agenceAccess, ficheInit, onBack }) {
       setToiseDernier(texte);
       setToiseHistorique(prev => [...prev, { role: 'user', texte: transcript || "(photo)" }, { role: 'assistant', texte }].slice(-8));
       parlerToise(texte);
-      setToisePhoto(null);
+      // Confirmation visuelle : si une mesure a ete lue sur cette photo, on
+      // garde la photo affichee avec la valeur lue en incrustation, pour
+      // que le metreur puisse verifier d'un coup d'oeil avant qu'elle ne
+      // disparaisse (au lieu de faire confiance a l'oreille seule).
+      const actionMesure = (data.actions || []).find(a => (a.name === 'ajouter_ouverture' || a.name === 'modifier_ouverture') && a.input?.largeur && a.input?.hauteur);
+      if (imageBase64 && actionMesure) {
+        setToisePhotoConfirmee({ dataUrl: imageBase64, largeur: actionMesure.input.largeur, hauteur: actionMesure.input.hauteur, repere: actionMesure.input.repere || "", suspect: !!actionMesure.input._suspect });
+        setToisePhoto(null);
+      } else {
+        setToisePhoto(null);
+      }
     } catch (e) {
-      setToiseErreur("Connexion impossible. Réessayez.");
+      if (!navigator.onLine) {
+        const item = { transcript, imageBase64, horodatage: Date.now() };
+        sauvegarderFileAttente([...toiseFileAttente, item]);
+        setToiseDernier("Connexion perdue : mesure mise en attente.");
+      } else {
+        setToiseErreur("Connexion impossible. Réessayez.");
+      }
     }
     setToiseEnCours(false);
   };
@@ -2196,6 +2264,7 @@ function FicheMetre({ agenceAccess, ficheInit, onBack }) {
 
   const [toiseAlerteQualite, setToiseAlerteQualite] = React.useState(null);
   const [toisePhotoEnAttente, setToisePhotoEnAttente] = React.useState(null);
+  const [toisePhotoConfirmee, setToisePhotoConfirmee] = React.useState(null);
 
   const capturerPhotoToise = async (fichier) => {
     if (!fichier) return;
@@ -2431,6 +2500,26 @@ function FicheMetre({ agenceAccess, ficheInit, onBack }) {
         <div style={{marginTop:"32px",color:"#b8b8b8",fontSize:"14px",maxWidth:"340px",textAlign:"center",minHeight:"40px",lineHeight:"1.5"}}>
           {toiseEcoute ? "Je vous écoute..." : toiseEnCours ? "..." : toiseDernier ? toiseDernier : "Dictez à Toise : \"Fenêtre P1, 120 par 100, blanc, double vitrage\"..."}
         </div>
+        {toisePhotoConfirmee && (
+          <div style={{marginTop:"14px",width:"90%",maxWidth:"320px",position:"relative",borderRadius:"14px",overflow:"hidden",border:"2px solid "+(toisePhotoConfirmee.suspect?"#DC2626":"#C9A876")}}>
+            <img src={toisePhotoConfirmee.dataUrl} style={{width:"100%",display:"block"}} alt="Mesure"/>
+            <div style={{position:"absolute",bottom:0,left:0,right:0,background:"linear-gradient(transparent,rgba(0,0,0,0.85))",padding:"20px 12px 10px",display:"flex",justifyContent:"space-between",alignItems:"flex-end"}}>
+              <div>
+                {toisePhotoConfirmee.repere && <div style={{color:"#C9A876",fontSize:"10px",fontWeight:"800"}}>{toisePhotoConfirmee.repere}</div>}
+                <div style={{color:"#fff",fontSize:"16px",fontWeight:"900"}}>{toisePhotoConfirmee.largeur} × {toisePhotoConfirmee.hauteur} mm</div>
+              </div>
+              {toisePhotoConfirmee.suspect && <div style={{color:"#DC2626",fontSize:"10px",fontWeight:"800"}}>⚠️ à vérifier</div>}
+            </div>
+            <button onClick={() => setToisePhotoConfirmee(null)}
+              style={{position:"absolute",top:8,right:8,width:"26px",height:"26px",borderRadius:"50%",background:"rgba(0,0,0,0.6)",border:"none",color:"#fff",fontSize:"13px",cursor:"pointer"}}>✕</button>
+          </div>
+        )}
+        {(toiseHorsLigne || toiseFileAttente.length > 0) && (
+          <div style={{marginTop:"10px",display:"flex",alignItems:"center",gap:"6px",background:toiseHorsLigne?"rgba(220,38,38,0.12)":"rgba(255,107,0,0.12)",border:"1px solid "+(toiseHorsLigne?"rgba(220,38,38,0.35)":"rgba(255,107,0,0.35)"),borderRadius:"20px",padding:"5px 12px",fontSize:"11px",fontWeight:"700",color:toiseHorsLigne?"#DC2626":"#FF6B00"}}>
+            {toiseHorsLigne ? "📡 Hors ligne" : "🔄 Synchronisation"}
+            {toiseFileAttente.length > 0 ? " · " + toiseFileAttente.length + " en attente" : ""}
+          </div>
+        )}
         {toiseErreur && <div style={{color:"#DC2626",fontSize:"12px",marginTop:"10px"}}>{toiseErreur}</div>}
         {toiseAlerteQualite && (
           <div style={{marginTop:"12px",width:"90%",maxWidth:"380px",background:"rgba(220,38,38,0.1)",border:"1px solid rgba(220,38,38,0.35)",borderRadius:"10px",padding:"10px 14px"}}>
@@ -2453,12 +2542,12 @@ function FicheMetre({ agenceAccess, ficheInit, onBack }) {
           </div>
         )}
 
-        <div style={{marginTop:"26px",width:"90%",maxWidth:"380px",display:"flex",gap:"8px"}}>
+        <div style={{marginTop:"26px",width:"90%",maxWidth:"380px",display:"flex",gap:"8px",alignItems:"center"}}>
           <input id="toisePhotoInput" type="file" accept="image/*" capture="environment" style={{display:"none"}}
             onChange={e => { if (e.target.files[0]) capturerPhotoToise(e.target.files[0]); e.target.value = ""; }}/>
           <button onClick={() => document.getElementById('toisePhotoInput').click()}
-            title="Photo avec mètre ruban dans le cadre"
-            style={{padding:"12px 14px",borderRadius:"10px",background:"#1a1a1a",border:"1px solid rgba(255,107,0,0.3)",color:"#fff",fontSize:"16px",cursor:"pointer"}}>
+            title="Capture rapide : photo avec mètre ruban dans le cadre, envoi automatique"
+            style={{width:"52px",height:"52px",flexShrink:0,borderRadius:"14px",background:"linear-gradient(135deg,#FF6B00,#C9A876)",border:"none",color:"#111",fontSize:"22px",cursor:"pointer",boxShadow:"0 4px 14px rgba(255,107,0,0.35)"}}>
             📷
           </button>
           <input id="toiseChampTexte" type="text" value={toiseTexte}
@@ -2471,7 +2560,7 @@ function FicheMetre({ agenceAccess, ficheInit, onBack }) {
             →
           </button>
         </div>
-        <div style={{marginTop:"8px",fontSize:"11px",color:"#8a8a8a",textAlign:"center"}}>📷 = photo avec mètre ruban visible dans le cadre</div>
+        <div style={{marginTop:"8px",fontSize:"11px",color:"#8a8a8a",textAlign:"center"}}>📷 = capture rapide, une main : cadrez le mètre ruban, un seul tap suffit, l'envoi est automatique</div>
 
         <div style={{position:"fixed",bottom:"36px",left:"36px"}}>
           <button onClick={() => { debloquerVoixIOS(); lancerEcouteToise(); }}
