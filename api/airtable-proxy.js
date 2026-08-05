@@ -57,7 +57,7 @@ export default async function handler(req, res) {
     }
   }
   const qs = params.toString();
-  const airtableUrl = 'https://api.airtable.com/v0/appkI8RKHkYNWY86U/' + encodedSubPath + (qs ? '?' + qs : '');
+  const airtableUrl = 'https://api.airtable.com/v0/app1AcRl9r6vB7W6e/' + encodedSubPath + (qs ? '?' + qs : '');
 
   const init = {
     method: req.method,
