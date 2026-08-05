@@ -278,24 +278,30 @@
   // silencieux sans explication.
   function oraliser(assistant, texte) {
     if (!texte) return Promise.resolve();
-    return new Promise(async (resolve) => {
+    return new Promise(async (resolveOriginal) => {
+      // Filet de securite : si la lecture reste bloquee (autoplay iOS
+      // silencieusement bloque sans jamais declencher onended/onerror),
+      // on debloque la reunion apres 12s au lieu de la figer pour toujours.
+      let dejaResolu = false;
+      const resolve = () => { if (!dejaResolu) { dejaResolu = true; resolveOriginal(); } };
+      const secours = setTimeout(() => { afficherAlerteSon(); resolve(); }, 12000);
       try {
         const r = await fetch('/api/tts', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ texte: texte, voice_id: assistant.voiceId }),
         });
-        if (!r.ok) { afficherAlerteSon(); resolve(); return; }
+        if (!r.ok) { clearTimeout(secours); afficherAlerteSon(); resolve(); return; }
         const blob = await r.blob();
         const url = URL.createObjectURL(blob);
         const sphere = document.getElementById('sphere-' + assistant.id);
         lecteur.onplay = () => { masquerAlerteSon(); sphere.classList.add('parle'); };
-        lecteur.onended = () => { sphere.classList.remove('parle'); resolve(); };
-        lecteur.onerror = () => { sphere.classList.remove('parle'); afficherAlerteSon(); resolve(); };
+        lecteur.onended = () => { clearTimeout(secours); sphere.classList.remove('parle'); resolve(); };
+        lecteur.onerror = () => { clearTimeout(secours); sphere.classList.remove('parle'); afficherAlerteSon(); resolve(); };
         lecteur.muted = false;
         lecteur.volume = 1.0;
         lecteur.src = url;
-        lecteur.play().then(masquerAlerteSon).catch(() => { afficherAlerteSon(); resolve(); });
-      } catch (e) { afficherAlerteSon(); resolve(); }
+        lecteur.play().then(masquerAlerteSon).catch(() => { afficherAlerteSon(); });
+      } catch (e) { clearTimeout(secours); afficherAlerteSon(); resolve(); }
     });
   }
 
@@ -327,10 +333,26 @@
   function ajouterBulleReponse(assistant, texte) {
     const bloc = document.createElement('div');
     bloc.className = 'bulle-reponse ' + assistant.id;
+    const enteteLigne = document.createElement('div');
+    enteteLigne.style.display = 'flex';
+    enteteLigne.style.justifyContent = 'space-between';
+    enteteLigne.style.alignItems = 'center';
     const entete = document.createElement('div');
     entete.className = 'bulle-entete ' + assistant.id;
     entete.textContent = assistant.nom.toUpperCase();
-    bloc.appendChild(entete);
+    enteteLigne.appendChild(entete);
+    if (texte) {
+      // Bouton d'ecoute manuelle : marche toujours, meme quand l'autoplay
+      // est bloque par le navigateur (frequent sur iPad). Appuyer dessus
+      // est un vrai geste utilisateur, donc la lecture ne peut pas echouer.
+      const boutonEcouter = document.createElement('button');
+      boutonEcouter.textContent = '🔊';
+      boutonEcouter.title = 'Écouter';
+      boutonEcouter.style.cssText = 'background:none;border:none;color:#8a8a8a;font-size:16px;cursor:pointer;padding:2px 6px;';
+      boutonEcouter.onclick = () => { lecteur.muted = false; oraliser(assistant, texte); };
+      enteteLigne.appendChild(boutonEcouter);
+    }
+    bloc.appendChild(enteteLigne);
     const corps = document.createElement('div');
     if (texte) {
       corps.className = 'bulle-texte';
