@@ -206,6 +206,12 @@
   // sans ca elles ne font que se demander des precisions en boucle. On
   // charge les tickets reels au demarrage de la salle et on les
   // rafraichit avant chaque question pour rester a jour.
+  const AIRTABLE_VERS_AGENCE = {
+    "Ibos (65)": "Agence 1",
+    "Tarnos (40)": "Agence 2",
+    "Lescar (64)": "Agence 3",
+    "Saint-Gaudens (31)": "Agence 4",
+  };
   let ticketsReunion = [];
   async function chargerTicketsReunion() {
     try {
@@ -218,7 +224,7 @@
         statut: t.fields?.Statut || "",
         produit: t.fields?.Produit || "",
         creneau: t.fields?.["Créneau"] || "",
-        agence: t.fields?.Agence || "",
+        agence: AIRTABLE_VERS_AGENCE[t.fields?.Agence] || t.fields?.Agence || "",
         urgent: t.fields?.Urgent === true || t.fields?.Urgent === "Oui",
       }));
     } catch (e) { ticketsReunion = []; }
@@ -389,7 +395,11 @@
     reco.onstart = () => boutonMicro.classList.add('ecoute');
     reco.onerror = () => boutonMicro.classList.remove('ecoute');
     reco.onend = () => boutonMicro.classList.remove('ecoute');
-    reco.onresult = (e) => { saisie.value = e.results[0][0].transcript; };
+    reco.onresult = (e) => {
+      const texte = e.results[0][0].transcript;
+      saisie.value = texte;
+      lancerTourDeTable(texte);
+    };
     reco.start();
   });
 })();
