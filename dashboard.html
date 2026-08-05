@@ -111,8 +111,8 @@ const parseDateCreneau = (creneau) => {
 // ---- STATUTS "CLOS" (Terminé / Annulé) ----
 const isStatutClos = (statut) => statut === "Terminé" || statut === "Annulé";
 
-function Badge({ label, color, bg }) {
-  return <span style={{display:"inline-block",padding:"2px 8px",borderRadius:"20px",fontSize:"10px",fontWeight:"700",color,background:bg,letterSpacing:"0.5px"}}>{label}</span>;
+function Badge({ label, color, bg, style }) {
+  return <span style={{display:"inline-block",padding:"2px 8px",borderRadius:"20px",fontSize:"10px",fontWeight:"700",color,background:bg,letterSpacing:"0.5px",...style}}>{label}</span>;
 }
 
 function StatCard({ label, value, sub, accent, active, onClick, alert }) {
@@ -255,7 +255,7 @@ function PhoneChatModal({ clientName, entries, texteReponse, onChangeTexte, onEn
   );
 }
 
-function TicketRow({ t, onStatusChange, onAnnuler, onRenvoyerMail, onRenvoyerMailClient, onDevis, onRepondreClient, onMarquerLu, isMessagePanelOpen, onToggleMessagePanel, onCloseMessagePanel, onRefreshTicket }) {
+function TicketRow({ t, onStatusChange, onAnnuler, onSupprimer, onRenvoyerMail, onRenvoyerMailClient, onDevis, onRepondreClient, onMarquerLu, isMessagePanelOpen, onToggleMessagePanel, onCloseMessagePanel, onRefreshTicket }) {
   const [texteReponse, setTexteReponse] = React.useState("");
   const [envoiReponse, setEnvoiReponse] = React.useState(null); // null | 'sending' | 'ok'
   const nonLu = !!t.fields?.["Message client non lu"];
@@ -307,7 +307,7 @@ function TicketRow({ t, onStatusChange, onAnnuler, onRenvoyerMail, onRenvoyerMai
       <div style={{flex:1,minWidth:0}}>
         <div style={{display:"flex",alignItems:"center",gap:"8px",flexWrap:"wrap",marginBottom:"6px"}}>
           <span style={{fontSize:"12px",fontWeight:"900",color:C.or,fontFamily:"monospace"}}>{t.fields?.Name||"—"}</span>
-          {urgent && <Badge label="URGENT" color={C.rouge} bg={C.rougeDim}/>}
+          {urgent && <Badge label="URGENT" color={C.rouge} bg={C.rougeDim} style={{animation:"clignoteUrgent 1.1s ease-in-out infinite"}}/>}
           <Badge label={statut} color={sc.color} bg={sc.bg}/>
           {t.fields?.["Source"] === "telephone" && <Badge label="📞 Tél." color={C.jaune} bg={C.jauneDim}/>}
           <span style={{fontSize:"10px",color:C.muted,marginLeft:"auto"}}>{t.fields?.Agence}</span>
@@ -372,11 +372,15 @@ function TicketRow({ t, onStatusChange, onAnnuler, onRenvoyerMail, onRenvoyerMai
           </div>
         </div>
       </div>
-      <div style={{flexShrink:0}}>
+      <div style={{flexShrink:0,display:"flex",flexDirection:"column",gap:"6px",alignItems:"stretch"}}>
         <select value={statut} onChange={e => e.target.value === "Annulé" ? onAnnuler(t) : onStatusChange(t.id, e.target.value)}
           style={{background:"#FFFFFF",border:"1px solid "+C.border,color:C.text,borderRadius:"8px",padding:"5px 8px",fontSize:"11px",cursor:"pointer"}}>
           <option>Nouveau</option><option>En cours</option><option>Devis à faire</option><option>Devis envoyé</option><option>Devis - Suivi</option><option>Devis - Attente fournisseur</option><option>Devis refusé</option><option>Terminé</option><option>Annulé</option>
         </select>
+        <button onClick={() => onSupprimer(t)} title="Supprimer définitivement"
+          style={{background:"transparent",border:"1px solid rgba(220,38,38,0.3)",color:C.rouge,borderRadius:"8px",padding:"4px 8px",fontSize:"10px",cursor:"pointer"}}>
+          🗑️ Supprimer
+        </button>
       </div>
     </div>
     {isMessagePanelOpen && t.fields?.["Message client"] && (
@@ -444,6 +448,7 @@ function ModalRdv({ agenceAccess, onClose, onSuccess }) {
         });
       }
       const urgentTexte = isUrgentProbleme(form.produit, form.probleme) ? "Oui" : "Non";
+      const garantieTexte = form.garantie ? "Oui - Facture " + (form.facture || "") : "Non / Hors garantie";
       await fetch(WEBHOOK, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -453,7 +458,7 @@ function ModalRdv({ agenceAccess, onClose, onSuccess }) {
           "e-mail": form.email || "aucun@rsia.fr",
           adresse: adresseComplete, produit: form.produit, probleme: form.probleme,
           creneau: dateLabel + ' — ' + new Date(form.date + 'T12:00:00').toLocaleDateString('fr-FR', {weekday:'long',day:'numeric',month:'long'}),
-          garantie: form.garantie, facture: form.facture, urgent: urgentTexte, photos: '', planningId
+          garantie: garantieTexte, facture: form.facture, urgent: urgentTexte, photos: '', planningId
         })
       });
       onSuccess(num);
@@ -1026,6 +1031,43 @@ function ModalAnnulation({ ticket, onConfirm, onClose }) {
   );
 }
 
+function ModalSuppression({ ticket, onConfirm, onClose }) {
+  const [confirmation, setConfirmation] = React.useState("");
+  const [saving, setSaving] = React.useState(false);
+  const pretAConfirmer = confirmation.trim().toUpperCase() === "SUPPRIMER";
+
+  const valider = async () => {
+    if (!pretAConfirmer) return;
+    setSaving(true);
+    await onConfirm(ticket);
+    setSaving(false);
+  };
+
+  return (
+    <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="modal-box" style={{maxWidth:"420px"}}>
+        <div style={{fontSize:"16px",fontWeight:"900",color:C.white,marginBottom:"4px"}}>🗑️ Supprimer définitivement</div>
+        <div style={{fontSize:"12px",color:C.or,fontFamily:"monospace",marginBottom:"14px"}}>{ticket.fields?.Name} — {ticket.fields?.Client}</div>
+        <div style={{background:C.rougeDim,border:"1px solid rgba(220,38,38,0.3)",borderRadius:"10px",padding:"10px 14px",marginBottom:"14px",fontSize:"12px",color:C.rouge}}>
+          ⚠️ Action irréversible : le ticket sera définitivement effacé, pas juste annulé. Si un créneau planning y est associé, il sera libéré.
+        </div>
+        <label style={{fontSize:"11px",fontWeight:"700",color:C.muted,display:"block",marginBottom:"6px"}}>
+          Tape <strong style={{color:C.white}}>SUPPRIMER</strong> pour confirmer
+        </label>
+        <input type="text" value={confirmation} onChange={e => setConfirmation(e.target.value)}
+          placeholder="SUPPRIMER" style={{marginBottom:"16px",textTransform:"uppercase"}}/>
+        <div style={{display:"flex",gap:"10px"}}>
+          <button onClick={onClose} style={{flex:1,padding:"11px",background:"transparent",color:C.muted,border:"1px solid "+C.border,borderRadius:"10px",fontSize:"12px",cursor:"pointer"}}>Annuler</button>
+          <button onClick={valider} disabled={saving||!pretAConfirmer}
+            style={{flex:2,padding:"11px",background:saving||!pretAConfirmer?"#333":C.rouge,color:"#fff",border:"none",borderRadius:"10px",fontSize:"13px",fontWeight:"900",cursor:saving||!pretAConfirmer?"not-allowed":"pointer"}}>
+            {saving ? "⏳ Suppression..." : "🗑️ Supprimer définitivement"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 
 function PlanningView({ agenceFilter }) {
   const [slots, setSlots] = React.useState([]);
@@ -1144,6 +1186,7 @@ function Dashboard({ agenceAccess, onClose }) {
   const [showModalNotes, setShowModalNotes] = React.useState(false);
   const [successTicket, setSuccessTicket] = React.useState(null);
   const [modalAnnulation, setModalAnnulation] = React.useState(null);
+  const [modalSuppression, setModalSuppression] = React.useState(null);
   const [modalDevis, setModalDevis] = React.useState(null);
   const [exportDebut, setExportDebut] = React.useState("");
   const [exportFin, setExportFin] = React.useState("");
@@ -1544,6 +1587,23 @@ function Dashboard({ agenceAccess, onClose }) {
     setModalAnnulation(null);
   };
 
+  const confirmerSuppression = async (ticket) => {
+    const planningId = ticket?.fields?.PlanningID;
+    if (planningId) {
+      try {
+        await fetch('/api/airtable/Planning/'+planningId, {
+          method:'PATCH', headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({fields:{Statut:'Libre'}})
+        });
+      } catch(e) { console.error(e); }
+    }
+    try {
+      await fetch('/api/airtable/Tickets SAV/'+ticket.id, { method:'DELETE' });
+    } catch(e) { console.error(e); }
+    setTickets(prev => prev.filter(t => t.id !== ticket.id));
+    setModalSuppression(null);
+  };
+
   const filtered = tickets.filter(t => {
     const matchAgence = agenceFilter==="global" || t.fields?.Agence===AGENCE_VERS_AIRTABLE[agenceFilter];
     const matchStatut = statutFilter==="tous" ? t.fields?.Statut !== "Terminé" : (statutFilter==="devis" ? ["Devis à faire","Devis envoyé","Devis - Suivi","Devis - Attente fournisseur","Devis refusé"].includes(t.fields?.Statut) : t.fields?.Statut===statutFilter) || (!t.fields?.Statut&&statutFilter==="Nouveau");
@@ -1663,6 +1723,13 @@ function Dashboard({ agenceAccess, onClose }) {
           ticket={modalAnnulation}
           onClose={() => setModalAnnulation(null)}
           onConfirm={confirmerAnnulation}
+        />
+      )}
+      {modalSuppression && (
+        <ModalSuppression
+          ticket={modalSuppression}
+          onClose={() => setModalSuppression(null)}
+          onConfirm={confirmerSuppression}
         />
       )}
       {modalDevis && (
@@ -1801,7 +1868,7 @@ function Dashboard({ agenceAccess, onClose }) {
               <div style={{textAlign:"center",padding:"60px",color:C.muted,border:"1px dashed "+C.border,borderRadius:"12px"}}>Aucun ticket trouvé</div>
             )}
             <div style={{display:"flex",flexDirection:"column",gap:"8px"}}>
-              {sorted.map(t => <TicketRow key={t.id} t={t} onStatusChange={updateStatus} onAnnuler={setModalAnnulation} onRenvoyerMail={renvoyerMailTechnicien} onRenvoyerMailClient={renvoyerMailClient} onDevis={setModalDevis} onRepondreClient={repondreClient} onMarquerLu={marquerMessageLu} isMessagePanelOpen={openMessageTicketId===t.id} onToggleMessagePanel={() => setOpenMessageTicketId(prev => prev===t.id ? null : t.id)} onCloseMessagePanel={() => setOpenMessageTicketId(null)} onRefreshTicket={rafraichirTicketMessage}/>)}
+              {sorted.map(t => <TicketRow key={t.id} t={t} onStatusChange={updateStatus} onAnnuler={setModalAnnulation} onSupprimer={setModalSuppression} onRenvoyerMail={renvoyerMailTechnicien} onRenvoyerMailClient={renvoyerMailClient} onDevis={setModalDevis} onRepondreClient={repondreClient} onMarquerLu={marquerMessageLu} isMessagePanelOpen={openMessageTicketId===t.id} onToggleMessagePanel={() => setOpenMessageTicketId(prev => prev===t.id ? null : t.id)} onCloseMessagePanel={() => setOpenMessageTicketId(null)} onRefreshTicket={rafraichirTicketMessage}/>)}
             </div>
           </div>
         )}
@@ -1844,7 +1911,8 @@ function Dashboard({ agenceAccess, onClose }) {
           </button>
         </div>
       </div>
-      <style>{`@keyframes pulse{0%,100%{transform:scale(1);}50%{transform:scale(1.08);}}`}</style>
+      <style>{`@keyframes pulse{0%,100%{transform:scale(1);}50%{transform:scale(1.08);}}
+@keyframes clignoteUrgent{0%,100%{opacity:1;}50%{opacity:0.35;}}`}</style>
     </div>
   );
 }
