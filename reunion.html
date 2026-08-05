@@ -182,18 +182,29 @@
     { id: 'toise', nom: 'Toise', endpoint: '/api/chat-metreur', role: 'métreur', voiceId: 'ErXwobaYiN019PkySvjV' },
   ];
 
+  // Ordre professionnel du tour de table : les 3 assistants terrain
+  // remontent d'abord chacun leur tour, IKO cloture toujours en dernier en
+  // faisant la synthese de ce qu'ils viennent de dire (c'est le meneur de
+  // reunion, pas un 4e avis independant).
+  const ORDRE_REUNION = ['amandine', 'max', 'toise', 'iko'];
+
   // Detecte si la question commence par le prenom d'un assistant (adressage
   // direct, ex: "Max, tu en es ou ?") pour ne faire repondre que lui.
   function detecterDestinataires(question) {
     const debut = question.trim().toLowerCase().replace(/^[,;:.!?\s]+/, '');
     const cible = ASSISTANTS.find(a => debut.startsWith(a.nom.toLowerCase()));
     if (cible) return [cible];
-    return ASSISTANTS;
+    return ORDRE_REUNION.map(id => ASSISTANTS.find(a => a.id === id));
   }
 
-  function corpsRequete(assistantId, question) {
+  function corpsRequete(assistantId, question, rapportsPrecedents) {
     if (assistantId === 'iko') {
-      return { message: question, tickets: [], agenceActuelle: 'global', historique: [], reunion: true };
+      const question_iko = rapportsPrecedents && rapportsPrecedents.length
+        ? "Voici ce qui vient d'etre remonte en reunion par Amandine, Max et Toise :\n\n" +
+          rapportsPrecedents.map(r => r.nom.toUpperCase() + " : " + r.texte).join("\n\n") +
+          "\n\nStephane a demande : \"" + question + "\"\n\nFais la synthese de ce qui remonte, en tant que meneur de reunion. Si un probleme a ete signale, propose une piste d'action concrete. Ne redemande pas aux autres de repeter, base-toi sur ce qu'ils viennent de dire."
+        : question;
+      return { message: question_iko, tickets: [], agenceActuelle: 'global', historique: [], reunion: true };
     }
     if (assistantId === 'max') {
       return { message: question, tickets: [], ongletActuel: 'aujourd_hui', historique: [], historiqueClient: null, reunion: true };
@@ -211,13 +222,9 @@
     return data.reponse || null;
   }
 
-  // File d'attente vocale : une seule voix a la fois, jamais de
-  // chevauchement, meme si plusieurs assistants ont fini de reflechir en
-  // meme temps.
-  let fileVocale = Promise.resolve();
-  function directOraliser(assistant, texte) {
-    fileVocale = fileVocale.then(() => oraliser(assistant, texte));
-  }
+  // Lecture vocale d'une reponse. Utilisee de facon sequentielle (await)
+  // dans lancerTourDeTable : chaque assistant termine de parler avant que
+  // le suivant ne prenne la parole.
   function oraliser(assistant, texte) {
     if (!texte) return Promise.resolve();
     return new Promise(async (resolve) => {
@@ -240,14 +247,14 @@
     });
   }
 
-  async function interrogerAssistant(assistant, question) {
+  async function interrogerAssistant(assistant, question, rapportsPrecedents) {
     const sphere = document.getElementById('sphere-' + assistant.id);
     sphere.classList.add('reflechit');
     try {
       const r = await fetch(assistant.endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(corpsRequete(assistant.id, question)),
+        body: JSON.stringify(corpsRequete(assistant.id, question, rapportsPrecedents)),
       });
       const data = await r.json();
       sphere.classList.remove('reflechit');
@@ -295,16 +302,25 @@
     fil.scrollIntoView({ behavior: 'smooth', block: 'end' });
 
     const destinataires = detecterDestinataires(question);
+    const estUneReunionComplete = destinataires.length > 1;
+    const rapports = [];
 
-    // Les assistants concernes repondent en parallele, chacun affiche des
-    // qu'il est pret, puis prend la parole (voix) l'un apres l'autre dans
-    // l'ordre ou ils ont fini de reflechir.
-    destinataires.forEach(async (assistant) => {
-      const reponse = await interrogerAssistant(assistant, question);
+    // Tour de table strictement sequentiel : chacun attend que le
+    // precedent ait fini de repondre ET de parler avant de prendre la
+    // parole a son tour. Comme dans une vraie reunion, personne ne coupe
+    // personne. IKO, s'il est dans le tour, cloture toujours en dernier
+    // avec la synthese de ce que les autres viennent de dire.
+    for (const assistant of destinataires) {
+      const reponse = await interrogerAssistant(
+        assistant,
+        question,
+        assistant.id === 'iko' ? rapports : null
+      );
       const bulle = ajouterBulleReponse(assistant, reponse);
       bulle.scrollIntoView({ behavior: 'smooth', block: 'end' });
-      directOraliser(assistant, reponse);
-    });
+      if (reponse) rapports.push({ nom: assistant.nom, texte: reponse });
+      await oraliser(assistant, reponse);
+    }
 
     boutonEnvoyer.disabled = false;
   }
