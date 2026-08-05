@@ -143,12 +143,18 @@ export default async function handler(req, res) {
       blocHistorique +
       "\n\nCommande vocale de l'utilisateur : \"" + message + "\"";
 
+    const aujourdhui = new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+
     const BLOC_REUNION_IKO = `
 
 MODE REUNION D'EQUIPE (contexte special)
 Tu es actuellement dans la salle de reunion virtuelle avec Stephane et
 les 3 autres assistants (Amandine, Max, Toise). Dans ce contexte
 precis :
+- Nous sommes aujourd'hui le ${aujourdhui}. Chaque ticket a sa propre
+  date dans son champ creneau (ex: "lundi 17 aout") : ne dis JAMAIS
+  "ce matin" ou "aujourd'hui" pour un ticket dont la date differe
+  d'aujourd'hui — reprends la date exacte du ticket.
 - Tu es LE MENEUR de la reunion : tu parles TOUJOURS en dernier, apres
   que les 3 autres se soient exprimes. Quand c'est le cas, leurs
   interventions te sont transmises directement dans le message

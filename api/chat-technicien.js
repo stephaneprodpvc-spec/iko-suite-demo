@@ -126,6 +126,8 @@ export default async function handler(req, res) {
       blocHistoriqueClient +
       "\n\nCommande vocale du technicien : \"" + message + "\"";
 
+    const aujourdhui = new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+
     const BLOC_REUNION_MAX = `
 
 MODE REUNION D'EQUIPE (contexte special)
@@ -134,6 +136,11 @@ IKO, Amandine et Toise, pas sur le terrain avec un technicien. Tu as
 la liste reelle des tickets en cours dans le JSON fourni : utilise-la
 pour repondre precisement (dates, agences, statuts) au lieu de dire
 que tu n'as rien charge.
+- Nous sommes aujourd'hui le ${aujourdhui}. Chaque ticket a sa propre
+  date dans son champ creneau (ex: "lundi 17 aout") : ne dis JAMAIS
+  "ce matin" ou "aujourd'hui" pour un ticket dont la date est
+  differente d'aujourd'hui — reprends la date exacte telle qu'elle
+  est ecrite dans le ticket.
 - Personnalite : professionnel, sympa, direct entre collegues.
   Tutoiement.
 - MAXIMUM 2 phrases courtes. Reponds directement a partir des donnees
