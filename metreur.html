@@ -2067,6 +2067,7 @@ function FicheMetre({ agenceAccess, ficheInit, onBack }) {
           couleur: i.couleur || "",
           vitrage: i.vitrage || "",
           note: i.note || "",
+          suspect: !!i._suspect,
         };
         // Ensemble composé dicté : traduit meneaux/traverses/zones vers le
         // format attendu par le configurateur graphique existant.
@@ -2087,7 +2088,7 @@ function FicheMetre({ agenceAccess, ficheInit, onBack }) {
         const i = a.input;
         setOuvertures(prev => prev.map(o => {
           if (o.repere !== i.repere) return o;
-          const maj = { ...o };
+          const maj = { ...o, suspect: !!i._suspect };
           ['largeur', 'hauteur', 'couleur', 'vitrage', 'type', 'pose', 'note'].forEach(champ => {
             if (i[champ] !== undefined && i[champ] !== null && i[champ] !== "") maj[champ] = i[champ];
           });
@@ -2130,6 +2131,45 @@ function FicheMetre({ agenceAccess, ficheInit, onBack }) {
     setToiseEnCours(false);
   };
 
+  // Analyse rapide de qualite (nettete + luminosite) sur une petite version
+  // de l'image, pour avertir avant envoi si la photo risque d'etre
+  // illisible (flou, trop sombre, surexposee) plutot que de laisser Toise
+  // se planter en silence ou halluciner une mesure.
+  const analyserQualitePhoto = (canvas) => {
+    const taille = 150;
+    const petit = document.createElement('canvas');
+    petit.width = taille; petit.height = taille;
+    const pctx = petit.getContext('2d');
+    pctx.drawImage(canvas, 0, 0, taille, taille);
+    const data = pctx.getImageData(0, 0, taille, taille).data;
+
+    const gris = new Float32Array(taille * taille);
+    let sommeLum = 0;
+    for (let i = 0; i < taille * taille; i++) {
+      const l = 0.299 * data[i * 4] + 0.587 * data[i * 4 + 1] + 0.114 * data[i * 4 + 2];
+      gris[i] = l;
+      sommeLum += l;
+    }
+    const luminositeMoyenne = sommeLum / (taille * taille);
+
+    let sommeVar = 0, n = 0;
+    for (let y = 1; y < taille - 1; y++) {
+      for (let x = 1; x < taille - 1; x++) {
+        const idx = y * taille + x;
+        const lap = 4 * gris[idx] - gris[idx - 1] - gris[idx + 1] - gris[idx - taille] - gris[idx + taille];
+        sommeVar += lap * lap;
+        n++;
+      }
+    }
+    const nettete = sommeVar / n;
+
+    const alertes = [];
+    if (luminositeMoyenne < 45) alertes.push("Photo trop sombre");
+    else if (luminositeMoyenne > 235) alertes.push("Photo surexposée");
+    if (nettete < 80) alertes.push("Photo floue");
+    return { ok: alertes.length === 0, alertes };
+  };
+
   const compresserPhoto = (fichier) => new Promise((resolve, reject) => {
     const img = new Image();
     const lecteurTemp = new FileReader();
@@ -2144,7 +2184,8 @@ function FicheMetre({ agenceAccess, ficheInit, onBack }) {
         canvas.height = Math.round(img.height * echelle);
         const ctx = canvas.getContext('2d');
         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-        resolve(canvas.toDataURL('image/jpeg', 0.75));
+        const qualite = analyserQualitePhoto(canvas);
+        resolve({ dataUrl: canvas.toDataURL('image/jpeg', 0.75), qualite });
       };
       img.onerror = reject;
       img.src = lecteurTemp.result;
@@ -2153,14 +2194,26 @@ function FicheMetre({ agenceAccess, ficheInit, onBack }) {
     lecteurTemp.readAsDataURL(fichier);
   });
 
+  const [toiseAlerteQualite, setToiseAlerteQualite] = React.useState(null);
+  const [toisePhotoEnAttente, setToisePhotoEnAttente] = React.useState(null);
+
   const capturerPhotoToise = async (fichier) => {
     if (!fichier) return;
     try {
-      const base64 = await compresserPhoto(fichier);
-      setToisePhoto(base64);
+      const { dataUrl, qualite } = await compresserPhoto(fichier);
+      if (!qualite.ok) {
+        // Ne bloque pas : previent et laisse le metreur decider (souvent
+        // pressé sur chantier, une fausse alerte ne doit pas lui forcer
+        // une reprise de photo inutile).
+        setToisePhoto(dataUrl);
+        setToisePhotoEnAttente({ dataUrl, texte: toiseTexte.trim() });
+        setToiseAlerteQualite(qualite.alertes.join(" · "));
+        return;
+      }
+      setToisePhoto(dataUrl);
       debloquerVoixIOS();
       const texteAccompagnant = toiseTexte.trim();
-      envoyerToise(texteAccompagnant, base64);
+      envoyerToise(texteAccompagnant, dataUrl);
       setToiseTexte("");
     } catch (e) {
       setToiseErreur("Impossible de traiter la photo. Réessayez.");
@@ -2379,6 +2432,26 @@ function FicheMetre({ agenceAccess, ficheInit, onBack }) {
           {toiseEcoute ? "Je vous écoute..." : toiseEnCours ? "..." : toiseDernier ? toiseDernier : "Dictez à Toise : \"Fenêtre P1, 120 par 100, blanc, double vitrage\"..."}
         </div>
         {toiseErreur && <div style={{color:"#DC2626",fontSize:"12px",marginTop:"10px"}}>{toiseErreur}</div>}
+        {toiseAlerteQualite && (
+          <div style={{marginTop:"12px",width:"90%",maxWidth:"380px",background:"rgba(220,38,38,0.1)",border:"1px solid rgba(220,38,38,0.35)",borderRadius:"10px",padding:"10px 14px"}}>
+            <div style={{color:"#DC2626",fontSize:"12px",fontWeight:"700"}}>⚠️ {toiseAlerteQualite}</div>
+            <div style={{color:"#999",fontSize:"11px",marginTop:"2px"}}>La lecture de la mesure risque d'être imprécise.</div>
+            <div style={{display:"flex",gap:"8px",marginTop:"8px"}}>
+              <button onClick={() => {
+                setToiseAlerteQualite(null);
+                debloquerVoixIOS();
+                if (toisePhotoEnAttente) envoyerToise(toisePhotoEnAttente.texte, toisePhotoEnAttente.dataUrl);
+                setToisePhotoEnAttente(null);
+                setToiseTexte("");
+              }} style={{flex:1,padding:"9px",background:"#DC2626",border:"none",color:"#fff",borderRadius:"7px",fontSize:"11px",fontWeight:"800",cursor:"pointer"}}>Envoyer quand même</button>
+              <button onClick={() => {
+                setToiseAlerteQualite(null);
+                setToisePhotoEnAttente(null);
+                setToisePhoto(null);
+              }} style={{flex:1,padding:"9px",background:"transparent",border:"1px solid #666",color:"#ccc",borderRadius:"7px",fontSize:"11px",fontWeight:"800",cursor:"pointer"}}>Reprendre la photo</button>
+            </div>
+          </div>
+        )}
 
         <div style={{marginTop:"26px",width:"90%",maxWidth:"380px",display:"flex",gap:"8px"}}>
           <input id="toisePhotoInput" type="file" accept="image/*" capture="environment" style={{display:"none"}}
@@ -2480,10 +2553,13 @@ function FicheMetre({ agenceAccess, ficheInit, onBack }) {
         {ouvertures.map((o, i) => {
           const nz = zonesRecap(o).length;
           return (
-            <div key={i} style={{background:C.card,border:"1px solid "+C.border,borderRadius:"10px",padding:"10px 14px",display:"flex",alignItems:"center",gap:"12px"}}>
+            <div key={i} style={{background:C.card,border:"1px solid "+(o.suspect?"#DC2626":C.border),borderRadius:"10px",padding:"10px 14px",display:"flex",alignItems:"center",gap:"12px"}}>
               <IconOuverture type={o.type} active={true} size={34}/>
               <div style={{flex:1,minWidth:0}}>
-                <div style={{fontSize:"12px",fontWeight:"800",color:C.white}}>{o.repere}</div>
+                <div style={{fontSize:"12px",fontWeight:"800",color:C.white,display:"flex",alignItems:"center",gap:"6px"}}>
+                  {o.repere}
+                  {o.suspect && <span style={{fontSize:"9px",fontWeight:"800",color:"#DC2626",background:"rgba(220,38,38,0.12)",border:"1px solid rgba(220,38,38,0.3)",borderRadius:"5px",padding:"2px 6px"}}>⚠️ À VÉRIFIER</span>}
+                </div>
                 <div style={{fontSize:"11px",color:C.muted}}>
                   {o.type} · {o.materiau}{o.pose ? " · " + o.pose : ""} · {o.largeur||"—"}×{o.hauteur||"—"} mm
                   {nz > 1 ? " · " + nz + " zones" : ""}{o.couleur ? " · " + o.couleur : ""}

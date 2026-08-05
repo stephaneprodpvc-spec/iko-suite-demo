@@ -13,6 +13,35 @@ const MAX_CHARS_MESSAGE = 600;
 const MAX_TAILLE_IMAGE = 5_000_000; // ~5 Mo en base64
 
 const TYPES_VALIDES = ["Fixe", "Fenêtre", "Porte-fenêtre", "Coulissant", "Porte", "Volet roulant", "Portail", "Véranda", "Ensemble composé", "Autre"];
+
+// Bornes de plausibilite (mm) par type d'ouverture, pour detecter une
+// mesure probablement fausse (erreur de lecture photo, virgule mal placee,
+// confusion cm/mm...) sans jamais bloquer la saisie : on avertit seulement.
+const BORNES_PLAUSIBILITE = {
+  "Fixe":              { largeur: [300, 3000],  hauteur: [300, 3000] },
+  "Fenêtre":           { largeur: [300, 2000],  hauteur: [300, 2500] },
+  "Porte-fenêtre":     { largeur: [600, 2400],  hauteur: [1800, 2600] },
+  "Coulissant":        { largeur: [800, 6000],  hauteur: [800, 2600] },
+  "Porte":             { largeur: [600, 1200],  hauteur: [1800, 2400] },
+  "Volet roulant":     { largeur: [300, 3000],  hauteur: [300, 2500] },
+  "Portail":           { largeur: [2000, 8000], hauteur: [800, 2500] },
+  "Véranda":           { largeur: [1000, 8000], hauteur: [1800, 3500] },
+  "Ensemble composé":  { largeur: [500, 10000], hauteur: [500, 4000] },
+  "Autre":             { largeur: [100, 10000], hauteur: [100, 5000] },
+};
+
+function verifierPlausibilite(type, largeur, hauteur) {
+  const bornes = BORNES_PLAUSIBILITE[type];
+  if (!bornes || !largeur || !hauteur) return null;
+  const alertes = [];
+  if (largeur < bornes.largeur[0] || largeur > bornes.largeur[1]) {
+    alertes.push("largeur " + largeur + " mm inhabituelle pour un " + type.toLowerCase());
+  }
+  if (hauteur < bornes.hauteur[0] || hauteur > bornes.hauteur[1]) {
+    alertes.push("hauteur " + hauteur + " mm inhabituelle pour un " + type.toLowerCase());
+  }
+  return alertes.length ? alertes.join(", ") : null;
+}
 const REMPLISSAGES_VALIDES = ["Fixe", "Ouvrant à la française gauche", "Ouvrant à la française droite", "Oscillo-battant gauche", "Oscillo-battant droite", "Coulissant", "Porte gauche", "Porte droite", "Soufflet"];
 const POSES_VALIDES = ["Rénovation totale", "Rénovation partielle", "Neuf en applique", "Neuf en tunnel"];
 
@@ -291,16 +320,27 @@ IKO, Amandine et Max, pas sur un chantier avec un metreur.
 
     let texteReponse = "";
     const actions = [];
+    const alertesPlausibilite = [];
     for (const appel of appelsOutils) {
       if (appel.name === "reponse_vocale") {
         texteReponse = String(appel.input?.message || "").slice(0, 300);
       } else {
+        if ((appel.name === "ajouter_ouverture" || appel.name === "modifier_ouverture") && appel.input?.largeur && appel.input?.hauteur) {
+          const alerte = verifierPlausibilite(appel.input.type, appel.input.largeur, appel.input.hauteur);
+          if (alerte) {
+            appel.input._suspect = true;
+            alertesPlausibilite.push((appel.input.repere || "cette ouverture") + " : " + alerte);
+          }
+        }
         actions.push(appel);
       }
     }
     if (!texteReponse) {
       const texteBrut = blocs.filter(b => b.type === "text").map(b => b.text || "").join(" ").trim();
       texteReponse = texteBrut || "C'est noté.";
+    }
+    if (alertesPlausibilite.length) {
+      texteReponse += " Attention, à vérifier : " + alertesPlausibilite.join(" ; ") + ".";
     }
 
     return res.status(200).json({ actions, reponse: texteReponse });
