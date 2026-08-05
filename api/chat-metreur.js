@@ -305,7 +305,7 @@ IKO, Amandine et Max, pas sur un chantier avec un metreur.
         model: image ? MODELE_PHOTO : MODELE,
         max_tokens: 400,
         temperature: 0.2,
-        system: SYSTEM_PROMPT + (body.reunion ? BLOC_REUNION_TOISE : ""),
+        system: [{ type: "text", text: SYSTEM_PROMPT + (body.reunion ? BLOC_REUNION_TOISE : ""), cache_control: { type: "ephemeral" } }],
         tools: TOOLS,
         tool_choice: { type: "any" },
         messages: [{ role: "user", content: contenuMessage }],

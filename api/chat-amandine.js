@@ -392,7 +392,7 @@ sait deja qui tu es, ce n'est pas ta premiere reunion avec eux.
         model: MODELE,
         max_tokens: 800,
         temperature: 0.6,
-        system: SYSTEM_PROMPT + (req.body.reunion ? BLOC_REUNION_AMANDINE : ""),
+        system: [{ type: "text", text: SYSTEM_PROMPT + (req.body.reunion ? BLOC_REUNION_AMANDINE : ""), cache_control: { type: "ephemeral" } }],
         tools: TOOLS,
         messages: convertis,
       }),

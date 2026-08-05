@@ -191,7 +191,7 @@ precis :
         model: MODELE,
         max_tokens: 500,
         temperature: 0.3,
-        system: SYSTEM_PROMPT + (body.reunion ? BLOC_REUNION_IKO : ""),
+        system: [{ type: "text", text: SYSTEM_PROMPT + (body.reunion ? BLOC_REUNION_IKO : ""), cache_control: { type: "ephemeral" } }],
         tools: TOOLS,
         tool_choice: { type: "any" },
         messages: [{ role: "user", content: messageUtilisateur }],

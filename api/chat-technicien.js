@@ -169,7 +169,7 @@ du ticket telle qu'elle est ecrite.
         model: MODELE,
         max_tokens: 400,
         temperature: 0.3,
-        system: SYSTEM_PROMPT + (body.reunion ? BLOC_REUNION_MAX : ""),
+        system: [{ type: "text", text: SYSTEM_PROMPT + (body.reunion ? BLOC_REUNION_MAX : ""), cache_control: { type: "ephemeral" } }],
         tools: TOOLS,
         tool_choice: { type: "any" },
         messages: [{ role: "user", content: messageUtilisateur }],
