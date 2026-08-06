@@ -459,7 +459,7 @@ function ModalRdv({ agenceAccess, onClose, onSuccess }) {
           "e-mail": emailFinal || "aucun@rsia.fr",
           adresse: adresseComplete, produit: form.produit, probleme: form.probleme,
           creneau: dateLabel + ' — ' + new Date(form.date + 'T12:00:00').toLocaleDateString('fr-FR', {weekday:'long',day:'numeric',month:'long'}),
-          garantie: garantieTexte, facture: form.facture, urgent: urgentTexte, photos: '', planningId
+          garantie: garantieTexte, facture: form.facture, urgent: urgentTexte, photos: '', planningId, source: 'telephone'
         })
       });
       onSuccess(num);
