@@ -57,7 +57,8 @@ export default async function handler(req, res) {
     }
   }
   const qs = params.toString();
-  const airtableUrl = 'https://api.airtable.com/v0/app1AcRl9r6vB7W6e/' + encodedSubPath + (qs ? '?' + qs : '');
+  const baseId = process.env.AIRTABLE_BASE_ID || 'appkI8RKHkYNWY86U'; // base démo Iko Suite
+  const airtableUrl = 'https://api.airtable.com/v0/' + baseId + '/' + encodedSubPath + (qs ? '?' + qs : '');
 
   const init = {
     method: req.method,
