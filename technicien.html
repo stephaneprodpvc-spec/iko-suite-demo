@@ -630,8 +630,9 @@ function ItineraireModal({ agence, tickets, onClose }) {
   );
 }
 
-function TicketCard({ ticket, onAction }) {
+function TicketCard({ ticket, onAction, onAcquitterRdv }) {
   const urgent = ticket.fields?.Qualification === "Oui";
+  const rdvModifie = ticket.fields?.["RDV modifié - notif technicien"] === true;
   const statut = ticket.fields?.Statut || "Nouveau";
   const commentaire = ticket.fields?.Commentaire;
   const diagnostic = ticket.fields?.Diagnostic;
@@ -649,6 +650,7 @@ function TicketCard({ ticket, onAction }) {
         <div style={{display:"flex",alignItems:"center",gap:"8px",flexWrap:"wrap"}}>
           <span style={{fontSize:"11px",fontWeight:"900",color:C.or,fontFamily:"monospace"}}>{ticket.fields?.Name}</span>
           {urgent && <span style={{background:C.rougeDim,color:C.rouge,fontSize:"9px",fontWeight:"700",padding:"2px 7px",borderRadius:"20px",animation:"clignoteUrgent 1.1s ease-in-out infinite"}}>URGENT</span>}
+          {rdvModifie && <span onClick={() => onAcquitterRdv && onAcquitterRdv(ticket)} title="Cliquer pour marquer comme vu" style={{background:C.rougeDim,color:C.rouge,fontSize:"9px",fontWeight:"700",padding:"2px 7px",borderRadius:"20px",animation:"clignoteUrgent 1.1s ease-in-out infinite",cursor:"pointer"}}>📅 RDV MODIFIÉ — cliquer pour valider</span>}
           {isTermine && <span style={{background:C.vertDim,color:C.vert,fontSize:"9px",fontWeight:"700",padding:"2px 7px",borderRadius:"20px"}}>✅ TERMINÉ</span>}
           {isAnnule && <span style={{background:C.rougeDim,color:C.rouge,fontSize:"9px",fontWeight:"700",padding:"2px 7px",borderRadius:"20px"}}>❌ ANNULÉ</span>}
           {isDevisAFaire && <span style={{background:"rgba(0,26,66,0.1)",color:"#0D0D0D",fontSize:"9px",fontWeight:"700",padding:"2px 7px",borderRadius:"20px"}}>📋 DEVIS À FAIRE</span>}
@@ -771,6 +773,24 @@ function Technicien({ agence, onClose }) {
   };
 
   React.useEffect(() => { charger(); }, [agence]);
+
+  // Rafraîchissement auto : capte les RDV validés par le client (suivi.html)
+  // et les RDV ajoutés manuellement (même circuit, table Tickets SAV).
+  React.useEffect(() => {
+    const id = setInterval(charger, 30000);
+    return () => clearInterval(id);
+  }, [agence]);
+
+  const acquitterRdv = async (ticket) => {
+    setTickets(prev => prev.map(t => t.id===ticket.id ? {...t, fields:{...t.fields, "RDV modifié - notif technicien": false}} : t));
+    try {
+      await fetch('/api/airtable/Tickets%20SAV/'+ticket.id, {
+        method:'PATCH',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({fields:{"RDV modifié - notif technicien": false}})
+      });
+    } catch(e) { console.error(e); }
+  };
 
   const todayStr = new Date().toLocaleDateString('fr-FR');
   const todayLong = new Date().toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'});
@@ -1124,7 +1144,7 @@ function Technicien({ agence, onClose }) {
           </div>
         )}
         <div style={{display:"flex",flexDirection:"column",gap:"12px"}}>
-          {filtered.map(t => <TicketCard key={t.id} ticket={t} onAction={setSelectedTicket}/>)}
+          {filtered.map(t => <TicketCard key={t.id} ticket={t} onAction={setSelectedTicket} onAcquitterRdv={acquitterRdv}/>)}
         </div>
         {lastRefresh && <div style={{textAlign:"center",fontSize:"9px",color:C.muted,marginTop:"20px"}}>Dernière mise à jour : {lastRefresh}</div>}
       </div>
