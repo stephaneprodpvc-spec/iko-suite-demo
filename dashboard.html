@@ -408,7 +408,7 @@ function ModalRdv({ agenceAccess, onClose, onSuccess }) {
   const today = new Date().toISOString().split('T')[0];
   const [form, setForm] = React.useState({
     agence: agenceAccess !== "global" ? agenceAccess : AGENCES[0],
-    nom: "", tel: "", email: "", adresse: "", codePostal: "", ville: "",
+    nom: "", tel: "", email: "", sansEmail: false, adresse: "", codePostal: "", ville: "",
     produit: "Fenêtre", probleme: PROBLEMES["Fenêtre"][0].l,
     date: today, creneau: "Matin (8h30 — 12h00)",
     garantie: false, facture: "", notes: ""
@@ -432,6 +432,7 @@ function ModalRdv({ agenceAccess, onClose, onSuccess }) {
     }
     setSaving(true); setError("");
     try {
+      const emailFinal = form.sansEmail ? "" : form.email;
       const adresseComplete = form.adresse.trim() + (form.codePostal || form.ville ? ', ' + form.codePostal + ' ' + form.ville : '');
       const num = 'SAV-' + new Date().getFullYear() + '-' + (Math.floor(Math.random()*9000)+1000);
       const dateLabel = form.creneau === "Matin (8h30 — 12h00)" ? "Matin (8h30 — 12h00)" : "Après-midi (13h00 — 17h00)";
@@ -455,7 +456,7 @@ function ModalRdv({ agenceAccess, onClose, onSuccess }) {
         body: JSON.stringify({
           marque: 'iko',
           ticket: num, agence: AGENCE_VERS_AIRTABLE[form.agence] || form.agence, nom: form.nom, tel: form.tel,
-          "e-mail": form.email || "aucun@rsia.fr",
+          "e-mail": emailFinal || "aucun@rsia.fr",
           adresse: adresseComplete, produit: form.produit, probleme: form.probleme,
           creneau: dateLabel + ' — ' + new Date(form.date + 'T12:00:00').toLocaleDateString('fr-FR', {weekday:'long',day:'numeric',month:'long'}),
           garantie: garantieTexte, facture: form.facture, urgent: urgentTexte, photos: '', planningId
@@ -491,8 +492,18 @@ function ModalRdv({ agenceAccess, onClose, onSuccess }) {
           <div><label style={labelStyle}>Nom et prénom *</label><input placeholder="Jean Dupont" value={form.nom} onChange={e => set("nom",e.target.value)}/></div>
           <div><label style={labelStyle}>Téléphone *</label><input placeholder="06 12 34 56 78" value={form.tel} onChange={e => set("tel",e.target.value)}/></div>
         </div>
+        <div style={{marginBottom:"10px",display:"flex",alignItems:"center",gap:"8px"}}>
+          <input type="checkbox" id="sansEmail" checked={form.sansEmail} onChange={e => set("sansEmail", e.target.checked)} style={{width:"16px",height:"16px",cursor:"pointer"}}/>
+          <label htmlFor="sansEmail" style={{fontSize:"12px",color:C.muted,cursor:"pointer"}}>Client sans email / internet (RDV téléphone uniquement)</label>
+        </div>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"10px",marginBottom:"14px"}}>
-          <div><label style={labelStyle}>Email</label><input placeholder="jean@gmail.com" value={form.email} onChange={e => set("email",e.target.value)}/></div>
+          <div>
+            <label style={labelStyle}>Email</label>
+            {form.sansEmail
+              ? <div style={{fontSize:"12px",color:C.muted,padding:"10px 0"}}>— Aucun email (le ticket sera confirmé par téléphone) —</div>
+              : <input placeholder="jean@gmail.com" value={form.email} onChange={e => set("email",e.target.value)}/>
+            }
+          </div>
           <div><label style={labelStyle}>Adresse (n° et rue) *</label><input placeholder="12 rue des Lilas" value={form.adresse} onChange={e => set("adresse",e.target.value)}/></div>
         </div>
         <div style={{display:"grid",gridTemplateColumns:"1fr 2fr",gap:"10px",marginBottom:"14px"}}>
