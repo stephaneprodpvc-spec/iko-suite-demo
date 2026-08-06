@@ -23,15 +23,8 @@ const DELAI_MIN_JOURS = 7;
 
 const AGENCES_VALIDES = ["Agence 1", "Agence 3", "Agence 2", "Agence 4"];
 
-// La base Airtable garde les vrais noms d'agence en interne. Ce mapping
-// traduit les labels generiques (Agence 1-4) vers les vraies valeurs
-// stockees, pour que les requetes Airtable fonctionnent reellement.
-const AGENCE_VERS_AIRTABLE = {
-  "Agence 1": "Ibos (65)",
-  "Agence 2": "Tarnos (40)",
-  "Agence 3": "Lescar (64)",
-  "Agence 4": "Saint-Gaudens (31)",
-};
+// Démo : la base utilise directement les libellés génériques Agence 1-4,
+// pas besoin de traduction vers un nom réel d'agence.
 
 const CRENEAUX = {
     matin: "Matin (8h30 — 12h00)",
@@ -188,7 +181,7 @@ async function executerOutil(nom, input) {
       if (!AGENCES_VALIDES.includes(input.agence) || !valeurCreneau) {
         return { erreur: "Agence ou periode invalide." };
       }
-      const agenceAirtable = AGENCE_VERS_AIRTABLE[input.agence];
+      const agenceAirtable = input.agence;
       const formule = "AND({Agence}=\"" + agenceAirtable + "\",{Créneau}=\"" + valeurCreneau + "\",{Statut}=\"Libre\")";
       const url = "https://api.airtable.com/v0/" + AIRTABLE_BASE + "/Planning?filterByFormula=" + encodeURIComponent(formule) + "&sort[0][field]=Date&sort[0][direction]=asc&maxRecords=60";
       const r = await fetch(url, { headers: airtableHeaders() });
@@ -235,7 +228,7 @@ async function executerOutil(nom, input) {
     const payload = {
       marque: "iko",
       ticket: numero,
-      agence: AGENCE_VERS_AIRTABLE[input.agence] || input.agence,
+      agence: input.agence,
       nom: input.nom,
       tel: input.telephone,
       "e-mail": input.email,
