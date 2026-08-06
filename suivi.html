@@ -142,8 +142,10 @@ const CRENEAUX = [
 ];
 const DELAI_MIN_JOURS = 7;
 
-function ChangerDatePanel({ agenceVille, onChoisir, onFermer, appliqueEnCours }) {
-  const [typeCreneau, setTypeCreneau] = useState(null);
+function ChangerDatePanel({ agenceVille, onChoisir, onFermer, appliqueEnCours, periodePreremplie }) {
+  const preremplie = CRENEAUX.find(c => c.id === periodePreremplie) || null;
+  const [typeCreneau, setTypeCreneau] = useState(preremplie);
+  React.useEffect(() => { if (preremplie) charger(preremplie); }, []);
   const [dates, setDates] = useState([]);
   const [loadingDates, setLoadingDates] = useState(false);
 
@@ -302,6 +304,15 @@ function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'message_client', ticket: ticket.fields?.Name, message: texteMessage })
       }).catch(() => {});
+
+      // Detection auto d'intention (changement de date) : best-effort, ne bloque pas
+      // l'UI. En cas de reussite, une proposition est ecrite dans "Reponse agence"
+      // et signalee par "Proposition auto en attente" (relu au prochain rafraichissement).
+      fetch('/api/detecter-demande-client', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ticketId: ticket.id, texte: texteMessage, agence: ticket.fields?.Agence, creneauActuel: ticket.fields?.Créneau })
+      }).catch(() => {});
     } catch (e) {
       setEnvoi('err');
     }
@@ -359,10 +370,10 @@ function App() {
       const resp = await fetch('/api/airtable/Tickets%20SAV/' + ticket.id, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fields: { Créneau: nouveauCreneau, PlanningID: nouvelleId, Statut: 'Nouveau' } })
+        body: JSON.stringify({ fields: { Créneau: nouveauCreneau, PlanningID: nouvelleId, Statut: 'Nouveau', "Proposition auto en attente": false, "RDV modifié - notif technicien": true } })
       });
       if (!resp.ok) throw new Error('patch failed');
-      setTicket(prev => ({ ...prev, fields: { ...prev.fields, Créneau: nouveauCreneau, PlanningID: nouvelleId, Statut: 'Nouveau' } }));
+      setTicket(prev => ({ ...prev, fields: { ...prev.fields, Créneau: nouveauCreneau, PlanningID: nouvelleId, Statut: 'Nouveau', "Proposition auto en attente": false } }));
       setShowChanger(false);
       setChangeOk(true);
     } catch (e) {
@@ -458,6 +469,11 @@ function App() {
 
                 {changeOk && <div style={{marginBottom:"10px",fontSize:"12px",color:F.vert,background:F.vertClair,borderRadius:"8px",padding:"8px 10px"}}>✅ Nouvelle date d'intervention confirmée.</div>}
                 {changeErr && <div style={{marginBottom:"10px",fontSize:"12px",color:F.rouge,background:F.rougeClair,borderRadius:"8px",padding:"8px 10px"}}>⚠️ Erreur, réessayez.</div>}
+                {ticket.fields?.["Proposition auto en attente"] && !showChanger && (
+                  <div style={{marginBottom:"10px",fontSize:"12px",color:F.marine,background:F.orClair,border:"1px solid "+F.or,borderRadius:"8px",padding:"10px 12px"}}>
+                    📅 Iko vous propose de nouvelles dates suite à votre message (voir la conversation ci-dessous). Cliquez sur « Changer la date d'intervention » pour choisir.
+                  </div>
+                )}
 
                 {!showChanger && !showAnnulerConfirm && (
                   <div style={{display:"flex",flexDirection:"column",gap:"8px"}}>
@@ -478,6 +494,7 @@ function App() {
                     onChoisir={appliquerNouvelleDate}
                     onFermer={() => setShowChanger(false)}
                     appliqueEnCours={changeEnCours}
+                    periodePreremplie={ticket.fields?.["Proposition auto en attente"] ? ticket.fields?.["Proposition auto créneau"] : null}
                   />
                 )}
 
