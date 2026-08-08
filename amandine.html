@@ -308,6 +308,39 @@
 <div class="mention">Assistant automatisé — pour un devis, un conseiller vous rappellera.</div>
 
 <script>
+window.IKO_CLIENT_ID = null;
+window.IKO_CLIENT_INFO = null;
+window.IKO_CLIENT_SLUG = null;
+window.IKO_CLIENT_READY = (async function () {
+  try {
+    var params = new URLSearchParams(window.location.search);
+    var slug = params.get('client');
+    if (slug) { localStorage.setItem('iko_client_slug', slug); }
+    else { slug = localStorage.getItem('iko_client_slug'); }
+    if (!slug) return null;
+    window.IKO_CLIENT_SLUG = slug;
+    var formule = encodeURIComponent('{Slug}="' + slug + '"');
+    var r = await fetch('/api/airtable/Clients?filterByFormula=' + formule + '&maxRecords=1', {});
+    var json = await r.json();
+    var rec = (json.records || [])[0];
+    if (!rec) return null;
+    window.IKO_CLIENT_ID = rec.id;
+    window.IKO_CLIENT_INFO = rec.fields || {};
+    var couleur = rec.fields && rec.fields["Couleur principale"];
+    var logo = rec.fields && rec.fields["Logo"] && rec.fields["Logo"][0] && rec.fields["Logo"][0].url;
+    var nom = rec.fields && rec.fields["Nom client"];
+    if (couleur) document.documentElement.style.setProperty('--orange', couleur);
+    var logoEl = document.querySelector('header .logo');
+    if (logoEl) {
+      if (logo) { logoEl.innerHTML = '<img src="' + logo + '" alt="" style="height:16px;display:block;">'; }
+      else if (nom) { logoEl.textContent = nom.slice(0, 3).toUpperCase(); }
+    }
+    var titreEl = document.querySelector('header .titre');
+    if (titreEl && nom) titreEl.textContent = 'Amandine — SAV ' + nom;
+    return rec.id;
+  } catch (e) { return null; }
+})();
+
 (function () {
   const fil = document.getElementById('fil');
   const saisie = document.getElementById('saisie');
@@ -379,7 +412,7 @@
       const reponse = await fetch('/api/chat-amandine', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: historique }),
+        body: JSON.stringify({ messages: historique, client_slug: window.IKO_CLIENT_SLUG || null }),
       });
       const data = await reponse.json();
       frappe.remove();
