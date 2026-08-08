@@ -46,10 +46,17 @@ STYLE
 - Direct, concret, professionnel. Pas de blabla commercial ni de
   formules creuses.
 
-DEUX MODES DE REPONSE
+TROIS MODES DE REPONSE
 1. Si Stephane decrit un nouveau client a creer (nom, metier, besoins) :
    appelle l'outil proposer_client avec les champs deduits.
-2. Sinon (question, discussion, avis, strategie) : reponds en texte libre,
+2. Si Stephane demande un devis (RSIA vers un prospect/client) : appelle
+   l'outil generer_devis. Structure toujours le devis en lignes claires
+   (ex: "Abonnement Iko Suite - forfait mensuel", "Mise en place et
+   parametrage", "Formation utilisateurs"). Ne facture QUE ce que Stephane
+   a mentionne. Si un prix n'est pas donne, mets 0 et dis-le dans
+   "message" pour qu'il le complete a la main - ne jamais inventer un
+   prix.
+3. Sinon (question, discussion, avis, strategie) : reponds en texte libre,
    naturellement, comme un collegue competent. Sois direct, concret, pas
    de blabla commercial.
 
@@ -84,6 +91,33 @@ const TOOLS = [
         message: { type: "string", description: "Une phrase courte confirmant la proposition." },
       },
       required: ["nom", "slug", "metier", "modules", "couleur_principale", "couleur_secondaire", "message"],
+    },
+  },
+  {
+    name: "generer_devis",
+    description: "Genere un devis structure de RSIA Conseil vers un prospect/client, a partir de la description de Stephane.",
+    input_schema: {
+      type: "object",
+      properties: {
+        client_nom: { type: "string", description: "Nom du destinataire du devis." },
+        client_adresse: { type: "string", description: "Adresse du destinataire, si connue. Vide sinon." },
+        objet: { type: "string", description: "Objet du devis, ex: Abonnement Iko Suite - Menuiserie Dupont." },
+        lignes: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              description: { type: "string" },
+              quantite: { type: "number" },
+              prix_unitaire: { type: "number", description: "En euros HT. Mettre 0 si Stephane n'a donne aucun prix : ne jamais inventer un prix." },
+            },
+            required: ["description", "quantite", "prix_unitaire"],
+          },
+        },
+        conditions: { type: "string", description: "Conditions (validite, paiement...). Valeur par defaut raisonnable si non precise." },
+        message: { type: "string", description: "Une phrase courte confirmant le devis genere, signalant si des prix sont a completer." },
+      },
+      required: ["client_nom", "objet", "lignes", "conditions", "message"],
     },
   },
 ];
@@ -144,11 +178,17 @@ export default async function handler(req, res) {
 
     const data = await reponse.json();
     const blocs = Array.isArray(data.content) ? data.content : [];
-    const appel = blocs.find(b => b.type === "tool_use" && b.name === "proposer_client");
+    const appelClient = blocs.find(b => b.type === "tool_use" && b.name === "proposer_client");
+    const appelDevis = blocs.find(b => b.type === "tool_use" && b.name === "generer_devis");
 
-    if (appel) {
-      appel.input.message = retirerEmojis(appel.input.message);
-      return res.status(200).json({ type: "proposition", proposition: appel.input });
+    if (appelClient) {
+      appelClient.input.message = retirerEmojis(appelClient.input.message);
+      return res.status(200).json({ type: "proposition", proposition: appelClient.input });
+    }
+
+    if (appelDevis) {
+      appelDevis.input.message = retirerEmojis(appelDevis.input.message);
+      return res.status(200).json({ type: "devis", devis: appelDevis.input });
     }
 
     const texteBrut = blocs.filter(b => b.type === "text").map(b => b.text || "").join(" ").trim();
