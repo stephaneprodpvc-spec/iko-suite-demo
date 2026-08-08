@@ -44,6 +44,30 @@ input:focus, select:focus, textarea:focus { border-color:rgba(218,178,57,0.5); }
     return _fetch(url, opts);
   };
 })();
+
+// Contexte multi-client : lit ?client=slug dans l'URL (ou le slug memorise
+// localement), va chercher sa fiche dans la table Clients, et expose son
+// id/ses champs globalement. Si aucun ?client= n'est present, se comporte
+// exactement comme avant (retro-compatible, aucune regression).
+window.IKO_CLIENT_ID = null;
+window.IKO_CLIENT_INFO = null;
+window.IKO_CLIENT_READY = (async function () {
+  try {
+    var params = new URLSearchParams(window.location.search);
+    var slug = params.get('client');
+    if (slug) { localStorage.setItem('iko_client_slug', slug); }
+    else { slug = localStorage.getItem('iko_client_slug'); }
+    if (!slug) return null;
+    var formule = encodeURIComponent('{Slug}="' + slug + '"');
+    var r = await fetch('/api/airtable/Clients?filterByFormula=' + formule + '&maxRecords=1', {});
+    var json = await r.json();
+    var rec = (json.records || [])[0];
+    if (!rec) return null;
+    window.IKO_CLIENT_ID = rec.id;
+    window.IKO_CLIENT_INFO = rec.fields || {};
+    return rec.id;
+  } catch (e) { return null; }
+})();
 </script>
 <script type="text/babel">
 
@@ -103,6 +127,16 @@ function appliquerConfigEntreprise(cfg) {
   C.orDim = hexVersRgba(CONFIG_ENTREPRISE.couleurAccent, 0.12);
   C.orBord = hexVersRgba(CONFIG_ENTREPRISE.couleurAccent, 0.3);
   C.jaune = CONFIG_ENTREPRISE.couleurAccent;
+}
+
+// Combine une formule Airtable existante avec le filtre "appartient au
+// client courant" (si un client est charge via ?client=slug). Retourne la
+// formule brute (non encodee), a passer ensuite a encodeURIComponent.
+function filtreAvecClient(baseFormula) {
+  if (!window.IKO_CLIENT_ID) return baseFormula;
+  var clause = 'FIND("' + window.IKO_CLIENT_ID + '", ARRAYJOIN({Compte client}))';
+  if (!baseFormula) return clause;
+  return 'AND(' + baseFormula + ',' + clause + ')';
 }
 
 const PRODUITS = ["Fenêtre","Coulissant","Volet roulant","Portail","Porte de garage","Véranda","Autre"];
@@ -1462,6 +1496,19 @@ function Dashboard({ agenceAccess, onClose }) {
         forcerRender(x => x + 1);
       })
       .catch(() => {});
+    // Si un client est charge (?client=slug), ses couleurs/logo prennent
+    // le pas sur la config demo generique ci-dessus.
+    window.IKO_CLIENT_READY.then(() => {
+      const info = window.IKO_CLIENT_INFO;
+      if (!info) return;
+      appliquerConfigEntreprise({
+        couleurAccent: info["Couleur principale"] || CONFIG_ENTREPRISE.couleurAccent,
+        logoUrl: (info["Logo"] && info["Logo"][0] && info["Logo"][0].url) || CONFIG_ENTREPRISE.logoUrl,
+        emailsTechnicien: CONFIG_ENTREPRISE.emailsTechnicien,
+        techniciens: CONFIG_ENTREPRISE.techniciens,
+      });
+      forcerRender(x => x + 1);
+    });
   }, []);
   const [showModalGestionDevis, setShowModalGestionDevis] = React.useState(false);
   const [showModalNotes, setShowModalNotes] = React.useState(false);
@@ -1502,7 +1549,10 @@ function Dashboard({ agenceAccess, onClose }) {
     isFetchingRef.current = true;
     setLoading(true);
     try {
-      let filter = agenceFilter !== "global" ? encodeURIComponent('{Agence}="'+AGENCE_VERS_AIRTABLE[agenceFilter]+'"') : "";
+      await window.IKO_CLIENT_READY;
+      let rawFilter = agenceFilter !== "global" ? '{Agence}="'+AGENCE_VERS_AIRTABLE[agenceFilter]+'"' : "";
+      rawFilter = filtreAvecClient(rawFilter);
+      let filter = rawFilter ? encodeURIComponent(rawFilter) : "";
       const url = '/api/airtable/Tickets SAV?'+(filter?'filterByFormula='+filter+'&':'')+'sort[0][field]=Name&sort[0][direction]=desc&maxRecords=200';
       const r = await fetch(url, {});
       const json = await r.json();
@@ -1526,7 +1576,10 @@ function Dashboard({ agenceAccess, onClose }) {
     if (isCheckingNouveauxRef.current) return;
     isCheckingNouveauxRef.current = true;
     try {
-      const r = await fetch('/api/airtable/Tickets SAV?sort[0][field]=Name&sort[0][direction]=desc&maxRecords=200', {});
+      await window.IKO_CLIENT_READY;
+      const cf = filtreAvecClient("");
+      const fp = cf ? 'filterByFormula='+encodeURIComponent(cf)+'&' : '';
+      const r = await fetch('/api/airtable/Tickets SAV?'+fp+'sort[0][field]=Name&sort[0][direction]=desc&maxRecords=200', {});
       const json = await r.json();
       const records = json.records||[];
       const idsActuels = new Set(records.map(t => t.id));
