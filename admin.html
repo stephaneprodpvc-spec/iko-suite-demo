@@ -211,6 +211,7 @@
         <div class="actions">
           <button type="submit" class="primary" id="submitBtn">Créer le client</button>
           <button type="button" class="secondary" id="cancelBtn" style="display:none;">Annuler</button>
+          <button type="button" class="secondary" id="deleteBtn" style="display:none;color:#FF453A;border-color:rgba(255,69,58,0.3);">Supprimer</button>
         </div>
         <div class="msg" id="formMsg"></div>
       </form>
@@ -355,11 +356,29 @@ function chargerDansFormulaire(id){
   setModulesActifs(f["Modules actifs"]);
   document.getElementById("submitBtn").textContent = "Enregistrer les modifications";
   document.getElementById("cancelBtn").style.display = "inline-block";
+  document.getElementById("deleteBtn").style.display = "inline-block";
   document.getElementById("formMsg").textContent = "";
 }
 
 document.getElementById("cancelBtn").addEventListener("click", function(){
   reinitialiserFormulaire();
+});
+
+document.getElementById("deleteBtn").addEventListener("click", function(){
+  if (!editingId) return;
+  var nom = document.getElementById("fNom").value || "ce client";
+  if (!confirm("Supprimer definitivement " + nom + " ? Cette action est irreversible.")) return;
+  var msg = document.getElementById("formMsg");
+  msg.className = "msg"; msg.textContent = "Suppression…";
+  fetch("/api/airtable/" + encodeURIComponent(TABLE) + "/" + editingId, { method: "DELETE" })
+    .then(function(r){ if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
+    .then(function(){
+      reinitialiserFormulaire();
+      chargerClients();
+    })
+    .catch(function(err){
+      msg.className = "msg err"; msg.textContent = "Erreur : " + err.message;
+    });
 });
 
 function reinitialiserFormulaire(){
@@ -372,6 +391,7 @@ function reinitialiserFormulaire(){
   document.getElementById("formTitle").textContent = "Nouveau client";
   document.getElementById("submitBtn").textContent = "Créer le client";
   document.getElementById("cancelBtn").style.display = "none";
+  document.getElementById("deleteBtn").style.display = "none";
   document.getElementById("formMsg").textContent = "";
   Array.prototype.forEach.call(document.querySelectorAll(".client-item"), function(x){ x.classList.remove("selected"); });
 }
