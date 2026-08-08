@@ -42,6 +42,26 @@ input:focus, select:focus, textarea:focus { border-color:rgba(218,178,57,0.5); }
     return _fetch(url, opts);
   };
 })();
+
+window.IKO_CLIENT_ID = null;
+window.IKO_CLIENT_INFO = null;
+window.IKO_CLIENT_READY = (async function () {
+  try {
+    var params = new URLSearchParams(window.location.search);
+    var slug = params.get('client');
+    if (slug) { localStorage.setItem('iko_client_slug', slug); }
+    else { slug = localStorage.getItem('iko_client_slug'); }
+    if (!slug) return null;
+    var formule = encodeURIComponent('{Slug}="' + slug + '"');
+    var r = await fetch('/api/airtable/Clients?filterByFormula=' + formule + '&maxRecords=1', {});
+    var json = await r.json();
+    var rec = (json.records || [])[0];
+    if (!rec) return null;
+    window.IKO_CLIENT_ID = rec.id;
+    window.IKO_CLIENT_INFO = rec.fields || {};
+    return rec.id;
+  } catch (e) { return null; }
+})();
 </script>
 <script type="text/babel">
 
@@ -155,6 +175,35 @@ const C = {
   vert: "#16a34a", vertDim: "rgba(22,163,74,0.15)",
   jaune: "#FF6B00", jauneDim: "rgba(217,119,6,0.12)",
 };
+
+// Branding dynamique par client (couleurs + logo), applique une fois le
+// contexte client charge (voir window.IKO_CLIENT_READY plus haut).
+let CONFIG_ENTREPRISE = { couleurAccent: "#FF6B00", logoUrl: "" };
+
+function hexVersRgba(hex, alpha) {
+  const h = (hex || "#FF6B00").replace('#', '');
+  const r = parseInt(h.substring(0,2),16), g = parseInt(h.substring(2,4),16), b = parseInt(h.substring(4,6),16);
+  return 'rgba(' + r + ',' + g + ',' + b + ',' + alpha + ')';
+}
+
+function appliquerConfigEntreprise(cfg) {
+  if (!cfg) return;
+  CONFIG_ENTREPRISE.couleurAccent = cfg.couleurAccent || "#FF6B00";
+  CONFIG_ENTREPRISE.logoUrl = cfg.logoUrl || "";
+  C.or = CONFIG_ENTREPRISE.couleurAccent;
+  C.orDim = hexVersRgba(CONFIG_ENTREPRISE.couleurAccent, 0.12);
+  C.orBord = hexVersRgba(CONFIG_ENTREPRISE.couleurAccent, 0.3);
+  C.jaune = CONFIG_ENTREPRISE.couleurAccent;
+}
+
+// Combine une formule Airtable existante avec le filtre "appartient au
+// client courant" (si un client est charge via ?client=slug).
+function filtreAvecClient(baseFormula) {
+  if (!window.IKO_CLIENT_ID) return baseFormula;
+  var clause = 'FIND("' + window.IKO_CLIENT_ID + '", ARRAYJOIN({Compte client}))';
+  if (!baseFormula) return clause;
+  return 'AND(' + baseFormula + ',' + clause + ')';
+}
 
 function ModalAction({ ticket, onClose, onDone }) {
   const [mode, setMode] = React.useState(ticket.fields?.Statut === "Devis envoyé" ? "debloquer" : null);
@@ -768,13 +817,26 @@ function Technicien({ agence, onClose }) {
   const [maxErreur, setMaxErreur] = React.useState("");
   const [maxTexte, setMaxTexte] = React.useState("");
   const [vueMode, setVueMode] = React.useState("vocal");
+  const [, forcerRenderTech] = React.useState(0);
+
+  React.useEffect(() => {
+    window.IKO_CLIENT_READY.then(() => {
+      const info = window.IKO_CLIENT_INFO;
+      if (!info) return;
+      appliquerConfigEntreprise({
+        couleurAccent: info["Couleur principale"],
+        logoUrl: (info["Logo"] && info["Logo"][0] && info["Logo"][0].url) || "",
+      });
+      forcerRenderTech(x => x + 1);
+    });
+  }, []);
 
   const charger = async () => {
     setLoading(true);
     try {
-      const filter = agence === "global" || !agence
-        ? ""
-        : "&filterByFormula=" + encodeURIComponent('{Agence}="' + agence + '"');
+      await window.IKO_CLIENT_READY;
+      const rawFilter = filtreAvecClient(agence === "global" || !agence ? "" : '{Agence}="' + agence + '"');
+      const filter = rawFilter ? "&filterByFormula=" + encodeURIComponent(rawFilter) : "";
       const url = '/api/airtable/Tickets%20SAV?sort[0][field]=Name&sort[0][direction]=desc&maxRecords=100' + filter;
       const r = await fetch(url, {});
       const json = await r.json();
@@ -1088,7 +1150,7 @@ function Technicien({ agence, onClose }) {
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
           <div style={{display:"flex",alignItems:"center",gap:"12px"}}>
             <div style={{width:"100px",height:"48px",background:"#FFFFFF",borderRadius:"10px",display:"flex",alignItems:"center",justifyContent:"center",padding:"3px",boxSizing:"border-box"}}>
-              <img src={IKO_LOGO} alt="Iko" style={{width:"100%",height:"100%",objectFit:"contain"}}/>
+              <img src={CONFIG_ENTREPRISE.logoUrl || IKO_LOGO} alt="Iko" style={{width:"100%",height:"100%",objectFit:"contain"}}/>
             </div>
             <div>
               <div style={{fontSize:"13px",fontWeight:"700",color:C.muted}}>Technicien</div>
@@ -1232,7 +1294,7 @@ function Login({ onLogin }) {
       <div style={{width:"100%",maxWidth:"340px"}}>
         <div style={{textAlign:"center",marginBottom:"36px"}}>
           <div style={{width:"190px",height:"100px",background:"#FFFFFF",borderRadius:"16px",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 16px",boxShadow:"0 8px 32px rgba(218,178,57,0.3)",padding:"8px",boxSizing:"border-box"}}>
-            <img src={IKO_LOGO} alt="Iko" style={{width:"100%",height:"100%",objectFit:"contain"}}/>
+            <img src={CONFIG_ENTREPRISE.logoUrl || IKO_LOGO} alt="Iko" style={{width:"100%",height:"100%",objectFit:"contain"}}/>
           </div>
           <div style={{fontSize:"11px",color:C.muted,marginTop:"6px",letterSpacing:"2px",textTransform:"uppercase"}}>Espace Technicien</div>
         </div>
