@@ -497,63 +497,74 @@
   // -- Dictée --
   const Reco = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (Reco) {
-    const reco = new Reco();
-    reco.lang = 'fr-FR';
-    reco.continuous = false;
-    reco.interimResults = true;
     let enEcoute = false;
     let texteDicte = '';
+    let recoActuelle = null;
+
+    // Safari/iOS bloque silencieusement le réemploi d'une instance
+    // SpeechRecognition déjà utilisée : on en recrée une neuve à chaque
+    // activation du micro plutôt que de réutiliser une instance partagée.
+    function creerReco() {
+      const r = new Reco();
+      r.lang = 'fr-FR';
+      r.continuous = false;
+      r.interimResults = true;
+
+      r.addEventListener('start', function () {
+        enEcoute = true;
+        texteDicte = '';
+        boutonMicro.classList.add('ecoute');
+        boutonMicro.setAttribute('aria-label', "Arrêter la dictée");
+      });
+      r.addEventListener('end', function () {
+        enEcoute = false;
+        boutonMicro.classList.remove('ecoute');
+        boutonMicro.setAttribute('aria-label', "Dicter votre message");
+        recoActuelle = null;
+        // Envoi à la fin de l'écoute : plus fiable que d'attendre un signal
+        // intermédiaire, qui n'arrive pas de la même façon selon le navigateur.
+        if (texteDicte.trim()) {
+          saisie.value = texteDicte.trim();
+          envoyer();
+          texteDicte = '';
+        }
+      });
+      r.addEventListener('result', function (e) {
+        let texte = '';
+        for (let i = 0; i < e.results.length; i++) texte += e.results[i][0].transcript;
+        texteDicte = texte;
+        // Aperçu en direct pendant que la personne parle
+        saisie.value = texte;
+        saisie.style.height = 'auto';
+        saisie.style.height = Math.min(saisie.scrollHeight, 120) + 'px';
+        // Phrase terminée : on arrête l'écoute, l'envoi se fait dans 'end'
+        if (e.results[e.results.length - 1].isFinal && texte.trim()) {
+          r.stop();
+        }
+      });
+      r.addEventListener('error', function (e) {
+        boutonMicro.classList.remove('ecoute');
+        recoActuelle = null;
+        console.warn('Dictée — erreur reconnaissance vocale :', e.error);
+        if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
+          ajouterBulle("Micro refusé. Autorisez l'accès au micro dans les réglages du navigateur, ou écrivez votre message.", 'erreur');
+        } else if (e.error === 'no-speech') {
+          ajouterBulle("Aucune voix détectée. Vérifiez le micro sélectionné (icône micro dans la barre d'adresse Chrome) et reparlez juste après avoir cliqué.", 'erreur');
+        } else if (e.error === 'audio-capture') {
+          ajouterBulle("Aucun micro détecté par le navigateur. Vérifiez qu'un micro est bien branché et activé.", 'erreur');
+        } else if (e.error === 'network') {
+          ajouterBulle("Erreur réseau pendant la reconnaissance vocale. Réessayez.", 'erreur');
+        }
+      });
+      return r;
+    }
 
     boutonMicro.classList.add('dispo');
     boutonMicro.addEventListener('click', function () {
-      if (enEcoute) { reco.stop(); return; }
+      if (enEcoute) { if (recoActuelle) recoActuelle.stop(); return; }
       try { lecteurAudio.pause(); } catch (e) {} // ne pas s'écouter parler
-      try { reco.start(); } catch (e) { /* déjà démarré : sans effet */ }
-    });
-
-    reco.addEventListener('start', function () {
-      enEcoute = true;
-      texteDicte = '';
-      boutonMicro.classList.add('ecoute');
-      boutonMicro.setAttribute('aria-label', "Arrêter la dictée");
-    });
-    reco.addEventListener('end', function () {
-      enEcoute = false;
-      boutonMicro.classList.remove('ecoute');
-      boutonMicro.setAttribute('aria-label', "Dicter votre message");
-      // Envoi à la fin de l'écoute : plus fiable que d'attendre un signal
-      // intermédiaire, qui n'arrive pas de la même façon selon le navigateur.
-      if (texteDicte.trim()) {
-        saisie.value = texteDicte.trim();
-        envoyer();
-        texteDicte = '';
-      }
-    });
-    reco.addEventListener('result', function (e) {
-      let texte = '';
-      for (let i = 0; i < e.results.length; i++) texte += e.results[i][0].transcript;
-      texteDicte = texte;
-      // Aperçu en direct pendant que la personne parle
-      saisie.value = texte;
-      saisie.style.height = 'auto';
-      saisie.style.height = Math.min(saisie.scrollHeight, 120) + 'px';
-      // Phrase terminée : on arrête l'écoute, l'envoi se fait dans 'end'
-      if (e.results[e.results.length - 1].isFinal && texte.trim()) {
-        reco.stop();
-      }
-    });
-    reco.addEventListener('error', function (e) {
-      boutonMicro.classList.remove('ecoute');
-      console.warn('Dictée — erreur reconnaissance vocale :', e.error);
-      if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
-        ajouterBulle("Micro refusé. Autorisez l'accès au micro dans les réglages du navigateur, ou écrivez votre message.", 'erreur');
-      } else if (e.error === 'no-speech') {
-        ajouterBulle("Aucune voix détectée. Vérifiez le micro sélectionné (icône micro dans la barre d'adresse Chrome) et reparlez juste après avoir cliqué.", 'erreur');
-      } else if (e.error === 'audio-capture') {
-        ajouterBulle("Aucun micro détecté par le navigateur. Vérifiez qu'un micro est bien branché et activé.", 'erreur');
-      } else if (e.error === 'network') {
-        ajouterBulle("Erreur réseau pendant la reconnaissance vocale. Réessayez.", 'erreur');
-      }
+      recoActuelle = creerReco();
+      try { recoActuelle.start(); } catch (e) { recoActuelle = null; }
     });
   }
 
