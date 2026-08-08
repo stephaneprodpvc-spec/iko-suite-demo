@@ -11,6 +11,18 @@
 // Amandine ; dans les deux cas, le meme systeme derriere est utilise.
 
 import { verifierOrigine, verifierDebit } from "./_securite.js";
+import vocabMenuiserie from "../trades/menuiserie.js";
+import vocabPlomberieChauffage from "../trades/plomberie_chauffage.js";
+
+// Vocabulaire parametrable par metier (voir trades/*.js). Menuiserie reste
+// le repli par defaut pour ne rien casser sur les clients demo existants.
+const TRADES = {
+  menuiserie: vocabMenuiserie,
+  plomberie_chauffage: vocabPlomberieChauffage,
+};
+function loadTradeVocab(tradeId) {
+  return TRADES[tradeId] || TRADES.menuiserie;
+}
 
 const MODELE = "claude-haiku-4-5-20251001";  // le plus economique, largement suffisant ici
 const MAX_MESSAGES = 60; // garde-fou : longueur max d'une conversation
@@ -31,15 +43,21 @@ let AGENCES_CACHE_TS = 0;
 // Valeur de départ = repli si la synchro échoue avant le premier appel.
 let AGENCES_VALIDES = ["Agence 1", "Agence 2", "Agence 3", "Agence 4"];
 
+// Metier de l'agence demo, synchronise sur le champ "Métier" du record
+// CONFIG (Planning), meme mecanisme/cache que AGENCES_VALIDES. Repli sur
+// "menuiserie" si le champ est vide ou absent (comportement historique).
+let TRADE_ID = "menuiserie";
+
 const CRENEAUX = {
     matin: "Matin (8h30 — 12h00)",
     apres_midi: "Après-midi (13h00 — 17h00)",
 };
 
-const SYSTEM_PROMPT = `
-Tu es Amandine, l'assistante SAV en ligne d'Iko Suite, specialiste de la
-menuiserie (fenetres, coulissants, volets roulants, portails, portes de
-garage, verandas).
+function buildSystemPrompt(vocab) {
+  const listeDiagnostics = vocab.diagnostics.map(function (d) { return "- " + d; }).join("\n");
+  return `
+Tu es Amandine, l'assistante SAV en ligne d'Iko Suite, specialiste de
+${vocab.nom_metier}.
 
 TON ROLE
 Le client peut soit remplir le formulaire de demande SAV lui-meme, soit tout
@@ -104,15 +122,12 @@ DEROULE POUR OUVRIR UN TICKET / PRENDRE RDV
                                           ticket en parallele si le client le souhaite.
                                           - Reste sur le sujet SAV. Si on te parle d'un nouveau projet ou d'un devis,
                                             redirige poliment vers le conseiller commercial.
+                                          - ${vocab.regle_securite}
 
-                                            QUELQUES PISTES DE DIAGNOSTIC DE BASE (a titre indicatif, jamais une garantie)
-                                            - Poignee dure ou qui force : souvent un reglage de paumelle ou de galet.
-                                            - Vitrage embue entre les vitres : signe probable de double vitrage HS.
-                                            - Volet roulant qui ne repond plus : verifier l'alimentation avant tout.
-                                            Sur un point de securite (serrure, vitrage), propose toujours une
-                                            intervention technicien plutot qu'une manipulation par le client.
-                                            `;
-
+QUELQUES PISTES DE DIAGNOSTIC DE BASE (a titre indicatif, jamais une garantie)
+${listeDiagnostics}
+`;
+}
 const TOOLS = [
   {
     name: "lister_creneaux",
@@ -148,7 +163,7 @@ const TOOLS = [
         telephone: { type: "string" },
         email: { type: "string" },
         adresse: { type: "string", description: "Adresse complete : rue, code postal, ville." },
-        produit: { type: "string", description: "Ex : Fenetre, Coulissant, Volet roulant, Portail, Porte de garage, Veranda." },
+        produit: { type: "string", description: "Ex : " + TRADES.menuiserie.produits.join(", ") + "." },
         probleme: { type: "string", description: "Description du probleme rencontre." },
         urgent: { type: "boolean", description: "true si probleme de securite ou degat en cours." },
         garantie: { type: "string", enum: ["oui", "non", "inconnu"] },
@@ -192,6 +207,13 @@ async function synchroniserAgences() {
       const n = Math.max(1, Math.min(10, parseInt(json.fields?.["Nombre agences"], 10) || 4));
       AGENCES_VALIDES.length = 0;
       for (let i = 1; i <= n; i++) AGENCES_VALIDES.push("Agence " + i);
+
+      const metier = json.fields?.["Métier"];
+      TRADE_ID = TRADES[metier] ? metier : "menuiserie";
+      // Mutation en place (meme pattern que AGENCES_VALIDES) pour que le
+      // schema TOOLS deja construit reste synchro sans reconstruire l'objet.
+      const champProduit = TOOLS.find(function (t) { return t.name === "creer_ticket"; }).input_schema.properties.produit;
+      champProduit.description = "Ex : " + loadTradeVocab(TRADE_ID).produits.join(", ") + ".";
     }
   } catch (e) {
     console.error("synchroniserAgences erreur:", e);
@@ -280,6 +302,8 @@ async function executerOutil(nom, input) {
   }
 
   if (nom === "consulter_historique_ouvertures") {
+    const vocabCourant = loadTradeVocab(TRADE_ID);
+    if (!vocabCourant.historique.disponible) return { trouve: false };
     const recherche = String(input.recherche || "").trim().slice(0, 100);
     if (!recherche) return { trouve: false };
     try {
@@ -411,7 +435,7 @@ sait deja qui tu es, ce n'est pas ta premiere reunion avec eux.
         model: MODELE,
         max_tokens: 800,
         temperature: 0.6,
-        system: [{ type: "text", text: SYSTEM_PROMPT + (req.body.reunion ? BLOC_REUNION_AMANDINE : ""), cache_control: { type: "ephemeral" } }],
+        system: [{ type: "text", text: buildSystemPrompt(loadTradeVocab(TRADE_ID)) + (req.body.reunion ? BLOC_REUNION_AMANDINE : ""), cache_control: { type: "ephemeral" } }],
         tools: TOOLS,
         messages: convertis,
       }),
