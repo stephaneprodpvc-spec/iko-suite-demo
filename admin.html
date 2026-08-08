@@ -350,14 +350,34 @@
     <button type="button" class="fs-close" id="mpCloseBtn">✕</button>
   </div>
   <div class="mp-body">
-    <div class="mp-toggle-row">
-      <span>Module actif pour ce client</span>
-      <span class="switch"><input type="checkbox" id="mpActif"><span class="switch-track"></span></span>
+    <div class="mp-row">
+      <label>Paramètre à régler</label>
+      <select id="mpParametre">
+        <option value="activation">Activation du module</option>
+        <option value="emails">Emails de contact / notifications</option>
+        <option value="adresse" data-modules="Technicien">Adresse (point de départ technicien)</option>
+      </select>
     </div>
 
-    <div class="mp-row">
-      <label>Emails de contact / notifications</label>
-      <textarea id="mpEmails" rows="4" placeholder="contact@client.fr&#10;sav@client.fr"></textarea>
+    <div class="mp-groupe" id="mpGroupeActivation">
+      <div class="mp-toggle-row">
+        <span>Module actif pour ce client</span>
+        <span class="switch"><input type="checkbox" id="mpActif"><span class="switch-track"></span></span>
+      </div>
+    </div>
+
+    <div class="mp-groupe" id="mpGroupeEmails" style="display:none;">
+      <div class="mp-row">
+        <label>Emails de contact / notifications</label>
+        <textarea id="mpEmails" rows="4" placeholder="contact@client.fr&#10;sav@client.fr"></textarea>
+      </div>
+    </div>
+
+    <div class="mp-groupe" id="mpGroupeAdresse" style="display:none;">
+      <div class="mp-row">
+        <label>Adresse (point de départ pour les itinéraires technicien)</label>
+        <input type="text" id="mpAdresse" placeholder="12 rue des Artisans, 10000 Troyes">
+      </div>
     </div>
 
     <div class="mp-note">Ces réglages sont propres à ce client uniquement (stockés dans sa fiche). Le fonctionnement du module lui-même (code, design, logique) est commun à tous les clients et se modifie uniquement à la racine du projet Iko Suite Démo — jamais depuis ce panneau.</div>
@@ -598,16 +618,40 @@ window.clicModuleDiagramme = function(moduleId){
   });
 });
 
+function afficherGroupeParametre(valeur){
+  document.getElementById("mpGroupeActivation").style.display = valeur === "activation" ? "block" : "none";
+  document.getElementById("mpGroupeEmails").style.display = valeur === "emails" ? "block" : "none";
+  document.getElementById("mpGroupeAdresse").style.display = valeur === "adresse" ? "block" : "none";
+}
+
 function ouvrirParametresModule(moduleId){
   if (!editingId) return;
   document.getElementById("mpTitre").textContent = moduleId;
   var actifs = getModulesActifs();
   document.getElementById("mpActif").checked = actifs.indexOf(moduleId) !== -1;
   document.getElementById("mpEmails").value = document.getElementById("fEmails").value || "";
+  var client = clients.find(function(c){ return c.id === editingId; });
+  document.getElementById("mpAdresse").value = (client && client.fields && client.fields["Adresse"]) || "";
   document.getElementById("mpMsg").textContent = "";
+
+  // N'affiche que les options pertinentes pour ce module (ex: Adresse
+  // uniquement pour Technicien), via l'attribut data-modules sur chaque
+  // <option>.
+  var select = document.getElementById("mpParametre");
+  Array.prototype.forEach.call(select.options, function(opt){
+    var restriction = opt.getAttribute("data-modules");
+    opt.hidden = !!restriction && restriction.split(",").indexOf(moduleId) === -1;
+  });
+  select.value = "activation";
+  afficherGroupeParametre("activation");
+
   document.getElementById("moduleParamPanel").style.display = "flex";
   document.getElementById("moduleParamPanel").setAttribute("data-current-mod", moduleId);
 }
+
+document.getElementById("mpParametre").addEventListener("change", function(){
+  afficherGroupeParametre(this.value);
+});
 
 document.getElementById("mpCloseBtn").addEventListener("click", function(){
   document.getElementById("moduleParamPanel").style.display = "none";
@@ -627,9 +671,11 @@ document.getElementById("mpSaveBtn").addEventListener("click", function(){
   var msg = document.getElementById("mpMsg");
   msg.className = "mp-msg"; msg.textContent = "Enregistrement…";
 
+  var adresse = document.getElementById("mpAdresse").value.trim();
   var fields = {
     "Modules actifs": getModulesActifs(),
-    "Emails contact": emails
+    "Emails contact": emails,
+    "Adresse": adresse
   };
   fetch("/api/airtable/" + encodeURIComponent(TABLE) + "/" + editingId, {
     method: "PATCH",
