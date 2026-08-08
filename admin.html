@@ -403,7 +403,12 @@ document.getElementById("clientForm").addEventListener("submit", function(e){
     });
 });
 
+function retirerEmojis(texte){
+  return String(texte || "").replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{1F1E6}-\u{1F1FF}\uFE0F]/gu, "").replace(/ {2,}/g, " ").trim();
+}
+
 function ajouterBulle(texte, role, extra){
+  if (role === "assistant") texte = retirerEmojis(texte);
   var wrap = document.getElementById("chatMessages");
   var div = document.createElement("div");
   div.className = "bulle " + role + (extra ? " " + extra : "");
@@ -425,10 +430,15 @@ document.getElementById("chatForm").addEventListener("submit", function(e){
   chatHistorique.push({ role: "user", texte: texte });
   var bulleAttente = ajouterBulle("Réflexion…", "assistant", "thinking");
 
+  var clientsContexte = clients.map(function(c){
+    var f = c.fields || {};
+    return { nom: f["Nom client"], metier: f["Métier"], modules: f["Modules actifs"], statut: f["Statut client"] };
+  });
+
   fetch("/api/chat-admin", {
     method: "POST",
     headers: {"Content-Type":"application/json"},
-    body: JSON.stringify({ message: texte, historique: chatHistorique.slice(0,-1) })
+    body: JSON.stringify({ message: texte, historique: chatHistorique.slice(0,-1), clients: clientsContexte })
   })
     .then(function(r){ return r.json(); })
     .then(function(data){
@@ -486,7 +496,7 @@ function parlerClaude(texte){
   if (!("speechSynthesis" in window)) return;
   try {
     window.speechSynthesis.cancel();
-    var u = new SpeechSynthesisUtterance(texte);
+    var u = new SpeechSynthesisUtterance(retirerEmojis(texte));
     u.lang = "fr-FR";
     u.onend = function(){
       if (document.getElementById("modeVocal").checked) lancerEcouteClaude();
