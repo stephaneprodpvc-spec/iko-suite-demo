@@ -236,6 +236,13 @@ var chatHistorique = [];
 var MDP = "ikopilote2026";
 document.getElementById("lockForm").addEventListener("submit", function(e){
   e.preventDefault();
+  // Amorce la synthese vocale iOS : un premier speak() doit etre declenche
+  // de maniere synchrone par un vrai geste utilisateur (ce clic), sinon
+  // Safari bloque silencieusement tous les appels speak() suivants qui
+  // arrivent apres un fetch/async (voir bug remonte par Stephane).
+  if ("speechSynthesis" in window){
+    try { window.speechSynthesis.speak(new SpeechSynthesisUtterance("")); } catch(e){}
+  }
   var val = document.getElementById("pw").value;
   if (val === MDP){
     sessionStorage.setItem("iko_admin_ok", "1");
