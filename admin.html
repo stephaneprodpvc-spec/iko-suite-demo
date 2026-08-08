@@ -120,6 +120,19 @@
   .msg.ok{color:#30D158;} .msg.err{color:#FF453A;}
   #tbody-wrap{max-height:560px;overflow-y:auto;}
   ::-webkit-scrollbar{width:6px;} ::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.15);border-radius:3px;}
+  #statsBar{font-size:12px;color:var(--texte-dim);background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:11px;padding:10px 12px;margin-bottom:12px;line-height:1.6;}
+  #statsBar b{color:var(--texte);}
+  .btn-export{width:100%;padding:9px;border-radius:11px;border:1px solid var(--border);background:rgba(255,255,255,0.03);color:var(--texte-dim);font-size:12.5px;cursor:pointer;margin-bottom:14px;font-weight:500;transition:background .15s;}
+  .btn-export:hover{background:var(--panel-hover);}
+  #activiteInfo{font-size:12px;color:var(--texte-dim);margin:10px 0;min-height:14px;}
+  #printFiche{display:none;}
+  @media print{
+    body *{visibility:hidden;}
+    #printFiche, #printFiche *{visibility:visible;}
+    #printFiche{display:block;position:absolute;top:0;left:0;width:100%;padding:40px;color:#000;background:#fff;}
+    #printFiche h1{font-size:24px;margin-bottom:16px;}
+    #printFiche p{margin:8px 0;font-size:14px;}
+  }
 </style>
 </head>
 <body>
@@ -161,6 +174,8 @@
 
     <div class="card">
       <h2>Clients</h2>
+      <div id="statsBar">Chargement des statistiques…</div>
+      <button type="button" class="btn-export" id="exportCsvBtn">Exporter en CSV (Excel)</button>
       <div id="tbody-wrap"><div id="empty">Chargement…</div></div>
     </div>
 
@@ -208,9 +223,12 @@
           <option>Pause</option>
         </select>
 
+        <div id="activiteInfo"></div>
+
         <div class="actions">
           <button type="submit" class="primary" id="submitBtn">Créer le client</button>
           <button type="button" class="secondary" id="cancelBtn" style="display:none;">Annuler</button>
+          <button type="button" class="secondary" id="printBtn" style="display:none;">Imprimer</button>
           <button type="button" class="secondary" id="deleteBtn" style="display:none;color:#FF453A;border-color:rgba(255,69,58,0.3);">Supprimer</button>
         </div>
         <div class="msg" id="formMsg"></div>
@@ -219,6 +237,8 @@
 
   </div>
 </main>
+
+<div id="printFiche"></div>
 
 <script>
 (function(){
@@ -284,8 +304,28 @@ function chargerClients(){
     });
 }
 
+function afficherStats(){
+  var el = document.getElementById("statsBar");
+  if (!el) return;
+  if (!clients.length){ el.textContent = "Aucun client pour l'instant."; return; }
+  var total = clients.length;
+  var actifs = clients.filter(function(c){ return (c.fields||{})["Statut client"] === "Actif"; }).length;
+  var parMetier = {};
+  var parModule = {};
+  clients.forEach(function(c){
+    var f = c.fields || {};
+    var m = f["Métier"] || "Non renseigné";
+    parMetier[m] = (parMetier[m]||0) + 1;
+    (f["Modules actifs"]||[]).forEach(function(mod){ parModule[mod] = (parModule[mod]||0) + 1; });
+  });
+  var metierTxt = Object.keys(parMetier).map(function(k){ return k + " (" + parMetier[k] + ")"; }).join(" · ");
+  var moduleTxt = Object.keys(parModule).map(function(k){ return k + " (" + parModule[k] + ")"; }).join(" · ");
+  el.innerHTML = "<b>" + total + "</b> client(s) · <b>" + actifs + "</b> actif(s)<br>Métiers : " + metierTxt + "<br>Modules : " + (moduleTxt || "—");
+}
+
 function afficherClients(){
   document.getElementById("count").textContent = clients.length + " client" + (clients.length > 1 ? "s" : "");
+  afficherStats();
   var wrap = document.getElementById("tbody-wrap");
   if (!clients.length){
     wrap.innerHTML = "<div id='empty'>Aucun client pour l'instant.<br>Décris-en un à l'assistant, ou remplis le formulaire.</div>";
@@ -356,12 +396,78 @@ function chargerDansFormulaire(id){
   setModulesActifs(f["Modules actifs"]);
   document.getElementById("submitBtn").textContent = "Enregistrer les modifications";
   document.getElementById("cancelBtn").style.display = "inline-block";
+  document.getElementById("printBtn").style.display = "inline-block";
   document.getElementById("deleteBtn").style.display = "inline-block";
   document.getElementById("formMsg").textContent = "";
+  chargerActivite(id);
 }
+
+function chargerActivite(clientId){
+  var el = document.getElementById("activiteInfo");
+  el.textContent = "Chargement de l'activité…";
+  var formule = encodeURIComponent('FIND("' + clientId + '", ARRAYJOIN({Compte client}))');
+  Promise.all([
+    fetch("/api/airtable/Tickets%20SAV?filterByFormula=" + formule + "&maxRecords=200").then(function(r){ return r.json(); }).catch(function(){ return {records:[]}; }),
+    fetch("/api/airtable/RDV%20Commercial?filterByFormula=" + formule + "&maxRecords=200").then(function(r){ return r.json(); }).catch(function(){ return {records:[]}; })
+  ]).then(function(results){
+    var tickets = results[0].records || [];
+    var rdvs = results[1].records || [];
+    var ouverts = tickets.filter(function(t){
+      var s = t.fields && t.fields.Statut;
+      return s && s !== "Terminé" && s !== "Annulé";
+    }).length;
+    el.textContent = tickets.length + " ticket(s) au total (" + ouverts + " en cours) · " + rdvs.length + " RDV commercial(aux)";
+  }).catch(function(){ el.textContent = "Activité indisponible."; });
+}
+
+document.getElementById("exportCsvBtn").addEventListener("click", function(){
+  var lignes = [["Nom","Slug","Métier","Modules actifs","Statut","Couleur principale","Couleur secondaire","Emails contact"]];
+  clients.forEach(function(c){
+    var f = c.fields || {};
+    lignes.push([
+      f["Nom client"] || "", f["Slug"] || "", f["Métier"] || "",
+      (f["Modules actifs"] || []).join(";"), f["Statut client"] || "",
+      f["Couleur principale"] || "", f["Couleur secondaire"] || "",
+      (f["Emails contact"] || "").replace(/\n/g, ";")
+    ]);
+  });
+  var csv = lignes.map(function(l){
+    return l.map(function(v){
+      v = String(v).replace(/"/g, '""');
+      return /[,"\n;]/.test(v) ? '"' + v + '"' : v;
+    }).join(",");
+  }).join("\r\n");
+  var blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8;" });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement("a");
+  a.href = url; a.download = "clients-iko-" + new Date().toISOString().slice(0,10) + ".csv";
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+});
 
 document.getElementById("cancelBtn").addEventListener("click", function(){
   reinitialiserFormulaire();
+});
+
+document.getElementById("printBtn").addEventListener("click", function(){
+  if (!editingId) return;
+  var nom = document.getElementById("fNom").value;
+  var slug = document.getElementById("fSlug").value;
+  var metier = document.getElementById("fMetier").value;
+  var statut = document.getElementById("fStatut").value;
+  var modules = getModulesActifs().join(", ") || "Aucun";
+  var emails = (document.getElementById("fEmails").value || "Aucun").replace(/\n/g, "<br>");
+  var activite = document.getElementById("activiteInfo").textContent || "—";
+  document.getElementById("printFiche").innerHTML =
+    "<h1>" + nom + "</h1>" +
+    "<p><b>Identifiant :</b> " + slug + "</p>" +
+    "<p><b>Métier :</b> " + metier + "</p>" +
+    "<p><b>Statut :</b> " + statut + "</p>" +
+    "<p><b>Modules actifs :</b> " + modules + "</p>" +
+    "<p><b>Emails de contact :</b><br>" + emails + "</p>" +
+    "<p><b>Activité :</b> " + activite + "</p>" +
+    "<p style='margin-top:40px;font-size:11px;color:#666;'>Iko Suite — RSIA Conseil — fiche générée le " + new Date().toLocaleDateString("fr-FR") + "</p>";
+  window.print();
 });
 
 document.getElementById("deleteBtn").addEventListener("click", function(){
@@ -391,8 +497,10 @@ function reinitialiserFormulaire(){
   document.getElementById("formTitle").textContent = "Nouveau client";
   document.getElementById("submitBtn").textContent = "Créer le client";
   document.getElementById("cancelBtn").style.display = "none";
+  document.getElementById("printBtn").style.display = "none";
   document.getElementById("deleteBtn").style.display = "none";
   document.getElementById("formMsg").textContent = "";
+  document.getElementById("activiteInfo").textContent = "";
   Array.prototype.forEach.call(document.querySelectorAll(".client-item"), function(x){ x.classList.remove("selected"); });
 }
 
