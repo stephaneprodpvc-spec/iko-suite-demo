@@ -827,6 +827,13 @@ function Technicien({ agence, onClose }) {
         couleurAccent: info["Couleur principale"],
         logoUrl: (info["Logo"] && info["Logo"][0] && info["Logo"][0].url) || "",
       });
+      // Adresse propre au client (reglee depuis le poste de pilotage) :
+      // sert de point de depart par defaut pour toutes les agences de ce
+      // client, a la place des adresses de demo codees en dur.
+      const adresseClient = info["Adresse"];
+      if (adresseClient) {
+        Object.keys(AGENCE_ADRESSES).forEach(a => { AGENCE_ADRESSES[a] = adresseClient; });
+      }
       forcerRenderTech(x => x + 1);
     });
   }, []);
