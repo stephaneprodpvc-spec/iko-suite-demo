@@ -500,11 +500,12 @@ function ModalRdv({ agenceAccess, onClose, onSuccess }) {
     }
     setSaving(true); setError("");
     try {
+      await window.IKO_CLIENT_READY;
       const emailFinal = form.sansEmail ? "" : form.email;
       const adresseComplete = form.adresse.trim() + (form.codePostal || form.ville ? ', ' + form.codePostal + ' ' + form.ville : '');
       const num = 'SAV-' + new Date().getFullYear() + '-' + (Math.floor(Math.random()*9000)+1000);
       const dateLabel = form.creneau === "Matin (8h30 — 12h00)" ? "Matin (8h30 — 12h00)" : "Après-midi (13h00 — 17h00)";
-      const filterPlanning = encodeURIComponent('AND({Agence}="'+AGENCE_VERS_AIRTABLE[form.agence]+'",{Créneau}="'+dateLabel+'",{Date}="'+form.date+'",{Statut}="Libre")');
+      const filterPlanning = encodeURIComponent(filtreAvecClient('AND({Agence}="'+AGENCE_VERS_AIRTABLE[form.agence]+'",{Créneau}="'+dateLabel+'",{Date}="'+form.date+'",{Statut}="Libre")'));
       const planResp = await fetch('/api/airtable/Planning?filterByFormula=' + filterPlanning + '&maxRecords=1', {});
       const planJson = await planResp.json();
       let planningId = '';
@@ -635,10 +636,11 @@ function ModalBlocage({ agenceAccess, onClose, onSuccess }) {
     if (dateFin < dateDebut) { setError("La date de fin doit être après la date de début."); return; }
     setSaving(true); setError("");
     try {
+      await window.IKO_CLIENT_READY;
       const agenceReelle = AGENCE_VERS_AIRTABLE[agence] || agence;
       // Le champ Date est du texte au format AAAA-MM-JJ : la comparaison
       // lexicographique >= / <= fonctionne car le format est trié naturellement.
-      const formule = 'AND({Agence}="'+agenceReelle+'",{Date}>="'+dateDebut+'",{Date}<="'+dateFin+'",{Statut}="Libre")';
+      const formule = filtreAvecClient('AND({Agence}="'+agenceReelle+'",{Date}>="'+dateDebut+'",{Date}<="'+dateFin+'",{Statut}="Libre")');
       const r = await fetch('/api/airtable/Planning?filterByFormula=' + encodeURIComponent(formule) + '&maxRecords=500');
       const json = await r.json();
       const creneaux = json.records || [];
@@ -1375,9 +1377,11 @@ function PlanningView({ agenceFilter }) {
   const charger = async () => {
     setLoading(true);
     try {
-      let filter = agenceFilter !== "global"
-        ? encodeURIComponent('AND({Agence}="'+AGENCE_VERS_AIRTABLE[agenceFilter]+'",{Statut}="Pris")')
-        : encodeURIComponent('{Statut}="Pris"');
+      await window.IKO_CLIENT_READY;
+      let rawFilter = agenceFilter !== "global"
+        ? 'AND({Agence}="'+AGENCE_VERS_AIRTABLE[agenceFilter]+'",{Statut}="Pris")'
+        : '{Statut}="Pris"';
+      let filter = encodeURIComponent(filtreAvecClient(rawFilter));
       const r = await fetch('/api/airtable/Planning?filterByFormula='+filter+'&sort[0][field]=Date&sort[0][direction]=asc&maxRecords=50', {});
       const json = await r.json();
       const slotsData = json.records||[];
