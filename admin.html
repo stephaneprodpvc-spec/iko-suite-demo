@@ -149,11 +149,10 @@
   #fsOverlay .fs-close:hover{background:var(--panel-hover);color:var(--texte);}
   #fsOverlay .fs-body{padding:10px;display:flex;align-items:center;justify-content:center;height:calc(100% - 78px);overflow:auto;}
   #fsOverlay .fs-body svg{width:96vw;height:auto;max-width:none;}
-  .mod-node rect{transition:filter .12s;}
   .diag-node-txt-fs{font-size:16px;font-family:-apple-system,sans-serif;font-weight:700;}
   .diag-node-sub-fs{font-size:12.5px;font-family:-apple-system,sans-serif;}
-  .mod-node{cursor:pointer;}
-  .mod-node:hover rect{filter:brightness(1.25);}
+  .diag-mod-btn{-webkit-appearance:none;appearance:none;-webkit-tap-highlight-color:rgba(255,107,0,0.25);touch-action:manipulation;}
+  .diag-mod-btn:active{opacity:0.7;}
 
   #moduleParamPanel{position:fixed;top:0;right:0;bottom:0;width:380px;max-width:90vw;background:rgba(15,15,15,0.97);backdrop-filter:blur(20px);border-left:1px solid var(--border);z-index:999;display:none;flex-direction:column;box-shadow:-20px 0 60px rgba(0,0,0,0.5);}
   #moduleParamPanel .mp-head{padding:22px 24px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;}
@@ -522,7 +521,13 @@ function setModulesActifs(arr){
 
 
 /* ---- Version plein ecran du schema (nœuds/textes agrandis) ---- */
-function genererSvgFlux(nom, actifs, tailleFs){
+// Genere le schema : un SVG en fond (purement decoratif, pointer-events
+// desactives) + des BOUTONS HTML REELS superposes en position absolue
+// (pourcentages) sur les 4 modules. Choix deliberе : le clic/tap sur des
+// noeuds SVG generes dynamiquement s'est avere peu fiable sur Safari iPad
+// (onclick inline + delegation testes, echec constate en usage reel) ;
+// un <button> HTML natif, lui, recoit toujours le tap de maniere fiable.
+function genererDiagramme(nom, actifs, tailleFs, conteneurId){
   var modules = [
     { id: "Dashboard", label: "Dashboard" },
     { id: "Technicien", label: "Technicien" },
@@ -555,23 +560,47 @@ function genererSvgFlux(nom, actifs, tailleFs){
     return "<path d='M " + x1 + " " + y1 + " C " + midX + " " + y1 + ", " + midX + " " + y2 + ", " + x2 + " " + y2 + "' fill='none' stroke='" + couleur + "' stroke-width='" + (1.5*scale) + "'" + dash + "/>";
   }
 
-  var svg = "<svg viewBox='0 0 " + W + " " + H + "' width='100%' style='display:block;'>";
+  var svg = "<svg viewBox='0 0 " + W + " " + H + "' width='100%' style='display:block;pointer-events:none;'>";
   var clientH = 46 * scale, clientW = 128 * scale;
   svg += noeud(xClient, yClient - clientH/2, clientW, clientH, nom.length > 16 ? nom.slice(0,15) + "…" : nom, "Compte client", true);
   var airtableH = 46 * scale, airtableW = 80 * scale;
   svg += noeud(xAirtable, yClient - airtableH/2, airtableW, airtableH, "Airtable", "Données", actifs.length > 0);
+
+  var boutons = [];
   modules.forEach(function(m, i){
     var y = startY + i * rowH;
     var actif = actifs.indexOf(m.id) !== -1;
     var modH = 44 * scale, modW = 148 * scale;
     svg += lien(xClient + clientW, yClient, xModule, y + modH/2, actif);
-    svg += "<g class='mod-node' data-mod='" + m.id + "' onclick='clicModuleDiagramme(\"" + m.id + "\")' style='cursor:pointer;pointer-events:all;'>";
-    svg += noeud(xModule, y, modW, modH, m.label, actif ? (tailleFs ? "Actif — clique pour configurer" : "Actif") : (tailleFs ? "Inactif — clique pour configurer" : "Non activé"), actif);
-    svg += "</g>";
+    svg += noeud(xModule, y, modW, modH, "", "", actif); // rectangle/points visuels uniquement, texte porté par le bouton HTML
     svg += lien(xModule + modW, y + modH/2, xAirtable, yClient, actif);
+    boutons.push({
+      id: m.id, label: m.label, actif: actif,
+      leftPct: (xModule / W * 100), topPct: (y / H * 100),
+      widthPct: (modW / W * 100), heightPct: (modH / H * 100),
+    });
   });
   svg += "</svg>";
-  return svg;
+
+  var boutonsHtml = boutons.map(function(b){
+    var couleurTxt = b.actif ? "#F5F5F7" : "#636366";
+    var sousTitre = (b.actif ? "Actif" : "Non activé") + (tailleFs ? " — toucher pour configurer" : "");
+    return "<button type='button' class='diag-mod-btn' data-mod='" + b.id + "' style='" +
+      "position:absolute;left:" + b.leftPct + "%;top:" + b.topPct + "%;width:" + b.widthPct + "%;height:" + b.heightPct + "%;" +
+      "background:none;border:none;padding:" + (tailleFs ? "0 0 0 30px" : "0 0 0 20px") + ";margin:0;text-align:left;cursor:pointer;display:flex;flex-direction:column;justify-content:center;" +
+      "'>" +
+      "<span style='font-weight:700;color:" + couleurTxt + ";font-size:" + (tailleFs ? "16px" : "11px") + ";font-family:-apple-system,sans-serif;'>" + b.label + "</span>" +
+      "<span style='color:#636366;font-size:" + (tailleFs ? "12.5px" : "9px") + ";font-family:-apple-system,sans-serif;'>" + sousTitre + "</span>" +
+      "</button>";
+  }).join("");
+
+  var conteneur = document.getElementById(conteneurId);
+  conteneur.style.position = "relative";
+  conteneur.innerHTML = svg + boutonsHtml;
+
+  Array.prototype.forEach.call(conteneur.querySelectorAll(".diag-mod-btn"), function(btn){
+    btn.addEventListener("click", function(){ ouvrirParametresModule(btn.getAttribute("data-mod")); });
+  });
 }
 
 function dessinerDiagramme(){
@@ -579,16 +608,14 @@ function dessinerDiagramme(){
   var nom = document.getElementById("fNom").value.trim();
   if (!nom){ wrap.style.display = "none"; return; }
   wrap.style.display = "block";
-  var actifs = getModulesActifs();
-  document.getElementById("diagramSvg").innerHTML = genererSvgFlux(nom, actifs, false);
+  genererDiagramme(nom, getModulesActifs(), false, "diagramSvg");
 }
 
 function ouvrirDiagrammePleinEcran(){
   var nom = document.getElementById("fNom").value.trim();
   if (!nom) return;
-  var actifs = getModulesActifs();
   document.getElementById("fsTitre").textContent = "Schéma des flux — " + nom;
-  document.getElementById("fsSvg").innerHTML = genererSvgFlux(nom, actifs, true);
+  genererDiagramme(nom, getModulesActifs(), true, "fsSvg");
   document.getElementById("fsOverlay").style.display = "block";
 }
 
@@ -601,22 +628,7 @@ document.getElementById("fsOverlay").addEventListener("click", function(e){
 });
 
 /* ---- Réglages par module (panneau propre au client, pas au code partagé) ----
-   Appelé directement via onclick inline sur chaque nœud SVG (plus fiable
-   qu'une délégation via closest() sur certains navigateurs/versions iOS). */
-window.clicModuleDiagramme = function(moduleId){
-  ouvrirParametresModule(moduleId);
-};
-
-// Filet de securite en plus de l'onclick inline (au cas ou certains
-// navigateurs/webviews n'executent pas les attributs onclick injectes via
-// innerHTML) : delegation classique sur les deux conteneurs SVG.
-[document.getElementById("diagramSvg"), document.getElementById("fsSvg")].forEach(function(conteneur){
-  if (!conteneur) return;
-  conteneur.addEventListener("click", function(e){
-    var g = e.target.closest(".mod-node");
-    if (g) ouvrirParametresModule(g.getAttribute("data-mod"));
-  });
-});
+   Les boutons sont crees et branches directement dans genererDiagramme(). */
 
 function afficherGroupeParametre(valeur){
   document.getElementById("mpGroupeActivation").style.display = valeur === "activation" ? "block" : "none";
