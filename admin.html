@@ -133,13 +133,13 @@
   <div class="grid">
 
     <div class="card">
-      <h2><span class="pulse"></span>Assistant</h2>
+      <h2><span class="pulse"></span>Claude</h2>
       <div id="chatMessages"></div>
       <form id="chatForm">
-        <textarea id="chatInput" rows="1" placeholder="Décris le client à créer…"></textarea>
+        <textarea id="chatInput" rows="1" placeholder="Parle-lui d'un client, d'une idée, d'une question…"></textarea>
         <button type="submit" id="chatSend">→</button>
       </form>
-      <div class="chat-hint">Ex : « Un plombier-chauffagiste à Lyon, avec SAV et dashboard » — l'assistant pré-remplit le formulaire, tu valides avant de créer.</div>
+      <div class="chat-hint">Discussion libre, ou décris un client (« un plombier-chauffagiste à Lyon, avec SAV et dashboard ») pour pré-remplir le formulaire — tu valides toujours avant de créer.</div>
     </div>
 
     <div class="card">
@@ -408,23 +408,29 @@ document.getElementById("chatForm").addEventListener("submit", function(e){
     .then(function(r){ return r.json(); })
     .then(function(data){
       bulleAttente.remove();
-      if (data.erreur || !data.proposition){
-        ajouterBulle(data.erreur || "Je n'ai pas pu traiter la demande.", "assistant");
+      if (data.erreur){
+        ajouterBulle(data.erreur, "assistant");
         return;
       }
-      var p = data.proposition;
-      chatHistorique.push({ role: "assistant", texte: p.message });
-      var bulle = ajouterBulle(p.message, "assistant");
-      var actions = document.createElement("div");
-      actions.className = "propose-actions";
-      var btnApply = document.createElement("button");
-      btnApply.className = "btn-apply"; btnApply.type = "button"; btnApply.textContent = "Appliquer au formulaire";
-      btnApply.addEventListener("click", function(){ appliquerProposition(p); });
-      var btnDismiss = document.createElement("button");
-      btnDismiss.className = "btn-dismiss"; btnDismiss.type = "button"; btnDismiss.textContent = "Ignorer";
-      btnDismiss.addEventListener("click", function(){ actions.remove(); });
-      actions.appendChild(btnApply); actions.appendChild(btnDismiss);
-      bulle.appendChild(actions);
+      if (data.type === "proposition" && data.proposition){
+        var p = data.proposition;
+        chatHistorique.push({ role: "assistant", texte: p.message });
+        var bulle = ajouterBulle(p.message, "assistant");
+        var actions = document.createElement("div");
+        actions.className = "propose-actions";
+        var btnApply = document.createElement("button");
+        btnApply.className = "btn-apply"; btnApply.type = "button"; btnApply.textContent = "Appliquer au formulaire";
+        btnApply.addEventListener("click", function(){ appliquerProposition(p); });
+        var btnDismiss = document.createElement("button");
+        btnDismiss.className = "btn-dismiss"; btnDismiss.type = "button"; btnDismiss.textContent = "Ignorer";
+        btnDismiss.addEventListener("click", function(){ actions.remove(); });
+        actions.appendChild(btnApply); actions.appendChild(btnDismiss);
+        bulle.appendChild(actions);
+        return;
+      }
+      var texte = data.reponse || "…";
+      chatHistorique.push({ role: "assistant", texte: texte });
+      ajouterBulle(texte, "assistant");
     })
     .catch(function(){
       bulleAttente.remove();
