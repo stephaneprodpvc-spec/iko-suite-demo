@@ -53,30 +53,34 @@ async function ecrireRapport(texte) {
   }
 }
 
-// Determine si l'heure actuelle (UTC) correspond a la programmation.
+// Determine si le cron doit executer une verification maintenant.
+//
+// IMPORTANT - contrainte du plan Vercel gratuit (Hobby) : un cron ne peut
+// s'executer qu'UNE FOIS PAR JOUR, a une heure fixe definie dans
+// vercel.json (pas modifiable dynamiquement sans redeploiement, et pas
+// precise a la minute). Le champ "Verif Heure" configure par Stephane est
+// donc informatif seulement pour l'instant : la verification automatique
+// s'execute au moment ou Vercel declenche reellement le cron (voir
+// vercel.json), pas a l'heure exacte choisie. Pour un choix d'heure
+// vraiment precis, il faudrait passer sur le plan Vercel Pro. Le
+// declenchement MANUEL (bouton "Lancer maintenant"), lui, n'a aucune
+// limite et s'execute instantanement a la demande.
 function estLeMomentProgramme(config) {
   if (!config || !config["Verif Active"]) return false;
-  const heureProg = String(config["Verif Heure"] || "").trim(); // "HH:MM"
-  if (!/^\d{1,2}:\d{2}$/.test(heureProg)) return false;
-  const maintenant = new Date();
-  const heureActuelle = String(maintenant.getUTCHours()).padStart(2, "0") + ":00";
-  const [hProg] = heureProg.split(":");
-  const heureProgArrondie = String(parseInt(hProg, 10)).padStart(2, "0") + ":00";
-  if (heureActuelle !== heureProgArrondie) return false;
 
+  const maintenant = new Date();
   if (config["Verif Frequence"] === "Hebdomadaire") {
     const JOURS = ["Dimanche", "Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi"];
     const jourActuel = JOURS[maintenant.getUTCDay()];
     if (config["Verif Jour"] && config["Verif Jour"] !== jourActuel) return false;
   }
 
-  // Anti double-declenchement : si deja execute cette heure-ci, on saute.
+  // Anti double-declenchement : si deja execute aujourd'hui, on saute.
   const derniere = config["Verif Derniere Exec"];
   if (derniere) {
     const d = new Date(derniere);
     if (!isNaN(d.getTime()) && d.getUTCFullYear() === maintenant.getUTCFullYear() &&
-        d.getUTCMonth() === maintenant.getUTCMonth() && d.getUTCDate() === maintenant.getUTCDate() &&
-        d.getUTCHours() === maintenant.getUTCHours()) {
+        d.getUTCMonth() === maintenant.getUTCMonth() && d.getUTCDate() === maintenant.getUTCDate()) {
       return false;
     }
   }
