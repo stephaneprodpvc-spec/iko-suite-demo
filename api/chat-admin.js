@@ -1,48 +1,50 @@
 import { verifierOrigine, verifierDebit, reponseBloquee } from "./_securite.js";
 
 // api/chat-admin.js
-// Assistant IA du poste de pilotage (admin.html). Aide Stephane a decrire
-// un nouveau client en langage naturel et propose les champs structures
-// (nom, slug, metier, modules, couleurs) a pre-remplir dans le formulaire.
+// Claude, integre au poste de pilotage (admin.html) comme partenaire de
+// travail de Stephane : discussion libre sur la strategie/le produit, ET
+// proposition de champs structures quand un nouveau client est decrit.
 //
-// IMPORTANT : cet endpoint ne touche JAMAIS Airtable lui-meme. Il renvoie
-// une simple proposition de champs ; c'est toujours Stephane qui relit et
-// clique sur "Creer le client" cote client pour ecrire reellement dans la
-// base (voir admin.html).
+// IMPORTANT : cet endpoint ne touche JAMAIS Airtable lui-meme. La creation
+// reelle d'un client reste toujours un clic explicite de Stephane cote
+// client (voir admin.html).
 
 const MODELE = "claude-haiku-4-5-20251001";
-const MAX_CHARS_MESSAGE = 800;
+const MAX_CHARS_MESSAGE = 1500;
 
 const METIERS_VALIDES = ["Menuiserie", "Plomberie & Chauffage", "Électricité", "Autre"];
 const MODULES_VALIDES = ["Dashboard", "Technicien", "SAV", "Métreur"];
 
 const SYSTEM_PROMPT = `
-Tu es l'assistant du poste de pilotage Iko, utilise par Stephane (RSIA
-Conseil) pour creer rapidement un nouveau client sur la plateforme Iko
-Suite. Stephane te decrit un client en langage naturel (nom, metier,
-besoins), et tu proposes les champs structures du formulaire de creation.
+Tu es Claude, integre au poste de pilotage d'Iko Suite (RSIA Conseil,
+Stephane). Tu es un partenaire de travail direct : Stephane peut te parler
+de strategie produit, discuter d'une idee, te demander un avis, ou te
+decrire un nouveau client a creer sur la plateforme.
 
-REGLES
+CONTEXTE PRODUIT
+Iko Suite est vendue a des professionnels (artisans/PME) pour gerer leur
+SAV, technicien terrain et tableau de bord. Chaque client final a sa propre
+fiche (metier, couleurs, logo, modules actifs, contacts) dans une base
+multi-tenant. Le code des modules (dashboard, technicien, SAV) est
+partage entre tous les clients.
+
+DEUX MODES DE REPONSE
+1. Si Stephane decrit un nouveau client a creer (nom, metier, besoins) :
+   appelle l'outil proposer_client avec les champs deduits.
+2. Sinon (question, discussion, avis, strategie) : reponds en texte libre,
+   naturellement, comme un collegue competent. Sois direct, concret, pas
+   de blabla commercial.
+
+REGLES POUR proposer_client
 - Deduis le metier le plus proche parmi la liste fournie. Si aucun ne
   correspond clairement, choisis "Autre".
-- Propose les modules actifs les plus pertinents. Dashboard et SAV sont
-  quasi toujours utiles des la creation. Technicien si le client a des
-  interventions terrain. Metreur UNIQUEMENT si le metier est Menuiserie
-  et que la prise de cotes est mentionnee ou evidente (sinon ne le
-  coche pas par defaut, meme pour la menuiserie).
-- Genere un slug technique a partir du nom : minuscules, sans accent,
-  mots separes par des tirets.
-- Propose des couleurs uniquement si Stephane en mentionne (ex: "en
-  bleu", "couleurs vertes") ; sinon garde les couleurs Iko par defaut
-  (#FF6B00 / #111111).
-- Reponds TOUJOURS en appelant l'outil proposer_client, jamais en texte
-  libre.
-- Le champ "message" est une phrase courte (1 phrase, francais informel)
-  confirmant ce que tu proposes, a afficher a Stephane.
-- Si la description est trop vague pour deduire quoi que ce soit
-  (ex: juste "un nouveau client"), propose des valeurs par defaut
-  raisonnables plutot que de bloquer : Stephane ajustera dans le
-  formulaire.
+- Dashboard et SAV sont quasi toujours utiles des la creation. Technicien
+  si le client a des interventions terrain. Metreur UNIQUEMENT si le
+  metier est Menuiserie et que la prise de cotes est mentionnee.
+- Slug : minuscules, sans accent, mots separes par des tirets.
+- Couleurs uniquement si mentionnees, sinon garde les couleurs Iko par
+  defaut (#FF6B00 / #111111).
+- Le champ "message" est une phrase courte confirmant ce que tu proposes.
 `;
 
 const TOOLS = [
@@ -86,16 +88,15 @@ export default async function handler(req, res) {
     const body = req.body || {};
     const message = String(body.message || "").slice(0, MAX_CHARS_MESSAGE).trim();
     if (!message) {
-      return res.status(400).json({ erreur: "Aucune description recue" });
+      return res.status(400).json({ erreur: "Aucun message recu" });
     }
-    const historique = Array.isArray(body.historique) ? body.historique.slice(-6) : [];
+    const historique = Array.isArray(body.historique) ? body.historique.slice(-10) : [];
 
-    const blocHistorique = historique.length
-      ? "\n\nEchanges precedents de cette session (le plus recent en dernier) :\n" +
-        historique.map(h => (h.role === "user" ? "Stephane: " : "Toi: ") + String(h.texte || "").slice(0, 300)).join("\n")
-      : "";
-
-    const messageUtilisateur = "Description du nouveau client par Stephane :\n\"" + message + "\"" + blocHistorique;
+    const messagesAnthropic = historique.map(h => ({
+      role: h.role === "user" ? "user" : "assistant",
+      content: String(h.texte || "").slice(0, 800),
+    }));
+    messagesAnthropic.push({ role: "user", content: message });
 
     const reponse = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
@@ -106,30 +107,31 @@ export default async function handler(req, res) {
       },
       body: JSON.stringify({
         model: MODELE,
-        max_tokens: 400,
-        temperature: 0.3,
+        max_tokens: 700,
+        temperature: 0.5,
         system: [{ type: "text", text: SYSTEM_PROMPT, cache_control: { type: "ephemeral" } }],
         tools: TOOLS,
-        tool_choice: { type: "tool", name: "proposer_client" },
-        messages: [{ role: "user", content: messageUtilisateur }],
+        tool_choice: { type: "auto" },
+        messages: messagesAnthropic,
       }),
     });
 
     if (!reponse.ok) {
       const detail = await reponse.text();
       console.error("Erreur API Anthropic:", reponse.status, detail);
-      return res.status(502).json({ erreur: "Assistant momentanément indisponible." });
+      return res.status(502).json({ erreur: "Claude est momentanément indisponible." });
     }
 
     const data = await reponse.json();
     const blocs = Array.isArray(data.content) ? data.content : [];
     const appel = blocs.find(b => b.type === "tool_use" && b.name === "proposer_client");
 
-    if (!appel) {
-      return res.status(502).json({ erreur: "Réponse inattendue de l'assistant." });
+    if (appel) {
+      return res.status(200).json({ type: "proposition", proposition: appel.input });
     }
 
-    return res.status(200).json({ proposition: appel.input });
+    const texte = blocs.filter(b => b.type === "text").map(b => b.text || "").join(" ").trim();
+    return res.status(200).json({ type: "message", reponse: texte || "…" });
   } catch (e) {
     console.error("Erreur chat-admin:", e);
     return res.status(500).json({ erreur: "Une erreur est survenue." });
