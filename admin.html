@@ -131,6 +131,11 @@
   #activiteInfo{font-size:12px;color:var(--texte-dim);margin:10px 0;min-height:14px;}
   #diagramWrap{margin:16px 0;border:1px solid var(--border);border-radius:14px;background:rgba(255,255,255,0.02);padding:14px;}
   #diagramWrap .diag-label{font-size:11px;color:var(--texte-faint);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;}
+  .verif-row{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-radius:12px;background:rgba(255,255,255,0.03);border:1px solid var(--border);margin-bottom:14px;}
+  .verif-config{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;}
+  .verif-config select{width:100%;}
+  .verif-rapport{font-size:11.5px;color:var(--texte-dim);white-space:pre-wrap;background:rgba(255,255,255,0.02);border:1px solid var(--border);border-radius:12px;padding:14px;max-height:220px;overflow-y:auto;line-height:1.6;margin-top:12px;}
+  .verif-hint{font-size:10.5px;color:var(--texte-faint);margin-top:8px;line-height:1.5;}
   .diag-node-txt{font-size:11px;font-family:-apple-system,sans-serif;font-weight:600;}
   .diag-node-sub{font-size:9px;font-family:-apple-system,sans-serif;}
   .diag-fs-btn{font-size:11px;color:var(--orange);background:none;border:1px solid rgba(255,107,0,0.3);border-radius:8px;padding:5px 10px;cursor:pointer;float:right;margin-top:-2px;}
@@ -237,6 +242,31 @@
       <div id="statsBar">Chargement des statistiques…</div>
       <button type="button" class="btn-export" id="exportCsvBtn">Exporter en CSV (Excel)</button>
       <div id="tbody-wrap"><div id="empty">Chargement…</div></div>
+    </div>
+
+    <div class="card">
+      <h2>Vérifications sécurité & fonctionnement</h2>
+      <div class="verif-row">
+        <span>Vérifications automatiques</span>
+        <span class="switch"><input type="checkbox" id="verifActive"><span class="switch-track"></span></span>
+      </div>
+      <div class="verif-config">
+        <select id="verifFrequence">
+          <option value="Quotidien">Quotidien</option>
+          <option value="Hebdomadaire">Hebdomadaire</option>
+        </select>
+        <select id="verifJour">
+          <option>Lundi</option><option>Mardi</option><option>Mercredi</option>
+          <option>Jeudi</option><option>Vendredi</option><option>Samedi</option><option>Dimanche</option>
+        </select>
+      </div>
+      <div class="actions" style="margin-top:0;">
+        <button type="button" class="secondary" id="verifSaveBtn" style="flex:1;">Enregistrer la programmation</button>
+        <button type="button" class="primary" id="verifRunBtn" style="flex:1;">Lancer maintenant</button>
+      </div>
+      <div class="verif-hint">Le déclenchement manuel est instantané. L'automatique dépend du cron Vercel (une fois par jour vers 6h UTC sur le plan gratuit — l'heure exacte n'est pas garantie ; passe sur Vercel Pro pour un horaire précis).</div>
+      <div class="verif-rapport" id="verifRapport">Aucun rapport pour l'instant.</div>
+      <div class="msg" id="verifMsg"></div>
     </div>
 
     <div class="card">
@@ -371,6 +401,7 @@ document.getElementById("lockForm").addEventListener("submit", function(e){
     sessionStorage.setItem("iko_admin_ok", "1");
     document.getElementById("lock").style.display = "none";
     chargerClients();
+    chargerConfigVerif();
     if (document.getElementById("modeVocal").checked) lancerEcouteClaude();
   } else {
     document.getElementById("lockErr").textContent = "Mot de passe incorrect.";
@@ -655,6 +686,55 @@ function chargerActivite(clientId){
     el.textContent = tickets.length + " ticket(s) au total (" + ouverts + " en cours) · " + rdvs.length + " RDV commercial(aux)";
   }).catch(function(){ el.textContent = "Activité indisponible."; });
 }
+
+/* ---- Verifications securite / fonctionnement (programmation + manuel) ---- */
+var VERIF_CONFIG_TABLE = "Planning";
+var VERIF_CONFIG_RECORD = "rec45X231n9dXnyaU";
+
+function chargerConfigVerif(){
+  fetch("/api/airtable/" + encodeURIComponent(VERIF_CONFIG_TABLE) + "/" + VERIF_CONFIG_RECORD)
+    .then(function(r){ return r.json(); })
+    .then(function(json){
+      var f = json.fields || {};
+      document.getElementById("verifActive").checked = !!f["Verif Active"];
+      document.getElementById("verifFrequence").value = f["Verif Frequence"] || "Quotidien";
+      document.getElementById("verifJour").value = f["Verif Jour"] || "Lundi";
+      document.getElementById("verifRapport").textContent = f["Verif Dernier Rapport"] || "Aucun rapport pour l'instant.";
+    })
+    .catch(function(){});
+}
+
+document.getElementById("verifSaveBtn").addEventListener("click", function(){
+  var msg = document.getElementById("verifMsg");
+  msg.className = "msg"; msg.textContent = "Enregistrement…";
+  var fields = {
+    "Verif Active": document.getElementById("verifActive").checked,
+    "Verif Frequence": document.getElementById("verifFrequence").value,
+    "Verif Jour": document.getElementById("verifJour").value
+  };
+  fetch("/api/airtable/" + encodeURIComponent(VERIF_CONFIG_TABLE) + "/" + VERIF_CONFIG_RECORD, {
+    method: "PATCH",
+    headers: {"Content-Type":"application/json"},
+    body: JSON.stringify({ fields: fields })
+  })
+    .then(function(r){ if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
+    .then(function(){ msg.className = "msg ok"; msg.textContent = "Programmation enregistrée."; })
+    .catch(function(err){ msg.className = "msg err"; msg.textContent = "Erreur : " + err.message; });
+});
+
+document.getElementById("verifRunBtn").addEventListener("click", function(){
+  var msg = document.getElementById("verifMsg");
+  var rapportEl = document.getElementById("verifRapport");
+  msg.className = "msg"; msg.textContent = "Vérification en cours…";
+  fetch("/api/verif-securite", { method: "POST" })
+    .then(function(r){ return r.json(); })
+    .then(function(data){
+      rapportEl.textContent = data.texte || "Aucun résultat.";
+      msg.className = data.aDesEchecs ? "msg err" : "msg ok";
+      msg.textContent = data.aDesEchecs ? "Problème(s) détecté(s), voir le rapport." : "Tout est OK.";
+    })
+    .catch(function(err){ msg.className = "msg err"; msg.textContent = "Erreur : " + err.message; });
+});
 
 document.getElementById("exportCsvBtn").addEventListener("click", function(){
   var lignes = [["Nom","Slug","Métier","Modules actifs","Statut","Couleur principale","Couleur secondaire","Emails contact"]];
