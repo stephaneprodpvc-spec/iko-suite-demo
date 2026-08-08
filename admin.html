@@ -154,7 +154,8 @@
   .diag-mod-btn{-webkit-appearance:none;appearance:none;-webkit-tap-highlight-color:rgba(255,107,0,0.25);touch-action:manipulation;}
   .diag-mod-btn:active{opacity:0.7;}
 
-  #moduleParamPanel{position:fixed;top:0;right:0;bottom:0;width:380px;max-width:90vw;background:rgba(15,15,15,0.97);backdrop-filter:blur(20px);border-left:1px solid var(--border);z-index:999;display:none;flex-direction:column;box-shadow:-20px 0 60px rgba(0,0,0,0.5);}
+  #moduleParamPanel{position:fixed;top:0;right:0;bottom:0;width:380px;max-width:90vw;background:rgba(15,15,15,0.97);backdrop-filter:blur(20px);border-left:1px solid var(--border);z-index:999;display:flex;flex-direction:column;box-shadow:-20px 0 60px rgba(0,0,0,0.5);transform:translateX(100%);transition:transform .28s cubic-bezier(.25,.8,.25,1);pointer-events:none;}
+  #moduleParamPanel.ouvert{transform:translateX(0);pointer-events:auto;}
   #moduleParamPanel .mp-head{padding:22px 24px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;}
   #moduleParamPanel .mp-head h3{font-size:16px;font-weight:600;}
   #moduleParamPanel .mp-body{padding:22px 24px;overflow-y:auto;flex:1;}
@@ -543,14 +544,15 @@ function genererDiagramme(nom, actifs, tailleFs, conteneurId){
   var subClass = tailleFs ? "diag-node-sub-fs" : "diag-node-sub";
   var r = 12 * scale;
 
-  function noeud(x, y, w, h, label, sub, actif){
+  function noeud(x, y, w, h, label, sub, actif, avecPoint){
     var fill = actif ? "rgba(255,107,0,0.12)" : "rgba(255,255,255,0.03)";
     var stroke = actif ? "#FF6B00" : "rgba(255,255,255,0.15)";
     var txtColor = actif ? "#F5F5F7" : "#636366";
-    var dotR = 4 * scale, padX = 16 * scale, txtX = 28 * scale;
+    var dotR = 4 * scale, padX = 16 * scale, txtX = avecPoint ? 28 * scale : 16 * scale;
+    var point = avecPoint ? "<circle cx='" + (x + padX) + "' cy='" + (y + h/2) + "' r='" + dotR + "' fill='" + (actif ? "#FF6B00" : "#48484A") + "'/>" : "";
     return "<rect x='" + x + "' y='" + y + "' width='" + w + "' height='" + h + "' rx='" + r + "' fill='" + fill + "' stroke='" + stroke + "' stroke-width='" + (1.5*scale) + "'/>" +
-      "<circle cx='" + (x + padX) + "' cy='" + (y + h/2) + "' r='" + dotR + "' fill='" + (actif ? "#FF6B00" : "#48484A") + "'/>" +
-      "<text x='" + (x + txtX) + "' y='" + (y + h/2 - 3*scale) + "' class='" + txtClass + "' fill='" + txtColor + "'>" + label + "</text>" +
+      point +
+      (label ? "<text x='" + (x + txtX) + "' y='" + (y + h/2 - 3*scale) + "' class='" + txtClass + "' fill='" + txtColor + "'>" + label + "</text>" : "") +
       (sub ? "<text x='" + (x + txtX) + "' y='" + (y + h/2 + 12*scale) + "' class='" + subClass + "' fill='#636366'>" + sub + "</text>" : "");
   }
   function lien(x1, y1, x2, y2, actif){
@@ -562,9 +564,9 @@ function genererDiagramme(nom, actifs, tailleFs, conteneurId){
 
   var svg = "<svg viewBox='0 0 " + W + " " + H + "' width='100%' style='display:block;pointer-events:none;'>";
   var clientH = 46 * scale, clientW = 128 * scale;
-  svg += noeud(xClient, yClient - clientH/2, clientW, clientH, nom.length > 16 ? nom.slice(0,15) + "…" : nom, "Compte client", true);
+  svg += noeud(xClient, yClient - clientH/2, clientW, clientH, nom.length > 16 ? nom.slice(0,15) + "…" : nom, "Compte client", true, true);
   var airtableH = 46 * scale, airtableW = 80 * scale;
-  svg += noeud(xAirtable, yClient - airtableH/2, airtableW, airtableH, "Airtable", "Données", actifs.length > 0);
+  svg += noeud(xAirtable, yClient - airtableH/2, airtableW, airtableH, "Airtable", "Données", actifs.length > 0, true);
 
   var boutons = [];
   modules.forEach(function(m, i){
@@ -572,7 +574,7 @@ function genererDiagramme(nom, actifs, tailleFs, conteneurId){
     var actif = actifs.indexOf(m.id) !== -1;
     var modH = 44 * scale, modW = 148 * scale;
     svg += lien(xClient + clientW, yClient, xModule, y + modH/2, actif);
-    svg += noeud(xModule, y, modW, modH, "", "", actif); // rectangle/points visuels uniquement, texte porté par le bouton HTML
+    svg += noeud(xModule, y, modW, modH, "", "", actif, false); // rectangle visuel uniquement (sans point), texte porté par le bouton HTML
     svg += lien(xModule + modW, y + modH/2, xAirtable, yClient, actif);
     boutons.push({
       id: m.id, label: m.label, actif: actif,
@@ -587,7 +589,7 @@ function genererDiagramme(nom, actifs, tailleFs, conteneurId){
     var sousTitre = (b.actif ? "Actif" : "Non activé") + (tailleFs ? " — toucher pour configurer" : "");
     return "<button type='button' class='diag-mod-btn' data-mod='" + b.id + "' style='" +
       "position:absolute;left:" + b.leftPct + "%;top:" + b.topPct + "%;width:" + b.widthPct + "%;height:" + b.heightPct + "%;" +
-      "background:none;border:none;padding:" + (tailleFs ? "0 0 0 30px" : "0 0 0 20px") + ";margin:0;text-align:left;cursor:pointer;display:flex;flex-direction:column;justify-content:center;" +
+      "background:none;border:none;padding:" + (tailleFs ? "0 0 0 24px" : "0 0 0 16px") + ";margin:0;text-align:left;cursor:pointer;display:flex;flex-direction:column;justify-content:center;" +
       "'>" +
       "<span style='font-weight:700;color:" + couleurTxt + ";font-size:" + (tailleFs ? "16px" : "11px") + ";font-family:-apple-system,sans-serif;'>" + b.label + "</span>" +
       "<span style='color:#636366;font-size:" + (tailleFs ? "12.5px" : "9px") + ";font-family:-apple-system,sans-serif;'>" + sousTitre + "</span>" +
@@ -657,7 +659,7 @@ function ouvrirParametresModule(moduleId){
   select.value = "activation";
   afficherGroupeParametre("activation");
 
-  document.getElementById("moduleParamPanel").style.display = "flex";
+  document.getElementById("moduleParamPanel").classList.add("ouvert");
   document.getElementById("moduleParamPanel").setAttribute("data-current-mod", moduleId);
 }
 
@@ -666,7 +668,7 @@ document.getElementById("mpParametre").addEventListener("change", function(){
 });
 
 document.getElementById("mpCloseBtn").addEventListener("click", function(){
-  document.getElementById("moduleParamPanel").style.display = "none";
+  document.getElementById("moduleParamPanel").classList.remove("ouvert");
 });
 
 document.getElementById("mpSaveBtn").addEventListener("click", function(){
