@@ -133,6 +133,19 @@
   #diagramWrap .diag-label{font-size:11px;color:var(--texte-faint);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;}
   .diag-node-txt{font-size:11px;font-family:-apple-system,sans-serif;font-weight:600;}
   .diag-node-sub{font-size:9px;font-family:-apple-system,sans-serif;}
+  .diag-fs-btn{font-size:11px;color:var(--orange);background:none;border:1px solid rgba(255,107,0,0.3);border-radius:8px;padding:5px 10px;cursor:pointer;float:right;margin-top:-2px;}
+  .diag-fs-btn:hover{background:rgba(255,107,0,0.1);}
+  #fsOverlay{position:fixed;inset:0;z-index:998;display:none;background:
+      radial-gradient(circle, rgba(255,255,255,0.06) 1px, transparent 1px) 0 0/22px 22px,
+      #0A0A0A;}
+  #fsOverlay .fs-head{display:flex;align-items:center;justify-content:space-between;padding:20px 28px;border-bottom:1px solid var(--border);background:rgba(10,10,10,0.7);backdrop-filter:blur(16px);}
+  #fsOverlay .fs-head h2{font-size:16px;font-weight:600;}
+  #fsOverlay .fs-close{width:36px;height:36px;border-radius:11px;border:1px solid var(--border);background:rgba(255,255,255,0.04);color:var(--texte-dim);cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;}
+  #fsOverlay .fs-close:hover{background:var(--panel-hover);color:var(--texte);}
+  #fsOverlay .fs-body{padding:40px;display:flex;align-items:center;justify-content:center;height:calc(100% - 78px);overflow:auto;}
+  #fsOverlay .fs-body svg{max-width:1000px;width:100%;}
+  .diag-node-txt-fs{font-size:14px;font-family:-apple-system,sans-serif;font-weight:700;}
+  .diag-node-sub-fs{font-size:11px;font-family:-apple-system,sans-serif;}
   #printFiche, #printDevis{display:none;}
   @page{size:A4 portrait;margin:18mm;}
   @media print{
@@ -276,6 +289,14 @@
 <div id="printFiche"></div>
 <div id="printDevis"></div>
 
+<div id="fsOverlay">
+  <div class="fs-head">
+    <h2 id="fsTitre">Schéma des flux</h2>
+    <button type="button" class="fs-close" id="fsCloseBtn">✕</button>
+  </div>
+  <div class="fs-body"><div id="fsSvg"></div></div>
+</div>
+
 <script>
 (function(){
   var APP_SECRET = "97960bb3f41d75c71ba3e831a7acb90ab324549734e27d6a";
@@ -389,6 +410,7 @@ function afficherClients(){
       Array.prototype.forEach.call(wrap.querySelectorAll(".client-item"), function(x){ x.classList.remove("selected"); });
       el.classList.add("selected");
       chargerDansFormulaire(el.getAttribute("data-id"));
+      ouvrirDiagrammePleinEcran();
     });
   });
 }
@@ -406,66 +428,83 @@ function setModulesActifs(arr){
   });
 }
 
-/* ---- Schéma des flux (style Make : nœuds + lignes courbes) ---- */
-function dessinerDiagramme(){
-  var wrap = document.getElementById("diagramWrap");
-  var nom = document.getElementById("fNom").value.trim();
-  if (!nom){ wrap.style.display = "none"; return; }
-  wrap.style.display = "block";
 
-  var actifs = getModulesActifs();
-  var couleurClient = document.getElementById("fC1").value || "#FF6B00";
+/* ---- Version plein ecran du schema (nœuds/textes agrandis) ---- */
+function genererSvgFlux(nom, actifs, tailleFs){
   var modules = [
     { id: "Dashboard", label: "Dashboard" },
     { id: "Technicien", label: "Technicien" },
     { id: "SAV", label: "SAV (Amandine)" },
     { id: "Métreur", label: "Métreur" },
   ];
-
-  var W = 460, rowH = 56, startY = 24;
+  var scale = tailleFs ? 1.9 : 1;
+  var W = 460 * scale, rowH = 56 * scale, startY = 24 * scale;
   var H = startY * 2 + modules.length * rowH;
-  var xClient = 16, xModule = 168, xAirtable = W - 96;
+  var xClient = 16 * scale, xModule = 168 * scale, xAirtable = W - 96 * scale;
   var yClient = H / 2;
+  var txtClass = tailleFs ? "diag-node-txt-fs" : "diag-node-txt";
+  var subClass = tailleFs ? "diag-node-sub-fs" : "diag-node-sub";
+  var r = 12 * scale;
 
-  function noeud(x, y, w, h, label, sub, actif, iconBg){
+  function noeud(x, y, w, h, label, sub, actif){
     var fill = actif ? "rgba(255,107,0,0.12)" : "rgba(255,255,255,0.03)";
     var stroke = actif ? "#FF6B00" : "rgba(255,255,255,0.15)";
     var txtColor = actif ? "#F5F5F7" : "#636366";
-    return "<rect x='" + x + "' y='" + y + "' width='" + w + "' height='" + h + "' rx='12' fill='" + fill + "' stroke='" + stroke + "' stroke-width='1.5'/>" +
-      "<circle cx='" + (x + 16) + "' cy='" + (y + h/2) + "' r='4' fill='" + (actif ? "#FF6B00" : "#48484A") + "'/>" +
-      "<text x='" + (x + 28) + "' y='" + (y + h/2 - 3) + "' class='diag-node-txt' fill='" + txtColor + "'>" + label + "</text>" +
-      (sub ? "<text x='" + (x + 28) + "' y='" + (y + h/2 + 11) + "' class='diag-node-sub' fill='#636366'>" + sub + "</text>" : "");
+    var dotR = 4 * scale, padX = 16 * scale, txtX = 28 * scale;
+    return "<rect x='" + x + "' y='" + y + "' width='" + w + "' height='" + h + "' rx='" + r + "' fill='" + fill + "' stroke='" + stroke + "' stroke-width='" + (1.5*scale) + "'/>" +
+      "<circle cx='" + (x + padX) + "' cy='" + (y + h/2) + "' r='" + dotR + "' fill='" + (actif ? "#FF6B00" : "#48484A") + "'/>" +
+      "<text x='" + (x + txtX) + "' y='" + (y + h/2 - 3*scale) + "' class='" + txtClass + "' fill='" + txtColor + "'>" + label + "</text>" +
+      (sub ? "<text x='" + (x + txtX) + "' y='" + (y + h/2 + 12*scale) + "' class='" + subClass + "' fill='#636366'>" + sub + "</text>" : "");
   }
-
   function lien(x1, y1, x2, y2, actif){
     var midX = (x1 + x2) / 2;
     var couleur = actif ? "#FF6B00" : "rgba(255,255,255,0.12)";
     var dash = actif ? "" : " stroke-dasharray='4,4'";
-    return "<path d='M " + x1 + " " + y1 + " C " + midX + " " + y1 + ", " + midX + " " + y2 + ", " + x2 + " " + y2 + "' fill='none' stroke='" + couleur + "' stroke-width='1.5'" + dash + "/>";
+    return "<path d='M " + x1 + " " + y1 + " C " + midX + " " + y1 + ", " + midX + " " + y2 + ", " + x2 + " " + y2 + "' fill='none' stroke='" + couleur + "' stroke-width='" + (1.5*scale) + "'" + dash + "/>";
   }
 
   var svg = "<svg viewBox='0 0 " + W + " " + H + "' width='100%' style='display:block;'>";
-
-  // Nœud client (point de depart)
-  var clientH = 46;
-  svg += noeud(xClient, yClient - clientH/2, 128, clientH, nom.length > 16 ? nom.slice(0,15) + "…" : nom, "Compte client", true);
-
-  // Nœud Airtable (destination commune)
-  var airtableH = 46;
-  svg += noeud(xAirtable, yClient - airtableH/2, 80, airtableH, "Airtable", "Données", actifs.length > 0);
-
-  // Nœuds modules + liens
+  var clientH = 46 * scale, clientW = 128 * scale;
+  svg += noeud(xClient, yClient - clientH/2, clientW, clientH, nom.length > 16 ? nom.slice(0,15) + "…" : nom, "Compte client", true);
+  var airtableH = 46 * scale, airtableW = 80 * scale;
+  svg += noeud(xAirtable, yClient - airtableH/2, airtableW, airtableH, "Airtable", "Données", actifs.length > 0);
   modules.forEach(function(m, i){
     var y = startY + i * rowH;
     var actif = actifs.indexOf(m.id) !== -1;
-    svg += lien(xClient + 128, yClient, xModule, y + 22, actif);
-    svg += noeud(xModule, y, 148, 44, m.label, actif ? "Actif" : "Non activé", actif);
-    svg += lien(xModule + 148, y + 22, xAirtable, yClient, actif);
+    var modH = 44 * scale, modW = 148 * scale;
+    svg += lien(xClient + clientW, yClient, xModule, y + modH/2, actif);
+    svg += noeud(xModule, y, modW, modH, m.label, actif ? "Actif" : "Non activé", actif);
+    svg += lien(xModule + modW, y + modH/2, xAirtable, yClient, actif);
   });
-
   svg += "</svg>";
-  document.getElementById("diagramSvg").innerHTML = svg;
+  return svg;
 }
+
+function dessinerDiagramme(){
+  var wrap = document.getElementById("diagramWrap");
+  var nom = document.getElementById("fNom").value.trim();
+  if (!nom){ wrap.style.display = "none"; return; }
+  wrap.style.display = "block";
+  var actifs = getModulesActifs();
+  document.getElementById("diagramSvg").innerHTML = genererSvgFlux(nom, actifs, false);
+}
+
+function ouvrirDiagrammePleinEcran(){
+  var nom = document.getElementById("fNom").value.trim();
+  if (!nom) return;
+  var actifs = getModulesActifs();
+  document.getElementById("fsTitre").textContent = "Schéma des flux — " + nom;
+  document.getElementById("fsSvg").innerHTML = genererSvgFlux(nom, actifs, true);
+  document.getElementById("fsOverlay").style.display = "block";
+}
+
+document.getElementById("diagFsBtn").addEventListener("click", ouvrirDiagrammePleinEcran);
+document.getElementById("fsCloseBtn").addEventListener("click", function(){
+  document.getElementById("fsOverlay").style.display = "none";
+});
+document.getElementById("fsOverlay").addEventListener("click", function(e){
+  if (e.target.id === "fsOverlay") document.getElementById("fsOverlay").style.display = "none";
+});
 
 function slugifier(s){
   return (s || "").toLowerCase()
