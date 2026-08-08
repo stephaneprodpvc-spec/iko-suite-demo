@@ -142,8 +142,9 @@
   #fsOverlay .fs-head h2{font-size:16px;font-weight:600;}
   #fsOverlay .fs-close{width:36px;height:36px;border-radius:11px;border:1px solid var(--border);background:rgba(255,255,255,0.04);color:var(--texte-dim);cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;}
   #fsOverlay .fs-close:hover{background:var(--panel-hover);color:var(--texte);}
-  #fsOverlay .fs-body{padding:20px;display:flex;align-items:center;justify-content:center;height:calc(100% - 78px);overflow:auto;}
-  #fsOverlay .fs-body svg{max-width:1600px;width:100%;}
+  #fsOverlay .fs-body{padding:10px;display:flex;align-items:center;justify-content:center;height:calc(100% - 78px);overflow:auto;}
+  #fsOverlay .fs-body svg{width:96vw;height:auto;max-width:none;}
+  .mod-node rect{transition:filter .12s;}
   .diag-node-txt-fs{font-size:16px;font-family:-apple-system,sans-serif;font-weight:700;}
   .diag-node-sub-fs{font-size:12.5px;font-family:-apple-system,sans-serif;}
   .mod-node{cursor:pointer;}
@@ -477,7 +478,7 @@ function genererSvgFlux(nom, actifs, tailleFs){
     { id: "SAV", label: "SAV (Amandine)" },
     { id: "Métreur", label: "Métreur" },
   ];
-  var scale = tailleFs ? 3.1 : 1;
+  var scale = tailleFs ? 1.9 : 1;
   var W = 460 * scale, rowH = 56 * scale, startY = 24 * scale;
   var H = startY * 2 + modules.length * rowH;
   var xClient = 16 * scale, xModule = 168 * scale, xAirtable = W - 96 * scale;
@@ -513,7 +514,7 @@ function genererSvgFlux(nom, actifs, tailleFs){
     var actif = actifs.indexOf(m.id) !== -1;
     var modH = 44 * scale, modW = 148 * scale;
     svg += lien(xClient + clientW, yClient, xModule, y + modH/2, actif);
-    if (tailleFs) svg += "<g class='mod-node' data-mod='" + m.id + "'>";
+    if (tailleFs) svg += "<g class='mod-node' data-mod='" + m.id + "' onclick='clicModuleDiagramme(\"" + m.id + "\")' style='cursor:pointer;'>";
     svg += noeud(xModule, y, modW, modH, m.label, actif ? "Actif" : "Non activé", actif);
     if (tailleFs) svg += "</g>";
     svg += lien(xModule + modW, y + modH/2, xAirtable, yClient, actif);
@@ -548,11 +549,12 @@ document.getElementById("fsOverlay").addEventListener("click", function(e){
   if (e.target.id === "fsOverlay") document.getElementById("fsOverlay").style.display = "none";
 });
 
-/* ---- Réglages par module (panneau propre au client, pas au code partagé) ---- */
-document.getElementById("fsSvg").addEventListener("click", function(e){
-  var g = e.target.closest(".mod-node");
-  if (g) ouvrirParametresModule(g.getAttribute("data-mod"));
-});
+/* ---- Réglages par module (panneau propre au client, pas au code partagé) ----
+   Appelé directement via onclick inline sur chaque nœud SVG (plus fiable
+   qu'une délégation via closest() sur certains navigateurs/versions iOS). */
+window.clicModuleDiagramme = function(moduleId){
+  ouvrirParametresModule(moduleId);
+};
 
 function ouvrirParametresModule(moduleId){
   if (!editingId) return;
