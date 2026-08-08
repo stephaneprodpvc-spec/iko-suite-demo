@@ -2068,6 +2068,8 @@ function Dashboard({ agenceAccess, onClose }) {
           <button onClick={() => setShowModalBlocage(true)} style={{background:"#fff",border:"1px solid "+C.border,color:C.white,borderRadius:"8px",padding:"8px 14px",fontSize:"12px",fontWeight:"900",cursor:"pointer",display:"flex",alignItems:"center",gap:"6px"}}>🔒 Bloquer dates</button>
           <button onClick={() => { const pwd = prompt("Mot de passe mode concepteur :"); if (pwd === "admin") setShowModalConcepteur(true); else if (pwd !== null) alert("Mot de passe incorrect."); }}
             style={{background:"#fff",border:"1px solid "+C.border,color:C.white,borderRadius:"8px",padding:"8px 14px",fontSize:"12px",fontWeight:"900",cursor:"pointer",display:"flex",alignItems:"center",gap:"6px"}}>⚙️ Concepteur</button>
+          <button onClick={() => window.open('/admin.html', '_blank')} title="Poste de pilotage RSIA"
+            style={{background:"#fff",border:"1px solid "+C.border,color:C.white,borderRadius:"8px",padding:"8px 14px",fontSize:"12px",fontWeight:"900",cursor:"pointer",display:"flex",alignItems:"center",gap:"6px"}}>🎛️ Pilotage</button>
           <button onClick={() => window.open('/metreur.html', '_blank')} style={{background:"#fff",border:"1px solid "+C.border,color:C.white,borderRadius:"8px",padding:"8px 14px",fontSize:"12px",fontWeight:"900",cursor:"pointer",display:"flex",alignItems:"center",gap:"6px"}}>📐 Métreur</button>
           <button onClick={charger} style={{background:C.orDim,border:"1px solid "+C.orBord,color:C.or,borderRadius:"8px",padding:"6px 14px",fontSize:"12px",fontWeight:"700",cursor:"pointer"}}>↺</button>
           <div style={{width:"1px",height:"24px",background:C.border,margin:"0 4px"}}/>
