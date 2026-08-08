@@ -564,14 +564,20 @@
       if (enEcoute) { if (recoActuelle) recoActuelle.stop(); return; }
       // Pause seule ne suffit pas sur Safari/iOS : la session audio reste en
       // mode lecture et empêche le micro de capter du son (le bouton
-      // "écoute" s'anime mais rien n'est transcrit). On libère la session.
+      // "écoute" s'anime mais rien n'est transcrit). On libère la session
+      // puis on laisse un court délai à iOS pour rebasculer en mode micro
+      // (bug WebKit connu, cf. discussions Apple Developer Forums).
       try {
         lecteurAudio.pause();
         lecteurAudio.removeAttribute('src');
         lecteurAudio.load();
       } catch (e) {}
-      recoActuelle = creerReco();
-      try { recoActuelle.start(); } catch (e) { recoActuelle = null; }
+      boutonMicro.disabled = true;
+      setTimeout(function () {
+        boutonMicro.disabled = false;
+        recoActuelle = creerReco();
+        try { recoActuelle.start(); } catch (e) { recoActuelle = null; }
+      }, 400);
     });
   }
 
