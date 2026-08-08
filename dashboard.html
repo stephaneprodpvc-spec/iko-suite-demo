@@ -687,6 +687,7 @@ function ModalConcepteur({ onClose, onSuccess }) {
   const [techniciens, setTechniciens] = React.useState({...CONFIG_ENTREPRISE.techniciens});
   const [saving, setSaving] = React.useState(false);
   const [error, setError] = React.useState("");
+  const [agenceOuverte, setAgenceOuverte] = React.useState(0);
 
   const setEmail = (agence, val) => setEmails(prev => ({...prev, [agence]: val}));
   const setTech = (agence, champ, val) => setTechniciens(prev => ({...prev, [agence]: {...(prev[agence]||{}), [champ]: val}}));
@@ -743,46 +744,50 @@ function ModalConcepteur({ onClose, onSuccess }) {
           </div>
         </div>
 
-        <div style={{marginBottom:"8px"}}>
-          <label style={labelStyle}>Email technicien par agence (notifications SAV)</label>
+        <div style={{fontSize:"12px",fontWeight:"800",color:C.white,marginTop:"4px",marginBottom:"4px"}}>Configuration par agence</div>
+        <div style={{fontSize:"10px",color:C.muted,margin:"0 0 10px"}}>
+          Un email et/ou un compte technicien non renseigné garde le comportement historique par défaut pour cette agence.
         </div>
-        {Array.from({length:nombre}, (_,i) => "Agence "+(i+1)).map(a => (
-          <div key={a} style={{marginBottom:"8px"}}>
-            <input type="email" value={emails[a] || ""} onChange={e => setEmail(a, e.target.value)} placeholder={a + " — email@exemple.fr"} style={inputStyle}/>
-          </div>
-        ))}
-
-        <div style={{fontSize:"10px",color:C.muted,margin:"10px 0 14px"}}>
-          Les emails sont enregistrés et prêts à l'emploi ; le branchement effectif dans les envois automatiques (scénario Make) est une étape suivante à faire séparément.
-        </div>
-
-        <div style={{marginBottom:"8px",marginTop:"8px"}}>
-          <label style={labelStyle}>Comptes technicien (accès au module technicien.html)</label>
-        </div>
-        {Array.from({length:nombre}, (_,i) => "Agence "+(i+1)).map(a => {
+        {Array.from({length:nombre}, (_,i) => "Agence "+(i+1)).map((a, i) => {
+          const ouverte = agenceOuverte === i;
           const t = techniciens[a] || {};
+          const emailRempli = !!(emails[a] || "").trim();
+          const compteRempli = !!((t.prenom||"").trim() || (t.nom||"").trim() || (t.motDePasse||"").trim());
           return (
-            <div key={a} style={{border:"1px solid "+C.border,borderRadius:"8px",padding:"10px",marginBottom:"8px"}}>
-              <div style={{fontSize:"11px",fontWeight:"800",color:C.white,marginBottom:"6px"}}>{a}</div>
-              <div style={{display:"flex",gap:"8px",marginBottom:"6px"}}>
-                <input type="text" value={t.prenom || ""} onChange={e => setTech(a, "prenom", e.target.value)} placeholder="Prénom" style={{...inputStyle,flex:1}}/>
-                <input type="text" value={t.nom || ""} onChange={e => setTech(a, "nom", e.target.value)} placeholder="Nom" style={{...inputStyle,flex:1}}/>
-              </div>
-              <div style={{display:"flex",gap:"8px",alignItems:"center"}}>
-                <input type="text" value={t.motDePasse || ""} onChange={e => setTech(a, "motDePasse", e.target.value)} placeholder="Mot de passe d'accès" style={{...inputStyle,flex:1}}/>
-                <label style={{display:"flex",alignItems:"center",gap:"5px",fontSize:"11px",color:C.muted,whiteSpace:"nowrap"}}>
-                  <input type="checkbox" checked={!!t.bloque} onChange={e => setTech(a, "bloque", e.target.checked)}/>
-                  Bloqué
-                </label>
-                <button type="button" onClick={() => setTechniciens(prev => { const cp = {...prev}; delete cp[a]; return cp; })}
-                  title="Supprimer ce compte technicien" style={{background:"none",border:"none",color:"#DC2626",cursor:"pointer",fontSize:"14px"}}>🗑️</button>
-              </div>
+            <div key={a} style={{border:"1px solid "+C.border,borderRadius:"10px",marginBottom:"8px",overflow:"hidden"}}>
+              <button type="button" onClick={() => setAgenceOuverte(ouverte ? -1 : i)}
+                style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"space-between",padding:"11px 13px",background:ouverte?C.orDim:"#FAFAFA",border:"none",cursor:"pointer",textAlign:"left"}}>
+                <span style={{display:"flex",alignItems:"center",gap:"8px"}}>
+                  <span style={{fontSize:"12px",fontWeight:"800",color:C.white}}>{a}</span>
+                  <span title={emailRempli ? "Email renseigné" : "Email non renseigné"} style={{width:"6px",height:"6px",borderRadius:"50%",background:emailRempli?C.vert:C.border,display:"inline-block"}}/>
+                  <span title={compteRempli ? "Compte technicien renseigné" : "Compte technicien non renseigné"} style={{width:"6px",height:"6px",borderRadius:"50%",background:compteRempli?C.vert:C.border,display:"inline-block"}}/>
+                </span>
+                <span style={{fontSize:"11px",color:C.muted,transform:ouverte?"rotate(90deg)":"none",transition:"transform 0.15s"}}>▸</span>
+              </button>
+              {ouverte && (
+                <div style={{padding:"12px 13px",borderTop:"1px solid "+C.border}}>
+                  <label style={labelStyle}>Email technicien (notifications SAV)</label>
+                  <input type="email" value={emails[a] || ""} onChange={e => setEmail(a, e.target.value)} placeholder={a + " — email@exemple.fr"} style={{...inputStyle,marginBottom:"12px"}}/>
+
+                  <label style={labelStyle}>Compte technicien (accès à technicien.html)</label>
+                  <div style={{display:"flex",gap:"8px",marginBottom:"6px"}}>
+                    <input type="text" value={t.prenom || ""} onChange={e => setTech(a, "prenom", e.target.value)} placeholder="Prénom" style={{...inputStyle,flex:1}}/>
+                    <input type="text" value={t.nom || ""} onChange={e => setTech(a, "nom", e.target.value)} placeholder="Nom" style={{...inputStyle,flex:1}}/>
+                  </div>
+                  <div style={{display:"flex",gap:"8px",alignItems:"center"}}>
+                    <input type="text" value={t.motDePasse || ""} onChange={e => setTech(a, "motDePasse", e.target.value)} placeholder="Mot de passe d'accès" style={{...inputStyle,flex:1}}/>
+                    <label style={{display:"flex",alignItems:"center",gap:"5px",fontSize:"11px",color:C.muted,whiteSpace:"nowrap"}}>
+                      <input type="checkbox" checked={!!t.bloque} onChange={e => setTech(a, "bloque", e.target.checked)}/>
+                      Bloqué
+                    </label>
+                    <button type="button" onClick={() => setTechniciens(prev => { const cp = {...prev}; delete cp[a]; return cp; })}
+                      title="Supprimer ce compte technicien" style={{background:"none",border:"none",color:C.rouge,cursor:"pointer",fontSize:"14px"}}>🗑️</button>
+                  </div>
+                </div>
+              )}
             </div>
           );
         })}
-        <div style={{fontSize:"10px",color:C.muted,margin:"6px 0 14px"}}>
-          Un compte "Bloqué" ou sans mot de passe garde l'accès historique par défaut (agence1, agence2…) tant qu'aucun mot de passe personnalisé n'est défini ici.
-        </div>
 
         {error && <div style={{background:"#FEF2F2",color:"#DC2626",padding:"9px 12px",borderRadius:"8px",fontSize:"12px",marginBottom:"14px"}}>{error}</div>}
         <div style={{display:"flex",gap:"10px"}}>
