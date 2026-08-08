@@ -305,7 +305,7 @@
   <textarea id="saisie" rows="1" placeholder="Décrivez votre projet…" aria-label="Votre message"></textarea>
   <button id="envoyer" aria-label="Envoyer">↑</button>
 </div>
-<div class="mention">Assistant automatisé — pour un devis, un conseiller vous rappellera. <span style="opacity:.5">[build b4cc433]</span></div>
+<div class="mention">Assistant automatisé — pour un devis, un conseiller vous rappellera.</div>
 
 <script>
 (function () {
@@ -498,15 +498,14 @@
   const Reco = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (Reco) {
     let enEcoute = false;
-    let texteDicte = '';
-    let recoActuelle = null;
+    let recoUnique = null;
+    let arretDemande = false;
+    let essaisErreurConsecutifs = 0;
     let streamMicro = null;
 
-    // Sur Safari/iOS, laisser SpeechRecognition gérer seul l'accès matériel
-    // au micro provoque une erreur "audio-capture" après une 1ère
-    // utilisation (surtout après lecture d'un son TTS) : le système "perd"
-    // le micro entre deux sessions. On garde un flux getUserMedia ouvert en
-    // continu pour que le micro reste toujours disponible.
+    // Garder un flux getUserMedia ouvert en continu : sur Safari/iOS, le
+    // laisser gérer seul l'accès matériel provoque une erreur audio-capture
+    // après une 1ère utilisation.
     async function assurerAccesMicro() {
       if (streamMicro && streamMicro.getAudioTracks().some(function (t) { return t.readyState === 'live'; })) {
         return true;
@@ -523,59 +522,73 @@
       if (streamMicro) streamMicro.getTracks().forEach(function (t) { t.stop(); });
     });
 
-    // Safari/iOS bloque silencieusement le réemploi d'une instance
-    // SpeechRecognition déjà utilisée : on en recrée une neuve à chaque
-    // activation du micro plutôt que de réutiliser une instance partagée.
+    // Session continue relancée automatiquement en interne (depuis 'end',
+    // sans nouveau clic) : sur Safari/iOS, un .start() déclenché par un
+    // nouveau clic utilisateur échoue systématiquement après la 1ère
+    // dictée (bug WebKit connu, cf. forums Apple Developer). Relancer
+    // depuis l'événement interne de l'API plutôt que depuis un clic
+    // contourne apparemment ce blocage dans les retours de la communauté.
     function creerReco() {
       const r = new Reco();
       r.lang = 'fr-FR';
-      r.continuous = false;
+      r.continuous = true;
       r.interimResults = true;
 
       r.addEventListener('start', function () {
         enEcoute = true;
-        texteDicte = '';
+        essaisErreurConsecutifs = 0;
         boutonMicro.classList.add('ecoute');
         boutonMicro.setAttribute('aria-label', "Arrêter la dictée");
       });
       r.addEventListener('end', function () {
         enEcoute = false;
-        boutonMicro.classList.remove('ecoute');
-        boutonMicro.setAttribute('aria-label', "Dicter votre message");
-        recoActuelle = null;
-        // Envoi à la fin de l'écoute : plus fiable que d'attendre un signal
-        // intermédiaire, qui n'arrive pas de la même façon selon le navigateur.
-        if (texteDicte.trim()) {
-          saisie.value = texteDicte.trim();
-          envoyer();
-          texteDicte = '';
+        if (arretDemande) {
+          arretDemande = false;
+          boutonMicro.classList.remove('ecoute');
+          boutonMicro.setAttribute('aria-label', "Dicter votre message");
+          return;
         }
+        // Relance automatique, sans intervention de l'utilisateur.
+        try { r.start(); } catch (e) { boutonMicro.classList.remove('ecoute'); }
       });
       r.addEventListener('result', function (e) {
-        let texte = '';
-        for (let i = 0; i < e.results.length; i++) texte += e.results[i][0].transcript;
-        texteDicte = texte;
-        // Aperçu en direct pendant que la personne parle
-        saisie.value = texte;
-        saisie.style.height = 'auto';
-        saisie.style.height = Math.min(saisie.scrollHeight, 120) + 'px';
-        // Phrase terminée : on arrête l'écoute, l'envoi se fait dans 'end'
-        if (e.results[e.results.length - 1].isFinal && texte.trim()) {
-          r.stop();
+        let texteFinalNouveau = '';
+        let texteInterim = '';
+        for (let i = e.resultIndex; i < e.results.length; i++) {
+          const morceau = e.results[i][0].transcript;
+          if (e.results[i].isFinal) texteFinalNouveau += morceau;
+          else texteInterim += morceau;
+        }
+        if (texteInterim) {
+          saisie.value = texteInterim;
+          saisie.style.height = 'auto';
+          saisie.style.height = Math.min(saisie.scrollHeight, 120) + 'px';
+        }
+        if (texteFinalNouveau.trim()) {
+          saisie.value = texteFinalNouveau.trim();
+          envoyer();
         }
       });
       r.addEventListener('error', function (e) {
-        boutonMicro.classList.remove('ecoute');
-        recoActuelle = null;
         console.warn('Dictée — erreur reconnaissance vocale :', e.error);
         if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
+          arretDemande = true;
+          boutonMicro.classList.remove('ecoute');
           ajouterBulle("Micro refusé. Autorisez l'accès au micro dans les réglages du navigateur, ou écrivez votre message.", 'erreur');
-        } else if (e.error === 'no-speech') {
-          ajouterBulle("Aucune voix détectée. Vérifiez le micro sélectionné (icône micro dans la barre d'adresse Chrome) et reparlez juste après avoir cliqué.", 'erreur');
-        } else if (e.error === 'audio-capture') {
-          ajouterBulle("Aucun micro détecté par le navigateur. Vérifiez qu'un micro est bien branché et activé.", 'erreur');
-        } else if (e.error === 'network') {
-          ajouterBulle("Erreur réseau pendant la reconnaissance vocale. Réessayez.", 'erreur');
+          return;
+        }
+        // no-speech / audio-capture / network : on tente une relance
+        // automatique (via 'end', qui suit toujours 'error') sauf après
+        // plusieurs échecs consécutifs, pour éviter une boucle infinie.
+        essaisErreurConsecutifs++;
+        if (essaisErreurConsecutifs > 3) {
+          arretDemande = true;
+          boutonMicro.classList.remove('ecoute');
+          if (e.error === 'audio-capture') {
+            ajouterBulle("Aucun micro détecté par le navigateur. Vérifiez qu'un micro est bien branché et activé.", 'erreur');
+          } else if (e.error === 'network') {
+            ajouterBulle("Erreur réseau pendant la reconnaissance vocale. Réessayez.", 'erreur');
+          }
         }
       });
       return r;
@@ -583,7 +596,11 @@
 
     boutonMicro.classList.add('dispo');
     boutonMicro.addEventListener('click', async function () {
-      if (enEcoute) { if (recoActuelle) recoActuelle.stop(); return; }
+      if (enEcoute) {
+        arretDemande = true;
+        try { recoUnique.stop(); } catch (e) {}
+        return;
+      }
       try { lecteurAudio.pause(); } catch (e) {} // ne pas s'écouter parler
       boutonMicro.disabled = true;
       const ok = await assurerAccesMicro();
@@ -592,9 +609,12 @@
         ajouterBulle("Micro refusé. Autorisez l'accès au micro dans les réglages du navigateur, ou écrivez votre message.", 'erreur');
         return;
       }
-      recoActuelle = creerReco();
-      try { recoActuelle.start(); } catch (e) { recoActuelle = null; }
+      if (!recoUnique) recoUnique = creerReco();
+      arretDemande = false;
+      essaisErreurConsecutifs = 0;
+      try { recoUnique.start(); } catch (e) {}
     });
+  }
   }
 
   // Démarrage
