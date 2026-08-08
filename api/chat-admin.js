@@ -9,24 +9,42 @@ import { verifierOrigine, verifierDebit, reponseBloquee } from "./_securite.js";
 // reelle d'un client reste toujours un clic explicite de Stephane cote
 // client (voir admin.html).
 
-const MODELE = "claude-haiku-4-5-20251001";
+const MODELE = "claude-sonnet-4-6";
 const MAX_CHARS_MESSAGE = 1500;
+const MAX_CLIENTS_CONTEXTE = 100;
+
+// Supprime emojis/pictogrammes d'un texte (filet de securite en plus de la
+// consigne donnee a Claude dans le system prompt).
+function retirerEmojis(texte){
+  return String(texte || "").replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{1F1E6}-\u{1F1FF}\uFE0F]/gu, "").replace(/ {2,}/g, " ").trim();
+}
 
 const METIERS_VALIDES = ["Menuiserie", "Plomberie & Chauffage", "Électricité", "Autre"];
 const MODULES_VALIDES = ["Dashboard", "Technicien", "SAV", "Métreur"];
 
 const SYSTEM_PROMPT = `
 Tu es Claude, integre au poste de pilotage d'Iko Suite (RSIA Conseil,
-Stephane). Tu es un partenaire de travail direct : Stephane peut te parler
-de strategie produit, discuter d'une idee, te demander un avis, ou te
-decrire un nouveau client a creer sur la plateforme.
+Stephane). Tu es un partenaire de travail direct et competent : Stephane
+peut te parler de strategie produit, discuter d'une idee, te demander un
+avis, analyser sa base de clients actuelle, ou te decrire un nouveau
+client a creer sur la plateforme.
 
 CONTEXTE PRODUIT
 Iko Suite est vendue a des professionnels (artisans/PME) pour gerer leur
 SAV, technicien terrain et tableau de bord. Chaque client final a sa propre
 fiche (metier, couleurs, logo, modules actifs, contacts) dans une base
 multi-tenant. Le code des modules (dashboard, technicien, SAV) est
-partage entre tous les clients.
+partage entre tous les clients. La liste actuelle des clients (JSON) t'est
+fournie dans chaque message : utilise-la pour repondre precisement a toute
+question sur l'etat de la base (nombre, statuts, modules, metiers), au
+lieu de deviner.
+
+STYLE
+- Jamais d'emoji ni de pictogramme (😉, 👍, etc.), meme pour "faire
+  sympa" : cette reponse est parfois lue a voix haute, les pictos n'ont
+  aucun sens a l'oral et alourdissent le texte a l'ecrit.
+- Direct, concret, professionnel. Pas de blabla commercial ni de
+  formules creuses.
 
 DEUX MODES DE REPONSE
 1. Si Stephane decrit un nouveau client a creer (nom, metier, besoins) :
@@ -91,12 +109,14 @@ export default async function handler(req, res) {
       return res.status(400).json({ erreur: "Aucun message recu" });
     }
     const historique = Array.isArray(body.historique) ? body.historique.slice(-10) : [];
+    const clients = Array.isArray(body.clients) ? body.clients.slice(0, MAX_CLIENTS_CONTEXTE) : [];
 
     const messagesAnthropic = historique.map(h => ({
       role: h.role === "user" ? "user" : "assistant",
       content: String(h.texte || "").slice(0, 800),
     }));
-    messagesAnthropic.push({ role: "user", content: message });
+    const contexte = "Clients actuels dans la base (JSON) :\n" + JSON.stringify(clients) + "\n\nMessage de Stephane : \"" + message + "\"";
+    messagesAnthropic.push({ role: "user", content: contexte });
 
     const reponse = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
@@ -127,11 +147,12 @@ export default async function handler(req, res) {
     const appel = blocs.find(b => b.type === "tool_use" && b.name === "proposer_client");
 
     if (appel) {
+      appel.input.message = retirerEmojis(appel.input.message);
       return res.status(200).json({ type: "proposition", proposition: appel.input });
     }
 
-    const texte = blocs.filter(b => b.type === "text").map(b => b.text || "").join(" ").trim();
-    return res.status(200).json({ type: "message", reponse: texte || "…" });
+    const texteBrut = blocs.filter(b => b.type === "text").map(b => b.text || "").join(" ").trim();
+    return res.status(200).json({ type: "message", reponse: retirerEmojis(texteBrut) || "…" });
   } catch (e) {
     console.error("Erreur chat-admin:", e);
     return res.status(500).json({ erreur: "Une erreur est survenue." });
