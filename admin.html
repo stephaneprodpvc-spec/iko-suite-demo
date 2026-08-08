@@ -129,6 +129,10 @@
   .btn-export{width:100%;padding:9px;border-radius:11px;border:1px solid var(--border);background:rgba(255,255,255,0.03);color:var(--texte-dim);font-size:12.5px;cursor:pointer;margin-bottom:14px;font-weight:500;transition:background .15s;}
   .btn-export:hover{background:var(--panel-hover);}
   #activiteInfo{font-size:12px;color:var(--texte-dim);margin:10px 0;min-height:14px;}
+  #diagramWrap{margin:16px 0;border:1px solid var(--border);border-radius:14px;background:rgba(255,255,255,0.02);padding:14px;}
+  #diagramWrap .diag-label{font-size:11px;color:var(--texte-faint);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;}
+  .diag-node-txt{font-size:11px;font-family:-apple-system,sans-serif;font-weight:600;}
+  .diag-node-sub{font-size:9px;font-family:-apple-system,sans-serif;}
   #printFiche, #printDevis{display:none;}
   @page{size:A4 portrait;margin:18mm;}
   @media print{
@@ -241,6 +245,11 @@
           <div class="chip" data-mod="Technicien">Technicien</div>
           <div class="chip" data-mod="SAV">SAV</div>
           <div class="chip" data-mod="Métreur">Métreur</div>
+        </div>
+
+        <div id="diagramWrap" style="display:none;">
+          <div class="diag-label">Schéma des flux</div>
+          <div id="diagramSvg"></div>
         </div>
 
         <label>Statut</label>
@@ -385,7 +394,7 @@ function afficherClients(){
 }
 
 Array.prototype.forEach.call(document.querySelectorAll("#fModules .chip"), function(chip){
-  chip.addEventListener("click", function(){ chip.classList.toggle("on"); });
+  chip.addEventListener("click", function(){ chip.classList.toggle("on"); dessinerDiagramme(); });
 });
 function getModulesActifs(){
   return Array.prototype.slice.call(document.querySelectorAll("#fModules .chip.on")).map(function(c){ return c.getAttribute("data-mod"); });
@@ -395,6 +404,67 @@ function setModulesActifs(arr){
   Array.prototype.forEach.call(document.querySelectorAll("#fModules .chip"), function(chip){
     chip.classList.toggle("on", arr.indexOf(chip.getAttribute("data-mod")) !== -1);
   });
+}
+
+/* ---- Schéma des flux (style Make : nœuds + lignes courbes) ---- */
+function dessinerDiagramme(){
+  var wrap = document.getElementById("diagramWrap");
+  var nom = document.getElementById("fNom").value.trim();
+  if (!nom){ wrap.style.display = "none"; return; }
+  wrap.style.display = "block";
+
+  var actifs = getModulesActifs();
+  var couleurClient = document.getElementById("fC1").value || "#FF6B00";
+  var modules = [
+    { id: "Dashboard", label: "Dashboard" },
+    { id: "Technicien", label: "Technicien" },
+    { id: "SAV", label: "SAV (Amandine)" },
+    { id: "Métreur", label: "Métreur" },
+  ];
+
+  var W = 460, rowH = 56, startY = 24;
+  var H = startY * 2 + modules.length * rowH;
+  var xClient = 16, xModule = 168, xAirtable = W - 96;
+  var yClient = H / 2;
+
+  function noeud(x, y, w, h, label, sub, actif, iconBg){
+    var fill = actif ? "rgba(255,107,0,0.12)" : "rgba(255,255,255,0.03)";
+    var stroke = actif ? "#FF6B00" : "rgba(255,255,255,0.15)";
+    var txtColor = actif ? "#F5F5F7" : "#636366";
+    return "<rect x='" + x + "' y='" + y + "' width='" + w + "' height='" + h + "' rx='12' fill='" + fill + "' stroke='" + stroke + "' stroke-width='1.5'/>" +
+      "<circle cx='" + (x + 16) + "' cy='" + (y + h/2) + "' r='4' fill='" + (actif ? "#FF6B00" : "#48484A") + "'/>" +
+      "<text x='" + (x + 28) + "' y='" + (y + h/2 - 3) + "' class='diag-node-txt' fill='" + txtColor + "'>" + label + "</text>" +
+      (sub ? "<text x='" + (x + 28) + "' y='" + (y + h/2 + 11) + "' class='diag-node-sub' fill='#636366'>" + sub + "</text>" : "");
+  }
+
+  function lien(x1, y1, x2, y2, actif){
+    var midX = (x1 + x2) / 2;
+    var couleur = actif ? "#FF6B00" : "rgba(255,255,255,0.12)";
+    var dash = actif ? "" : " stroke-dasharray='4,4'";
+    return "<path d='M " + x1 + " " + y1 + " C " + midX + " " + y1 + ", " + midX + " " + y2 + ", " + x2 + " " + y2 + "' fill='none' stroke='" + couleur + "' stroke-width='1.5'" + dash + "/>";
+  }
+
+  var svg = "<svg viewBox='0 0 " + W + " " + H + "' width='100%' style='display:block;'>";
+
+  // Nœud client (point de depart)
+  var clientH = 46;
+  svg += noeud(xClient, yClient - clientH/2, 128, clientH, nom.length > 16 ? nom.slice(0,15) + "…" : nom, "Compte client", true);
+
+  // Nœud Airtable (destination commune)
+  var airtableH = 46;
+  svg += noeud(xAirtable, yClient - airtableH/2, 80, airtableH, "Airtable", "Données", actifs.length > 0);
+
+  // Nœuds modules + liens
+  modules.forEach(function(m, i){
+    var y = startY + i * rowH;
+    var actif = actifs.indexOf(m.id) !== -1;
+    svg += lien(xClient + 128, yClient, xModule, y + 22, actif);
+    svg += noeud(xModule, y, 148, 44, m.label, actif ? "Actif" : "Non activé", actif);
+    svg += lien(xModule + 148, y + 22, xAirtable, yClient, actif);
+  });
+
+  svg += "</svg>";
+  document.getElementById("diagramSvg").innerHTML = svg;
 }
 
 function slugifier(s){
@@ -421,6 +491,7 @@ function chargerDansFormulaire(id){
   document.getElementById("fC2").value = f["Couleur secondaire"] || "#111111";
   document.getElementById("fStatut").value = f["Statut client"] || "Actif";
   setModulesActifs(f["Modules actifs"]);
+  dessinerDiagramme();
   document.getElementById("submitBtn").textContent = "Enregistrer les modifications";
   document.getElementById("cancelBtn").style.display = "inline-block";
   document.getElementById("printBtn").style.display = "inline-block";
@@ -528,6 +599,7 @@ function reinitialiserFormulaire(){
   document.getElementById("deleteBtn").style.display = "none";
   document.getElementById("formMsg").textContent = "";
   document.getElementById("activiteInfo").textContent = "";
+  document.getElementById("diagramWrap").style.display = "none";
   Array.prototype.forEach.call(document.querySelectorAll(".client-item"), function(x){ x.classList.remove("selected"); });
 }
 
