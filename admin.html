@@ -73,6 +73,13 @@
   #chatMic.ecoute{background:var(--orange);color:#0A0A0A;border-color:var(--orange);animation:micPulse 1.2s ease-in-out infinite;}
   @keyframes micPulse{0%,100%{box-shadow:0 0 0 0 rgba(255,107,0,.5);}50%{box-shadow:0 0 0 8px rgba(255,107,0,0);}}
   .chat-err{color:#FF453A;font-size:11.5px;margin-top:8px;min-height:14px;}
+  .voice-toggle{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;padding:9px 12px;border-radius:11px;background:rgba(255,255,255,0.03);border:1px solid var(--border);font-size:12px;color:var(--texte-dim);}
+  .switch{position:relative;width:38px;height:22px;flex-shrink:0;}
+  .switch input{opacity:0;width:0;height:0;}
+  .switch-track{position:absolute;inset:0;background:rgba(255,255,255,0.12);border-radius:22px;cursor:pointer;transition:background .2s;}
+  .switch-track:before{content:"";position:absolute;width:16px;height:16px;left:3px;top:3px;background:#fff;border-radius:50%;transition:transform .2s;}
+  .switch input:checked + .switch-track{background:var(--orange);}
+  .switch input:checked + .switch-track:before{transform:translateX(16px);}
   .chat-hint{font-size:11.5px;color:var(--texte-faint);margin-top:10px;line-height:1.5;}
 
   .client-item{display:flex;align-items:center;gap:12px;padding:13px 10px;border-radius:14px;cursor:pointer;transition:background .15s;border:1px solid transparent;}
@@ -138,6 +145,10 @@
 
     <div class="card">
       <h2><span class="pulse"></span>Claude</h2>
+      <label class="voice-toggle">
+        <span>Conversation vocale automatique</span>
+        <span class="switch"><input type="checkbox" id="modeVocal" checked><span class="switch-track"></span></span>
+      </label>
       <div id="chatMessages"></div>
       <form id="chatForm">
         <textarea id="chatInput" rows="1" placeholder="Parle-lui d'un client, d'une idée, d'une question…"></textarea>
@@ -230,6 +241,7 @@ document.getElementById("lockForm").addEventListener("submit", function(e){
     sessionStorage.setItem("iko_admin_ok", "1");
     document.getElementById("lock").style.display = "none";
     chargerClients();
+    if (document.getElementById("modeVocal").checked) lancerEcouteClaude();
   } else {
     document.getElementById("lockErr").textContent = "Mot de passe incorrect.";
   }
@@ -437,6 +449,7 @@ document.getElementById("chatForm").addEventListener("submit", function(e){
       var texte = data.reponse || "…";
       chatHistorique.push({ role: "assistant", texte: texte });
       ajouterBulle(texte, "assistant");
+      parlerClaude(texte);
     })
     .catch(function(){
       bulleAttente.remove();
@@ -461,6 +474,19 @@ function appliquerProposition(p){
 }
 
 document.getElementById("chatMic").addEventListener("click", lancerEcouteClaude);
+
+function parlerClaude(texte){
+  if (!("speechSynthesis" in window)) return;
+  try {
+    window.speechSynthesis.cancel();
+    var u = new SpeechSynthesisUtterance(texte);
+    u.lang = "fr-FR";
+    u.onend = function(){
+      if (document.getElementById("modeVocal").checked) lancerEcouteClaude();
+    };
+    window.speechSynthesis.speak(u);
+  } catch(e){ /* synthese vocale indisponible, on continue sans */ }
+}
 
 function lancerEcouteClaude(){
   var err = document.getElementById("chatErr");
