@@ -21,10 +21,15 @@ const AIRTABLE_BASE = "appkI8RKHkYNWY86U"; // base démo Iko Suite (était: prod
 const MAKE_WEBHOOK = "https://hook.eu1.make.com/n3lwi92wldkf22jcemmjfem334p4mv6a"; // scénario démo isolé (était: scénario prod partagé)
 const DELAI_MIN_JOURS = 7;
 
-const AGENCES_VALIDES = ["Agence 1", "Agence 3", "Agence 2", "Agence 4"];
+// Enregistrement sentinelle Planning (Date="CONFIG") qui porte le nombre
+// d'agences défini en mode concepteur (1 à 10) — même record que dashboard.html.
+const CONFIG_RECORD_ID = "rec45X231n9dXnyaU";
+const AGENCES_CACHE_TTL_MS = 60000;
+let AGENCES_CACHE_TS = 0;
 
-// Démo : la base utilise directement les libellés génériques Agence 1-4,
-// pas besoin de traduction vers un nom réel d'agence.
+// Liste dynamique, synchronisée sur "Nombre agences" via synchroniserAgences().
+// Valeur de départ = repli si la synchro échoue avant le premier appel.
+let AGENCES_VALIDES = ["Agence 1", "Agence 2", "Agence 3", "Agence 4"];
 
 const CRENEAUX = {
     matin: "Matin (8h30 — 12h00)",
@@ -172,6 +177,26 @@ function airtableHeaders() {
     Authorization: "Bearer " + process.env.AIRTABLE_TOKEN,
     "Content-Type": "application/json",
   };
+}
+
+// Aligne AGENCES_VALIDES sur le mode concepteur (dashboard.html) en lisant
+// "Nombre agences" sur le record sentinelle Planning. Mutation en place (pas
+// de reassignation) pour que l'enum deja construit dans TOOLS reste synchro.
+// Cache 60s pour eviter un appel Airtable a chaque message.
+async function synchroniserAgences() {
+  if (Date.now() - AGENCES_CACHE_TS < AGENCES_CACHE_TTL_MS) return;
+  try {
+    const r = await fetch("https://api.airtable.com/v0/" + AIRTABLE_BASE + "/Planning/" + CONFIG_RECORD_ID, { headers: airtableHeaders() });
+    if (r.ok) {
+      const json = await r.json();
+      const n = Math.max(1, Math.min(10, parseInt(json.fields?.["Nombre agences"], 10) || 4));
+      AGENCES_VALIDES.length = 0;
+      for (let i = 1; i <= n; i++) AGENCES_VALIDES.push("Agence " + i);
+    }
+  } catch (e) {
+    console.error("synchroniserAgences erreur:", e);
+  }
+  AGENCES_CACHE_TS = Date.now();
 }
 
 async function executerOutil(nom, input) {
@@ -324,6 +349,7 @@ const cle = process.env.ANTHROPIC_API_KEY;
   }
 
 try {
+  await synchroniserAgences();
   const messages = (req.body || {}).messages;
   if (!Array.isArray(messages) || messages.length === 0) {
     return res.status(400).json({ error: "Aucun message recu" });
