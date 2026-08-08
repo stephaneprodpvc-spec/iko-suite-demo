@@ -198,6 +198,28 @@ function airtableHeaders() {
 // "Nombre agences" sur le record sentinelle Planning. Mutation en place (pas
 // de reassignation) pour que l'enum deja construit dans TOOLS reste synchro.
 // Cache 60s pour eviter un appel Airtable a chaque message.
+// Resout le client courant a partir de son slug (?client=slug transmis par
+// amandine.html). Calcul PAR REQUETE (pas de variable globale partagee, a
+// la difference de TRADE_ID/AGENCES_VALIDES) car plusieurs clients peuvent
+// discuter avec Amandine simultanement sur ce meme serveur.
+async function resoudreClient(slug) {
+  if (!slug) return null;
+  try {
+    const formule = encodeURIComponent('{Slug}="' + String(slug).replace(/"/g, '\\"') + '"');
+    const r = await fetch("https://api.airtable.com/v0/" + AIRTABLE_BASE + "/Clients?filterByFormula=" + formule + "&maxRecords=1", { headers: airtableHeaders() });
+    if (!r.ok) return null;
+    const json = await r.json();
+    const rec = (json.records || [])[0];
+    if (!rec) return null;
+    const metier = rec.fields && rec.fields["Métier"];
+    const metierId = metier === "Menuiserie" ? "menuiserie" : (metier === "Plomberie & Chauffage" ? "plomberie_chauffage" : null);
+    return { id: rec.id, tradeId: (metierId && TRADES[metierId]) ? metierId : null };
+  } catch (e) {
+    console.error("resoudreClient erreur:", e);
+    return null;
+  }
+}
+
 async function synchroniserAgences() {
   if (Date.now() - AGENCES_CACHE_TS < AGENCES_CACHE_TTL_MS) return;
   try {
@@ -221,7 +243,13 @@ async function synchroniserAgences() {
   AGENCES_CACHE_TS = Date.now();
 }
 
-async function executerOutil(nom, input) {
+function filtreAvecClientServeur(baseFormula, clientId) {
+  if (!clientId) return baseFormula;
+  const clause = 'FIND("' + clientId + '", ARRAYJOIN({Compte client}))';
+  return baseFormula ? "AND(" + baseFormula + "," + clause + ")" : clause;
+}
+
+async function executerOutil(nom, input, clientId, tradeId) {
   try {
     if (nom === "lister_creneaux") {
       const valeurCreneau = CRENEAUX[input.periode];
@@ -229,7 +257,8 @@ async function executerOutil(nom, input) {
         return { erreur: "Agence ou periode invalide." };
       }
       const agenceAirtable = input.agence;
-      const formule = "AND({Agence}=\"" + agenceAirtable + "\",{Créneau}=\"" + valeurCreneau + "\",{Statut}=\"Libre\")";
+      const formuleBase = "AND({Agence}=\"" + agenceAirtable + "\",{Créneau}=\"" + valeurCreneau + "\",{Statut}=\"Libre\")";
+      const formule = filtreAvecClientServeur(formuleBase, clientId);
       const url = "https://api.airtable.com/v0/" + AIRTABLE_BASE + "/Planning?filterByFormula=" + encodeURIComponent(formule) + "&sort[0][field]=Date&sort[0][direction]=asc&maxRecords=60";
       const r = await fetch(url, { headers: airtableHeaders() });
       const json = await r.json();
@@ -298,16 +327,42 @@ async function executerOutil(nom, input) {
       body: JSON.stringify(payload),
     });
     if (!r.ok) return { erreur: "La creation du ticket a echoue, merci de reessayer." };
+
+    if (clientId) {
+      // Le ticket est cree de maniere asynchrone par le scenario Make (pas
+      // directement par ce code). On attend un court instant puis on le
+      // retrouve par son numero (genere ci-dessus, donc connu et unique)
+      // pour lui attacher le lien "Compte client". Best-effort : si ca
+      // echoue, le ticket existe deja et fonctionne, juste sans le lien.
+      try {
+        await new Promise(function (resolve) { setTimeout(resolve, 2500); });
+        const formuleTicket = encodeURIComponent('{Name}="' + numero + '"');
+        const rTicket = await fetch("https://api.airtable.com/v0/" + AIRTABLE_BASE + "/Tickets%20SAV?filterByFormula=" + formuleTicket + "&maxRecords=1", { headers: airtableHeaders() });
+        const jsonTicket = await rTicket.json();
+        const ticketRec = (jsonTicket.records || [])[0];
+        if (ticketRec) {
+          await fetch("https://api.airtable.com/v0/" + AIRTABLE_BASE + "/Tickets%20SAV/" + ticketRec.id, {
+            method: "PATCH",
+            headers: airtableHeaders(),
+            body: JSON.stringify({ fields: { "Compte client": [clientId] } }),
+          });
+        }
+      } catch (e) {
+        console.error("Tag Compte client du ticket echoue (non bloquant):", e);
+      }
+    }
+
     return { ok: true, ticket: numero };
   }
 
   if (nom === "consulter_historique_ouvertures") {
-    const vocabCourant = loadTradeVocab(TRADE_ID);
+    const vocabCourant = loadTradeVocab(tradeId || TRADE_ID);
     if (!vocabCourant.historique.disponible) return { trouve: false };
     const recherche = String(input.recherche || "").trim().slice(0, 100);
     if (!recherche) return { trouve: false };
     try {
-      const formuleFiche = "OR(FIND(LOWER(\"" + recherche.replace(/"/g, '\\"') + "\"),LOWER({Client})),FIND(\"" + recherche.replace(/"/g, '\\"') + "\",{Téléphone}))";
+      const formuleFicheBase = "OR(FIND(LOWER(\"" + recherche.replace(/"/g, '\\"') + "\"),LOWER({Client})),FIND(\"" + recherche.replace(/"/g, '\\"') + "\",{Téléphone}))";
+      const formuleFiche = filtreAvecClientServeur(formuleFicheBase, clientId);
       const urlFiches = "https://api.airtable.com/v0/" + AIRTABLE_BASE + "/" + encodeURIComponent("Métrés") +
         "?filterByFormula=" + encodeURIComponent(formuleFiche) +
         "&sort[0][field]=Date&sort[0][direction]=desc&maxRecords=3";
@@ -374,6 +429,10 @@ const cle = process.env.ANTHROPIC_API_KEY;
 
 try {
   await synchroniserAgences();
+  const clientSlug = (req.body || {}).client_slug || null;
+  const contexteClient = await resoudreClient(clientSlug);
+  const clientIdActuel = contexteClient ? contexteClient.id : null;
+  const tradeIdActuel = (contexteClient && contexteClient.tradeId) || TRADE_ID;
   const messages = (req.body || {}).messages;
   if (!Array.isArray(messages) || messages.length === 0) {
     return res.status(400).json({ error: "Aucun message recu" });
@@ -435,7 +494,7 @@ sait deja qui tu es, ce n'est pas ta premiere reunion avec eux.
         model: MODELE,
         max_tokens: 800,
         temperature: 0.6,
-        system: [{ type: "text", text: buildSystemPrompt(loadTradeVocab(TRADE_ID)) + (req.body.reunion ? BLOC_REUNION_AMANDINE : ""), cache_control: { type: "ephemeral" } }],
+        system: [{ type: "text", text: buildSystemPrompt(loadTradeVocab(tradeIdActuel)) + (req.body.reunion ? BLOC_REUNION_AMANDINE : ""), cache_control: { type: "ephemeral" } }],
         tools: TOOLS,
         messages: convertis,
       }),
@@ -466,7 +525,7 @@ sait deja qui tu es, ce n'est pas ta premiere reunion avec eux.
   convertis.push({ role: "assistant", content: blocs });
     const resultats = [];
     for (const appel of appelsOutils) {
-      const resultat = await executerOutil(appel.name, appel.input || {});
+      const resultat = await executerOutil(appel.name, appel.input || {}, clientIdActuel, tradeIdActuel);
       resultats.push({
         type: "tool_result",
         tool_use_id: appel.id,
