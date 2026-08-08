@@ -142,10 +142,26 @@
   #fsOverlay .fs-head h2{font-size:16px;font-weight:600;}
   #fsOverlay .fs-close{width:36px;height:36px;border-radius:11px;border:1px solid var(--border);background:rgba(255,255,255,0.04);color:var(--texte-dim);cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;}
   #fsOverlay .fs-close:hover{background:var(--panel-hover);color:var(--texte);}
-  #fsOverlay .fs-body{padding:40px;display:flex;align-items:center;justify-content:center;height:calc(100% - 78px);overflow:auto;}
-  #fsOverlay .fs-body svg{max-width:1000px;width:100%;}
-  .diag-node-txt-fs{font-size:14px;font-family:-apple-system,sans-serif;font-weight:700;}
-  .diag-node-sub-fs{font-size:11px;font-family:-apple-system,sans-serif;}
+  #fsOverlay .fs-body{padding:20px;display:flex;align-items:center;justify-content:center;height:calc(100% - 78px);overflow:auto;}
+  #fsOverlay .fs-body svg{max-width:1600px;width:100%;}
+  .diag-node-txt-fs{font-size:16px;font-family:-apple-system,sans-serif;font-weight:700;}
+  .diag-node-sub-fs{font-size:12.5px;font-family:-apple-system,sans-serif;}
+  .mod-node{cursor:pointer;}
+  .mod-node:hover rect{filter:brightness(1.25);}
+
+  #moduleParamPanel{position:fixed;top:0;right:0;bottom:0;width:380px;max-width:90vw;background:rgba(15,15,15,0.97);backdrop-filter:blur(20px);border-left:1px solid var(--border);z-index:999;display:none;flex-direction:column;box-shadow:-20px 0 60px rgba(0,0,0,0.5);}
+  #moduleParamPanel .mp-head{padding:22px 24px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;}
+  #moduleParamPanel .mp-head h3{font-size:16px;font-weight:600;}
+  #moduleParamPanel .mp-body{padding:22px 24px;overflow-y:auto;flex:1;}
+  #moduleParamPanel .mp-row{margin-bottom:20px;}
+  #moduleParamPanel .mp-row label{display:block;font-size:11.5px;color:var(--texte-dim);margin-bottom:8px;font-weight:500;}
+  #moduleParamPanel .mp-toggle-row{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-radius:12px;background:rgba(255,255,255,0.03);border:1px solid var(--border);margin-bottom:20px;}
+  #moduleParamPanel textarea{width:100%;padding:11px 13px;border-radius:12px;border:1px solid var(--border);background:rgba(255,255,255,0.04);color:var(--texte);font-size:13px;font-family:inherit;resize:vertical;}
+  #moduleParamPanel .mp-note{font-size:11px;color:var(--texte-faint);line-height:1.6;background:rgba(255,255,255,0.02);border:1px solid var(--border);border-radius:12px;padding:14px;margin-top:6px;}
+  #moduleParamPanel .mp-actions{padding:18px 24px;border-top:1px solid var(--border);}
+  #moduleParamPanel .mp-msg{font-size:12px;margin-top:10px;min-height:14px;}
+  #moduleParamPanel .mp-msg.ok{color:#30D158;}
+  #moduleParamPanel .mp-msg.err{color:#FF453A;}
   #printFiche, #printDevis{display:none;}
   @page{size:A4 portrait;margin:18mm;}
   @media print{
@@ -297,6 +313,30 @@
   <div class="fs-body"><div id="fsSvg"></div></div>
 </div>
 
+<div id="moduleParamPanel">
+  <div class="mp-head">
+    <h3 id="mpTitre">Module</h3>
+    <button type="button" class="fs-close" id="mpCloseBtn">✕</button>
+  </div>
+  <div class="mp-body">
+    <div class="mp-toggle-row">
+      <span>Module actif pour ce client</span>
+      <span class="switch"><input type="checkbox" id="mpActif"><span class="switch-track"></span></span>
+    </div>
+
+    <div class="mp-row">
+      <label>Emails de contact / notifications</label>
+      <textarea id="mpEmails" rows="4" placeholder="contact@client.fr&#10;sav@client.fr"></textarea>
+    </div>
+
+    <div class="mp-note">Ces réglages sont propres à ce client uniquement (stockés dans sa fiche). Le fonctionnement du module lui-même (code, design, logique) est commun à tous les clients et se modifie uniquement à la racine du projet Iko Suite Démo — jamais depuis ce panneau.</div>
+  </div>
+  <div class="mp-actions">
+    <button type="button" class="primary" id="mpSaveBtn" style="width:100%;">Enregistrer</button>
+    <div class="mp-msg" id="mpMsg"></div>
+  </div>
+</div>
+
 <script>
 (function(){
   var APP_SECRET = "97960bb3f41d75c71ba3e831a7acb90ab324549734e27d6a";
@@ -437,7 +477,7 @@ function genererSvgFlux(nom, actifs, tailleFs){
     { id: "SAV", label: "SAV (Amandine)" },
     { id: "Métreur", label: "Métreur" },
   ];
-  var scale = tailleFs ? 1.9 : 1;
+  var scale = tailleFs ? 3.1 : 1;
   var W = 460 * scale, rowH = 56 * scale, startY = 24 * scale;
   var H = startY * 2 + modules.length * rowH;
   var xClient = 16 * scale, xModule = 168 * scale, xAirtable = W - 96 * scale;
@@ -473,7 +513,9 @@ function genererSvgFlux(nom, actifs, tailleFs){
     var actif = actifs.indexOf(m.id) !== -1;
     var modH = 44 * scale, modW = 148 * scale;
     svg += lien(xClient + clientW, yClient, xModule, y + modH/2, actif);
+    if (tailleFs) svg += "<g class='mod-node' data-mod='" + m.id + "'>";
     svg += noeud(xModule, y, modW, modH, m.label, actif ? "Actif" : "Non activé", actif);
+    if (tailleFs) svg += "</g>";
     svg += lien(xModule + modW, y + modH/2, xAirtable, yClient, actif);
   });
   svg += "</svg>";
@@ -504,6 +546,61 @@ document.getElementById("fsCloseBtn").addEventListener("click", function(){
 });
 document.getElementById("fsOverlay").addEventListener("click", function(e){
   if (e.target.id === "fsOverlay") document.getElementById("fsOverlay").style.display = "none";
+});
+
+/* ---- Réglages par module (panneau propre au client, pas au code partagé) ---- */
+document.getElementById("fsSvg").addEventListener("click", function(e){
+  var g = e.target.closest(".mod-node");
+  if (g) ouvrirParametresModule(g.getAttribute("data-mod"));
+});
+
+function ouvrirParametresModule(moduleId){
+  if (!editingId) return;
+  document.getElementById("mpTitre").textContent = moduleId;
+  var actifs = getModulesActifs();
+  document.getElementById("mpActif").checked = actifs.indexOf(moduleId) !== -1;
+  document.getElementById("mpEmails").value = document.getElementById("fEmails").value || "";
+  document.getElementById("mpMsg").textContent = "";
+  document.getElementById("moduleParamPanel").style.display = "flex";
+  document.getElementById("moduleParamPanel").setAttribute("data-current-mod", moduleId);
+}
+
+document.getElementById("mpCloseBtn").addEventListener("click", function(){
+  document.getElementById("moduleParamPanel").style.display = "none";
+});
+
+document.getElementById("mpSaveBtn").addEventListener("click", function(){
+  if (!editingId) return;
+  var moduleId = document.getElementById("moduleParamPanel").getAttribute("data-current-mod");
+  var actifCoche = document.getElementById("mpActif").checked;
+  var emails = document.getElementById("mpEmails").value.trim();
+
+  // Met a jour l'etat local du formulaire (chips modules + emails)
+  var chip = document.querySelector("#fModules .chip[data-mod='" + moduleId + "']");
+  if (chip) chip.classList.toggle("on", actifCoche);
+  document.getElementById("fEmails").value = emails;
+
+  var msg = document.getElementById("mpMsg");
+  msg.className = "mp-msg"; msg.textContent = "Enregistrement…";
+
+  var fields = {
+    "Modules actifs": getModulesActifs(),
+    "Emails contact": emails
+  };
+  fetch("/api/airtable/" + encodeURIComponent(TABLE) + "/" + editingId, {
+    method: "PATCH",
+    headers: {"Content-Type":"application/json"},
+    body: JSON.stringify({ fields: fields })
+  })
+    .then(function(r){ if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
+    .then(function(){
+      msg.className = "mp-msg ok"; msg.textContent = "Enregistré.";
+      dessinerDiagramme();
+      chargerClients();
+    })
+    .catch(function(err){
+      msg.className = "mp-msg err"; msg.textContent = "Erreur : " + err.message;
+    });
 });
 
 function slugifier(s){
