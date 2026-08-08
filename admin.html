@@ -145,14 +145,20 @@
       #0A0A0A;}
   #fsOverlay .fs-head{display:flex;align-items:center;justify-content:space-between;padding:20px 28px;border-bottom:1px solid var(--border);background:rgba(10,10,10,0.7);backdrop-filter:blur(16px);}
   #fsOverlay .fs-head h2{font-size:16px;font-weight:600;}
-  #fsOverlay .fs-close{width:36px;height:36px;border-radius:11px;border:1px solid var(--border);background:rgba(255,255,255,0.04);color:var(--texte-dim);cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;}
-  #fsOverlay .fs-close:hover{background:var(--panel-hover);color:var(--texte);}
+  .fs-close{width:40px;height:40px;border-radius:11px;border:1px solid var(--border);background:rgba(255,255,255,0.04);color:var(--texte-dim);cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;flex-shrink:0;-webkit-tap-highlight-color:rgba(255,107,0,0.25);touch-action:manipulation;}
+  .fs-close:hover{background:var(--panel-hover);color:var(--texte);}
+  .fs-close:active{transform:scale(0.92);}
   #fsOverlay .fs-body{padding:10px;display:flex;align-items:center;justify-content:center;height:calc(100% - 78px);overflow:auto;}
   #fsOverlay .fs-body svg{width:96vw;height:auto;max-width:none;}
   .diag-node-txt-fs{font-size:16px;font-family:-apple-system,sans-serif;font-weight:700;}
   .diag-node-sub-fs{font-size:12.5px;font-family:-apple-system,sans-serif;}
-  .diag-mod-btn{-webkit-appearance:none;appearance:none;-webkit-tap-highlight-color:rgba(255,107,0,0.25);touch-action:manipulation;}
-  .diag-mod-btn:active{opacity:0.7;}
+  .diag-mod-btn{-webkit-appearance:none;appearance:none;-webkit-tap-highlight-color:rgba(255,107,0,0.25);touch-action:manipulation;transform-style:preserve-3d;perspective:600px;transition:transform .2s cubic-bezier(.25,.8,.25,1);}
+  .diag-mod-btn:hover{transform:translateZ(8px) rotateX(3deg) scale(1.015);}
+  .diag-mod-btn:active{transform:translateZ(2px) rotateX(1deg) scale(0.98);}
+
+  #reouvrirPanelBtn{position:fixed;top:50%;right:0;transform:translateY(-50%);z-index:997;background:rgba(255,107,0,0.12);backdrop-filter:blur(12px);border:1px solid rgba(255,107,0,0.35);border-right:none;border-radius:14px 0 0 14px;padding:16px 8px;color:var(--orange);cursor:pointer;display:none;flex-direction:column;align-items:center;gap:6px;font-size:11px;font-weight:600;letter-spacing:.03em;transition:background .15s, padding-right .15s;}
+  #reouvrirPanelBtn:hover{background:rgba(255,107,0,0.22);padding-right:14px;}
+  #reouvrirPanelBtn span.chevron{font-size:14px;}
 
   #moduleParamPanel{position:fixed;top:0;right:0;bottom:0;width:380px;max-width:90vw;background:rgba(15,15,15,0.97);backdrop-filter:blur(20px);border-left:1px solid var(--border);z-index:999;display:flex;flex-direction:column;box-shadow:-20px 0 60px rgba(0,0,0,0.5);transform:translateX(100%);transition:transform .28s cubic-bezier(.25,.8,.25,1);pointer-events:none;}
   #moduleParamPanel.ouvert{transform:translateX(0);pointer-events:auto;}
@@ -343,6 +349,8 @@
   </div>
   <div class="fs-body"><div id="fsSvg"></div></div>
 </div>
+
+<button type="button" id="reouvrirPanelBtn"><span class="chevron">‹</span>Réglages<span class="chevron">module</span></button>
 
 <div id="moduleParamPanel">
   <div class="mp-head">
@@ -661,6 +669,7 @@ function ouvrirParametresModule(moduleId){
 
   document.getElementById("moduleParamPanel").classList.add("ouvert");
   document.getElementById("moduleParamPanel").setAttribute("data-current-mod", moduleId);
+  document.getElementById("reouvrirPanelBtn").style.display = "none";
 }
 
 document.getElementById("mpParametre").addEventListener("change", function(){
@@ -669,6 +678,12 @@ document.getElementById("mpParametre").addEventListener("change", function(){
 
 document.getElementById("mpCloseBtn").addEventListener("click", function(){
   document.getElementById("moduleParamPanel").classList.remove("ouvert");
+  document.getElementById("reouvrirPanelBtn").style.display = "flex";
+});
+
+document.getElementById("reouvrirPanelBtn").addEventListener("click", function(){
+  var dernierMod = document.getElementById("moduleParamPanel").getAttribute("data-current-mod");
+  if (dernierMod) ouvrirParametresModule(dernierMod);
 });
 
 document.getElementById("mpSaveBtn").addEventListener("click", function(){
