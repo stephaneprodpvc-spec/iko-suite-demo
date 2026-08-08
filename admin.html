@@ -69,6 +69,10 @@
   #chatSend{width:42px;height:42px;flex-shrink:0;border:none;border-radius:14px;background:var(--orange);color:#0A0A0A;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;transition:opacity .15s,transform .15s;}
   #chatSend:active{transform:scale(0.93);}
   #chatSend:disabled{opacity:.4;cursor:default;}
+  #chatMic{width:42px;height:42px;flex-shrink:0;border:1px solid var(--border);border-radius:14px;background:rgba(255,255,255,0.04);color:var(--texte-dim);cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;transition:all .15s;}
+  #chatMic.ecoute{background:var(--orange);color:#0A0A0A;border-color:var(--orange);animation:micPulse 1.2s ease-in-out infinite;}
+  @keyframes micPulse{0%,100%{box-shadow:0 0 0 0 rgba(255,107,0,.5);}50%{box-shadow:0 0 0 8px rgba(255,107,0,0);}}
+  .chat-err{color:#FF453A;font-size:11.5px;margin-top:8px;min-height:14px;}
   .chat-hint{font-size:11.5px;color:var(--texte-faint);margin-top:10px;line-height:1.5;}
 
   .client-item{display:flex;align-items:center;gap:12px;padding:13px 10px;border-radius:14px;cursor:pointer;transition:background .15s;border:1px solid transparent;}
@@ -137,8 +141,10 @@
       <div id="chatMessages"></div>
       <form id="chatForm">
         <textarea id="chatInput" rows="1" placeholder="Parle-lui d'un client, d'une idée, d'une question…"></textarea>
+        <button type="button" id="chatMic" title="Parler à Claude">🎙️</button>
         <button type="submit" id="chatSend">→</button>
       </form>
+      <div class="chat-err" id="chatErr"></div>
       <div class="chat-hint">Discussion libre, ou décris un client (« un plombier-chauffagiste à Lyon, avec SAV et dashboard ») pour pré-remplir le formulaire — tu valides toujours avant de créer.</div>
     </div>
 
@@ -452,6 +458,46 @@ function appliquerProposition(p){
   document.getElementById("formMsg").className = "msg ok";
   document.getElementById("formMsg").textContent = "Formulaire pré-rempli — vérifie puis crée le client.";
   document.querySelector(".card:nth-child(3)").scrollIntoView({ behavior: "smooth", block: "center" });
+}
+
+document.getElementById("chatMic").addEventListener("click", lancerEcouteClaude);
+
+function lancerEcouteClaude(){
+  var err = document.getElementById("chatErr");
+  err.textContent = "";
+  var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR){
+    // Pas de reconnaissance vocale native (Safari iPad/iPhone) : on met le
+    // focus sur le champ texte, qui accepte la dictée via le micro du
+    // clavier iOS lui-même.
+    document.getElementById("chatInput").focus();
+    return;
+  }
+  var mic = document.getElementById("chatMic");
+  var reco = new SR();
+  reco.lang = "fr-FR";
+  reco.continuous = false;
+  reco.interimResults = false;
+  reco.onstart = function(){ mic.classList.add("ecoute"); };
+  reco.onend = function(){ mic.classList.remove("ecoute"); };
+  reco.onerror = function(e){
+    mic.classList.remove("ecoute");
+    if (e.error === "not-allowed" || e.error === "service-not-allowed"){
+      err.textContent = "Micro refusé — autorise-le via l'icône à côté de l'adresse du site, puis réessaie.";
+    } else if (e.error === "no-speech"){
+      err.textContent = "Aucune voix détectée. Réessaie en parlant juste après avoir appuyé sur le micro.";
+    } else if (e.error === "audio-capture"){
+      err.textContent = "Aucun micro détecté sur cet appareil.";
+    } else {
+      err.textContent = "Problème micro (" + e.error + "). Utilise le champ texte en attendant.";
+    }
+  };
+  reco.onresult = function(e){
+    var transcript = e.results[0][0].transcript;
+    document.getElementById("chatInput").value = transcript;
+    document.getElementById("chatForm").dispatchEvent(new Event("submit"));
+  };
+  reco.start();
 }
 
 document.getElementById("chatInput").addEventListener("keydown", function(e){
