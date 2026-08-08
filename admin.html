@@ -184,6 +184,10 @@
         <label>Logo (URL de l'image)</label>
         <input type="url" id="fLogo" placeholder="https://…">
 
+        <label>Emails de contact (SAV / dashboard / technicien)</label>
+        <textarea id="fEmails" rows="2" placeholder="contact@client.fr&#10;sav@client.fr" style="width:100%;padding:12px 14px;border-radius:13px;border:1px solid var(--border);background:rgba(255,255,255,0.04);color:var(--texte);font-size:13.5px;outline:none;font-family:inherit;resize:vertical;"></textarea>
+        <div class="hint" style="font-size:11px;color:var(--texte-faint);margin-top:5px;">Un email par ligne.</div>
+
         <label>Couleurs</label>
         <div class="row-inline">
           <div><input type="color" id="fC1" value="#FF6B00"><div class="lbl">Principale</div></div>
@@ -344,6 +348,7 @@ function chargerDansFormulaire(id){
   document.getElementById("fSlug").value = f["Slug"] || "";
   document.getElementById("fMetier").value = f["Métier"] || "Menuiserie";
   document.getElementById("fLogo").value = (f["Logo"] && f["Logo"][0] && f["Logo"][0].url) || "";
+  document.getElementById("fEmails").value = f["Emails contact"] || "";
   document.getElementById("fC1").value = f["Couleur principale"] || "#FF6B00";
   document.getElementById("fC2").value = f["Couleur secondaire"] || "#111111";
   document.getElementById("fStatut").value = f["Statut client"] || "Actif";
@@ -360,6 +365,7 @@ document.getElementById("cancelBtn").addEventListener("click", function(){
 function reinitialiserFormulaire(){
   editingId = null;
   document.getElementById("clientForm").reset();
+  document.getElementById("fEmails").value = "";
   document.getElementById("fC1").value = "#FF6B00";
   document.getElementById("fC2").value = "#111111";
   setModulesActifs([]);
@@ -383,7 +389,8 @@ document.getElementById("clientForm").addEventListener("submit", function(e){
     "Couleur principale": document.getElementById("fC1").value,
     "Couleur secondaire": document.getElementById("fC2").value,
     "Modules actifs": getModulesActifs(),
-    "Statut client": document.getElementById("fStatut").value
+    "Statut client": document.getElementById("fStatut").value,
+    "Emails contact": document.getElementById("fEmails").value.trim()
   };
   if (logoUrl) fields["Logo"] = [{ url: logoUrl }];
 
