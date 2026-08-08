@@ -562,7 +562,14 @@
     boutonMicro.classList.add('dispo');
     boutonMicro.addEventListener('click', function () {
       if (enEcoute) { if (recoActuelle) recoActuelle.stop(); return; }
-      try { lecteurAudio.pause(); } catch (e) {} // ne pas s'écouter parler
+      // Pause seule ne suffit pas sur Safari/iOS : la session audio reste en
+      // mode lecture et empêche le micro de capter du son (le bouton
+      // "écoute" s'anime mais rien n'est transcrit). On libère la session.
+      try {
+        lecteurAudio.pause();
+        lecteurAudio.removeAttribute('src');
+        lecteurAudio.load();
+      } catch (e) {}
       recoActuelle = creerReco();
       try { recoActuelle.start(); } catch (e) { recoActuelle = null; }
     });
