@@ -545,9 +545,9 @@ function genererSvgFlux(nom, actifs, tailleFs){
     var actif = actifs.indexOf(m.id) !== -1;
     var modH = 44 * scale, modW = 148 * scale;
     svg += lien(xClient + clientW, yClient, xModule, y + modH/2, actif);
-    if (tailleFs) svg += "<g class='mod-node' data-mod='" + m.id + "' onclick='clicModuleDiagramme(\"" + m.id + "\")' style='cursor:pointer;'>";
-    svg += noeud(xModule, y, modW, modH, m.label, actif ? "Actif" : "Non activé", actif);
-    if (tailleFs) svg += "</g>";
+    svg += "<g class='mod-node' data-mod='" + m.id + "' onclick='clicModuleDiagramme(\"" + m.id + "\")' style='cursor:pointer;pointer-events:all;'>";
+    svg += noeud(xModule, y, modW, modH, m.label, actif ? (tailleFs ? "Actif — clique pour configurer" : "Actif") : (tailleFs ? "Inactif — clique pour configurer" : "Non activé"), actif);
+    svg += "</g>";
     svg += lien(xModule + modW, y + modH/2, xAirtable, yClient, actif);
   });
   svg += "</svg>";
@@ -586,6 +586,17 @@ document.getElementById("fsOverlay").addEventListener("click", function(e){
 window.clicModuleDiagramme = function(moduleId){
   ouvrirParametresModule(moduleId);
 };
+
+// Filet de securite en plus de l'onclick inline (au cas ou certains
+// navigateurs/webviews n'executent pas les attributs onclick injectes via
+// innerHTML) : delegation classique sur les deux conteneurs SVG.
+[document.getElementById("diagramSvg"), document.getElementById("fsSvg")].forEach(function(conteneur){
+  if (!conteneur) return;
+  conteneur.addEventListener("click", function(e){
+    var g = e.target.closest(".mod-node");
+    if (g) ouvrirParametresModule(g.getAttribute("data-mod"));
+  });
+});
 
 function ouvrirParametresModule(moduleId){
   if (!editingId) return;
