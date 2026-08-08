@@ -500,6 +500,28 @@
     let enEcoute = false;
     let texteDicte = '';
     let recoActuelle = null;
+    let streamMicro = null;
+
+    // Sur Safari/iOS, laisser SpeechRecognition gérer seul l'accès matériel
+    // au micro provoque une erreur "audio-capture" après une 1ère
+    // utilisation (surtout après lecture d'un son TTS) : le système "perd"
+    // le micro entre deux sessions. On garde un flux getUserMedia ouvert en
+    // continu pour que le micro reste toujours disponible.
+    async function assurerAccesMicro() {
+      if (streamMicro && streamMicro.getAudioTracks().some(function (t) { return t.readyState === 'live'; })) {
+        return true;
+      }
+      try {
+        streamMicro = await navigator.mediaDevices.getUserMedia({ audio: true });
+        return true;
+      } catch (e) {
+        console.warn('Accès micro refusé/impossible :', e);
+        return false;
+      }
+    }
+    window.addEventListener('beforeunload', function () {
+      if (streamMicro) streamMicro.getTracks().forEach(function (t) { t.stop(); });
+    });
 
     // Safari/iOS bloque silencieusement le réemploi d'une instance
     // SpeechRecognition déjà utilisée : on en recrée une neuve à chaque
@@ -560,24 +582,18 @@
     }
 
     boutonMicro.classList.add('dispo');
-    boutonMicro.addEventListener('click', function () {
+    boutonMicro.addEventListener('click', async function () {
       if (enEcoute) { if (recoActuelle) recoActuelle.stop(); return; }
-      // Pause seule ne suffit pas sur Safari/iOS : la session audio reste en
-      // mode lecture et empêche le micro de capter du son (le bouton
-      // "écoute" s'anime mais rien n'est transcrit). On libère la session
-      // puis on laisse un court délai à iOS pour rebasculer en mode micro
-      // (bug WebKit connu, cf. discussions Apple Developer Forums).
-      try {
-        lecteurAudio.pause();
-        lecteurAudio.removeAttribute('src');
-        lecteurAudio.load();
-      } catch (e) {}
+      try { lecteurAudio.pause(); } catch (e) {} // ne pas s'écouter parler
       boutonMicro.disabled = true;
-      setTimeout(function () {
-        boutonMicro.disabled = false;
-        recoActuelle = creerReco();
-        try { recoActuelle.start(); } catch (e) { recoActuelle = null; }
-      }, 400);
+      const ok = await assurerAccesMicro();
+      boutonMicro.disabled = false;
+      if (!ok) {
+        ajouterBulle("Micro refusé. Autorisez l'accès au micro dans les réglages du navigateur, ou écrivez votre message.", 'erreur');
+        return;
+      }
+      recoActuelle = creerReco();
+      try { recoActuelle.start(); } catch (e) { recoActuelle = null; }
     });
   }
 
