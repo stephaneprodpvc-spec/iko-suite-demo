@@ -737,11 +737,28 @@ function ModalConcepteur({ onClose, onSuccess }) {
       const emailsUtiles = {};
       agencesResultantes.forEach(a => { if (emails[a]) emailsUtiles[a] = emails[a]; });
       const cfg = { emailsTechnicien: emailsUtiles, couleurAccent: couleur, logoUrl: logoUrl.trim(), techniciens };
-      await fetch('/api/airtable/Planning/' + CONFIG_RECORD_ID, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fields: { "Nombre agences": nombre, "Config JSON": JSON.stringify(cfg) } })
-      });
+
+      if (window.IKO_CLIENT_ID) {
+        // Un client precis est charge (?client=slug) : ses reglages
+        // s'enregistrent sur SA PROPRE fiche (table Clients), jamais sur
+        // la config globale partagee - sinon un client modifierait
+        // l'identite visuelle de tous les autres clients.
+        const fieldsClient = { "Couleur principale": couleur };
+        if (logoUrl.trim()) fieldsClient["Logo"] = [{ url: logoUrl.trim() }];
+        await fetch('/api/airtable/Clients/' + window.IKO_CLIENT_ID, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fields: fieldsClient })
+        });
+      } else {
+        // Pas de client charge (usage demo historique) : comportement
+        // inchange, ecriture sur la config globale.
+        await fetch('/api/airtable/Planning/' + CONFIG_RECORD_ID, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fields: { "Nombre agences": nombre, "Config JSON": JSON.stringify(cfg) } })
+        });
+      }
       appliquerNombreAgences(nombre);
       appliquerConfigEntreprise(cfg);
       onSuccess();
