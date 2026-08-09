@@ -124,6 +124,30 @@
   .msg.ok{color:#30D158;} .msg.err{color:#FF453A;}
   #tbody-wrap{max-height:560px;overflow-y:auto;}
   ::-webkit-scrollbar{width:6px;} ::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.15);border-radius:3px;}
+
+  /* ---- Hero d'accueil ---- */
+  .hero{position:relative;border-radius:24px;padding:36px 32px;margin-bottom:26px;overflow:hidden;
+    background:radial-gradient(circle at 20% 20%, rgba(255,107,0,0.18), transparent 55%),
+               radial-gradient(circle at 85% 80%, rgba(255,107,0,0.10), transparent 50%),
+               var(--panel);
+    border:1px solid var(--border); backdrop-filter:blur(24px);
+    animation:heroIn .6s cubic-bezier(.25,.8,.25,1) both;}
+  .hero-eyebrow{font-size:11.5px;color:var(--orange);text-transform:uppercase;letter-spacing:.08em;font-weight:700;margin-bottom:10px;}
+  .hero h2{font-size:26px;font-weight:700;letter-spacing:-0.02em;margin-bottom:6px;}
+  .hero p{color:var(--texte-dim);font-size:14px;max-width:520px;line-height:1.5;}
+  .hero-stats{display:flex;gap:32px;margin-top:26px;flex-wrap:wrap;}
+  .hero-stat{}
+  .hero-stat b{display:block;font-size:32px;font-weight:800;font-variant-numeric:tabular-nums;background:linear-gradient(135deg,#fff,var(--orange));-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;}
+  .hero-stat span{font-size:11.5px;color:var(--texte-dim);text-transform:uppercase;letter-spacing:.04em;}
+
+  @keyframes heroIn{from{opacity:0;transform:translateY(-14px);}to{opacity:1;transform:translateY(0);}}
+  @keyframes cardIn{from{opacity:0;transform:translateY(22px);}to{opacity:1;transform:translateY(0);}}
+  .grid > .card{animation:cardIn .55s cubic-bezier(.25,.8,.25,1) both;}
+  .grid > .card:nth-child(1){animation-delay:.05s;}
+  .grid > .card:nth-child(2){animation-delay:.15s;}
+  .grid > .card:nth-child(3){animation-delay:.25s;}
+
+  .card.tilt-3d{transform-style:preserve-3d;transition:transform .12s ease-out, box-shadow .3s;will-change:transform;}
   #statsBar{font-size:12px;color:var(--texte-dim);background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:11px;padding:10px 12px;margin-bottom:12px;line-height:1.6;}
   #statsBar b{color:var(--texte);}
   .btn-export{width:100%;padding:9px;border-radius:11px;border:1px solid var(--border);background:rgba(255,255,255,0.03);color:var(--texte-dim);font-size:12.5px;cursor:pointer;margin-bottom:14px;font-weight:500;transition:background .15s;}
@@ -225,9 +249,21 @@
 </header>
 
 <main>
+
+  <div class="hero">
+    <div class="hero-eyebrow">RSIA Conseil — Iko Suite</div>
+    <h2>Bienvenue, Stéphane.</h2>
+    <p>Pilote tes clients, leurs modules et leur identité depuis un seul endroit. Décris, configure, déploie.</p>
+    <div class="hero-stats">
+      <div class="hero-stat"><b id="heroTotalClients">0</b><span>Clients</span></div>
+      <div class="hero-stat"><b id="heroActifs">0</b><span>Actifs</span></div>
+      <div class="hero-stat"><b id="heroModules">0</b><span>Modules déployés</span></div>
+    </div>
+  </div>
+
   <div class="grid">
 
-    <div class="card">
+    <div class="card tilt-3d">
       <h2><span class="pulse"></span>Claude</h2>
       <label class="voice-toggle">
         <span>Conversation vocale automatique</span>
@@ -243,7 +279,7 @@
       <div class="chat-hint">Discussion libre, décris un client à créer, ou demande un devis (« devis pour Menuiserie Dupont : abonnement Iko Suite 150€/mois + mise en place 500€ ») — tu valides toujours avant d'agir.</div>
     </div>
 
-    <div class="card">
+    <div class="card tilt-3d">
       <h2>Clients</h2>
       <div id="statsBar">Chargement des statistiques…</div>
       <button type="button" class="btn-export" id="exportCsvBtn">Exporter en CSV (Excel)</button>
@@ -275,7 +311,7 @@
       <div class="msg" id="verifMsg"></div>
     </div>
 
-    <div class="card">
+    <div class="card tilt-3d">
       <h2 id="formTitle">Nouveau client</h2>
       <form id="clientForm">
         <label>Nom du client</label>
@@ -461,24 +497,65 @@ function chargerClients(){
     });
 }
 
+function animerCompteur(el, valeurFinale){
+  if (!el) return;
+  var depart = parseInt(el.textContent, 10) || 0;
+  if (depart === valeurFinale) { el.textContent = valeurFinale; return; }
+  var duree = 700, t0 = null;
+  function step(t){
+    if (!t0) t0 = t;
+    var progres = Math.min(1, (t - t0) / duree);
+    var ease = 1 - Math.pow(1 - progres, 3);
+    el.textContent = Math.round(depart + (valeurFinale - depart) * ease);
+    if (progres < 1) requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+
 function afficherStats(){
   var el = document.getElementById("statsBar");
   if (!el) return;
-  if (!clients.length){ el.textContent = "Aucun client pour l'instant."; return; }
+  if (!clients.length){
+    el.textContent = "Aucun client pour l'instant.";
+    animerCompteur(document.getElementById("heroTotalClients"), 0);
+    animerCompteur(document.getElementById("heroActifs"), 0);
+    animerCompteur(document.getElementById("heroModules"), 0);
+    return;
+  }
   var total = clients.length;
   var actifs = clients.filter(function(c){ return (c.fields||{})["Statut client"] === "Actif"; }).length;
   var parMetier = {};
   var parModule = {};
+  var totalModules = 0;
   clients.forEach(function(c){
     var f = c.fields || {};
     var m = f["Métier"] || "Non renseigné";
     parMetier[m] = (parMetier[m]||0) + 1;
-    (f["Modules actifs"]||[]).forEach(function(mod){ parModule[mod] = (parModule[mod]||0) + 1; });
+    var mods = f["Modules actifs"] || [];
+    totalModules += mods.length;
+    mods.forEach(function(mod){ parModule[mod] = (parModule[mod]||0) + 1; });
   });
   var metierTxt = Object.keys(parMetier).map(function(k){ return k + " (" + parMetier[k] + ")"; }).join(" · ");
   var moduleTxt = Object.keys(parModule).map(function(k){ return k + " (" + parModule[k] + ")"; }).join(" · ");
   el.innerHTML = "<b>" + total + "</b> client(s) · <b>" + actifs + "</b> actif(s)<br>Métiers : " + metierTxt + "<br>Modules : " + (moduleTxt || "—");
+
+  animerCompteur(document.getElementById("heroTotalClients"), total);
+  animerCompteur(document.getElementById("heroActifs"), actifs);
+  animerCompteur(document.getElementById("heroModules"), totalModules);
 }
+
+/* ---- Effet 3D au survol : incline la carte selon la position du curseur ---- */
+Array.prototype.forEach.call(document.querySelectorAll(".card.tilt-3d"), function(carte){
+  carte.addEventListener("mousemove", function(e){
+    var r = carte.getBoundingClientRect();
+    var x = (e.clientX - r.left) / r.width - 0.5;
+    var y = (e.clientY - r.top) / r.height - 0.5;
+    carte.style.transform = "perspective(900px) rotateY(" + (x * 4) + "deg) rotateX(" + (-y * 4) + "deg) translateZ(4px)";
+  });
+  carte.addEventListener("mouseleave", function(){
+    carte.style.transform = "perspective(900px) rotateY(0deg) rotateX(0deg) translateZ(0)";
+  });
+});
 
 function afficherClients(){
   document.getElementById("count").textContent = clients.length + " client" + (clients.length > 1 ? "s" : "");
