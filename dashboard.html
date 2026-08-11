@@ -2229,7 +2229,7 @@ function Dashboard({ agenceAccess, onClose }) {
   stats.nbNotes = ticketsNotes.length;
 
   const byAgence = {};
-  AGENCES.forEach(a => { byAgence[a] = tickets.filter(t => t.fields?.Agence===AGENCE_VERS_AIRTABLE[a] && t.fields?.Statut !== "Terminé").length; });
+  AGENCES.forEach(a => { byAgence[a] = tickets.filter(t => t.fields?.Agence===AGENCE_VERS_AIRTABLE[a] && !["Terminé","Annulé","Supprimé"].includes(t.fields?.Statut)).length; });
 
   if (vueMode === "vocal") {
     return (
