@@ -177,7 +177,7 @@ const parseDateCreneau = (creneau) => {
 };
 
 // ---- STATUTS "CLOS" (Terminé / Annulé) ----
-const isStatutClos = (statut) => statut === "Terminé" || statut === "Annulé";
+const isStatutClos = (statut) => statut === "Terminé" || statut === "Annulé" || statut === "Supprimé";
 
 function Badge({ label, color, bg, style }) {
   return <span style={{display:"inline-block",padding:"2px 8px",borderRadius:"20px",fontSize:"10px",fontWeight:"700",color,background:bg,letterSpacing:"0.5px",...style}}>{label}</span>;
@@ -323,7 +323,7 @@ function PhoneChatModal({ clientName, entries, texteReponse, onChangeTexte, onEn
   );
 }
 
-function TicketRow({ t, onStatusChange, onAnnuler, onSupprimer, onRenvoyerMail, onRenvoyerMailClient, onDevis, onRepondreClient, onMarquerLu, isMessagePanelOpen, onToggleMessagePanel, onCloseMessagePanel, onRefreshTicket }) {
+function TicketRow({ t, onStatusChange, onAnnuler, onSupprimer, onSupprimerDefinitivement, onRenvoyerMail, onRenvoyerMailClient, onDevis, onRepondreClient, onMarquerLu, isMessagePanelOpen, onToggleMessagePanel, onCloseMessagePanel, onRefreshTicket }) {
   const [texteReponse, setTexteReponse] = React.useState("");
   const [envoiReponse, setEnvoiReponse] = React.useState(null); // null | 'sending' | 'ok'
   const nonLu = !!t.fields?.["Message client non lu"];
@@ -366,6 +366,7 @@ function TicketRow({ t, onStatusChange, onAnnuler, onSupprimer, onRenvoyerMail, 
     "Devis refusé": { color: C.rouge, bg: C.rougeDim },
     "Terminé": { color: C.vert, bg: C.vertDim },
     "Annulé": { color: C.muted, bg: "#F3F4F6" },
+    "Supprimé": { color: C.muted, bg: "#F3F4F6" },
   };
   const sc = statusColors[statut] || statusColors["Nouveau"];
   const clos = isStatutClos(statut);
@@ -445,9 +446,10 @@ function TicketRow({ t, onStatusChange, onAnnuler, onSupprimer, onRenvoyerMail, 
           style={{background:"#FFFFFF",border:"1px solid "+C.border,color:C.text,borderRadius:"8px",padding:"5px 8px",fontSize:"11px",cursor:"pointer"}}>
           <option>Nouveau</option><option>En cours</option><option>Devis à faire</option><option>Devis envoyé</option><option>Devis - Suivi</option><option>Devis - Attente fournisseur</option><option>Devis refusé</option><option>Terminé</option><option>Annulé</option>
         </select>
-        <button onClick={() => onSupprimer(t)} title="Supprimer définitivement"
+        <button onClick={() => (statut === "Annulé" || statut === "Supprimé") ? onSupprimerDefinitivement(t) : onSupprimer(t)}
+          title={(statut === "Annulé" || statut === "Supprimé") ? "Supprimer définitivement" : "Archiver (déplace vers l'onglet Archives)"}
           style={{background:"transparent",border:"1px solid rgba(220,38,38,0.3)",color:C.rouge,borderRadius:"8px",padding:"4px 8px",fontSize:"10px",cursor:"pointer"}}>
-          🗑️ Supprimer
+          {(statut === "Annulé" || statut === "Supprimé") ? "🗑️ Définitivement" : "🗑️ Archiver"}
         </button>
       </div>
     </div>
@@ -1350,6 +1352,35 @@ function ModalAnnulation({ ticket, onConfirm, onClose }) {
 }
 
 function ModalSuppression({ ticket, onConfirm, onClose }) {
+  const [saving, setSaving] = React.useState(false);
+
+  const valider = async () => {
+    setSaving(true);
+    await onConfirm(ticket);
+    setSaving(false);
+  };
+
+  return (
+    <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="modal-box" style={{maxWidth:"420px"}}>
+        <div style={{fontSize:"16px",fontWeight:"900",color:C.white,marginBottom:"4px"}}>🗑️ Supprimer ce ticket</div>
+        <div style={{fontSize:"12px",color:C.or,fontFamily:"monospace",marginBottom:"14px"}}>{ticket.fields?.Name} — {ticket.fields?.Client}</div>
+        <div style={{background:C.rougeDim,border:"1px solid rgba(220,38,38,0.3)",borderRadius:"10px",padding:"10px 14px",marginBottom:"14px",fontSize:"12px",color:C.rouge}}>
+          Le ticket sera retiré de la liste principale et déplacé dans l'onglet Archives. Si un créneau planning y est associé, il sera libéré. Suppression définitive possible depuis Archives.
+        </div>
+        <div style={{display:"flex",gap:"10px"}}>
+          <button onClick={onClose} style={{flex:1,padding:"11px",background:"transparent",color:C.muted,border:"1px solid "+C.border,borderRadius:"10px",fontSize:"12px",cursor:"pointer"}}>Annuler</button>
+          <button onClick={valider} disabled={saving}
+            style={{flex:2,padding:"11px",background:saving?"#333":C.rouge,color:"#fff",border:"none",borderRadius:"10px",fontSize:"13px",fontWeight:"900",cursor:saving?"not-allowed":"pointer"}}>
+            {saving ? "⏳ Suppression..." : "🗑️ Supprimer"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ModalSuppressionDefinitive({ ticket, onConfirm, onClose }) {
   const [confirmation, setConfirmation] = React.useState("");
   const [saving, setSaving] = React.useState(false);
   const pretAConfirmer = confirmation.trim().toUpperCase() === "SUPPRIMER";
@@ -1367,7 +1398,7 @@ function ModalSuppression({ ticket, onConfirm, onClose }) {
         <div style={{fontSize:"16px",fontWeight:"900",color:C.white,marginBottom:"4px"}}>🗑️ Supprimer définitivement</div>
         <div style={{fontSize:"12px",color:C.or,fontFamily:"monospace",marginBottom:"14px"}}>{ticket.fields?.Name} — {ticket.fields?.Client}</div>
         <div style={{background:C.rougeDim,border:"1px solid rgba(220,38,38,0.3)",borderRadius:"10px",padding:"10px 14px",marginBottom:"14px",fontSize:"12px",color:C.rouge}}>
-          ⚠️ Action irréversible : le ticket sera définitivement effacé, pas juste annulé. Si un créneau planning y est associé, il sera libéré.
+          ⚠️ Action irréversible : le ticket sera définitivement effacé d'Airtable, y compris de l'onglet Archives.
         </div>
         <label style={{fontSize:"11px",fontWeight:"700",color:C.muted,display:"block",marginBottom:"6px"}}>
           Tape <strong style={{color:C.white}}>SUPPRIMER</strong> pour confirmer
@@ -1536,6 +1567,7 @@ function Dashboard({ agenceAccess, onClose }) {
   const [successTicket, setSuccessTicket] = React.useState(null);
   const [modalAnnulation, setModalAnnulation] = React.useState(null);
   const [modalSuppression, setModalSuppression] = React.useState(null);
+  const [modalSuppressionDefinitive, setModalSuppressionDefinitive] = React.useState(null);
   const [modalDevis, setModalDevis] = React.useState(null);
   const [exportDebut, setExportDebut] = React.useState("");
   const [exportFin, setExportFin] = React.useState("");
@@ -1952,16 +1984,37 @@ function Dashboard({ agenceAccess, onClose }) {
         });
       } catch(e) { console.error(e); }
     }
+    const fields = { Statut: "Supprimé" };
+    setTickets(prev => prev.map(t => t.id===ticket.id?{...t,fields:{...t.fields,...fields}}:t));
+    try {
+      await fetch('/api/airtable/Tickets SAV/'+ticket.id, {
+        method:'PATCH', headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({fields})
+      });
+    } catch(e) { console.error(e); }
+    setModalSuppression(null);
+  };
+
+  const confirmerSuppressionDefinitive = async (ticket) => {
+    const planningId = ticket?.fields?.PlanningID;
+    if (planningId) {
+      try {
+        await fetch('/api/airtable/Planning/'+planningId, {
+          method:'PATCH', headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({fields:{Statut:'Libre'}})
+        });
+      } catch(e) { console.error(e); }
+    }
     try {
       await fetch('/api/airtable/Tickets SAV/'+ticket.id, { method:'DELETE' });
     } catch(e) { console.error(e); }
     setTickets(prev => prev.filter(t => t.id !== ticket.id));
-    setModalSuppression(null);
+    setModalSuppressionDefinitive(null);
   };
 
   const filtered = tickets.filter(t => {
     const matchAgence = agenceFilter==="global" || t.fields?.Agence===AGENCE_VERS_AIRTABLE[agenceFilter];
-    const matchStatut = statutFilter==="tous" ? t.fields?.Statut !== "Terminé" : (statutFilter==="devis" ? ["Devis à faire","Devis envoyé","Devis - Suivi","Devis - Attente fournisseur","Devis refusé"].includes(t.fields?.Statut) : t.fields?.Statut===statutFilter) || (!t.fields?.Statut&&statutFilter==="Nouveau");
+    const matchStatut = statutFilter==="tous" ? (t.fields?.Statut !== "Terminé" && t.fields?.Statut !== "Annulé" && t.fields?.Statut !== "Supprimé") : statutFilter==="archives" ? (t.fields?.Statut === "Annulé" || t.fields?.Statut === "Supprimé") : (statutFilter==="devis" ? ["Devis à faire","Devis envoyé","Devis - Suivi","Devis - Attente fournisseur","Devis refusé"].includes(t.fields?.Statut) : t.fields?.Statut===statutFilter) || (!t.fields?.Statut&&statutFilter==="Nouveau");
     const matchUrgent = !urgentOnly || (t.fields?.Qualification === "Oui" && !isStatutClos(t.fields?.Statut));
     const matchMessages = !messagesOnly || t.fields?.["Message client non lu"] || t.id === openMessageTicketId;
     const q = search.toLowerCase();
@@ -1986,15 +2039,17 @@ function Dashboard({ agenceAccess, onClose }) {
   }
 
   const stats = {
-    total: tickets.filter(t => t.fields?.Statut !== "Terminé").length,
+    total: tickets.filter(t => t.fields?.Statut !== "Terminé" && t.fields?.Statut !== "Annulé" && t.fields?.Statut !== "Supprimé").length,
     urgent: tickets.filter(t => t.fields?.Qualification === "Oui" && !isStatutClos(t.fields?.Statut)).length,
     nouveau: tickets.filter(t => !t.fields?.Statut||t.fields?.Statut==="Nouveau").length,
     encours: tickets.filter(t => t.fields?.Statut==="En cours").length,
     termine: tickets.filter(t => t.fields?.Statut==="Terminé").length,
     annule: tickets.filter(t => t.fields?.Statut==="Annulé").length,
+    supprime: tickets.filter(t => t.fields?.Statut==="Supprimé").length,
     devisEnAttente: tickets.filter(t => ["Devis à faire","Devis envoyé","Devis - Suivi","Devis - Attente fournisseur"].includes(t.fields?.Statut)).length,
     messagesNonLus: tickets.filter(t => t.fields?.["Message client non lu"]).length,
   };
+  stats.archives = stats.annule + stats.supprime;
   const ticketsNotes = tickets.filter(t => typeof t.fields?.Note === "number");
   stats.noteMoyenne = ticketsNotes.length ? (ticketsNotes.reduce((s,t) => s + t.fields.Note, 0) / ticketsNotes.length) : null;
   stats.nbNotes = ticketsNotes.length;
@@ -2100,6 +2155,13 @@ function Dashboard({ agenceAccess, onClose }) {
           onConfirm={confirmerSuppression}
         />
       )}
+      {modalSuppressionDefinitive && (
+        <ModalSuppressionDefinitive
+          ticket={modalSuppressionDefinitive}
+          onClose={() => setModalSuppressionDefinitive(null)}
+          onConfirm={confirmerSuppressionDefinitive}
+        />
+      )}
       {modalDevis && (
         <ModalDevis
           ticket={modalDevis}
@@ -2183,9 +2245,9 @@ function Dashboard({ agenceAccess, onClose }) {
           <StatCard label="Terminés" value={stats.termine}
             active={statutFilter==="Terminé"}
             onClick={() => { setStatutFilter("Terminé"); setUrgentOnly(false); setMessagesOnly(false); }}/>
-          <StatCard label="Annulés" value={stats.annule}
-            active={statutFilter==="Annulé"}
-            onClick={() => { setStatutFilter("Annulé"); setUrgentOnly(false); setMessagesOnly(false); }}/>
+          <StatCard label="Archives" value={stats.archives} sub="annulés + supprimés"
+            active={statutFilter==="archives"}
+            onClick={() => { setStatutFilter("archives"); setUrgentOnly(false); setMessagesOnly(false); }}/>
           <StatCard label="Note client" value={stats.noteMoyenne ? "⭐ "+stats.noteMoyenne.toFixed(1) : "—"} sub={stats.nbNotes+" avis"} onClick={() => setShowModalNotes(true)}/>
         </div>
 
@@ -2241,7 +2303,7 @@ function Dashboard({ agenceAccess, onClose }) {
               <div style={{textAlign:"center",padding:"60px",color:C.muted,border:"1px dashed "+C.border,borderRadius:"12px"}}>Aucun ticket trouvé</div>
             )}
             <div style={{display:"flex",flexDirection:"column",gap:"8px"}}>
-              {sorted.map(t => <TicketRow key={t.id} t={t} onStatusChange={updateStatus} onAnnuler={setModalAnnulation} onSupprimer={setModalSuppression} onRenvoyerMail={renvoyerMailTechnicien} onRenvoyerMailClient={renvoyerMailClient} onDevis={setModalDevis} onRepondreClient={repondreClient} onMarquerLu={marquerMessageLu} isMessagePanelOpen={openMessageTicketId===t.id} onToggleMessagePanel={() => setOpenMessageTicketId(prev => prev===t.id ? null : t.id)} onCloseMessagePanel={() => setOpenMessageTicketId(null)} onRefreshTicket={rafraichirTicketMessage}/>)}
+              {sorted.map(t => <TicketRow key={t.id} t={t} onStatusChange={updateStatus} onAnnuler={setModalAnnulation} onSupprimer={setModalSuppression} onSupprimerDefinitivement={setModalSuppressionDefinitive} onRenvoyerMail={renvoyerMailTechnicien} onRenvoyerMailClient={renvoyerMailClient} onDevis={setModalDevis} onRepondreClient={repondreClient} onMarquerLu={marquerMessageLu} isMessagePanelOpen={openMessageTicketId===t.id} onToggleMessagePanel={() => setOpenMessageTicketId(prev => prev===t.id ? null : t.id)} onCloseMessagePanel={() => setOpenMessageTicketId(null)} onRefreshTicket={rafraichirTicketMessage}/>)}
             </div>
           </div>
         )}
