@@ -52,6 +52,14 @@ REGLES
   pour comprendre une reference comme "celui d'avant" ou "le meme".
 - N'appelle jamais plus d'un outil d'action a la fois (une seule
   intention par commande).
+- REGLE ABSOLUE : si la commande demande une action sur le dashboard
+  (filtrer, chercher, changer un statut, ouvrir ou renvoyer un ticket),
+  tu DOIS appeler l'outil d'action correspondant. Il est INTERDIT de
+  repondre "c'est fait" ou toute confirmation similaire via
+  reponse_vocale sans avoir reellement appele cet outil dans le meme
+  message. reponse_vocale seul n'est valide que pour une question ou
+  une demande de precision, jamais pour confirmer une action non
+  executee.
 `;
 
 const TOOLS = [
@@ -218,7 +226,7 @@ precis :
       body: JSON.stringify({
         model: MODELE,
         max_tokens: 500,
-        temperature: 0.3,
+        temperature: 0.1,
         system: [{ type: "text", text: SYSTEM_PROMPT + (body.reunion ? BLOC_REUNION_IKO : ""), cache_control: { type: "ephemeral" } }],
         tools: TOOLS,
         tool_choice: { type: "any" },

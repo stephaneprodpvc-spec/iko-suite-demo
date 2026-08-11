@@ -2022,6 +2022,19 @@ function Dashboard({ agenceAccess, onClose }) {
     } catch (e) {}
   };
 
+  // Repli local si l'API ElevenLabs échoue (quota/crédits épuisés, réseau...) :
+  // on utilise la synthèse vocale native du navigateur, gratuite et sans API.
+  // Qualité moindre, mais IKO reste audible dans tous les cas.
+  const parlerNavigateurNatif = (texte) => {
+    try {
+      if (!('speechSynthesis' in window) || !texte) return;
+      window.speechSynthesis.cancel();
+      const u = new SpeechSynthesisUtterance(texte);
+      u.lang = 'fr-FR';
+      window.speechSynthesis.speak(u);
+    } catch (e) {}
+  };
+
   const parlerAmandine = async (texte) => {
     try {
       if (!texte) return;
@@ -2029,12 +2042,12 @@ function Dashboard({ agenceAccess, onClose }) {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ texte, voice_id: VOICE_ID_IKO }),
       });
-      if (!r.ok) return;
+      if (!r.ok) { parlerNavigateurNatif(texte); return; }
       const blob = await r.blob();
       const url = URL.createObjectURL(blob);
       const a = ikoAudioRef.current;
-      if (a) { a.volume = 1.0; a.src = url; a.play().catch(() => {}); }
-    } catch (e) {}
+      if (a) { a.volume = 1.0; a.src = url; a.play().catch(() => parlerNavigateurNatif(texte)); }
+    } catch (e) { parlerNavigateurNatif(texte); }
   };
 
   const executerActionsAmandine = (actions) => {
