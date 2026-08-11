@@ -2136,40 +2136,81 @@ function Dashboard({ agenceAccess, onClose }) {
     setAmandineEnCours(false);
   };
 
-  const lancerEcouteAmandine = () => {
-    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SR) {
-      // Pas de reconnaissance vocale native disponible (cas Safari iPad/iPhone) :
-      // on met le focus sur le champ texte, qui accepte la dictée via le
-      // micro du clavier iOS lui-meme.
+  // Enregistrement + transcription serveur (Whisper), en remplacement de
+  // webkitSpeechRecognition (peu fiable sur WebKit iOS après le 1er usage,
+  // marche/arrête au tap plutôt que sur détection de silence, pour rester
+  // prévisible sur tous les navigateurs).
+  const mediaRecorderRef = React.useRef(null);
+  const audioChunksRef = React.useRef([]);
+
+  const lancerEcouteAmandine = async () => {
+    if (!navigator.mediaDevices || !window.MediaRecorder) {
+      // Environnement trop ancien : on retombe sur la dictée clavier iOS.
       const champ = document.getElementById('ikoChampTexte');
       if (champ) champ.focus();
       return;
     }
-    const reco = new SR();
-    reco.lang = 'fr-FR';
-    reco.continuous = false;
-    reco.interimResults = false;
-    reco.onstart = () => { setAmandineEcoute(true); setAmandineErreur(""); };
-    reco.onerror = (e) => {
+    setAmandineErreur("");
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mimeType = MediaRecorder.isTypeSupported('audio/mp4') ? 'audio/mp4'
+        : MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : '';
+      const recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+      audioChunksRef.current = [];
+      recorder.ondataavailable = (e) => { if (e.data.size > 0) audioChunksRef.current.push(e.data); };
+      recorder.onstop = async () => {
+        stream.getTracks().forEach(t => t.stop());
+        setAmandineEcoute(false);
+        const blob = new Blob(audioChunksRef.current, { type: recorder.mimeType || mimeType || 'audio/webm' });
+        if (blob.size < 800) {
+          setAmandineErreur("Aucune voix détectée. Réessayez en parlant juste après avoir appuyé sur le micro.");
+          return;
+        }
+        setAmandineEnCours(true);
+        try {
+          const r = await fetch('/api/tts', {
+            method: 'POST',
+            headers: { 'Content-Type': blob.type || 'audio/webm' },
+            body: blob,
+          });
+          const data = await r.json();
+          if (!r.ok || data.erreur || !data.texte) {
+            setAmandineErreur(data.erreur || "Je n'ai rien compris. Réessayez.");
+            setAmandineEnCours(false);
+            return;
+          }
+          setAmandineDernier(data.texte);
+          envoyerAmandine(data.texte);
+        } catch (e) {
+          setAmandineErreur("Transcription impossible. Réessayez.");
+          setAmandineEnCours(false);
+        }
+      };
+      mediaRecorderRef.current = recorder;
+      recorder.start();
+      setAmandineEcoute(true);
+      // Coupure de sécurité si l'utilisateur oublie de retaper sur le micro.
+      setTimeout(() => { if (recorder.state === 'recording') recorder.stop(); }, 15000);
+    } catch (e) {
       setAmandineEcoute(false);
-      if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
+      if (e.name === 'NotAllowedError' || e.name === 'SecurityError') {
         setAmandineErreur("Micro refusé par le navigateur. Appuyez sur l'icône micro barrée à côté de l'adresse du site pour l'autoriser, puis réessayez.");
-      } else if (e.error === 'no-speech') {
-        setAmandineErreur("Aucune voix détectée. Réessayez en parlant juste après avoir appuyé sur le micro.");
-      } else if (e.error === 'audio-capture') {
+      } else if (e.name === 'NotFoundError') {
         setAmandineErreur("Aucun micro détecté sur cet appareil.");
       } else {
-        setAmandineErreur("Problème micro (" + e.error + "). Utilisez le champ texte en attendant.");
+        setAmandineErreur("Problème micro (" + e.name + "). Utilisez le champ texte en attendant.");
       }
-    };
-    reco.onend = () => setAmandineEcoute(false);
-    reco.onresult = (e) => {
-      const transcript = e.results[0][0].transcript;
-      setAmandineDernier(transcript);
-      envoyerAmandine(transcript);
-    };
-    reco.start();
+    }
+  };
+
+  const arreterEcouteAmandine = () => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+      mediaRecorderRef.current.stop();
+    }
+  };
+
+  const toggleEcouteAmandine = () => {
+    if (amandineEcoute) arreterEcouteAmandine(); else lancerEcouteAmandine();
   };
 
   const confirmerAnnulation = async (ticket, motif) => {
@@ -2286,7 +2327,7 @@ function Dashboard({ agenceAccess, onClose }) {
           boxShadow:"0 0 90px rgba(255,107,0,0.45)",
           animation: amandineEcoute ? "ikoPulseRapide 1s ease-in-out infinite" : "ikoRespire 3.2s ease-in-out infinite"}}/>
         <div style={{marginTop:"32px",color:"#b8b8b8",fontSize:"14px",maxWidth:"320px",textAlign:"center",minHeight:"40px",lineHeight:"1.5"}}>
-          {amandineEcoute ? "Je vous écoute..." : amandineEnCours ? "..." : amandineDernier ? amandineDernier : "Dites une commande à IKO : \"Filtre sur Agence 2\", \"Combien de tickets urgents ?\"..."}
+          {amandineEcoute ? "Je vous écoute... (retapez le micro pour terminer)" : amandineEnCours ? "..." : amandineDernier ? amandineDernier : "Dites une commande à IKO : \"Filtre sur Agence 2\", \"Combien de tickets urgents ?\"..."}
         </div>
         {amandineErreur && <div style={{color:"#DC2626",fontSize:"12px",marginTop:"10px"}}>{amandineErreur}</div>}
 
@@ -2303,7 +2344,7 @@ function Dashboard({ agenceAccess, onClose }) {
         </div>
 
         <div style={{position:"fixed",bottom:"36px",left:"36px"}}>
-          <button onClick={() => { debloquerVoixIOS(); lancerEcouteAmandine(); }}
+          <button onClick={() => { debloquerVoixIOS(); toggleEcouteAmandine(); }}
             style={{width:"64px",height:"64px",borderRadius:"50%",background:amandineEcoute?"#DC2626":"#FF6B00",border:"none",color:"#111",cursor:"pointer",fontSize:"26px",boxShadow:"0 6px 24px rgba(255,107,0,0.4)"}}>
             🎙️
           </button>
@@ -2537,7 +2578,7 @@ function Dashboard({ agenceAccess, onClose }) {
           <div style={{width:"280px",background:C.card,border:"1px solid "+C.orBord,borderRadius:"14px",padding:"16px",boxShadow:"0 10px 40px rgba(0,0,0,0.35)"}}>
             <div style={{fontSize:"12px",fontWeight:"800",color:C.or,marginBottom:"8px",letterSpacing:"1px"}}>IKO</div>
             <div style={{fontSize:"12px",color:C.muted,minHeight:"36px"}}>
-              {amandineEcoute ? "Je vous écoute..." : amandineEnCours ? "..." : amandineDernier ? amandineDernier : "Dites par exemple : \"Filtre sur Agence 2\" ou \"Passe le ticket SAV-2026-1552 en terminé\"."}
+              {amandineEcoute ? "Je vous écoute... (retapez le micro pour terminer)" : amandineEnCours ? "..." : amandineDernier ? amandineDernier : "Dites par exemple : \"Filtre sur Agence 2\" ou \"Passe le ticket SAV-2026-1552 en terminé\"."}
             </div>
             {amandineErreur && <div style={{fontSize:"11px",color:C.rouge,marginTop:"6px"}}>{amandineErreur}</div>}
             <div style={{display:"flex",gap:"6px",marginTop:"10px"}}>
@@ -2559,7 +2600,7 @@ function Dashboard({ agenceAccess, onClose }) {
           {amandineOuverte && (
             <button onClick={() => setAmandineOuverte(false)} style={{width:"36px",height:"36px",borderRadius:"50%",background:C.card,border:"1px solid "+C.border,color:C.muted,cursor:"pointer",fontSize:"14px"}}>✕</button>
           )}
-          <button onClick={() => { debloquerVoixIOS(); setAmandineOuverte(true); lancerEcouteAmandine(); }}
+          <button onClick={() => { debloquerVoixIOS(); setAmandineOuverte(true); toggleEcouteAmandine(); }}
             style={{width:"58px",height:"58px",borderRadius:"50%",background:amandineEcoute?C.rouge:"radial-gradient(circle at 35% 30%, #FFB067, #FF6B00 55%, #7a3200 100%)",border:"none",color:"#111",cursor:"pointer",fontSize:"24px",boxShadow:"0 0 26px rgba(255,107,0,0.4)",animation:amandineEcoute?"pulse 1.2s infinite":"none"}}>
             🎙️
           </button>
