@@ -484,10 +484,10 @@ function TicketRow({ t, onStatusChange, onAnnuler, onSupprimer, onSupprimerDefin
 }
 
 // ---- MODAL AJOUT RDV ----
-function ModalRdv({ agenceAccess, onClose, onSuccess }) {
+function ModalRdv({ agenceAccess, onClose, onSuccess, initialAgence }) {
   const today = new Date().toISOString().split('T')[0];
   const [form, setForm] = React.useState({
-    agence: agenceAccess !== "global" ? agenceAccess : AGENCES[0],
+    agence: agenceAccess !== "global" ? agenceAccess : (initialAgence || AGENCES[0]),
     nom: "", tel: "", email: "", sansEmail: false, adresse: "", codePostal: "", ville: "",
     produit: "Fenêtre", probleme: PROBLEMES["Fenêtre"][0].l,
     date: today, creneau: "Matin (8h30 — 12h00)",
@@ -631,12 +631,12 @@ function ModalRdv({ agenceAccess, onClose, onSuccess }) {
 const MOTIFS_BLOCAGE = ["Congé", "Congé payé", "Maladie", "Autre"];
 
 // ---- MODAL BLOCAGE DATES (congés / absences techniciens par agence) ----
-function ModalBlocage({ agenceAccess, onClose, onSuccess }) {
+function ModalBlocage({ agenceAccess, onClose, onSuccess, initialAgence, initialDateDebut, initialDateFin, initialMotif }) {
   const today = new Date().toISOString().split('T')[0];
-  const [agence, setAgence] = React.useState(agenceAccess !== "global" ? agenceAccess : AGENCES[0]);
-  const [dateDebut, setDateDebut] = React.useState(today);
-  const [dateFin, setDateFin] = React.useState(today);
-  const [motif, setMotif] = React.useState(MOTIFS_BLOCAGE[0]);
+  const [agence, setAgence] = React.useState(agenceAccess !== "global" ? agenceAccess : (initialAgence || AGENCES[0]));
+  const [dateDebut, setDateDebut] = React.useState(initialDateDebut || today);
+  const [dateFin, setDateFin] = React.useState(initialDateFin || today);
+  const [motif, setMotif] = React.useState(initialMotif || MOTIFS_BLOCAGE[0]);
   const [saving, setSaving] = React.useState(false);
   const [error, setError] = React.useState("");
 
@@ -1327,8 +1327,8 @@ function ModalNotes({ tickets, onClose }) {
   );
 }
 
-function ModalAnnulation({ ticket, onConfirm, onClose }) {
-  const [motif, setMotif] = React.useState("");
+function ModalAnnulation({ ticket, onConfirm, onClose, motifInitial }) {
+  const [motif, setMotif] = React.useState(motifInitial || "");
   const [saving, setSaving] = React.useState(false);
 
   const valider = async () => {
@@ -1675,6 +1675,9 @@ function Dashboard({ agenceAccess, onClose }) {
   const [sortBy, setSortBy] = React.useState("date");
   const [lastRefresh, setLastRefresh] = React.useState(null);
   const [showModalRdv, setShowModalRdv] = React.useState(false);
+  const [rdvPrefillAgence, setRdvPrefillAgence] = React.useState(null);
+  const [blocagePrefill, setBlocagePrefill] = React.useState(null); // {agence, dateDebut, dateFin, motif}
+  const [annulationMotifPrefill, setAnnulationMotifPrefill] = React.useState("");
   const [showModalBlocage, setShowModalBlocage] = React.useState(false);
   const [showModalConcepteur, setShowModalConcepteur] = React.useState(false);
   const [, forcerRender] = React.useState(0);
@@ -2073,6 +2076,33 @@ function Dashboard({ agenceAccess, onClose }) {
         } else {
           renvoyerMailClient(cible.fields?.Name);
         }
+      } else if (a.name === 'marquer_message_lu') {
+        const cible = tickets.find(x => x.id === a.input.ticket_id || x.fields?.Name === a.input.numero);
+        if (cible) marquerMessageLu(cible);
+      } else if (a.name === 'repondre_client') {
+        const cible = tickets.find(x => x.id === a.input.ticket_id || x.fields?.Name === a.input.numero);
+        if (cible && a.input.message) repondreClient(cible, a.input.message);
+      } else if (a.name === 'preparer_blocage_dates') {
+        // Action multi-champs sur potentiellement de nombreux créneaux :
+        // on ouvre le formulaire pré-rempli, la confirmation reste manuelle.
+        setBlocagePrefill({
+          agence: a.input.agence || null,
+          dateDebut: a.input.date_debut || null,
+          dateFin: a.input.date_fin || null,
+          motif: a.input.motif || null,
+        });
+        setShowModalBlocage(true);
+      } else if (a.name === 'ouvrir_nouveau_rdv') {
+        setRdvPrefillAgence(a.input.agence || null);
+        setShowModalRdv(true);
+      } else if (a.name === 'preparer_annulation_ticket') {
+        // Action irréversible : on ouvre la confirmation avec motif pré-rempli,
+        // le clic de validation reste manuel.
+        const cible = tickets.find(x => x.id === a.input.ticket_id || x.fields?.Name === a.input.numero);
+        if (cible) { setAnnulationMotifPrefill(a.input.motif || ""); setModalAnnulation(cible); }
+      } else if (a.name === 'preparer_suppression_ticket') {
+        const cible = tickets.find(x => x.id === a.input.ticket_id || x.fields?.Name === a.input.numero);
+        if (cible) setModalSuppression(cible);
       }
     });
   };
@@ -2297,15 +2327,20 @@ function Dashboard({ agenceAccess, onClose }) {
       {showModalRdv && (
         <ModalRdv
           agenceAccess={agenceFilter !== "global" ? agenceFilter : agenceAccess}
-          onClose={() => setShowModalRdv(false)}
-          onSuccess={(num) => { setShowModalRdv(false); setSuccessTicket(num); charger(); }}
+          initialAgence={rdvPrefillAgence}
+          onClose={() => { setShowModalRdv(false); setRdvPrefillAgence(null); }}
+          onSuccess={(num) => { setShowModalRdv(false); setRdvPrefillAgence(null); setSuccessTicket(num); charger(); }}
         />
       )}
       {showModalBlocage && (
         <ModalBlocage
           agenceAccess={agenceFilter !== "global" ? agenceFilter : agenceAccess}
-          onClose={() => setShowModalBlocage(false)}
-          onSuccess={(n) => { setShowModalBlocage(false); alert(n + " créneau(x) bloqué(s)."); charger(); }}
+          initialAgence={blocagePrefill?.agence}
+          initialDateDebut={blocagePrefill?.dateDebut}
+          initialDateFin={blocagePrefill?.dateFin}
+          initialMotif={blocagePrefill?.motif}
+          onClose={() => { setShowModalBlocage(false); setBlocagePrefill(null); }}
+          onSuccess={(n) => { setShowModalBlocage(false); setBlocagePrefill(null); alert(n + " créneau(x) bloqué(s)."); charger(); }}
         />
       )}
       {showModalConcepteur && (
@@ -2331,7 +2366,8 @@ function Dashboard({ agenceAccess, onClose }) {
       {modalAnnulation && (
         <ModalAnnulation
           ticket={modalAnnulation}
-          onClose={() => setModalAnnulation(null)}
+          motifInitial={annulationMotifPrefill}
+          onClose={() => { setModalAnnulation(null); setAnnulationMotifPrefill(""); }}
           onConfirm={confirmerAnnulation}
         />
       )}

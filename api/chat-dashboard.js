@@ -16,14 +16,20 @@ const MAX_CHARS_MESSAGE = 500;
 const MAX_TICKETS_CONTEXTE = 150;
 
 const AGENCES_VALIDES = ["Agence 1", "Agence 2", "Agence 3", "Agence 4"];
-const STATUTS_VALIDES = ["Nouveau", "En cours", "Terminé", "Annulé"];
+const STATUTS_VALIDES = ["Nouveau", "En cours", "Terminé", "Annulé", "Devis à faire", "Devis envoyé", "Devis - Suivi", "Devis - Attente fournisseur", "Devis refusé"];
+// Sous-ensemble utilisable par changer_statut : Annulé en est exclu volontairement,
+// cette transition exige un motif et passe par preparer_annulation_ticket.
+const STATUTS_MODIFIABLES = STATUTS_VALIDES.filter(s => s !== "Annulé");
+const MOTIFS_BLOCAGE_VALIDES = ["Congé", "Congé payé", "Maladie", "Autre"];
 
 const SYSTEM_PROMPT = `
 Tu es IKO, l'assistant vocal integre au dashboard SAV d'Iko Suite.
 La personne qui te parle est un responsable ou une personne d'agence en
 train de travailler sur le dashboard. Elle te donne des commandes ou
 questions a l'oral, et tu dois soit AGIR sur le dashboard (filtrer,
-chercher, changer un statut, ouvrir un ticket, renvoyer un ticket),
+chercher, changer un statut, ouvrir ou renvoyer un ticket, marquer un
+message lu, repondre a un client, preparer un blocage de dates, ouvrir
+un nouveau RDV, preparer une annulation ou une suppression de ticket),
 soit REPONDRE a une question sur les tickets actuellement visibles.
 
 Tu recois la liste des tickets actuellement charges dans le dashboard
@@ -32,10 +38,16 @@ UNIQUEMENT cette liste pour repondre ou identifier un ticket : ne
 suppose jamais l'existence d'un ticket qui n'y figure pas.
 
 REGLES
-- Pour changer le statut, ouvrir ou renvoyer un ticket, identifie-le
-  dans la liste fournie (par numero de ticket ou nom de client cite) et
-  utilise son identifiant exact (champ id) dans ticket_id, jamais le
-  numero affiche.
+- Pour changer le statut, ouvrir, renvoyer, marquer lu, ou repondre a un
+  ticket, identifie-le dans la liste fournie (par numero de ticket ou
+  nom de client cite) et utilise son identifiant exact (champ id) dans
+  ticket_id, jamais le numero affiche.
+- Les actions preparer_blocage_dates, ouvrir_nouveau_rdv,
+  preparer_annulation_ticket et preparer_suppression_ticket ouvrent
+  seulement un formulaire pre-rempli : elles n'ecrivent rien tant que
+  l'utilisateur n'a pas confirme manuellement. C'est normal, ne dis
+  jamais que l'action est terminee pour celles-ci : dis plutot que le
+  formulaire est ouvert et pret, en resumant ce qui est pre-rempli.
 - Si plusieurs tickets correspondent ou qu'aucun n'est trouve avec
   certitude, n'appelle pas d'action sur un ticket precis : utilise
   reponse_vocale pour demander une precision.
@@ -53,7 +65,8 @@ REGLES
 - N'appelle jamais plus d'un outil d'action a la fois (une seule
   intention par commande).
 - REGLE ABSOLUE : si la commande demande une action sur le dashboard
-  (filtrer, chercher, changer un statut, ouvrir ou renvoyer un ticket),
+  (filtrer, chercher, changer un statut, ouvrir ou renvoyer un ticket,
+  marquer lu, repondre, preparer un blocage/RDV/annulation/suppression),
   tu DOIS appeler l'outil d'action correspondant. Il est INTERDIT de
   repondre "c'est fait" ou toute confirmation similaire via
   reponse_vocale sans avoir reellement appele cet outil dans le meme
@@ -103,7 +116,7 @@ const TOOLS = [
       type: "object",
       properties: {
         ticket_id: { type: "string", description: "Identifiant exact (champ id) du ticket dans la liste fournie, pas son numero affiche." },
-        nouveau_statut: { type: "string", enum: STATUTS_VALIDES },
+        nouveau_statut: { type: "string", enum: STATUTS_MODIFIABLES },
       },
       required: ["ticket_id", "nouveau_statut"],
     },
@@ -129,6 +142,77 @@ const TOOLS = [
         destinataire: { type: "string", enum: ["client", "technicien"] },
       },
       required: ["ticket_id", "destinataire"],
+    },
+  },
+  {
+    name: "marquer_message_lu",
+    description: "Marque comme lu le message client d'un ticket precis.",
+    input_schema: {
+      type: "object",
+      properties: {
+        ticket_id: { type: "string", description: "Identifiant exact (champ id) du ticket dans la liste fournie." },
+      },
+      required: ["ticket_id"],
+    },
+  },
+  {
+    name: "repondre_client",
+    description: "Envoie une reponse texte au client sur un ticket precis, visible dans son fil de suivi.",
+    input_schema: {
+      type: "object",
+      properties: {
+        ticket_id: { type: "string", description: "Identifiant exact (champ id) du ticket dans la liste fournie." },
+        message: { type: "string", description: "Contenu exact du message a envoyer au client." },
+      },
+      required: ["ticket_id", "message"],
+    },
+  },
+  {
+    name: "preparer_blocage_dates",
+    description: "Ouvre le formulaire de blocage de dates pre-rempli avec l'agence, la periode et le motif precises. N'ecrit rien : cette action peut modifier de nombreux creneaux et exige une confirmation manuelle dans le formulaire.",
+    input_schema: {
+      type: "object",
+      properties: {
+        agence: { type: "string", enum: AGENCES_VALIDES },
+        date_debut: { type: "string", description: "Format AAAA-MM-JJ." },
+        date_fin: { type: "string", description: "Format AAAA-MM-JJ." },
+        motif: { type: "string", enum: MOTIFS_BLOCAGE_VALIDES },
+      },
+      required: [],
+    },
+  },
+  {
+    name: "ouvrir_nouveau_rdv",
+    description: "Ouvre le formulaire de prise de nouveau rendez-vous SAV, avec l'agence pre-remplie si precisee. N'ecrit rien : le reste du formulaire (client, produit, date...) est trop consequent pour etre rempli fiablement a la voix.",
+    input_schema: {
+      type: "object",
+      properties: {
+        agence: { type: "string", enum: AGENCES_VALIDES },
+      },
+      required: [],
+    },
+  },
+  {
+    name: "preparer_annulation_ticket",
+    description: "Ouvre la confirmation d'annulation d'un ticket precis, avec le motif pre-rempli si donne. N'annule rien : action irreversible, la validation finale reste manuelle.",
+    input_schema: {
+      type: "object",
+      properties: {
+        ticket_id: { type: "string", description: "Identifiant exact (champ id) du ticket dans la liste fournie." },
+        motif: { type: "string", description: "Motif d'annulation si precise par l'utilisateur." },
+      },
+      required: ["ticket_id"],
+    },
+  },
+  {
+    name: "preparer_suppression_ticket",
+    description: "Ouvre la confirmation de suppression (archivage) d'un ticket precis. Ne supprime rien : action irreversible, la validation finale reste manuelle.",
+    input_schema: {
+      type: "object",
+      properties: {
+        ticket_id: { type: "string", description: "Identifiant exact (champ id) du ticket dans la liste fournie." },
+      },
+      required: ["ticket_id"],
     },
   },
   {
