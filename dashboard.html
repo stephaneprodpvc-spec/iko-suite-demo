@@ -331,17 +331,17 @@ function TicketRow({ t, onStatusChange, onAnnuler, onSupprimer, onSupprimerDefin
   const nonLu = !!t.fields?.["Message client non lu"];
 
   // Tant que la fenêtre SMS est ouverte, on va chercher les nouveaux messages
-  // toutes les ~3s. Délai légèrement aléatoire (voir plus bas dans Dashboard)
-  // pour désynchroniser les postes ouverts en simultané et rester sous la
-  // limite Airtable de 5 req/s par base.
+  // toutes les ~8-10s (élargi depuis ~3s pour économiser le quota Airtable
+  // du plan Free). Délai légèrement aléatoire pour désynchroniser les
+  // postes ouverts en simultané.
   React.useEffect(() => {
     if (!isMessagePanelOpen) return;
     let timeoutId;
     const tick = () => {
       onRefreshTicket(t.id);
-      timeoutId = setTimeout(tick, 2700 + Math.random() * 600);
+      timeoutId = setTimeout(tick, 8000 + Math.random() * 2000);
     };
-    timeoutId = setTimeout(tick, 2700 + Math.random() * 600);
+    timeoutId = setTimeout(tick, 8000 + Math.random() * 2000);
     return () => clearTimeout(timeoutId);
   }, [isMessagePanelOpen, t.id]);
 
@@ -1799,28 +1799,26 @@ function Dashboard({ agenceAccess, onClose }) {
   };
 
   React.useEffect(() => { charger(); }, [agenceFilter]);
-  // Rafraîchissement toutes les ~3s avec un délai légèrement aléatoire
-  // (2.7-3.3s, re-tiré à chaque cycle plutôt qu'un setInterval fixe) : évite
-  // que tous les dashboards ouverts en même temps (plusieurs agences +
-  // fenêtres SMS + suivi.html côté client) tapent l'API Airtable exactement
-  // à la même seconde et dépassent la limite de 5 req/s par base.
-  React.useEffect(() => {
-    let timeoutId;
-    const tick = () => {
-      charger();
-      timeoutId = setTimeout(tick, 2700 + Math.random() * 600);
-    };
-    timeoutId = setTimeout(tick, 2700 + Math.random() * 600);
-    return () => clearTimeout(timeoutId);
-  }, [agenceFilter]);
+  // Plus d'auto-rafraîchissement en tâche de fond (c'était toutes les ~3s,
+  // ce qui épuise en quelques heures le quota Airtable du plan Free —
+  // 1000 appels/mois). La liste se recharge au chargement de la page, au
+  // changement de filtre agence, et via le bouton ↺ manuel. Les actions
+  // (changer un statut, etc.) mettent déjà à jour l'affichage localement
+  // sans requête supplémentaire.
+  //
+  // La détection de nouveaux tickets (notifications 🆕) reste en tâche de
+  // fond mais à un intervalle bien plus large (~90-100s au lieu de ~3s) :
+  // c'est la seule chose qui a vraiment besoin de tourner sans action de
+  // l'utilisateur. Fermer l'onglet quand le dashboard n'est pas activement
+  // utilisé reste le meilleur moyen d'économiser le quota.
   React.useEffect(() => {
     checkNouveaux();
     let timeoutId;
     const tick = () => {
       checkNouveaux();
-      timeoutId = setTimeout(tick, 2700 + Math.random() * 600);
+      timeoutId = setTimeout(tick, 90000 + Math.random() * 10000);
     };
-    timeoutId = setTimeout(tick, 2700 + Math.random() * 600);
+    timeoutId = setTimeout(tick, 90000 + Math.random() * 10000);
     return () => clearTimeout(timeoutId);
   }, []);
 
@@ -2023,6 +2021,19 @@ function Dashboard({ agenceAccess, onClose }) {
       const a = ikoAudioRef.current;
       if (a) { a.src = SILENCE_WAV; a.play().catch(() => {}); }
     } catch (e) {}
+    try {
+      // window.speechSynthesis est une API distincte de <audio> : iOS exige
+      // aussi un premier appel synchrone avec le geste utilisateur, sinon
+      // les speak() suivants (déclenchés après un await fetch, donc de
+      // façon asynchrone) sont silencieusement ignorés. On "amorce" donc
+      // le moteur ici avec une syllabe quasi inaudible.
+      if ('speechSynthesis' in window) {
+        const amorce = new SpeechSynthesisUtterance(' ');
+        amorce.volume = 0.01;
+        amorce.lang = 'fr-FR';
+        window.speechSynthesis.speak(amorce);
+      }
+    } catch (e) {}
   };
 
   // Repli local si l'API ElevenLabs échoue (quota/crédits épuisés, réseau...) :
@@ -2209,10 +2220,6 @@ function Dashboard({ agenceAccess, onClose }) {
     }
   };
 
-  const toggleEcouteAmandine = () => {
-    if (amandineEcoute) arreterEcouteAmandine(); else lancerEcouteAmandine();
-  };
-
   const confirmerAnnulation = async (ticket, motif) => {
     const fields = { Statut: "Annulé", Commentaire: "Annulé : " + motif.trim() };
     const planningId = ticket?.fields?.PlanningID;
@@ -2327,7 +2334,7 @@ function Dashboard({ agenceAccess, onClose }) {
           boxShadow:"0 0 90px rgba(255,107,0,0.45)",
           animation: amandineEcoute ? "ikoPulseRapide 1s ease-in-out infinite" : "ikoRespire 3.2s ease-in-out infinite"}}/>
         <div style={{marginTop:"32px",color:"#b8b8b8",fontSize:"14px",maxWidth:"320px",textAlign:"center",minHeight:"40px",lineHeight:"1.5"}}>
-          {amandineEcoute ? "Je vous écoute... (retapez le micro pour terminer)" : amandineEnCours ? "..." : amandineDernier ? amandineDernier : "Dites une commande à IKO : \"Filtre sur Agence 2\", \"Combien de tickets urgents ?\"..."}
+          {amandineEcoute ? "Je vous écoute... (relâchez le micro pour terminer)" : amandineEnCours ? "..." : amandineDernier ? amandineDernier : "Dites une commande à IKO : \"Filtre sur Agence 2\", \"Combien de tickets urgents ?\"..."}
         </div>
         {amandineErreur && <div style={{color:"#DC2626",fontSize:"12px",marginTop:"10px"}}>{amandineErreur}</div>}
 
@@ -2344,8 +2351,12 @@ function Dashboard({ agenceAccess, onClose }) {
         </div>
 
         <div style={{position:"fixed",bottom:"36px",left:"36px"}}>
-          <button onClick={() => { debloquerVoixIOS(); toggleEcouteAmandine(); }}
-            style={{width:"64px",height:"64px",borderRadius:"50%",background:amandineEcoute?"#DC2626":"#FF6B00",border:"none",color:"#111",cursor:"pointer",fontSize:"26px",boxShadow:"0 6px 24px rgba(255,107,0,0.4)"}}>
+          <button
+            onPointerDown={() => { debloquerVoixIOS(); lancerEcouteAmandine(); }}
+            onPointerUp={arreterEcouteAmandine}
+            onPointerLeave={arreterEcouteAmandine}
+            onPointerCancel={arreterEcouteAmandine}
+            style={{width:"64px",height:"64px",borderRadius:"50%",background:amandineEcoute?"#DC2626":"#FF6B00",border:"none",color:"#111",cursor:"pointer",fontSize:"26px",boxShadow:"0 6px 24px rgba(255,107,0,0.4)",touchAction:"none",userSelect:"none"}}>
             🎙️
           </button>
         </div>
@@ -2451,7 +2462,7 @@ function Dashboard({ agenceAccess, onClose }) {
           </div>
         </div>
         <div style={{display:"flex",alignItems:"center",gap:"10px"}}>
-          {lastRefresh && <span style={{fontSize:"10px",color:C.muted,display:"flex",alignItems:"center",gap:"4px"}}><span style={{width:"6px",height:"6px",background:"#22c55e",borderRadius:"50%",display:"inline-block"}}/>MAJ {lastRefresh} · auto</span>}
+          {lastRefresh && <span style={{fontSize:"10px",color:C.muted,display:"flex",alignItems:"center",gap:"4px"}}><span style={{width:"6px",height:"6px",background:"#22c55e",borderRadius:"50%",display:"inline-block"}}/>MAJ {lastRefresh}</span>}
           {stats.messagesNonLus > 0 && (
             <button onClick={() => { setMessagesOnly(!messagesOnly); setStatutFilter("tous"); setUrgentOnly(false); }}
               className={messagesOnly ? "" : "alert-blink"}
@@ -2578,7 +2589,7 @@ function Dashboard({ agenceAccess, onClose }) {
           <div style={{width:"280px",background:C.card,border:"1px solid "+C.orBord,borderRadius:"14px",padding:"16px",boxShadow:"0 10px 40px rgba(0,0,0,0.35)"}}>
             <div style={{fontSize:"12px",fontWeight:"800",color:C.or,marginBottom:"8px",letterSpacing:"1px"}}>IKO</div>
             <div style={{fontSize:"12px",color:C.muted,minHeight:"36px"}}>
-              {amandineEcoute ? "Je vous écoute... (retapez le micro pour terminer)" : amandineEnCours ? "..." : amandineDernier ? amandineDernier : "Dites par exemple : \"Filtre sur Agence 2\" ou \"Passe le ticket SAV-2026-1552 en terminé\"."}
+              {amandineEcoute ? "Je vous écoute... (relâchez le micro pour terminer)" : amandineEnCours ? "..." : amandineDernier ? amandineDernier : "Dites par exemple : \"Filtre sur Agence 2\" ou \"Passe le ticket SAV-2026-1552 en terminé\"."}
             </div>
             {amandineErreur && <div style={{fontSize:"11px",color:C.rouge,marginTop:"6px"}}>{amandineErreur}</div>}
             <div style={{display:"flex",gap:"6px",marginTop:"10px"}}>
@@ -2600,8 +2611,12 @@ function Dashboard({ agenceAccess, onClose }) {
           {amandineOuverte && (
             <button onClick={() => setAmandineOuverte(false)} style={{width:"36px",height:"36px",borderRadius:"50%",background:C.card,border:"1px solid "+C.border,color:C.muted,cursor:"pointer",fontSize:"14px"}}>✕</button>
           )}
-          <button onClick={() => { debloquerVoixIOS(); setAmandineOuverte(true); toggleEcouteAmandine(); }}
-            style={{width:"58px",height:"58px",borderRadius:"50%",background:amandineEcoute?C.rouge:"radial-gradient(circle at 35% 30%, #FFB067, #FF6B00 55%, #7a3200 100%)",border:"none",color:"#111",cursor:"pointer",fontSize:"24px",boxShadow:"0 0 26px rgba(255,107,0,0.4)",animation:amandineEcoute?"pulse 1.2s infinite":"none"}}>
+          <button
+            onPointerDown={() => { debloquerVoixIOS(); setAmandineOuverte(true); lancerEcouteAmandine(); }}
+            onPointerUp={arreterEcouteAmandine}
+            onPointerLeave={arreterEcouteAmandine}
+            onPointerCancel={arreterEcouteAmandine}
+            style={{width:"58px",height:"58px",borderRadius:"50%",background:amandineEcoute?C.rouge:"radial-gradient(circle at 35% 30%, #FFB067, #FF6B00 55%, #7a3200 100%)",border:"none",color:"#111",cursor:"pointer",fontSize:"24px",boxShadow:"0 0 26px rgba(255,107,0,0.4)",animation:amandineEcoute?"pulse 1.2s infinite":"none",touchAction:"none",userSelect:"none"}}>
             🎙️
           </button>
         </div>
