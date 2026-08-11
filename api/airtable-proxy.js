@@ -48,6 +48,19 @@ export default async function handler(req, res) {
   // chaque segment (utile notamment pour "Tickets SAV" -> "Tickets%20SAV").
   const encodedSubPath = subPathRaw.split('/').filter(Boolean).map(encodeURIComponent).join('/');
 
+  // Garde-fou métier : une annulation de ticket SAV doit toujours être
+  // accompagnée d'un motif, même si l'appel contourne suivi.html (validation
+  // front seule insuffisante).
+  if (req.method === 'PATCH' && subPathRaw.startsWith('Tickets SAV/')) {
+    const fields = req.body && req.body.fields;
+    if (fields && fields.Statut === 'Annulé') {
+      const raison = typeof fields['Raison annulation'] === 'string' ? fields['Raison annulation'].trim() : '';
+      if (!raison) {
+        return res.status(400).json({ error: "Motif d'annulation obligatoire (champ 'Raison annulation')." });
+      }
+    }
+  }
+
   const params = new URLSearchParams();
   for (const [key, value] of Object.entries(rest)) {
     if (Array.isArray(value)) {
