@@ -291,6 +291,8 @@ function App() {
   const [showAnnulerConfirm, setShowAnnulerConfirm] = useState(false);
   const [annulEnCours, setAnnulEnCours] = useState(false);
   const [annulErr, setAnnulErr] = useState(false);
+  const [raisonAnnulation, setRaisonAnnulation] = useState("");
+  const [raisonManquante, setRaisonManquante] = useState(false);
   const [showChanger, setShowChanger] = useState(false);
   const [changeEnCours, setChangeEnCours] = useState(false);
   const [changeErr, setChangeErr] = useState(false);
@@ -379,6 +381,7 @@ function App() {
   const nouvelleRecherche = () => {
     setTicket(null); setNumero(""); setErreur(""); setMessage(""); setEnvoi(null);
     setShowAnnulerConfirm(false); setShowChanger(false); setChangeOk(false);
+    setRaisonAnnulation(""); setRaisonManquante(false);
   };
 
   const libererCreneauSiBesoin = async (planningId) => {
@@ -394,17 +397,21 @@ function App() {
 
   const annulerDemande = async () => {
     if (!ticket) return;
+    const raison = raisonAnnulation.trim();
+    if (!raison) { setRaisonManquante(true); return; }
+    setRaisonManquante(false);
     setAnnulEnCours(true); setAnnulErr(false);
     try {
       await libererCreneauSiBesoin(ticket.fields?.PlanningID);
       const resp = await fetch('/api/airtable/Tickets%20SAV/' + ticket.id, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fields: { Statut: 'Annulé' } })
+        body: JSON.stringify({ fields: { Statut: 'Annulé', 'Raison annulation': raison } })
       });
       if (!resp.ok) throw new Error('patch failed');
-      setTicket(prev => ({ ...prev, fields: { ...prev.fields, Statut: 'Annulé' } }));
+      setTicket(prev => ({ ...prev, fields: { ...prev.fields, Statut: 'Annulé', 'Raison annulation': raison } }));
       setShowAnnulerConfirm(false);
+      setRaisonAnnulation("");
     } catch (e) {
       setAnnulErr(true);
     }
@@ -557,15 +564,22 @@ function App() {
 
                 {showAnnulerConfirm && (
                   <div style={{background:F.rougeClair,border:"1px solid rgba(220,38,38,0.3)",borderRadius:"10px",padding:"14px"}}>
-                    <p style={{fontSize:"12px",color:"#7F1D1D",marginBottom:"12px"}}>Confirmez-vous l'annulation de cette demande SAV ? Cette action libérera votre créneau.</p>
+                    <p style={{fontSize:"12px",color:"#7F1D1D",marginBottom:"10px"}}>Confirmez-vous l'annulation de cette demande SAV ? Cette action libérera votre créneau.</p>
+                    <label style={{fontSize:"11px",fontWeight:"700",color:"#7F1D1D",display:"block",marginBottom:"4px"}}>Motif de l'annulation *</label>
+                    <textarea value={raisonAnnulation}
+                      onChange={e => { setRaisonAnnulation(e.target.value); if (e.target.value.trim()) setRaisonManquante(false); }}
+                      placeholder="Ex : intervention n'est plus nécessaire, changement de date impossible…"
+                      rows={3}
+                      style={{width:"100%",border:"1px solid "+(raisonManquante?F.rouge:F.grisBord),borderRadius:"8px",padding:"8px 10px",fontSize:"12px",fontFamily:"inherit",resize:"vertical",marginBottom:"8px"}}/>
+                    {raisonManquante && <div style={{marginBottom:"10px",fontSize:"12px",color:F.rouge}}>⚠️ Merci d'indiquer un motif avant de confirmer.</div>}
                     {annulErr && <div style={{marginBottom:"10px",fontSize:"12px",color:F.rouge}}>⚠️ Erreur, réessayez.</div>}
                     <div style={{display:"flex",gap:"8px"}}>
-                      <button onClick={() => setShowAnnulerConfirm(false)} disabled={annulEnCours}
+                      <button onClick={() => { setShowAnnulerConfirm(false); setRaisonManquante(false); }} disabled={annulEnCours}
                         style={{flex:1,background:F.blanc,color:"#374151",border:"1px solid "+F.grisBord,borderRadius:"8px",padding:"10px",fontWeight:"700",fontSize:"12px",cursor:"pointer"}}>
                         Retour
                       </button>
-                      <button onClick={annulerDemande} disabled={annulEnCours}
-                        style={{flex:1,background:F.rouge,color:F.blanc,border:"none",borderRadius:"8px",padding:"10px",fontWeight:"700",fontSize:"12px",cursor:annulEnCours?"default":"pointer"}}>
+                      <button onClick={annulerDemande} disabled={annulEnCours || !raisonAnnulation.trim()}
+                        style={{flex:1,background:F.rouge,color:F.blanc,border:"none",borderRadius:"8px",padding:"10px",fontWeight:"700",fontSize:"12px",cursor:(annulEnCours || !raisonAnnulation.trim())?"default":"pointer",opacity:(!raisonAnnulation.trim() && !annulEnCours)?0.55:1}}>
                         {annulEnCours ? "Annulation…" : "Confirmer l'annulation"}
                       </button>
                     </div>
