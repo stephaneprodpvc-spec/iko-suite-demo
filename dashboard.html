@@ -891,14 +891,11 @@ async function resoudreClientDepuisAgence(agenceLabel) {
   const agenceRec = (jA.records || [])[0];
   const clientId = agenceRec?.fields?.Client?.[0];
   if (!clientId) return null;
-  const rC = await fetch('/api/airtable/Clients/' + clientId);
-  const clientRec = await rC.json();
-  return { agenceId: agenceRec.id, clientId, clientNom: clientRec.fields?.["Nom client"] || "" };
+  return { agenceId: agenceRec.id, clientId };
 }
 
-async function chargerCatalogueDevis(clientNom) {
-  const nomEchappe = (clientNom || "").replace(/'/g, "\\'");
-  const formule = "FIND('" + nomEchappe + "', ARRAYJOIN({Client}))";
+async function chargerCatalogueDevis(clientId) {
+  const formule = "FIND('" + clientId + "', ARRAYJOIN({Client}))";
   const [rProd, rMo, rMep] = await Promise.all([
     fetch('/api/airtable/Catalogue%20Produits?filterByFormula=' + encodeURIComponent(formule)),
     fetch('/api/airtable/Grille%20Main%20d%27%C5%93uvre?filterByFormula=' + encodeURIComponent(formule)),
@@ -1133,7 +1130,7 @@ function ModalDevis({ ticket, onClose, onSent }) {
         const resolu = await resoudreClientDepuisAgence(ticket.fields?.Agence);
         if (!resolu) { setChargement(false); return; }
         setClientInfo(resolu);
-        const cat = await chargerCatalogueDevis(resolu.clientNom);
+        const cat = await chargerCatalogueDevis(resolu.clientId);
         setCatalogue(cat);
       } catch(e) { console.error(e); }
       setChargement(false);

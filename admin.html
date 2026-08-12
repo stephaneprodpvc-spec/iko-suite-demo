@@ -1758,8 +1758,7 @@ Array.prototype.forEach.call(document.querySelectorAll(".devis-tab"), function(t
 });
 
 function filtreFormuleClient(){
-  var nom = (devisClientNom || "").replace(/'/g, "\\'");
-  return "FIND('" + nom + "', ARRAYJOIN({Client}))";
+  return "FIND('" + devisClientId + "', ARRAYJOIN({Client}))";
 }
 
 /* ---- Catalogue produits ---- */
