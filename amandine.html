@@ -4,6 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Iko Suite — Amandine SAV</title>
+<link rel="manifest" href="/manifest-amandine.json">
+<link rel="apple-touch-icon" href="/icon-192.png">
 <meta name="theme-color" content="#111111">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -651,6 +653,13 @@ window.IKO_CLIENT_READY = (async function () {
   if (landingBtn) landingBtn.addEventListener('click', ouvrirConversation);
   if (retourBtn) retourBtn.addEventListener('click', retournerSphere);
 })();
+</script>
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('/sw.js').catch(() => {});
+    });
+  }
 </script>
 
 </body>
