@@ -53,8 +53,24 @@ const CRENEAUX = {
     apres_midi: "Après-midi (13h00 — 17h00)",
 };
 
-function buildSystemPrompt(vocab) {
+function buildSystemPrompt(vocab, agencesNoms, questionnairePersonnalise) {
   const listeDiagnostics = vocab.diagnostics.map(function (d) { return "- " + d; }).join("\n");
+  const listeAgences = (agencesNoms && agencesNoms.length > 0 ? agencesNoms : ["Agence 1", "Agence 2", "Agence 3", "Agence 4"]).join(", ");
+  const blocQuestionnaire = (questionnairePersonnalise && questionnairePersonnalise.length > 0) ? `
+
+QUESTIONNAIRE PERSONNALISE DE CE CLIENT
+En plus (et a la place) des questions generiques du deroule ci-dessus pour
+comprendre le probleme, pose aussi ces questions specifiques a ce client,
+dans cet ordre, une seule a la fois, juste apres avoir compris le probleme
+general et avant de demander l'agence :
+${questionnairePersonnalise.map(function (q, i) {
+  const choix = (q.type === "Choix multiple" && q.options) ? " (propose ces choix : " + q.options.split("\n").filter(Boolean).join(", ") + ")" : "";
+  const oblig = q.obligatoire ? " [reponse obligatoire]" : " [optionnel, tu peux passer si le client ne sait pas]";
+  return (i + 1) + ". " + q.question + choix + oblig;
+}).join("\n")}
+Quand tu appelles creer_ticket, remplis le champ reponses_questionnaire avec
+un objet JSON en texte, au format {"question 1": "reponse", "question 2": "reponse"},
+en reprenant exactement le texte de chaque question ci-dessus comme cle.` : "";
   return `
 Tu es Amandine, l'assistante SAV en ligne d'Iko Suite, specialiste de
 ${vocab.nom_metier}.
@@ -81,9 +97,9 @@ ticket (ex: SAV-2026-1234, jamais **SAV-2026-1234**).
 
 DEROULE POUR OUVRIR UN TICKET / PRENDRE RDV
 1. Comprendre le probleme (quel produit, quelle panne, depuis quand).
-2. Demander l'agence du client parmi : Agence 1, Agence 2, Agence 3,
-   Agence 4. Si le client donne juste sa ville, associe-la a
-      l'agence la plus proche parmi ces 4-la.
+2. Demander l'agence du client parmi : ${listeAgences}. Si le client
+   donne juste sa ville, associe-la a l'agence la plus proche parmi
+      celles-ci.
       3. Recuperer nom complet, telephone, e-mail, adresse complete (rue, code
          postal, ville).
          Attention a l'email dicte a l'oral : les clients disent parfois "arobase" pour
@@ -126,16 +142,24 @@ DEROULE POUR OUVRIR UN TICKET / PRENDRE RDV
 
 QUELQUES PISTES DE DIAGNOSTIC DE BASE (a titre indicatif, jamais une garantie)
 ${listeDiagnostics}
+${blocQuestionnaire}
 `;
 }
-const TOOLS = [
+// Construit la liste d'outils pour UN appel donne, avec l'enum d'agences et
+// le vocabulaire produit du client concerne (ou le repli demo si aucun
+// client resolu). Reconstruit a chaque requete au lieu d'une constante
+// partagee, pour eviter qu'un client A voie les agences d'un client B sur
+// un meme serveur (meme raison que resoudreClient calcule par requete).
+function buildTools(agencesNoms, vocab) {
+  const listeAgences = agencesNoms && agencesNoms.length > 0 ? agencesNoms : AGENCES_VALIDES;
+  return [
   {
     name: "lister_creneaux",
     description: "Liste les creneaux de rendez-vous disponibles pour une agence et une periode donnees (au moins " + DELAI_MIN_JOURS + " jours a l'avance). Retourne jusqu'a 5 dates avec leur identifiant interne a reutiliser dans reserver_creneau.",
     input_schema: {
       type: "object",
       properties: {
-        agence: { type: "string", enum: AGENCES_VALIDES, description: "Agence concernee." },
+        agence: { type: "string", enum: listeAgences, description: "Agence concernee." },
         periode: { type: "string", enum: ["matin", "apres_midi"], description: "Periode de la journee souhaitee." },
       },
       required: ["agence", "periode"],
@@ -158,18 +182,19 @@ const TOOLS = [
     input_schema: {
       type: "object",
       properties: {
-        agence: { type: "string", enum: AGENCES_VALIDES },
+        agence: { type: "string", enum: listeAgences },
         nom: { type: "string", description: "Nom complet du client." },
         telephone: { type: "string" },
         email: { type: "string" },
         adresse: { type: "string", description: "Adresse complete : rue, code postal, ville." },
-        produit: { type: "string", description: "Ex : " + TRADES.menuiserie.produits.join(", ") + "." },
+        produit: { type: "string", description: "Ex : " + (vocab || TRADES.menuiserie).produits.join(", ") + "." },
         probleme: { type: "string", description: "Description du probleme rencontre." },
         urgent: { type: "boolean", description: "true si probleme de securite ou degat en cours." },
         garantie: { type: "string", enum: ["oui", "non", "inconnu"] },
         numero_facture: { type: "string", description: "Numero de facture si sous garantie, sinon vide." },
         creneau_texte: { type: "string", description: "Texte lisible du rendez-vous choisi, ou A convenir si aucun creneau n'a ete reserve." },
         planning_id: { type: "string", description: "Identifiant du creneau reserve via reserver_creneau, si applicable. Laisser vide sinon." },
+        reponses_questionnaire: { type: "string", description: "Si un questionnaire personnalise a ete fourni dans tes instructions, objet JSON en texte {\"question\": \"reponse\"} avec les reponses recueillies. Laisser vide sinon." },
       },
       required: ["agence", "nom", "telephone", "email", "adresse", "produit", "probleme", "urgent", "garantie", "creneau_texte"],
     },
@@ -186,6 +211,7 @@ const TOOLS = [
     },
   },
   ];
+}
 
 function airtableHeaders() {
   return {
@@ -194,14 +220,67 @@ function airtableHeaders() {
   };
 }
 
-// Aligne AGENCES_VALIDES sur le mode concepteur (dashboard.html) en lisant
-// "Nombre agences" sur le record sentinelle Planning. Mutation en place (pas
-// de reassignation) pour que l'enum deja construit dans TOOLS reste synchro.
-// Cache 60s pour eviter un appel Airtable a chaque message.
+// Aligne AGENCES_VALIDES (repli demo, hors client resolu) sur le mode
+// concepteur (dashboard.html) en lisant "Nombre agences" sur le record
+// sentinelle Planning. Mutation en place. Cache 60s pour eviter un appel
+// Airtable a chaque message.
 // Resout le client courant a partir de son slug (?client=slug transmis par
 // amandine.html). Calcul PAR REQUETE (pas de variable globale partagee, a
 // la difference de TRADE_ID/AGENCES_VALIDES) car plusieurs clients peuvent
 // discuter avec Amandine simultanement sur ce meme serveur.
+// Questionnaire SAV personnalise de ce client (table "Questionnaire SAV",
+// filtre Client + Actif, trie par Ordre). null si le client n'en a pas
+// defini (Amandine garde alors le deroule generique par defaut).
+async function obtenirQuestionnaireClient(clientId) {
+  if (!clientId) return null;
+  try {
+    const formule = encodeURIComponent('AND(FIND("' + clientId + '", ARRAYJOIN({Client})), {Actif}=1)');
+    const url = "https://api.airtable.com/v0/" + AIRTABLE_BASE + "/" + encodeURIComponent("Questionnaire SAV") +
+      "?filterByFormula=" + formule + "&sort[0][field]=Ordre&sort[0][direction]=asc&maxRecords=30";
+    const r = await fetch(url, { headers: airtableHeaders() });
+    if (!r.ok) return null;
+    const json = await r.json();
+    const questions = (json.records || []).map(function (rec) {
+      return {
+        question: rec.fields["Question"] || "",
+        type: rec.fields["Type de réponse"] || "Texte libre",
+        options: rec.fields["Options"] || "",
+        obligatoire: !!rec.fields["Obligatoire"],
+      };
+    }).filter(function (q) { return q.question; });
+    return questions.length > 0 ? questions : null;
+  } catch (e) {
+    console.error("obtenirQuestionnaireClient erreur:", e);
+    return null;
+  }
+}
+
+// Agences de ce client (table "Agences", filtre Client + Actif), avec leurs
+// emails de notification. null si le client n'a pas encore d'agences
+// configurees (Amandine garde alors le repli demo AGENCES_VALIDES).
+async function obtenirAgencesClient(clientId) {
+  if (!clientId) return null;
+  try {
+    const formule = encodeURIComponent('AND(FIND("' + clientId + '", ARRAYJOIN({Client})), {Actif}=1)');
+    const url = "https://api.airtable.com/v0/" + AIRTABLE_BASE + "/" + encodeURIComponent("Agences") +
+      "?filterByFormula=" + formule + "&maxRecords=10";
+    const r = await fetch(url, { headers: airtableHeaders() });
+    if (!r.ok) return null;
+    const json = await r.json();
+    const agences = (json.records || []).map(function (rec) {
+      return {
+        nom: rec.fields["Nom agence"] || "",
+        emailAgence: rec.fields["Email agence"] || "",
+        emailTechnicien: rec.fields["Email technicien SAV"] || "",
+      };
+    }).filter(function (a) { return a.nom; });
+    return agences.length > 0 ? agences : null;
+  } catch (e) {
+    console.error("obtenirAgencesClient erreur:", e);
+    return null;
+  }
+}
+
 async function resoudreClient(slug) {
   if (!slug) return null;
   try {
@@ -213,7 +292,16 @@ async function resoudreClient(slug) {
     if (!rec) return null;
     const metier = rec.fields && rec.fields["Métier"];
     const metierId = metier === "Menuiserie" ? "menuiserie" : (metier === "Plomberie & Chauffage" ? "plomberie_chauffage" : null);
-    return { id: rec.id, tradeId: (metierId && TRADES[metierId]) ? metierId : null };
+    const [questionnaire, agences] = await Promise.all([
+      obtenirQuestionnaireClient(rec.id),
+      obtenirAgencesClient(rec.id),
+    ]);
+    return {
+      id: rec.id,
+      tradeId: (metierId && TRADES[metierId]) ? metierId : null,
+      questionnaire: questionnaire,
+      agences: agences,
+    };
   } catch (e) {
     console.error("resoudreClient erreur:", e);
     return null;
@@ -232,10 +320,9 @@ async function synchroniserAgences() {
 
       const metier = json.fields?.["Métier"];
       TRADE_ID = TRADES[metier] ? metier : "menuiserie";
-      // Mutation en place (meme pattern que AGENCES_VALIDES) pour que le
-      // schema TOOLS deja construit reste synchro sans reconstruire l'objet.
-      const champProduit = TOOLS.find(function (t) { return t.name === "creer_ticket"; }).input_schema.properties.produit;
-      champProduit.description = "Ex : " + loadTradeVocab(TRADE_ID).produits.join(", ") + ".";
+      // Note : plus besoin de muter un TOOLS global ici, buildTools()
+      // reconstruit l'enum agences et la description produit a chaque
+      // requete (voir handler plus bas).
     }
   } catch (e) {
     console.error("synchroniserAgences erreur:", e);
@@ -249,11 +336,12 @@ function filtreAvecClientServeur(baseFormula, clientId) {
   return baseFormula ? "AND(" + baseFormula + "," + clause + ")" : clause;
 }
 
-async function executerOutil(nom, input, clientId, tradeId) {
+async function executerOutil(nom, input, clientId, tradeId, agencesObjets) {
+  const agencesNoms = (agencesObjets && agencesObjets.length > 0) ? agencesObjets.map(function (a) { return a.nom; }) : AGENCES_VALIDES;
   try {
     if (nom === "lister_creneaux") {
       const valeurCreneau = CRENEAUX[input.periode];
-      if (!AGENCES_VALIDES.includes(input.agence) || !valeurCreneau) {
+      if (!agencesNoms.includes(input.agence) || !valeurCreneau) {
         return { erreur: "Agence ou periode invalide." };
       }
       const agenceAirtable = input.agence;
@@ -295,11 +383,12 @@ async function executerOutil(nom, input, clientId, tradeId) {
   }
 
   if (nom === "creer_ticket") {
-    if (!AGENCES_VALIDES.includes(input.agence)) {
+    if (!agencesNoms.includes(input.agence)) {
       return { erreur: "Agence invalide." };
     }
     const numero = "SAV-" + new Date().getFullYear() + "-" + (Math.floor(Math.random() * 9000) + 1000);
     const garantieTexte = input.garantie === "oui" ? "Oui - Facture " + (input.numero_facture || "") : input.garantie === "non" ? "Non / Hors garantie" : "N/A";
+    const agenceInfo = (agencesObjets || []).find(function (a) { return a.nom === input.agence; });
 
     const payload = {
       marque: "iko",
@@ -319,6 +408,11 @@ async function executerOutil(nom, input, clientId, tradeId) {
       facture_photo: "",
       planningId: input.planning_id || "",
       source: "Amandine (IA)",
+      // Emails specifiques a cette agence (table Agences), si ce client en a
+      // configure. A brancher cote scenario Make pour le routage des
+      // notifications par agence (mapping non fait dans cette session).
+      email_agence: (agenceInfo && agenceInfo.emailAgence) || "",
+      email_technicien: (agenceInfo && agenceInfo.emailTechnicien) || "",
     };
 
     const r = await fetch(MAKE_WEBHOOK, {
@@ -328,12 +422,13 @@ async function executerOutil(nom, input, clientId, tradeId) {
     });
     if (!r.ok) return { erreur: "La creation du ticket a echoue, merci de reessayer." };
 
-    if (clientId) {
+    if (clientId || input.reponses_questionnaire) {
       // Le ticket est cree de maniere asynchrone par le scenario Make (pas
       // directement par ce code). On attend un court instant puis on le
       // retrouve par son numero (genere ci-dessus, donc connu et unique)
-      // pour lui attacher le lien "Compte client". Best-effort : si ca
-      // echoue, le ticket existe deja et fonctionne, juste sans le lien.
+      // pour lui attacher le lien "Compte client" et/ou les reponses du
+      // questionnaire personnalise. Best-effort : si ca echoue, le ticket
+      // existe deja et fonctionne, juste sans ces champs complementaires.
       try {
         await new Promise(function (resolve) { setTimeout(resolve, 2500); });
         const formuleTicket = encodeURIComponent('{Name}="' + numero + '"');
@@ -341,14 +436,17 @@ async function executerOutil(nom, input, clientId, tradeId) {
         const jsonTicket = await rTicket.json();
         const ticketRec = (jsonTicket.records || [])[0];
         if (ticketRec) {
+          const champsMaj = {};
+          if (clientId) champsMaj["Compte client"] = [clientId];
+          if (input.reponses_questionnaire) champsMaj["Réponses questionnaire"] = String(input.reponses_questionnaire).slice(0, 5000);
           await fetch("https://api.airtable.com/v0/" + AIRTABLE_BASE + "/Tickets%20SAV/" + ticketRec.id, {
             method: "PATCH",
             headers: airtableHeaders(),
-            body: JSON.stringify({ fields: { "Compte client": [clientId] } }),
+            body: JSON.stringify({ fields: champsMaj }),
           });
         }
       } catch (e) {
-        console.error("Tag Compte client du ticket echoue (non bloquant):", e);
+        console.error("Maj complementaire du ticket echouee (non bloquant):", e);
       }
     }
 
@@ -433,6 +531,13 @@ try {
   const contexteClient = await resoudreClient(clientSlug);
   const clientIdActuel = contexteClient ? contexteClient.id : null;
   const tradeIdActuel = (contexteClient && contexteClient.tradeId) || TRADE_ID;
+  const vocabActuel = loadTradeVocab(tradeIdActuel);
+  // Agences de ce client si configurees (table Agences), sinon repli sur le
+  // reglage demo global (Planning/CONFIG, mode concepteur du dashboard).
+  const agencesObjetsActuels = (contexteClient && contexteClient.agences) || AGENCES_VALIDES.map(function (n) { return { nom: n, emailAgence: "", emailTechnicien: "" }; });
+  const agencesNomsActuels = agencesObjetsActuels.map(function (a) { return a.nom; });
+  const questionnaireActuel = contexteClient ? contexteClient.questionnaire : null;
+  const toolsActuels = buildTools(agencesNomsActuels, vocabActuel);
   const messages = (req.body || {}).messages;
   if (!Array.isArray(messages) || messages.length === 0) {
     return res.status(400).json({ error: "Aucun message recu" });
@@ -494,8 +599,8 @@ sait deja qui tu es, ce n'est pas ta premiere reunion avec eux.
         model: MODELE,
         max_tokens: 800,
         temperature: 0.6,
-        system: [{ type: "text", text: buildSystemPrompt(loadTradeVocab(tradeIdActuel)) + (req.body.reunion ? BLOC_REUNION_AMANDINE : ""), cache_control: { type: "ephemeral" } }],
-        tools: TOOLS,
+        system: [{ type: "text", text: buildSystemPrompt(vocabActuel, agencesNomsActuels, questionnaireActuel) + (req.body.reunion ? BLOC_REUNION_AMANDINE : ""), cache_control: { type: "ephemeral" } }],
+        tools: toolsActuels,
         messages: convertis,
       }),
     });
@@ -525,7 +630,7 @@ sait deja qui tu es, ce n'est pas ta premiere reunion avec eux.
   convertis.push({ role: "assistant", content: blocs });
     const resultats = [];
     for (const appel of appelsOutils) {
-      const resultat = await executerOutil(appel.name, appel.input || {}, clientIdActuel, tradeIdActuel);
+      const resultat = await executerOutil(appel.name, appel.input || {}, clientIdActuel, tradeIdActuel, agencesObjetsActuels);
       resultats.push({
         type: "tool_result",
         tool_use_id: appel.id,

@@ -377,6 +377,23 @@
           <div class="chip" data-mod="Métreur">Métreur</div>
         </div>
 
+        <label>Nombre d'agences (1 à 10)</label>
+        <input type="number" id="fNbAgences" min="1" max="10" value="1">
+
+        <div id="agencesWrap" style="display:none;">
+          <label style="margin-top:18px;">Agences</label>
+          <div id="agencesListe" style="display:flex;flex-direction:column;gap:8px;"></div>
+          <button type="button" class="secondary" id="ajouterAgenceBtn" style="margin-top:8px;width:100%;">+ Ajouter une agence</button>
+          <div class="hint" style="font-size:11px;color:var(--texte-faint);margin-top:5px;">Nom + emails de notification par agence. Enregistrement automatique à chaque champ quitté.</div>
+        </div>
+
+        <div id="questionnaireWrap" style="display:none;">
+          <label style="margin-top:18px;">Questionnaire SAV personnalisé</label>
+          <div id="questionnaireListe" style="display:flex;flex-direction:column;gap:10px;"></div>
+          <button type="button" class="secondary" id="ajouterQuestionBtn" style="margin-top:8px;width:100%;">+ Ajouter une question</button>
+          <div class="hint" style="font-size:11px;color:var(--texte-faint);margin-top:5px;">Amandine posera ces questions dans l'ordre, en plus du déroulé standard SAV. Enregistrement automatique.</div>
+        </div>
+
         <div id="diagramWrap" style="display:none;">
           <div class="diag-label">Schéma des flux</div>
           <div id="diagramSvg"></div>
@@ -883,6 +900,7 @@ function chargerDansFormulaire(id){
   document.getElementById("fC1").value = f["Couleur principale"] || "#FF6B00";
   document.getElementById("fC2").value = f["Couleur secondaire"] || "#111111";
   document.getElementById("fStatut").value = f["Statut client"] || "Actif";
+  document.getElementById("fNbAgences").value = f["Nombre agences"] || 1;
   setModulesActifs(f["Modules actifs"]);
   dessinerDiagramme();
   document.getElementById("submitBtn").textContent = "Enregistrer les modifications";
@@ -891,7 +909,157 @@ function chargerDansFormulaire(id){
   document.getElementById("deleteBtn").style.display = "inline-block";
   document.getElementById("formMsg").textContent = "";
   chargerActivite(id);
+  chargerAgencesClient(id);
+  chargerQuestionnaire(id);
 }
+
+var AGENCES_TABLE = "Agences";
+var QUESTIONNAIRE_TABLE = "Questionnaire SAV";
+
+function escHtml(s){
+  return String(s == null ? "" : s).replace(/[&<>"']/g, function(c){
+    return { "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" }[c];
+  });
+}
+
+// --- Agences par client -----------------------------------------------
+
+function chargerAgencesClient(clientId){
+  var wrap = document.getElementById("agencesWrap");
+  if (!clientId) { wrap.style.display = "none"; return; }
+  wrap.style.display = "block";
+  var formule = encodeURIComponent('FIND("' + clientId + '", ARRAYJOIN({Client}))');
+  fetch("/api/airtable/" + encodeURIComponent(AGENCES_TABLE) + "?filterByFormula=" + formule + "&maxRecords=10")
+    .then(function(r){ return r.json(); })
+    .then(function(data){ afficherAgences(data.records || []); })
+    .catch(function(){ document.getElementById("agencesListe").innerHTML = "<div style='color:#FF453A;font-size:12px;'>Erreur de chargement.</div>"; });
+}
+
+function afficherAgences(records){
+  var el = document.getElementById("agencesListe");
+  var max = Math.max(1, Math.min(10, parseInt(document.getElementById("fNbAgences").value, 10) || 1));
+  document.getElementById("ajouterAgenceBtn").style.display = records.length >= max ? "none" : "block";
+
+  if (!records.length) {
+    el.innerHTML = "<div style='font-size:12px;color:var(--texte-faint);'>Aucune agence configurée pour ce client.</div>";
+    return;
+  }
+  el.innerHTML = records.map(function(rec){
+    var f = rec.fields || {};
+    var actif = f["Actif"] !== false ? "checked" : "";
+    return "<div style='border:1px solid var(--border);border-radius:12px;padding:10px;display:flex;flex-direction:column;gap:6px;'>" +
+      "<input type='text' value='" + escHtml(f["Nom agence"]) + "' placeholder=\"Nom de l'agence\" data-id='" + rec.id + "' data-champ='Nom agence' style='width:100%;padding:8px 10px;border-radius:8px;border:1px solid var(--border);background:rgba(255,255,255,0.04);color:var(--texte);font-size:13px;outline:none;'>" +
+      "<input type='email' value='" + escHtml(f["Email agence"]) + "' placeholder='Email agence' data-id='" + rec.id + "' data-champ='Email agence' style='width:100%;padding:8px 10px;border-radius:8px;border:1px solid var(--border);background:rgba(255,255,255,0.04);color:var(--texte);font-size:12px;outline:none;'>" +
+      "<input type='email' value='" + escHtml(f["Email technicien SAV"]) + "' placeholder='Email technicien SAV' data-id='" + rec.id + "' data-champ='Email technicien SAV' style='width:100%;padding:8px 10px;border-radius:8px;border:1px solid var(--border);background:rgba(255,255,255,0.04);color:var(--texte);font-size:12px;outline:none;'>" +
+      "<div style='display:flex;align-items:center;gap:10px;'>" +
+        "<label style='font-size:11px;color:var(--texte-dim);display:flex;align-items:center;gap:4px;'><input type='checkbox' data-id='" + rec.id + "' data-champ='Actif' " + actif + "> Actif</label>" +
+        "<button type='button' class='ag-del' data-id='" + rec.id + "' style='margin-left:auto;background:none;border:none;color:#FF453A;cursor:pointer;font-size:12px;'>Supprimer</button>" +
+      "</div>" +
+    "</div>";
+  }).join("");
+
+  Array.prototype.forEach.call(el.querySelectorAll("input[data-id]"), function(champ){
+    var evt = champ.type === "checkbox" ? "change" : "blur";
+    champ.addEventListener(evt, function(){
+      var nomChamp = this.getAttribute("data-champ");
+      var id = this.getAttribute("data-id");
+      var valeur = this.type === "checkbox" ? this.checked : this.value;
+      var fields = {}; fields[nomChamp] = valeur;
+      fetch("/api/airtable/" + encodeURIComponent(AGENCES_TABLE) + "/" + id, {
+        method: "PATCH", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ fields: fields })
+      });
+    });
+  });
+  Array.prototype.forEach.call(el.querySelectorAll(".ag-del"), function(btn){
+    btn.addEventListener("click", function(){
+      if (!confirm("Supprimer cette agence ?")) return;
+      fetch("/api/airtable/" + encodeURIComponent(AGENCES_TABLE) + "/" + this.getAttribute("data-id"), { method: "DELETE" })
+        .then(function(){ chargerAgencesClient(editingId); });
+    });
+  });
+}
+
+document.getElementById("ajouterAgenceBtn").addEventListener("click", function(){
+  if (!editingId) return;
+  fetch("/api/airtable/" + encodeURIComponent(AGENCES_TABLE), {
+    method: "POST", headers: {"Content-Type":"application/json"},
+    body: JSON.stringify({ fields: { "Client": [editingId], "Nom agence": "Nouvelle agence", "Actif": true } })
+  }).then(function(){ chargerAgencesClient(editingId); });
+});
+
+document.getElementById("fNbAgences").addEventListener("change", function(){
+  if (editingId) chargerAgencesClient(editingId);
+});
+
+// --- Questionnaire SAV par client ---------------------------------------
+
+function chargerQuestionnaire(clientId){
+  var wrap = document.getElementById("questionnaireWrap");
+  if (!clientId) { wrap.style.display = "none"; return; }
+  wrap.style.display = "block";
+  var formule = encodeURIComponent('FIND("' + clientId + '", ARRAYJOIN({Client}))');
+  fetch("/api/airtable/" + encodeURIComponent(QUESTIONNAIRE_TABLE) + "?filterByFormula=" + formule + "&sort[0][field]=Ordre&sort[0][direction]=asc&maxRecords=30")
+    .then(function(r){ return r.json(); })
+    .then(function(data){ afficherQuestionnaire(data.records || []); })
+    .catch(function(){ document.getElementById("questionnaireListe").innerHTML = "<div style='color:#FF453A;font-size:12px;'>Erreur de chargement.</div>"; });
+}
+
+function afficherQuestionnaire(records){
+  var el = document.getElementById("questionnaireListe");
+  if (!records.length) {
+    el.innerHTML = "<div style='font-size:12px;color:var(--texte-faint);'>Aucune question. Le déroulé standard s'applique.</div>";
+    return;
+  }
+  el.innerHTML = records.map(function(rec, i){
+    var f = rec.fields || {};
+    var actif = f["Actif"] !== false ? "checked" : "";
+    var oblig = f["Obligatoire"] ? "checked" : "";
+    var type = f["Type de réponse"] || "Texte libre";
+    return "<div class='q-row' style='border:1px solid var(--border);border-radius:12px;padding:10px;'>" +
+      "<input type='text' value='" + escHtml(f["Question"]) + "' placeholder='Texte de la question' data-id='" + rec.id + "' data-champ='Question' style='width:100%;margin-bottom:6px;padding:8px 10px;border-radius:8px;border:1px solid var(--border);background:rgba(255,255,255,0.04);color:var(--texte);font-size:13px;outline:none;'>" +
+      "<div style='display:flex;gap:8px;flex-wrap:wrap;align-items:center;'>" +
+        "<select data-id='" + rec.id + "' data-champ='Type de réponse' class='q-type' style='padding:6px 8px;border-radius:8px;border:1px solid var(--border);background:rgba(255,255,255,0.04);color:var(--texte);font-size:12px;'>" +
+          "<option " + (type === "Texte libre" ? "selected" : "") + ">Texte libre</option>" +
+          "<option " + (type === "Choix multiple" ? "selected" : "") + ">Choix multiple</option>" +
+        "</select>" +
+        "<input type='number' value='" + (f["Ordre"] || (i + 1)) + "' data-id='" + rec.id + "' data-champ='Ordre' title='Ordre' style='width:52px;padding:6px 8px;border-radius:8px;border:1px solid var(--border);background:rgba(255,255,255,0.04);color:var(--texte);font-size:12px;'>" +
+        "<label style='font-size:11px;color:var(--texte-dim);display:flex;align-items:center;gap:4px;'><input type='checkbox' data-id='" + rec.id + "' data-champ='Obligatoire' " + oblig + "> Obligatoire</label>" +
+        "<label style='font-size:11px;color:var(--texte-dim);display:flex;align-items:center;gap:4px;'><input type='checkbox' data-id='" + rec.id + "' data-champ='Actif' " + actif + "> Actif</label>" +
+        "<button type='button' class='q-del' data-id='" + rec.id + "' style='margin-left:auto;background:none;border:none;color:#FF453A;cursor:pointer;font-size:12px;'>Supprimer</button>" +
+      "</div>" +
+      (type === "Choix multiple" ? "<textarea data-id='" + rec.id + "' data-champ='Options' placeholder='Une option par ligne' rows='2' style='width:100%;margin-top:6px;padding:8px 10px;border-radius:8px;border:1px solid var(--border);background:rgba(255,255,255,0.04);color:var(--texte);font-size:12px;outline:none;resize:vertical;'>" + escHtml(f["Options"]) + "</textarea>" : "") +
+    "</div>";
+  }).join("");
+
+  Array.prototype.forEach.call(el.querySelectorAll("input[data-id], select[data-id], textarea[data-id]"), function(champ){
+    var estCheckboxOuNombre = champ.type === "checkbox" || champ.type === "number" || champ.tagName === "SELECT";
+    champ.addEventListener(estCheckboxOuNombre ? "change" : "blur", function(){
+      var nomChamp = this.getAttribute("data-champ");
+      var id = this.getAttribute("data-id");
+      var valeur = this.type === "checkbox" ? this.checked : (this.type === "number" ? (parseInt(this.value, 10) || 0) : this.value);
+      var fields = {}; fields[nomChamp] = valeur;
+      fetch("/api/airtable/" + encodeURIComponent(QUESTIONNAIRE_TABLE) + "/" + id, {
+        method: "PATCH", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ fields: fields })
+      }).then(function(){ if (nomChamp === "Type de réponse") chargerQuestionnaire(editingId); });
+    });
+  });
+  Array.prototype.forEach.call(el.querySelectorAll(".q-del"), function(btn){
+    btn.addEventListener("click", function(){
+      if (!confirm("Supprimer cette question ?")) return;
+      fetch("/api/airtable/" + encodeURIComponent(QUESTIONNAIRE_TABLE) + "/" + this.getAttribute("data-id"), { method: "DELETE" })
+        .then(function(){ chargerQuestionnaire(editingId); });
+    });
+  });
+}
+
+document.getElementById("ajouterQuestionBtn").addEventListener("click", function(){
+  if (!editingId) return;
+  var ordreSuivant = document.querySelectorAll("#questionnaireListe .q-row").length + 1;
+  fetch("/api/airtable/" + encodeURIComponent(QUESTIONNAIRE_TABLE), {
+    method: "POST", headers: {"Content-Type":"application/json"},
+    body: JSON.stringify({ fields: { "Client": [editingId], "Question": "", "Type de réponse": "Texte libre", "Ordre": ordreSuivant, "Actif": true } })
+  }).then(function(){ chargerQuestionnaire(editingId); });
+});
 
 function chargerActivite(clientId){
   var el = document.getElementById("activiteInfo");
@@ -1042,6 +1210,9 @@ function reinitialiserFormulaire(){
   document.getElementById("formMsg").textContent = "";
   document.getElementById("activiteInfo").textContent = "";
   document.getElementById("diagramWrap").style.display = "none";
+  document.getElementById("fNbAgences").value = 1;
+  document.getElementById("agencesWrap").style.display = "none";
+  document.getElementById("questionnaireWrap").style.display = "none";
   Array.prototype.forEach.call(document.querySelectorAll(".client-item"), function(x){ x.classList.remove("selected"); });
 }
 
@@ -1059,7 +1230,8 @@ document.getElementById("clientForm").addEventListener("submit", function(e){
     "Couleur secondaire": document.getElementById("fC2").value,
     "Modules actifs": getModulesActifs(),
     "Statut client": document.getElementById("fStatut").value,
-    "Emails contact": document.getElementById("fEmails").value.trim()
+    "Emails contact": document.getElementById("fEmails").value.trim(),
+    "Nombre agences": Math.max(1, Math.min(10, parseInt(document.getElementById("fNbAgences").value, 10) || 1))
   };
   if (logoUrl) fields["Logo"] = [{ url: logoUrl }];
 
