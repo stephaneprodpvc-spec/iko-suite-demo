@@ -8,10 +8,12 @@
 <style>
   :root{
     --noir:#0A0A0A; --panel: rgba(255,255,255,0.045); --panel-hover: rgba(255,255,255,0.07);
-    --border: rgba(255,255,255,0.09); --orange:#FF6B00; --orange-dim: rgba(255,107,0,0.15);
+    --g2:#151517; --g3:#1C1C1F;
+    --border: rgba(255,255,255,0.09); --border-strong: rgba(255,255,255,0.18); --orange:#FF6B00; --orange-dim: rgba(255,107,0,0.15);
     --texte:#F5F5F7; --texte-dim:#98989D; --texte-faint:#636366;
     --radius:20px; --radius-sm:12px;
     --shadow: 0 20px 60px rgba(0,0,0,0.5);
+    --ease: cubic-bezier(.32,.72,0,1);
   }
   *{box-sizing:border-box;margin:0;padding:0;}
   html{-webkit-font-smoothing:antialiased;}
@@ -36,11 +38,24 @@
   #lock button:active{transform:scale(0.97);}
   #lock .err{color:#FF453A;font-size:12.5px;margin-top:12px;min-height:16px;}
 
-  header{padding:22px 32px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:10;background:rgba(10,10,10,0.7);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border-bottom:1px solid var(--border);}
+  header{padding:16px 32px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:10;background:rgba(10,10,10,0.72);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border-bottom:1px solid var(--border);}
   header .brand{display:flex;align-items:center;gap:10px;}
-  header .brand .dot{width:9px;height:9px;border-radius:50%;background:var(--orange);box-shadow:0 0 10px var(--orange);}
-  header h1{font-size:17px;font-weight:600;}
-  header span{font-size:12.5px;color:var(--texte-dim);font-variant-numeric:tabular-nums;}
+  header .brand .dot{width:6px;height:6px;border-radius:50%;background:#30D158;box-shadow:0 0 8px #30D158;animation:pulse 2s ease-in-out infinite;}
+  header h1{font-size:15px;font-weight:600;}
+  header span{font-size:11.5px;color:var(--texte-dim);font-variant-numeric:tabular-nums;}
+
+  .menu-wrap{position:relative;}
+  .menu-btn{display:flex;align-items:center;gap:6px;padding:8px 13px;border-radius:10px;border:1px solid var(--border);background:var(--g2);color:var(--texte);font-size:12.5px;font-weight:500;cursor:pointer;transition:background .12s,border-color .12s;}
+  .menu-btn:hover{background:var(--g3);border-color:var(--border-strong);}
+  .menu-btn .chev{font-size:9px;color:var(--texte-faint);transition:transform .18s var(--ease);}
+  .menu-btn.ouvert .chev{transform:rotate(180deg);}
+  .menu-dropdown{position:absolute;top:calc(100% + 6px);right:0;width:230px;background:var(--g2);border:1px solid var(--border-strong);border-radius:12px;box-shadow:0 16px 40px rgba(0,0,0,0.5);padding:6px;opacity:0;transform:translateY(-6px) scale(.98);pointer-events:none;transition:opacity .16s var(--ease),transform .16s var(--ease);z-index:50;}
+  .menu-dropdown.ouvert{opacity:1;transform:translateY(0) scale(1);pointer-events:auto;}
+  .menu-item{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:8px;font-size:13px;cursor:pointer;transition:background .1s;}
+  .menu-item:hover{background:rgba(255,255,255,0.06);}
+  .menu-item .ico{width:15px;text-align:center;color:var(--texte-dim);font-size:13px;}
+  .menu-sep{height:1px;background:var(--border);margin:5px 4px;}
+
   main{padding:32px;max-width:1280px;margin:0 auto;}
   .grid{display:grid;grid-template-columns:1fr;gap:20px;}
   @media(min-width:1080px){.grid{grid-template-columns:0.9fr 1.15fr 1fr;align-items:start;}}
@@ -184,7 +199,7 @@
   #reouvrirPanelBtn:hover{background:rgba(255,107,0,0.22);padding-right:14px;}
   #reouvrirPanelBtn span.chevron{font-size:14px;}
 
-  #moduleParamPanel{position:fixed;top:0;right:0;bottom:0;width:380px;max-width:90vw;background:rgba(15,15,15,0.97);backdrop-filter:blur(20px);border-left:1px solid var(--border);z-index:999;display:flex;flex-direction:column;box-shadow:-20px 0 60px rgba(0,0,0,0.5);transform:translateX(100%);transition:transform .28s cubic-bezier(.25,.8,.25,1);pointer-events:none;}
+  #moduleParamPanel{position:fixed;top:0;right:0;bottom:0;width:380px;max-width:90vw;background:rgba(15,15,15,0.97);backdrop-filter:blur(20px);border-left:1px solid var(--border);z-index:999;display:flex;flex-direction:column;box-shadow:-24px 0 70px rgba(0,0,0,0.55);transform:translateX(100%);transition:transform .32s var(--ease);pointer-events:none;}
   #moduleParamPanel.ouvert{transform:translateX(0);pointer-events:auto;}
   #moduleParamPanel .mp-head{padding:22px 24px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;}
   #moduleParamPanel .mp-head h3{font-size:16px;font-weight:600;}
@@ -245,7 +260,18 @@
     <div class="rsia-logo"><span>R</span><span>R</span></div>
     <h1>Iko — Poste de pilotage</h1>
   </div>
-  <span id="count"></span>
+  <div style="display:flex;align-items:center;gap:14px;">
+    <span id="count"></span>
+    <div class="menu-wrap">
+      <button type="button" class="menu-btn" id="actionsMenuBtn">Actions <span class="chev">▾</span></button>
+      <div class="menu-dropdown" id="actionsMenuDropdown">
+        <div class="menu-item" id="actionNouveauClient"><span class="ico">＋</span>Nouveau client</div>
+        <div class="menu-item" id="actionActualiser"><span class="ico">↻</span>Actualiser la liste</div>
+        <div class="menu-sep"></div>
+        <div class="menu-item" id="actionVerifSecu"><span class="ico">◇</span>Vérification sécurité</div>
+      </div>
+    </div>
+  </div>
 </header>
 
 <main>
@@ -1461,6 +1487,35 @@ document.getElementById("chatInput").addEventListener("keydown", function(e){
     document.getElementById("chatForm").dispatchEvent(new Event("submit"));
   }
 });
+
+// --- Menu déroulant Actions (en-tête) ---
+(function(){
+  var btn = document.getElementById("actionsMenuBtn");
+  var dropdown = document.getElementById("actionsMenuDropdown");
+  if (!btn || !dropdown) return;
+  btn.addEventListener("click", function(e){
+    e.stopPropagation();
+    btn.classList.toggle("ouvert");
+    dropdown.classList.toggle("ouvert");
+  });
+  document.addEventListener("click", function(){
+    btn.classList.remove("ouvert");
+    dropdown.classList.remove("ouvert");
+  });
+  var actionNouveau = document.getElementById("actionNouveauClient");
+  if (actionNouveau) actionNouveau.addEventListener("click", function(){
+    reinitialiserFormulaire();
+    var carte = document.getElementById("fNom");
+    if (carte) carte.scrollIntoView({ behavior: "smooth", block: "center" });
+  });
+  var actionActualiser = document.getElementById("actionActualiser");
+  if (actionActualiser) actionActualiser.addEventListener("click", chargerClients);
+  var actionVerif = document.getElementById("actionVerifSecu");
+  if (actionVerif) actionVerif.addEventListener("click", function(){
+    var boutonVerif = document.getElementById("verifRunBtn");
+    if (boutonVerif) { boutonVerif.scrollIntoView({ behavior: "smooth", block: "center" }); boutonVerif.click(); }
+  });
+})();
 </script>
 </body>
 </html>
