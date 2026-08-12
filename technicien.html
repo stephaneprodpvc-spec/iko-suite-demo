@@ -973,6 +973,28 @@ function Technicien({ agence, onClose }) {
       const a = maxAudioRef.current;
       if (a) { a.src = SILENCE_WAV; a.play().catch(() => {}); }
     } catch (e) {}
+    try {
+      // Amorce synchrone requise par iOS pour que speechSynthesis.speak()
+      // fonctionne plus tard, une fois appelé après un await (asynchrone).
+      if ('speechSynthesis' in window) {
+        const amorce = new SpeechSynthesisUtterance(' ');
+        amorce.volume = 0.01;
+        amorce.lang = 'fr-FR';
+        window.speechSynthesis.speak(amorce);
+      }
+    } catch (e) {}
+  };
+
+  // Repli local si ElevenLabs échoue (quota/crédits épuisés, réseau...) :
+  // Max reste audible via la synthèse vocale native du navigateur.
+  const parlerNavigateurNatifMax = (texte) => {
+    try {
+      if (!('speechSynthesis' in window) || !texte) return;
+      window.speechSynthesis.cancel();
+      const u = new SpeechSynthesisUtterance(texte);
+      u.lang = 'fr-FR';
+      window.speechSynthesis.speak(u);
+    } catch (e) {}
   };
 
   const parlerMax = async (texte) => {
@@ -982,12 +1004,12 @@ function Technicien({ agence, onClose }) {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ texte, voice_id: VOICE_ID_MAX }),
       });
-      if (!r.ok) return;
+      if (!r.ok) { parlerNavigateurNatifMax(texte); return; }
       const blob = await r.blob();
       const url = URL.createObjectURL(blob);
       const a = maxAudioRef.current;
-      if (a) { a.volume = 1.0; a.src = url; a.play().catch(() => {}); }
-    } catch (e) {}
+      if (a) { a.volume = 1.0; a.src = url; a.play().catch(() => parlerNavigateurNatifMax(texte)); }
+    } catch (e) { parlerNavigateurNatifMax(texte); }
   };
 
   const executerActionsMax = (actions) => {
@@ -1065,78 +1087,114 @@ function Technicien({ agence, onClose }) {
     setMaxEnCours(false);
   };
 
-  const lancerEcouteMax = () => {
-    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SR) {
+  // Enregistrement + transcription serveur (Whisper), en remplacement de
+  // webkitSpeechRecognition (peu fiable sur WebKit iOS après le 1er usage).
+  // Marche/arrête au tap (appuyer/relâcher), même correctif que dashboard.html.
+  const maxRecorderRef = React.useRef(null);
+  const maxChunksRef = React.useRef([]);
+
+  const lancerEcouteMax = async () => {
+    if (!navigator.mediaDevices || !window.MediaRecorder) {
       const champ = document.getElementById('maxChampTexte');
       if (champ) champ.focus();
       return;
     }
-    const reco = new SR();
-    reco.lang = 'fr-FR';
-    reco.continuous = false;
-    reco.interimResults = false;
-    reco.onstart = () => { setMaxEcoute(true); setMaxErreur(""); };
-    reco.onerror = (e) => {
+    setMaxErreur("");
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mimeType = MediaRecorder.isTypeSupported('audio/mp4') ? 'audio/mp4'
+        : MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : '';
+      const recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+      maxChunksRef.current = [];
+      recorder.ondataavailable = (e) => { if (e.data.size > 0) maxChunksRef.current.push(e.data); };
+      recorder.onstop = async () => {
+        stream.getTracks().forEach(t => t.stop());
+        setMaxEcoute(false);
+        const blob = new Blob(maxChunksRef.current, { type: recorder.mimeType || mimeType || 'audio/webm' });
+        if (blob.size < 800) {
+          setMaxErreur("Aucune voix détectée. Réessayez en parlant juste après avoir appuyé sur le micro.");
+          return;
+        }
+        setMaxEnCours(true);
+        try {
+          const r = await fetch('/api/tts', {
+            method: 'POST',
+            headers: { 'Content-Type': blob.type || 'audio/webm' },
+            body: blob,
+          });
+          const data = await r.json();
+          if (!r.ok || data.erreur || !data.texte) {
+            setMaxErreur(data.erreur || "Je n'ai rien compris. Réessayez.");
+            setMaxEnCours(false);
+            return;
+          }
+          setMaxDernier(data.texte);
+          envoyerMax(data.texte);
+        } catch (e) {
+          setMaxErreur("Transcription impossible. Réessayez.");
+          setMaxEnCours(false);
+        }
+      };
+      maxRecorderRef.current = recorder;
+      recorder.start();
+      setMaxEcoute(true);
+      setTimeout(() => { if (recorder.state === 'recording') recorder.stop(); }, 15000);
+    } catch (e) {
       setMaxEcoute(false);
-      if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
+      if (e.name === 'NotAllowedError' || e.name === 'SecurityError') {
         setMaxErreur("Micro refusé par le navigateur. Appuyez sur l'icône micro barrée à côté de l'adresse du site pour l'autoriser, puis réessayez.");
-      } else if (e.error === 'no-speech') {
-        setMaxErreur("Aucune voix détectée. Réessayez en parlant juste après avoir appuyé sur le micro.");
-      } else if (e.error === 'audio-capture') {
+      } else if (e.name === 'NotFoundError') {
         setMaxErreur("Aucun micro détecté sur cet appareil.");
       } else {
-        setMaxErreur("Problème micro (" + e.error + "). Utilisez le champ texte en attendant.");
+        setMaxErreur("Problème micro (" + e.name + "). Utilisez le champ texte en attendant.");
       }
-    };
-    reco.onend = () => setMaxEcoute(false);
-    reco.onresult = (e) => {
-      const transcript = e.results[0][0].transcript;
-      setMaxDernier(transcript);
-      envoyerMax(transcript);
-    };
-    reco.start();
+    }
+  };
+
+  const arreterEcouteMax = () => {
+    if (maxRecorderRef.current && maxRecorderRef.current.state === 'recording') {
+      maxRecorderRef.current.stop();
+    }
   };
 
   if (vueMode === "vocal") {
     return (
       <div style={{position:"fixed",inset:0,background:"#0D0D0D",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",zIndex:100}}>
         <audio ref={maxAudioRef} style={{display:"none"}}/>
-        <div style={{position:"absolute",top:"20px",left:"50%",transform:"translateX(-50%)",color:"#8a8a8a",fontSize:"12px",letterSpacing:"2px",textTransform:"uppercase"}}>
+        <div style={{position:"absolute",top:"20px",left:"20px",color:"#8a8a8a",fontSize:"12px",letterSpacing:"2px",textTransform:"uppercase"}}>
           {agence === "global" ? "Toutes agences" : agence}
         </div>
+        <button onClick={() => setVueMode("liste")}
+          style={{position:"absolute",top:"14px",right:"14px",padding:"10px 16px",borderRadius:"20px",background:"#1a1a1a",border:"1px solid rgba(255,107,0,0.35)",color:"#fff",cursor:"pointer",fontSize:"12px",fontWeight:"700"}}>
+          📋 Mes tickets
+        </button>
         <div style={{width:"220px",height:"220px",borderRadius:"50%",
           background:"radial-gradient(circle at 35% 30%, #4a4a4a, #0D0D0D 55%, #000000 100%)",
           border:"2px solid #FF6B00",
           boxShadow:"0 0 90px rgba(255,107,0,0.35)",
           animation: maxEcoute ? "pulseMaxEcran 1s ease-in-out infinite" : "respireMax 3.2s ease-in-out infinite"}}/>
-        <div style={{marginTop:"32px",color:"#b8b8b8",fontSize:"14px",maxWidth:"320px",textAlign:"center",minHeight:"40px",lineHeight:"1.5"}}>
-          {maxEcoute ? "Je vous écoute..." : maxEnCours ? "..." : maxDernier ? maxDernier : "Dites une commande à Max : \"Montre les urgents\", \"Ouvre l'itinéraire\"..."}
+        <div style={{marginTop:"32px",color:"#b8b8b8",fontSize:"14px",maxWidth:"320px",textAlign:"center",minHeight:"40px",lineHeight:"1.5",padding:"0 16px"}}>
+          {maxEcoute ? "Je vous écoute... (relâchez le micro pour terminer)" : maxEnCours ? "..." : maxDernier ? maxDernier : "Dites une commande à Max : \"Montre les urgents\", \"Ouvre l'itinéraire\"..."}
         </div>
-        {maxErreur && <div style={{color:"#DC2626",fontSize:"12px",marginTop:"10px"}}>{maxErreur}</div>}
+        {maxErreur && <div style={{color:"#DC2626",fontSize:"12px",marginTop:"10px",padding:"0 16px",textAlign:"center"}}>{maxErreur}</div>}
 
-        <div style={{marginTop:"26px",width:"90%",maxWidth:"380px",display:"flex",gap:"8px"}}>
+        <div style={{position:"fixed",bottom:"28px",left:"16px",right:"16px",display:"flex",gap:"10px",alignItems:"center"}}>
           <input id="maxChampTexte" type="text" value={maxTexte}
             onChange={e => setMaxTexte(e.target.value)}
             onKeyDown={e => { if (e.key === "Enter" && maxTexte.trim()) { debloquerVoixIOS(); envoyerMax(maxTexte.trim()); setMaxTexte(""); } }}
-            placeholder="Tapez ou dictez (🎤 sur le clavier)"
-            style={{flex:1,padding:"12px 14px",borderRadius:"10px",background:"#1a1a1a",border:"1px solid rgba(255,107,0,0.3)",color:"#fff",fontSize:"14px"}}/>
+            placeholder="Tapez ou dictez..."
+            style={{flex:1,minWidth:0,padding:"14px",borderRadius:"12px",background:"#1a1a1a",border:"1px solid rgba(255,107,0,0.3)",color:"#fff",fontSize:"14px"}}/>
           <button onClick={() => { if (maxTexte.trim()) { debloquerVoixIOS(); envoyerMax(maxTexte.trim()); setMaxTexte(""); } }}
-            style={{padding:"12px 16px",borderRadius:"10px",background:"#FF6B00",border:"none",color:"#111",fontWeight:"800",cursor:"pointer"}}>
+            style={{flexShrink:0,width:"48px",height:"48px",borderRadius:"12px",background:"#FF6B00",border:"none",color:"#111",fontWeight:"800",cursor:"pointer",fontSize:"18px"}}>
             →
           </button>
-        </div>
-
-        <div style={{position:"fixed",bottom:"36px",left:"36px"}}>
-          <button onClick={() => { debloquerVoixIOS(); lancerEcouteMax(); }}
-            style={{width:"64px",height:"64px",borderRadius:"50%",background:maxEcoute?"#DC2626":"radial-gradient(circle at 35% 30%, #4a4a4a, #0D0D0D 55%, #000000 100%)",border:"2px solid #FF6B00",color:"#fff",cursor:"pointer",fontSize:"26px",boxShadow:"0 6px 24px rgba(255,107,0,0.35)"}}>
+          <button
+            onPointerDown={() => { debloquerVoixIOS(); lancerEcouteMax(); }}
+            onPointerUp={arreterEcouteMax}
+            onPointerLeave={arreterEcouteMax}
+            onPointerCancel={arreterEcouteMax}
+            style={{flexShrink:0,width:"48px",height:"48px",borderRadius:"50%",background:maxEcoute?"#DC2626":"radial-gradient(circle at 35% 30%, #4a4a4a, #0D0D0D 55%, #000000 100%)",border:"2px solid #FF6B00",color:"#fff",cursor:"pointer",fontSize:"20px",boxShadow:"0 6px 24px rgba(255,107,0,0.35)",touchAction:"none",userSelect:"none"}}>
             🎙️
-          </button>
-        </div>
-        <div style={{position:"fixed",bottom:"36px",right:"36px"}}>
-          <button onClick={() => setVueMode("liste")}
-            style={{padding:"16px 22px",borderRadius:"30px",background:"#1a1a1a",border:"1px solid rgba(255,107,0,0.35)",color:"#fff",cursor:"pointer",fontSize:"13px",fontWeight:"700"}}>
-            📋 Voir mes tickets
           </button>
         </div>
         <style>{`
@@ -1261,8 +1319,12 @@ function Technicien({ agence, onClose }) {
             style={{width:"36px",height:"36px",borderRadius:"50%",background:C.card,border:"2px solid #FF6B00",color:"#FF6B00",cursor:"pointer",fontSize:"15px"}}>
             🔮
           </button>
-          <button onClick={() => { debloquerVoixIOS(); setMaxOuvert(true); lancerEcouteMax(); }}
-            style={{width:"58px",height:"58px",borderRadius:"50%",background:"radial-gradient(circle at 35% 30%, #4a4a4a, #0D0D0D 55%, #000000 100%)",border:"2px solid #FF6B00",color:"#fff",cursor:"pointer",fontSize:"24px",boxShadow:"0 0 26px rgba(255,107,0,0.35)",animation:maxEcoute?"pulseMax 1.2s infinite":"none"}}>
+          <button
+            onPointerDown={() => { debloquerVoixIOS(); setMaxOuvert(true); lancerEcouteMax(); }}
+            onPointerUp={arreterEcouteMax}
+            onPointerLeave={arreterEcouteMax}
+            onPointerCancel={arreterEcouteMax}
+            style={{width:"58px",height:"58px",borderRadius:"50%",background:"radial-gradient(circle at 35% 30%, #4a4a4a, #0D0D0D 55%, #000000 100%)",border:"2px solid #FF6B00",color:"#fff",cursor:"pointer",fontSize:"24px",boxShadow:"0 0 26px rgba(255,107,0,0.35)",animation:maxEcoute?"pulseMax 1.2s infinite":"none",touchAction:"none",userSelect:"none"}}>
             🎙️
           </button>
         </div>
