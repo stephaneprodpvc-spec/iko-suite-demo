@@ -287,6 +287,12 @@
     </div>
 
     <div class="card">
+      <h2>🔑 Abonnements du projet</h2>
+      <div id="usageElevenLabsBadge" style="font-size:12px;color:var(--texte-faint);margin-bottom:12px;">Chargement du quota ElevenLabs…</div>
+      <div id="abonnementsListe" style="display:flex;flex-direction:column;gap:8px;"></div>
+    </div>
+
+    <div class="card">
       <h2>Vérifications sécurité & fonctionnement</h2>
       <div class="verif-row">
         <span>Vérifications automatiques</span>
@@ -466,6 +472,7 @@ document.getElementById("lockForm").addEventListener("submit", function(e){
     document.getElementById("lock").style.display = "none";
     chargerClients();
     chargerConfigVerif();
+    chargerAbonnements();
     if (document.getElementById("modeVocal").checked) lancerEcouteClaude();
   } else {
     document.getElementById("lockErr").textContent = "Mot de passe incorrect.";
@@ -473,6 +480,7 @@ document.getElementById("lockForm").addEventListener("submit", function(e){
 });
 if (sessionStorage.getItem("iko_admin_ok") === "1"){
   document.getElementById("lock").style.display = "none";
+  chargerAbonnements();
 }
 
 function couleurDe(nom){
@@ -483,6 +491,37 @@ function couleurDe(nom){
 }
 function initiales(nom){
   return (nom||"?").trim().split(/\s+/).slice(0,2).map(function(w){return w[0]||"";}).join("").toUpperCase();
+}
+
+var ABONNEMENTS_PROJET = [
+  { nom: "Airtable", detail: "Base de données", url: "https://airtable.com/workspaces" },
+  { nom: "Vercel", detail: "Hébergement + déploiement", url: "https://vercel.com/akial" },
+  { nom: "GitHub", detail: "Code source (repo iko-suite-demo)", url: "https://github.com/stephaneprodpvc-spec/iko-suite-demo" },
+  { nom: "ElevenLabs", detail: "Voix (synthèse vocale)", url: "https://elevenlabs.io/app/subscription" },
+  { nom: "OpenAI", detail: "Transcription vocale (Whisper)", url: "https://platform.openai.com/settings/organization/billing" },
+  { nom: "Anthropic (Claude)", detail: "Intelligence des assistants", url: "https://console.anthropic.com/settings/billing" },
+  { nom: "Make", detail: "Automatisations / webhooks", url: "https://www.make.com/en/login" }
+];
+
+function chargerAbonnements(){
+  var liste = document.getElementById("abonnementsListe");
+  if (liste){
+    liste.innerHTML = ABONNEMENTS_PROJET.map(function(a){
+      return "<a href='" + a.url + "' target='_blank' rel='noopener noreferrer' style='display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border-radius:10px;border:1px solid var(--border);text-decoration:none;color:var(--texte);'>" +
+        "<span><b style='font-size:12.5px;'>" + a.nom + "</b><br><span style='font-size:11px;color:var(--texte-faint);'>" + a.detail + "</span></span>" +
+        "<span style='color:var(--texte-faint);'>↗</span></a>";
+    }).join("");
+  }
+  var badge = document.getElementById("usageElevenLabsBadge");
+  if (!badge) return;
+  fetch("/api/tts")
+    .then(function(r){ return r.ok ? r.json() : null; })
+    .then(function(data){
+      if (!data || data.erreur){ badge.textContent = "Quota ElevenLabs indisponible."; return; }
+      var couleur = data.restants < 1000 ? "#FF453A" : "var(--texte-faint)";
+      badge.innerHTML = "🎙️ ElevenLabs : <b style='color:" + couleur + ";'>" + data.restants.toLocaleString("fr-FR") + " / " + data.limite.toLocaleString("fr-FR") + "</b> crédits restants ce mois";
+    })
+    .catch(function(){ badge.textContent = "Quota ElevenLabs indisponible."; });
 }
 
 function chargerClients(){
