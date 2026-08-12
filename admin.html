@@ -152,6 +152,33 @@
   .devis-legal-grid{display:grid;grid-template-columns:1fr 1fr;gap:0 16px;}
   .devis-legal-grid label{margin:14px 0 6px;}
   .devis-save-bar{display:flex;align-items:center;gap:12px;margin-top:18px;}
+  .devis-mep-layout{display:grid;grid-template-columns:minmax(280px,1fr) minmax(280px,340px);gap:24px;align-items:start;}
+  @media (max-width:900px){.devis-mep-layout{grid-template-columns:1fr;}}
+  .devis-mep-apercu{position:sticky;top:12px;}
+  .devis-apercu-label{font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--texte-faint);margin-bottom:8px;text-align:center;}
+  .a4-page{width:100%;aspect-ratio:210/297;background:#ffffff;border-radius:3px;box-shadow:0 2px 4px rgba(0,0,0,0.35),0 18px 40px -14px rgba(0,0,0,0.55);overflow:hidden;position:relative;}
+  .a4-marge-guide{position:absolute;inset:7% 6%;display:flex;flex-direction:column;border:1px dashed rgba(0,0,0,0.14);padding:3%;box-sizing:border-box;}
+  .a4-entete{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;}
+  .a4-logo{max-width:34%;max-height:36px;object-fit:contain;}
+  .a4-logo:not([src]),.a4-logo[src=""]{display:none;}
+  .a4-entete-droite{text-align:right;}
+  .a4-devis-titre{font-size:15px;font-weight:700;letter-spacing:.04em;color:#111;}
+  .a4-devis-num{font-size:7px;color:#666;margin-top:2px;}
+  .a4-identite{font-size:6.3px;color:#444;margin-top:8px;line-height:1.5;}
+  .a4-client-bloc{margin-top:14px;font-size:6.8px;color:#222;line-height:1.5;background:#f4f4f4;border-radius:3px;padding:6px 8px;max-width:60%;}
+  .a4-client-label{font-size:5.6px;text-transform:uppercase;letter-spacing:.05em;color:#888;margin-bottom:2px;}
+  .a4-table-apercu{width:100%;border-collapse:collapse;margin-top:14px;font-size:6.5px;}
+  .a4-table-apercu th{text-align:left;border-bottom:1px solid #ccc;padding:3px 4px;font-size:5.8px;text-transform:uppercase;letter-spacing:.04em;color:#777;}
+  .a4-table-apercu td{padding:4px;border-bottom:1px solid #eee;color:#333;}
+  .a4-totaux{text-align:right;font-size:6.8px;color:#222;margin-top:8px;}
+  .a4-mentions{font-size:5.2px;color:#999;margin-top:auto;padding-top:10px;line-height:1.6;}
+  .a4-pied{font-size:5.2px;color:#aaa;text-align:center;border-top:1px solid #eee;padding-top:6px;margin-top:6px;}
+  .devis-liste-item{display:flex;justify-content:space-between;align-items:center;padding:11px 13px;border-radius:11px;border:1px solid var(--border);margin-bottom:8px;font-size:12.5px;}
+  .devis-liste-statut{font-size:10px;padding:2.5px 9px;border-radius:7px;font-weight:600;}
+  .devis-liste-statut.Brouillon{background:var(--g3);color:var(--texte-dim);}
+  .devis-liste-statut.Envoyé{background:rgba(10,132,255,0.18);color:#5FAAFF;}
+  .devis-liste-statut.Validé{background:rgba(50,215,75,0.18);color:#32D74B;}
+  .devis-liste-statut.Expiré{background:rgba(255,69,58,0.18);color:#FF453A;}
   .msg{font-size:12.5px;margin-top:12px;min-height:16px;font-weight:500;}
   .msg.ok{color:#30D158;} .msg.err{color:#FF453A;}
   #tbody-wrap{max-height:560px;overflow-y:auto;}
@@ -285,7 +312,6 @@
   <div class="ide-nav-item actif" data-cible="sec-claude"><span class="ico">◆</span><span class="lbl">Claude</span></div>
   <div class="ide-nav-item" data-cible="sec-clients"><span class="ico">▤</span><span class="lbl">Clients</span></div>
   <div class="ide-nav-item" data-cible="sec-apps"><span class="ico">▦</span><span class="lbl">Apps</span></div>
-  <div class="ide-nav-item" data-cible="sec-devis"><span class="ico">▥</span><span class="lbl">Devis</span></div>
   <div class="ide-nav-item" data-cible="sec-abonnements"><span class="ico">◈</span><span class="lbl">Abo.</span></div>
   <div class="ide-nav-item" data-cible="sec-securite"><span class="ico">◇</span><span class="lbl">Sécu.</span></div>
 </aside>
@@ -346,90 +372,6 @@
       <div id="statsBar">Chargement des statistiques…</div>
       <button type="button" class="btn-export" id="exportCsvBtn">Exporter en CSV (Excel)</button>
       <div id="tbody-wrap"><div id="empty">Chargement…</div></div>
-    </div>
-
-    <div class="card" id="sec-devis">
-      <h2>▥ Devis — Configurateur</h2>
-      <label>Client</label>
-      <select id="devisClientSelect"><option value="">— Sélectionner un client —</option></select>
-      <div id="devisContenu" style="display:none;margin-top:18px;">
-        <div class="devis-tabs">
-          <div class="devis-tab actif" data-panel="devisPanelCatalogue">Catalogue produits</div>
-          <div class="devis-tab" data-panel="devisPanelMO">Main d'œuvre</div>
-          <div class="devis-tab" data-panel="devisPanelMEP">Mise en page</div>
-        </div>
-
-        <div class="devis-panel actif" id="devisPanelCatalogue">
-          <div class="devis-toolbar">
-            <button type="button" class="secondary" id="devisProduitAjoutBtn">+ Ligne</button>
-            <button type="button" class="secondary" id="devisImportBtn">Importer un fichier (Excel/CSV)</button>
-            <input type="file" id="devisImportFile" accept=".csv,.xlsx,.xls" style="display:none;">
-          </div>
-          <div class="devis-import-hint">Colonnes attendues : Désignation, Référence, Prix unitaire HT, Unité (optionnel), Taux TVA (optionnel).</div>
-          <div style="overflow-x:auto;margin-top:10px;">
-            <table class="devis-table">
-              <thead><tr><th>Désignation</th><th>Référence</th><th>Prix HT</th><th>Unité</th><th>TVA</th><th></th></tr></thead>
-              <tbody id="devisCatalogueBody"></tbody>
-            </table>
-          </div>
-          <div class="msg" id="devisCatalogueMsg"></div>
-        </div>
-
-        <div class="devis-panel" id="devisPanelMO">
-          <div class="devis-toolbar">
-            <button type="button" class="secondary" id="devisMOAjoutBtn">+ Ligne</button>
-          </div>
-          <div style="overflow-x:auto;">
-            <table class="devis-table">
-              <thead><tr><th>Type d'action</th><th>Temps (min)</th><th>Taux horaire HT</th><th>Prix forfait HT</th><th></th></tr></thead>
-              <tbody id="devisMOBody"></tbody>
-            </table>
-          </div>
-          <div class="msg" id="devisMOMsg"></div>
-        </div>
-
-        <div class="devis-panel" id="devisPanelMEP">
-          <label>Logo (URL image)</label>
-          <input type="url" id="mepLogo" placeholder="https://…">
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:0 16px;">
-            <div><label>Couleur principale</label><input type="color" id="mepCouleur" value="#FF6B00"></div>
-            <div><label>Police</label>
-              <select id="mepPolice">
-                <option>Helvetica</option><option>Arial</option><option>Times New Roman</option><option>Georgia</option><option>Roboto</option>
-              </select>
-            </div>
-          </div>
-          <label>Marges</label>
-          <input type="text" id="mepMarges" placeholder="20mm haut/bas, 15mm gauche/droite">
-          <label>Texte pied de page</label>
-          <textarea id="mepPiedPage" rows="2" style="width:100%;padding:12px 14px;border-radius:13px;border:1px solid var(--border);background:rgba(255,255,255,0.04);color:var(--texte);font-size:13.5px;outline:none;font-family:inherit;resize:vertical;"></textarea>
-
-          <h2 style="margin-top:22px;">Identité entreprise (mentions légales obligatoires)</h2>
-          <div class="devis-legal-grid">
-            <div><label>Raison sociale</label><input type="text" id="mepRaisonSociale"></div>
-            <div><label>Forme juridique</label><input type="text" id="mepFormeJuridique" placeholder="SARL, SASU…"></div>
-            <div><label>Adresse entreprise</label><input type="text" id="mepAdresseEntreprise"></div>
-            <div><label>SIRET</label><input type="text" id="mepSiret"></div>
-            <div><label>RCS / Répertoire des Métiers</label><input type="text" id="mepRcs"></div>
-            <div><label>TVA intracommunautaire</label><input type="text" id="mepTva" placeholder="FR… ou « non applicable art. 293 B »"></div>
-          </div>
-
-          <h2 style="margin-top:22px;">Assurance décennale (obligatoire art. L243-2)</h2>
-          <div class="devis-legal-grid">
-            <div><label>Assureur</label><input type="text" id="mepAssureur"></div>
-            <div><label>N° de police</label><input type="text" id="mepNumPolice"></div>
-            <div style="grid-column:1/-1;"><label>Zone de couverture géographique</label><input type="text" id="mepZoneCouverture"></div>
-          </div>
-
-          <label>Durée de validité du devis (jours)</label>
-          <input type="text" id="mepDureeValidite" placeholder="30">
-
-          <div class="devis-save-bar">
-            <button type="button" class="primary" id="mepSaveBtn" style="flex:none;padding:12px 22px;">Enregistrer la mise en page</button>
-            <div class="msg" id="devisMEPMsg"></div>
-          </div>
-        </div>
-      </div>
     </div>
 
     <div class="card" id="sec-apps">
@@ -557,10 +499,135 @@
           <button type="submit" class="primary" id="submitBtn">Créer le client</button>
           <button type="button" class="secondary" id="cancelBtn" style="display:none;">Annuler</button>
           <button type="button" class="secondary" id="printBtn" style="display:none;">Imprimer</button>
+          <button type="button" class="secondary" id="devisOuvrirBtn" style="display:none;">🧾 Devis &amp; Facturation</button>
           <button type="button" class="secondary" id="deleteBtn" style="display:none;color:#FF453A;border-color:rgba(255,69,58,0.3);">Supprimer</button>
         </div>
         <div class="msg" id="formMsg"></div>
       </form>
+    </div>
+
+    <div class="card" id="sec-devis" style="display:none;">
+      <h2>▥ Devis &amp; Facturation — <span id="devisTitreClient">—</span></h2>
+      <div class="devis-tabs">
+        <div class="devis-tab actif" data-panel="devisPanelMEP">Mise en page</div>
+        <div class="devis-tab" data-panel="devisPanelCatalogue">Catalogue produits</div>
+        <div class="devis-tab" data-panel="devisPanelMO">Main d'œuvre</div>
+        <div class="devis-tab" data-panel="devisPanelListe">Devis &amp; factures</div>
+      </div>
+
+      <div class="devis-panel actif" id="devisPanelMEP">
+        <div class="devis-mep-layout">
+          <div class="devis-mep-form">
+            <label>Logo (URL image)</label>
+            <input type="url" id="mepLogo" placeholder="https://…">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:0 16px;">
+              <div><label>Couleur principale</label><input type="color" id="mepCouleur" value="#FF6B00"></div>
+              <div><label>Police</label>
+                <select id="mepPolice">
+                  <option>Helvetica</option><option>Arial</option><option>Times New Roman</option><option>Georgia</option><option>Roboto</option>
+                </select>
+              </div>
+            </div>
+            <label>Marges</label>
+            <input type="text" id="mepMarges" placeholder="20mm haut/bas, 15mm gauche/droite">
+            <label>Texte pied de page</label>
+            <textarea id="mepPiedPage" rows="2" style="width:100%;padding:12px 14px;border-radius:13px;border:1px solid var(--border);background:rgba(255,255,255,0.04);color:var(--texte);font-size:13.5px;outline:none;font-family:inherit;resize:vertical;"></textarea>
+
+            <h2 style="margin-top:22px;">Identité entreprise (mentions légales obligatoires)</h2>
+            <div class="devis-legal-grid">
+              <div><label>Raison sociale</label><input type="text" id="mepRaisonSociale"></div>
+              <div><label>Forme juridique</label><input type="text" id="mepFormeJuridique" placeholder="SARL, SASU…"></div>
+              <div><label>Adresse entreprise</label><input type="text" id="mepAdresseEntreprise"></div>
+              <div><label>SIRET</label><input type="text" id="mepSiret"></div>
+              <div><label>RCS / Répertoire des Métiers</label><input type="text" id="mepRcs"></div>
+              <div><label>TVA intracommunautaire</label><input type="text" id="mepTva" placeholder="FR… ou « non applicable art. 293 B »"></div>
+            </div>
+
+            <h2 style="margin-top:22px;">Assurance décennale (obligatoire art. L243-2)</h2>
+            <div class="devis-legal-grid">
+              <div><label>Assureur</label><input type="text" id="mepAssureur"></div>
+              <div><label>N° de police</label><input type="text" id="mepNumPolice"></div>
+              <div style="grid-column:1/-1;"><label>Zone de couverture géographique</label><input type="text" id="mepZoneCouverture"></div>
+            </div>
+
+            <label>Durée de validité du devis (jours)</label>
+            <input type="text" id="mepDureeValidite" placeholder="30">
+
+            <div class="devis-save-bar">
+              <button type="button" class="primary" id="mepSaveBtn" style="flex:none;padding:12px 22px;">Enregistrer la mise en page</button>
+              <div class="msg" id="devisMEPMsg"></div>
+            </div>
+          </div>
+
+          <div class="devis-mep-apercu">
+            <div class="devis-apercu-label">Aperçu — A4 portrait (210 × 297 mm)</div>
+            <div class="a4-page" id="a4Page">
+              <div class="a4-marge-guide" id="a4MargeGuide">
+                <div class="a4-entete">
+                  <img id="a4Logo" class="a4-logo" alt="">
+                  <div class="a4-entete-droite">
+                    <div class="a4-devis-titre" id="a4DevisTitre">DEVIS</div>
+                    <div class="a4-devis-num">N° DEV-2026-0001</div>
+                  </div>
+                </div>
+                <div class="a4-identite" id="a4Identite">Raison sociale — Forme juridique<br>Adresse entreprise</div>
+                <div class="a4-client-bloc">
+                  <div class="a4-client-label">Client</div>
+                  <div>Nom du client<br>Adresse, Code postal Ville</div>
+                </div>
+                <table class="a4-table-apercu">
+                  <thead><tr><th>Désignation</th><th>Qté</th><th>PU HT</th><th>Total HT</th></tr></thead>
+                  <tbody>
+                    <tr><td>Exemple de ligne produit</td><td>1</td><td>—</td><td>—</td></tr>
+                    <tr><td>Exemple main d'œuvre</td><td>2h</td><td>—</td><td>—</td></tr>
+                  </tbody>
+                </table>
+                <div class="a4-totaux">Total HT — · TVA — · <b>Total TTC —</b></div>
+                <div class="a4-mentions" id="a4Mentions">SIRET — · RCS — · TVA intracom. —<br>Assurance décennale : — · Validité devis : 30 jours</div>
+                <div class="a4-pied" id="a4Pied">Texte de pied de page</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="devis-panel" id="devisPanelCatalogue">
+        <div class="devis-toolbar">
+          <button type="button" class="secondary" id="devisProduitAjoutBtn">+ Ligne</button>
+          <button type="button" class="secondary" id="devisImportBtn">Importer un fichier (Excel/CSV)</button>
+          <input type="file" id="devisImportFile" accept=".csv,.xlsx,.xls" style="display:none;">
+        </div>
+        <div class="devis-import-hint">Colonnes attendues : Désignation, Référence, Prix unitaire HT, Unité (optionnel), Taux TVA (optionnel).</div>
+        <div style="overflow-x:auto;margin-top:10px;">
+          <table class="devis-table">
+            <thead><tr><th>Désignation</th><th>Référence</th><th>Prix HT</th><th>Unité</th><th>TVA</th><th></th></tr></thead>
+            <tbody id="devisCatalogueBody"></tbody>
+          </table>
+        </div>
+        <div class="msg" id="devisCatalogueMsg"></div>
+      </div>
+
+      <div class="devis-panel" id="devisPanelMO">
+        <div class="devis-toolbar">
+          <button type="button" class="secondary" id="devisMOAjoutBtn">+ Ligne</button>
+        </div>
+        <div style="overflow-x:auto;">
+          <table class="devis-table">
+            <thead><tr><th>Type d'action</th><th>Temps (min)</th><th>Taux horaire HT</th><th>Prix forfait HT</th><th></th></tr></thead>
+            <tbody id="devisMOBody"></tbody>
+          </table>
+        </div>
+        <div class="msg" id="devisMOMsg"></div>
+      </div>
+
+      <div class="devis-panel" id="devisPanelListe">
+        <div class="devis-toolbar">
+          <button type="button" class="primary" id="devisNouveauBtn" style="flex:none;padding:12px 20px;">+ Nouveau devis</button>
+        </div>
+        <div class="devis-import-hint">Brouillon créé ici ; le détail des lignes, l'envoi client et les factures se gèrent depuis le tableau de bord (module à venir).</div>
+        <div id="devisListeWrap" style="margin-top:12px;"></div>
+        <div class="msg" id="devisListeMsg"></div>
+      </div>
     </div>
 
   </div>
@@ -818,7 +885,6 @@ function afficherClients(){
       ouvrirDiagrammePleinEcran();
     });
   });
-  populerDevisClientSelect();
 }
 
 Array.prototype.forEach.call(document.querySelectorAll("#fModules .chip"), function(chip){
@@ -1064,6 +1130,8 @@ function chargerDansFormulaire(id){
   document.getElementById("cancelBtn").style.display = "inline-block";
   document.getElementById("printBtn").style.display = "inline-block";
   document.getElementById("deleteBtn").style.display = "inline-block";
+  document.getElementById("devisOuvrirBtn").style.display = "inline-block";
+  if (devisClientId && devisClientId !== id) fermerDevis();
   document.getElementById("formMsg").textContent = "";
   chargerActivite(id);
   chargerAgencesClient(id);
@@ -1364,6 +1432,8 @@ function reinitialiserFormulaire(){
   document.getElementById("cancelBtn").style.display = "none";
   document.getElementById("printBtn").style.display = "none";
   document.getElementById("deleteBtn").style.display = "none";
+  document.getElementById("devisOuvrirBtn").style.display = "none";
+  fermerDevis();
   document.getElementById("formMsg").textContent = "";
   document.getElementById("activiteInfo").textContent = "";
   document.getElementById("diagramWrap").style.display = "none";
@@ -1642,35 +1712,41 @@ document.getElementById("chatInput").addEventListener("keydown", function(e){
   });
 })();
 
-// ==================== Configurateur Devis ====================
+// ==================== Devis & Facturation (par fiche client) ====================
 var TBL_CATALOGUE = "Catalogue Produits";
 var TBL_MO = "Grille Main d'œuvre";
 var TBL_MEP = "Mise en page Devis";
+var TBL_DEVIS = "Devis";
 var devisClientId = null;
 var devisClientNom = "";
 var devisCatalogue = [];
 var devisMO = [];
 var devisMEPRecordId = null;
+var devisListe = [];
 
-function populerDevisClientSelect(){
-  var sel = document.getElementById("devisClientSelect");
-  if (!sel) return;
-  var valActuelle = sel.value;
-  sel.innerHTML = "<option value=''>— Sélectionner un client —</option>" +
-    clients.map(function(c){ return "<option value='" + c.id + "'>" + escHtml((c.fields||{})["Nom client"] || "—") + "</option>"; }).join("");
-  if (valActuelle) sel.value = valActuelle;
-}
+document.getElementById("devisOuvrirBtn").addEventListener("click", function(){
+  ouvrirDevisPourClient(editingId, (clients.find(function(c){ return c.id === editingId; })||{}).fields || {});
+  document.getElementById("sec-devis").scrollIntoView({ behavior: "smooth", block: "start" });
+});
 
-document.getElementById("devisClientSelect").addEventListener("change", function(){
-  devisClientId = this.value || null;
-  devisClientNom = this.options[this.selectedIndex] ? this.options[this.selectedIndex].text : "";
-  var contenu = document.getElementById("devisContenu");
-  if (!devisClientId){ contenu.style.display = "none"; return; }
-  contenu.style.display = "block";
+function ouvrirDevisPourClient(id, fieldsClient){
+  if (!id) return;
+  devisClientId = id;
+  devisClientNom = fieldsClient["Nom client"] || "";
+  document.getElementById("devisTitreClient").textContent = devisClientNom || "—";
+  document.getElementById("sec-devis").style.display = "block";
+  document.getElementById("devisOuvrirBtn").style.display = "inline-block";
   chargerCatalogue();
   chargerMO();
   chargerMEP();
-});
+  chargerDevisListe();
+}
+
+function fermerDevis(){
+  devisClientId = null;
+  document.getElementById("sec-devis").style.display = "none";
+  document.getElementById("devisOuvrirBtn").style.display = "none";
+}
 
 Array.prototype.forEach.call(document.querySelectorAll(".devis-tab"), function(tab){
   tab.addEventListener("click", function(){
@@ -1688,6 +1764,7 @@ function filtreFormuleClient(){
 
 /* ---- Catalogue produits ---- */
 function chargerCatalogue(){
+
   var msg = document.getElementById("devisCatalogueMsg"); msg.textContent = "Chargement…";
   fetch("/api/airtable/" + encodeURIComponent(TBL_CATALOGUE) + "?filterByFormula=" + encodeURIComponent(filtreFormuleClient()))
     .then(function(r){ return r.json(); })
@@ -1867,7 +1944,6 @@ function chargerMEP(){
 function remplirFormMEP(rec){
   var f = (rec && rec.fields) || {};
   devisMEPRecordId = rec ? rec.id : null;
-  document.getElementById("mepLogo").value = "";
   document.getElementById("mepCouleur").value = f["Couleur primaire"] || "#FF6B00";
   document.getElementById("mepPolice").value = f["Police"] || "Helvetica";
   document.getElementById("mepMarges").value = f["Marges"] || "";
@@ -1876,6 +1952,7 @@ function remplirFormMEP(rec){
 
   var identite = {};
   try { identite = JSON.parse(f["Identité entreprise (JSON)"] || "{}"); } catch(e){}
+  document.getElementById("mepLogo").value = identite.logoUrl || "";
   document.getElementById("mepRaisonSociale").value = identite.raisonSociale || "";
   document.getElementById("mepFormeJuridique").value = identite.formeJuridique || "";
   document.getElementById("mepAdresseEntreprise").value = identite.adresse || "";
@@ -1888,7 +1965,51 @@ function remplirFormMEP(rec){
   document.getElementById("mepAssureur").value = assurance.assureur || "";
   document.getElementById("mepNumPolice").value = assurance.numPolice || "";
   document.getElementById("mepZoneCouverture").value = assurance.zone || "";
+  majApercuA4();
 }
+
+/* ---- Aperçu A4 en direct (façon logiciel de mise en page) ---- */
+function majApercuA4(){
+  var logo = document.getElementById("mepLogo").value.trim();
+  var img = document.getElementById("a4Logo");
+  if (logo){ img.src = logo; img.style.display = ""; } else { img.removeAttribute("src"); img.style.display = "none"; }
+
+  var couleur = document.getElementById("mepCouleur").value || "#FF6B00";
+  document.getElementById("a4DevisTitre").style.color = couleur;
+  document.getElementById("a4MargeGuide").style.fontFamily = document.getElementById("mepPolice").value || "Helvetica";
+
+  var raison = document.getElementById("mepRaisonSociale").value.trim() || "Raison sociale";
+  var forme = document.getElementById("mepFormeJuridique").value.trim();
+  var adresse = document.getElementById("mepAdresseEntreprise").value.trim() || "Adresse entreprise";
+  document.getElementById("a4Identite").innerHTML = escHtml(raison + (forme ? " — " + forme : "")) + "<br>" + escHtml(adresse);
+
+  var siret = document.getElementById("mepSiret").value.trim() || "—";
+  var rcs = document.getElementById("mepRcs").value.trim() || "—";
+  var tva = document.getElementById("mepTva").value.trim() || "—";
+  var assureur = document.getElementById("mepAssureur").value.trim() || "—";
+  var validite = document.getElementById("mepDureeValidite").value.trim() || "30";
+  document.getElementById("a4Mentions").innerHTML =
+    "SIRET " + escHtml(siret) + " · RCS " + escHtml(rcs) + " · TVA intracom. " + escHtml(tva) +
+    "<br>Assurance décennale : " + escHtml(assureur) + " · Validité devis : " + escHtml(validite) + " jours";
+
+  document.getElementById("a4Pied").textContent = document.getElementById("mepPiedPage").value.trim() || "Texte de pied de page";
+
+  var marges = document.getElementById("mepMarges").value.trim();
+  var guide = document.getElementById("a4MargeGuide");
+  // Interprete un nombre de mm en tête de chaîne pour ajuster grossièrement les marges de l'aperçu ; sinon garde le défaut.
+  var mmMatch = marges.match(/(\d+)/);
+  if (mmMatch){
+    var pct = Math.min(18, Math.max(4, Math.round(parseInt(mmMatch[1], 10) / 297 * 100)));
+    guide.style.inset = pct + "% " + Math.round(pct * 0.85) + "%";
+  } else {
+    guide.style.inset = "7% 6%";
+  }
+}
+
+Array.prototype.forEach.call(
+  document.querySelectorAll("#devisPanelMEP input, #devisPanelMEP select, #devisPanelMEP textarea"),
+  function(champ){ champ.addEventListener("input", majApercuA4); }
+);
 
 document.getElementById("mepSaveBtn").addEventListener("click", function(){
   var msg = document.getElementById("devisMEPMsg");
@@ -1901,6 +2022,7 @@ document.getElementById("mepSaveBtn").addEventListener("click", function(){
     "Texte pied de page": document.getElementById("mepPiedPage").value,
     "Durée validité devis (jours)": parseInt(document.getElementById("mepDureeValidite").value, 10) || 30,
     "Identité entreprise (JSON)": JSON.stringify({
+      logoUrl: document.getElementById("mepLogo").value,
       raisonSociale: document.getElementById("mepRaisonSociale").value,
       formeJuridique: document.getElementById("mepFormeJuridique").value,
       adresse: document.getElementById("mepAdresseEntreprise").value,
@@ -1929,7 +2051,47 @@ document.getElementById("mepSaveBtn").addEventListener("click", function(){
     })
     .catch(function(){ msg.style.color = "#FF453A"; msg.textContent = "Erreur d'enregistrement."; });
 });
-// ==================== /Configurateur Devis ====================
+
+/* ---- Devis & factures (liste + création de brouillon) ---- */
+function chargerDevisListe(){
+  var msg = document.getElementById("devisListeMsg"); msg.textContent = "Chargement…";
+  fetch("/api/airtable/" + encodeURIComponent(TBL_DEVIS) + "?filterByFormula=" + encodeURIComponent(filtreFormuleClient()))
+    .then(function(r){ return r.json(); })
+    .then(function(data){
+      devisListe = data.records || [];
+      afficherDevisListe();
+      msg.textContent = "";
+    })
+    .catch(function(){ msg.style.color = "#FF453A"; msg.textContent = "Erreur de chargement."; });
+}
+
+function afficherDevisListe(){
+  var wrap = document.getElementById("devisListeWrap");
+  if (!devisListe.length){ wrap.innerHTML = "<div class='hint' style='color:var(--texte-faint);font-size:12.5px;'>Aucun devis pour l'instant.</div>"; return; }
+  wrap.innerHTML = devisListe.map(function(rec){
+    var f = rec.fields || {};
+    var statut = f["Statut"] || "Brouillon";
+    var montant = f["Montant TTC"] != null ? f["Montant TTC"].toLocaleString("fr-FR", { style: "currency", currency: "EUR" }) : "—";
+    return "<div class='devis-liste-item'>" +
+      "<span><b>" + escHtml(f["N° devis"] || rec.id) + "</b> — " + escHtml(f["Nom client"] || devisClientNom) + "</span>" +
+      "<span style='display:flex;align-items:center;gap:10px;'>" + montant + "<span class='devis-liste-statut " + statut + "'>" + statut + "</span></span>" +
+      "</div>";
+  }).join("");
+}
+
+document.getElementById("devisNouveauBtn").addEventListener("click", function(){
+  if (!devisClientId) return;
+  var msg = document.getElementById("devisListeMsg");
+  msg.style.color = ""; msg.textContent = "Création du brouillon…";
+  var numero = "DEV-" + new Date().getFullYear() + "-" + Math.floor(1000 + Math.random() * 9000);
+  fetch("/api/airtable/" + encodeURIComponent(TBL_DEVIS), {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ records: [{ fields: { "N° devis": numero, "Client": [devisClientId], "Nom client": devisClientNom, "Statut": "Brouillon", "Mode": "Manuel" } }] })
+  }).then(function(r){ return r.json(); })
+    .then(function(){ msg.textContent = ""; chargerDevisListe(); })
+    .catch(function(){ msg.style.color = "#FF453A"; msg.textContent = "Erreur de création."; });
+});
+// ==================== /Devis & Facturation ====================
 
 // --- Navigation sidebar (rail IDE) ---
 (function(){
