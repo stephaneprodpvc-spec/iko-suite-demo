@@ -58,7 +58,7 @@
 
   main{padding:32px;max-width:1280px;margin:0 auto;}
   .grid{display:grid;grid-template-columns:1fr;gap:20px;}
-  @media(min-width:1080px){.grid{grid-template-columns:0.9fr 1.15fr 1fr;align-items:start;}}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;align-items:start;}
 
   .card{
     background:var(--g2); border:1px solid var(--border); border-radius:var(--radius);
@@ -237,7 +237,16 @@
     #printDevis .dv-total .grand{font-weight:800;font-size:15px;border-top:2px solid #111;}
     #printDevis .dv-conditions{font-size:11px;color:#555;border-top:1px solid #eee;padding-top:14px;line-height:1.6;}
     #printDevis .dv-footer{margin-top:40px;font-size:10px;color:#999;text-align:center;}
-  }
+  }  body{display:flex;height:100vh;overflow:hidden;}
+  .app-shell{display:flex;flex:1;min-width:0;height:100vh;}
+  .ide-sidebar{width:64px;flex-shrink:0;background:#000;border-right:1px solid var(--border);display:flex;flex-direction:column;align-items:center;padding:14px 0;gap:3px;overflow-y:auto;}
+  .ide-sidebar .ide-logo{width:34px;height:34px;border-radius:9px;background:var(--g2);border:1px solid var(--border-strong);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:11px;color:var(--orange);margin-bottom:16px;flex-shrink:0;}
+  .ide-nav-item{width:48px;height:48px;border-radius:11px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;cursor:pointer;color:var(--texte-faint);transition:background .12s,color .12s;flex-shrink:0;}
+  .ide-nav-item:hover{background:var(--g2);color:var(--texte-dim);}
+  .ide-nav-item.actif{background:var(--orange-dim);color:var(--orange);}
+  .ide-nav-item .ico{font-size:16px;line-height:1;}
+  .ide-nav-item .lbl{font-size:8px;font-weight:600;letter-spacing:.01em;text-align:center;}
+  .workspace{flex:1;min-width:0;overflow-y:auto;height:100vh;}
 </style>
 </head>
 <body>
@@ -252,6 +261,17 @@
     <div class="err" id="lockErr"></div>
   </form>
 </div>
+
+<div class="app-shell">
+<aside class="ide-sidebar">
+  <div class="ide-logo">R</div>
+  <div class="ide-nav-item actif" data-cible="sec-claude"><span class="ico">◆</span><span class="lbl">Claude</span></div>
+  <div class="ide-nav-item" data-cible="sec-clients"><span class="ico">▤</span><span class="lbl">Clients</span></div>
+  <div class="ide-nav-item" data-cible="sec-apps"><span class="ico">▦</span><span class="lbl">Apps</span></div>
+  <div class="ide-nav-item" data-cible="sec-abonnements"><span class="ico">◈</span><span class="lbl">Abo.</span></div>
+  <div class="ide-nav-item" data-cible="sec-securite"><span class="ico">◇</span><span class="lbl">Sécu.</span></div>
+</aside>
+<div class="workspace">
 
 <header>
   <div class="brand">
@@ -287,7 +307,7 @@
 
   <div class="grid">
 
-    <div class="card tilt-3d">
+    <div class="card tilt-3d" id="sec-claude">
       <h2><span class="pulse"></span>Claude</h2>
       <label class="voice-toggle">
         <span>Conversation vocale automatique</span>
@@ -303,14 +323,14 @@
       <div class="chat-hint">Discussion libre, décris un client à créer, ou demande un devis (« devis pour Menuiserie Dupont : abonnement Iko Suite 150€/mois + mise en place 500€ ») — tu valides toujours avant d'agir.</div>
     </div>
 
-    <div class="card tilt-3d">
+    <div class="card tilt-3d" id="sec-clients">
       <h2>Clients</h2>
       <div id="statsBar">Chargement des statistiques…</div>
       <button type="button" class="btn-export" id="exportCsvBtn">Exporter en CSV (Excel)</button>
       <div id="tbody-wrap"><div id="empty">Chargement…</div></div>
     </div>
 
-    <div class="card">
+    <div class="card" id="sec-apps">
       <h2>📱 Applications</h2>
       <div style="font-size:12px;color:var(--texte-faint);margin-bottom:12px;">Ouvrir directement sur un téléphone (ex : celui d'un client en démo) pour installer.</div>
       <div style="display:flex;flex-direction:column;gap:8px;">
@@ -332,13 +352,13 @@
       </div>
     </div>
 
-    <div class="card">
+    <div class="card" id="sec-abonnements">
       <h2>🔑 Abonnements du projet</h2>
       <div id="usageElevenLabsBadge" style="font-size:12px;color:var(--texte-faint);margin-bottom:12px;">Chargement du quota ElevenLabs…</div>
       <div id="abonnementsListe" style="display:flex;flex-direction:column;gap:8px;"></div>
     </div>
 
-    <div class="card">
+    <div class="card" id="sec-securite">
       <h2>Vérifications sécurité & fonctionnement</h2>
       <div class="verif-row">
         <span>Vérifications automatiques</span>
@@ -443,6 +463,9 @@
 
   </div>
 </main>
+
+</div>
+</div>
 
 <div id="printFiche"></div>
 <div id="printDevis"></div>
@@ -1513,6 +1536,37 @@ document.getElementById("chatInput").addEventListener("keydown", function(e){
     var boutonVerif = document.getElementById("verifRunBtn");
     if (boutonVerif) { boutonVerif.scrollIntoView({ behavior: "smooth", block: "center" }); boutonVerif.click(); }
   });
+})();
+
+// --- Navigation sidebar (rail IDE) ---
+(function(){
+  var items = document.querySelectorAll(".ide-nav-item");
+  var workspace = document.querySelector(".workspace");
+  if (!items.length || !workspace) return;
+  items.forEach(function(item){
+    item.addEventListener("click", function(){
+      var cible = document.getElementById(item.getAttribute("data-cible"));
+      if (!cible) return;
+      items.forEach(function(x){ x.classList.remove("actif"); });
+      item.classList.add("actif");
+      cible.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  });
+  // Met a jour l'item actif au scroll (observe quelle section est visible)
+  if (window.IntersectionObserver) {
+    var sections = Array.prototype.map.call(items, function(item){
+      return document.getElementById(item.getAttribute("data-cible"));
+    }).filter(Boolean);
+    var observer = new IntersectionObserver(function(entries){
+      entries.forEach(function(entry){
+        if (!entry.isIntersecting) return;
+        items.forEach(function(x){ x.classList.remove("actif"); });
+        var match = document.querySelector('.ide-nav-item[data-cible="' + entry.target.id + '"]');
+        if (match) match.classList.add("actif");
+      });
+    }, { root: workspace, threshold: 0.35 });
+    sections.forEach(function(s){ observer.observe(s); });
+  }
 })();
 </script>
 </body>
