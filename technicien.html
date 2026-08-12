@@ -1171,7 +1171,8 @@ function Technicien({ agence, onClose }) {
 
   if (vueMode === "vocal") {
     return (
-      <div style={{position:"fixed",inset:0,background:"#0D0D0D",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",zIndex:100}}>
+      <div style={{position:"fixed",inset:0,background:"#0D0D0D",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",zIndex:100,WebkitUserSelect:"none",userSelect:"none",WebkitTouchCallout:"none"}}
+        onContextMenu={e => e.preventDefault()}>
         <audio ref={maxAudioRef} style={{display:"none"}}/>
         <div style={{position:"absolute",top:"20px",left:"20px",color:"#8a8a8a",fontSize:"12px",letterSpacing:"2px",textTransform:"uppercase"}}>
           {agence === "global" ? "Toutes agences" : agence}
@@ -1304,7 +1305,8 @@ function Technicien({ agence, onClose }) {
 
       {/* Widget vocal Max */}
       <audio ref={maxAudioRef} style={{display:"none"}}/>
-      <div style={{position:"fixed",bottom:"24px",right:"24px",zIndex:200,display:"flex",flexDirection:"column",alignItems:"flex-end",gap:"10px"}}>
+      <div style={{position:"fixed",bottom:"24px",right:"24px",zIndex:200,display:"flex",flexDirection:"column",alignItems:"flex-end",gap:"10px",WebkitUserSelect:"none",userSelect:"none",WebkitTouchCallout:"none"}}
+        onContextMenu={e => e.preventDefault()}>
         {maxOuvert && (
           <div style={{width:"270px",background:C.card,border:"1px solid "+C.border,borderRadius:"14px",padding:"16px",boxShadow:"0 10px 40px rgba(0,0,0,0.35)"}}>
             <div style={{fontSize:"12px",fontWeight:"800",color:"#fff",marginBottom:"8px",letterSpacing:"1px"}}>MAX</div>
