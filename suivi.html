@@ -298,11 +298,14 @@ function App() {
   const [changeErr, setChangeErr] = useState(false);
   const [changeOk, setChangeOk] = useState(false);
 
-  // Rafraîchissement auto toutes les ~3s pour voir arriver les réponses de
-  // l'agence dans la fenêtre SMS sans que le client ait à relancer sa recherche.
-  // Délai légèrement aléatoire (2.7-3.3s, re-tiré à chaque cycle) plutôt qu'un
-  // setInterval fixe : évite que tous les clients ouverts en même temps tapent
-  // l'API Airtable exactement à la même seconde (limite : 5 req/s par base).
+  // Rafraîchissement auto pour voir arriver les réponses de l'agence dans la
+  // fenêtre SMS sans que le client ait à relancer sa recherche.
+  // Délai aléatoire ~90-100s (re-tiré à chaque cycle) plutôt qu'un setInterval
+  // fixe : évite que tous les clients ouverts en même temps tapent l'API
+  // Airtable à la même seconde, et surtout économise le quota API (compte
+  // Airtable démo en plan Free, 1000 appels/mois partagés entre plusieurs
+  // bases — un cycle de 3s par onglet client ouvert épuisait le quota en
+  // quelques heures).
   React.useEffect(() => {
     if (!ticket) return;
     let timeoutId;
@@ -314,9 +317,9 @@ function App() {
           setTicket(prev => prev ? { ...prev, fields: { ...prev.fields, ...data.fields } } : prev);
         }
       } catch (e) {}
-      timeoutId = setTimeout(tick, 2700 + Math.random() * 600);
+      timeoutId = setTimeout(tick, 90000 + Math.random() * 10000);
     };
-    timeoutId = setTimeout(tick, 2700 + Math.random() * 600);
+    timeoutId = setTimeout(tick, 90000 + Math.random() * 10000);
     return () => clearTimeout(timeoutId);
   }, [ticket?.id]);
 

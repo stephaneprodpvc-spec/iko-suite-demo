@@ -74,8 +74,9 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true, note: 'Pas de signature_request.id dans le payload' });
     }
 
+    const baseId = process.env.AIRTABLE_BASE_ID || 'appkI8RKHkYNWY86U'; // base démo Iko Suite
     const filter = encodeURIComponent('{Yousign Request ID}="' + signatureRequestId + '"');
-    const searchUrl = 'https://api.airtable.com/v0/app1AcRl9r6vB7W6e/Tickets%20SAV?filterByFormula=' + filter + '&maxRecords=1';
+    const searchUrl = 'https://api.airtable.com/v0/' + baseId + '/Tickets%20SAV?filterByFormula=' + filter + '&maxRecords=1';
     const searchRes = await fetch(searchUrl, { headers: { Authorization: 'Bearer ' + airtableToken } });
     const searchJson = await searchRes.json();
     const record = searchJson.records?.[0];
@@ -85,7 +86,7 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true, note: 'Ticket introuvable' });
     }
 
-    await fetch('https://api.airtable.com/v0/app1AcRl9r6vB7W6e/Tickets%20SAV/' + record.id, {
+    await fetch('https://api.airtable.com/v0/' + baseId + '/Tickets%20SAV/' + record.id, {
       method: 'PATCH',
       headers: { Authorization: 'Bearer ' + airtableToken, 'Content-Type': 'application/json' },
       body: JSON.stringify({ fields: { "Devis Signé": true } })
