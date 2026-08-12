@@ -1092,6 +1092,8 @@ function Technicien({ agence, onClose }) {
   // Marche/arrête au tap (appuyer/relâcher), même correctif que dashboard.html.
   const maxRecorderRef = React.useRef(null);
   const maxChunksRef = React.useRef([]);
+  const maxDebutEnregRef = React.useRef(0);
+  const DUREE_MIN_ENREG_MS = 600;
 
   const lancerEcouteMax = async () => {
     if (!navigator.mediaDevices || !window.MediaRecorder) {
@@ -1137,6 +1139,7 @@ function Technicien({ agence, onClose }) {
       };
       maxRecorderRef.current = recorder;
       recorder.start();
+      maxDebutEnregRef.current = Date.now();
       setMaxEcoute(true);
       setTimeout(() => { if (recorder.state === 'recording') recorder.stop(); }, 15000);
     } catch (e) {
@@ -1152,7 +1155,16 @@ function Technicien({ agence, onClose }) {
   };
 
   const arreterEcouteMax = () => {
-    if (maxRecorderRef.current && maxRecorderRef.current.state === 'recording') {
+    if (!maxRecorderRef.current || maxRecorderRef.current.state !== 'recording') return;
+    const ecoule = Date.now() - maxDebutEnregRef.current;
+    const restant = DUREE_MIN_ENREG_MS - ecoule;
+    if (restant > 0) {
+      setTimeout(() => {
+        if (maxRecorderRef.current && maxRecorderRef.current.state === 'recording') {
+          maxRecorderRef.current.stop();
+        }
+      }, restant);
+    } else {
       maxRecorderRef.current.stop();
     }
   };
