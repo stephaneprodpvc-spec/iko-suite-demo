@@ -857,8 +857,10 @@ function Technicien({ agence, onClose }) {
 
   // Rafraîchissement auto : capte les RDV validés par le client (suivi.html)
   // et les RDV ajoutés manuellement (même circuit, table Tickets SAV).
+  // ~90-100s (au lieu de 30s) pour économiser le quota API Airtable (compte
+  // démo en plan Free, 1000 appels/mois partagés entre plusieurs bases).
   React.useEffect(() => {
-    const id = setInterval(charger, 30000);
+    const id = setInterval(charger, 90000 + Math.random() * 10000);
     return () => clearInterval(id);
   }, [agence]);
 
