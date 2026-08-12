@@ -726,7 +726,44 @@ function ModalBlocage({ agenceAccess, onClose, onSuccess, initialAgence, initial
   );
 }
 
-// ---- MODE CONCEPTEUR : parametrage du nombre d'agences (1 a 10), reutilisable par n'importe quelle societe ----
+// ---- MODALE ABONNEMENTS : accès rapide à tous les services utilisés pour le projet ----
+const ABONNEMENTS_PROJET = [
+  { nom: "Airtable", detail: "Base de données", url: "https://airtable.com/workspaces" },
+  { nom: "Vercel", detail: "Hébergement + déploiement", url: "https://vercel.com/akial" },
+  { nom: "GitHub", detail: "Code source (repo iko-suite-demo)", url: "https://github.com/stephaneprodpvc-spec/iko-suite-demo" },
+  { nom: "ElevenLabs", detail: "Voix (synthèse vocale)", url: "https://elevenlabs.io/app/subscription" },
+  { nom: "OpenAI", detail: "Transcription vocale (Whisper)", url: "https://platform.openai.com/settings/organization/billing" },
+  { nom: "Anthropic (Claude)", detail: "Intelligence des assistants", url: "https://console.anthropic.com/settings/billing" },
+  { nom: "Make", detail: "Automatisations / webhooks", url: "https://www.make.com/en/login" },
+];
+
+function ModalAbonnements({ onClose }) {
+  return (
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:1500,display:"flex",alignItems:"center",justifyContent:"center",padding:"16px"}} onClick={onClose}>
+      <div style={{background:C.card,borderRadius:"16px",padding:"22px",maxWidth:"420px",width:"100%",maxHeight:"85vh",overflowY:"auto"}} onClick={e => e.stopPropagation()}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"6px"}}>
+          <div style={{fontSize:"16px",fontWeight:"900",color:C.white}}>🔑 Abonnements du projet</div>
+          <button onClick={onClose} style={{background:"none",border:"none",fontSize:"18px",color:C.muted,cursor:"pointer"}}>✕</button>
+        </div>
+        <div style={{fontSize:"12px",color:C.muted,marginBottom:"16px"}}>Tous les services utilisés pour faire tourner Iko Suite Démo.</div>
+        <div style={{display:"flex",flexDirection:"column",gap:"8px"}}>
+          {ABONNEMENTS_PROJET.map(a => (
+            <a key={a.nom} href={a.url} target="_blank" rel="noopener noreferrer"
+              style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"12px 14px",borderRadius:"10px",border:"1px solid "+C.border,textDecoration:"none",color:C.white}}>
+              <div>
+                <div style={{fontSize:"13px",fontWeight:"800"}}>{a.nom}</div>
+                <div style={{fontSize:"11px",color:C.muted}}>{a.detail}</div>
+              </div>
+              <div style={{fontSize:"16px",color:C.muted}}>↗</div>
+            </a>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
 function ModalConcepteur({ onClose, onSuccess }) {
   const [nombre, setNombre] = React.useState(AGENCES.length);
   const [emails, setEmails] = React.useState({...CONFIG_ENTREPRISE.emailsTechnicien});
@@ -1680,6 +1717,15 @@ function Dashboard({ agenceAccess, onClose }) {
   const [annulationMotifPrefill, setAnnulationMotifPrefill] = React.useState("");
   const [showModalBlocage, setShowModalBlocage] = React.useState(false);
   const [showModalConcepteur, setShowModalConcepteur] = React.useState(false);
+  const [showModalAbonnements, setShowModalAbonnements] = React.useState(false);
+  const [usageElevenLabs, setUsageElevenLabs] = React.useState(null);
+
+  React.useEffect(() => {
+    fetch('/api/tts')
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (data && !data.erreur) setUsageElevenLabs(data); })
+      .catch(() => {});
+  }, []);
   const [, forcerRender] = React.useState(0);
 
   React.useEffect(() => {
@@ -2401,6 +2447,9 @@ function Dashboard({ agenceAccess, onClose }) {
           onSuccess={() => { setShowModalConcepteur(false); forcerRender(x => x + 1); }}
         />
       )}
+      {showModalAbonnements && (
+        <ModalAbonnements onClose={() => setShowModalAbonnements(false)} />
+      )}
       {showModalGestionDevis && (
         <ModalGestionDevis
           tickets={tickets}
@@ -2477,6 +2526,16 @@ function Dashboard({ agenceAccess, onClose }) {
           </button>
           <button onClick={() => setShowModalRdv(true)} style={{background:C.or,border:"none",color:"#111",borderRadius:"8px",padding:"8px 16px",fontSize:"12px",fontWeight:"900",cursor:"pointer",display:"flex",alignItems:"center",gap:"6px"}}>📞 + Nouveau RDV</button>
           <button onClick={() => setShowModalBlocage(true)} style={{background:"#fff",border:"1px solid "+C.border,color:C.white,borderRadius:"8px",padding:"8px 14px",fontSize:"12px",fontWeight:"900",cursor:"pointer",display:"flex",alignItems:"center",gap:"6px"}}>🔒 Bloquer dates</button>
+          {usageElevenLabs && (
+            <span title="Quota ElevenLabs restant ce mois"
+              style={{fontSize:"10px",color:usageElevenLabs.restants < 1000 ? "#DC2626" : C.muted,display:"flex",alignItems:"center",gap:"4px",fontWeight:"700"}}>
+              🎙️ {usageElevenLabs.restants.toLocaleString('fr-FR')} / {usageElevenLabs.limite.toLocaleString('fr-FR')}
+            </span>
+          )}
+          <button onClick={() => setShowModalAbonnements(true)} title="Accès aux abonnements du projet"
+            style={{background:"#fff",border:"1px solid "+C.border,color:C.white,borderRadius:"8px",padding:"8px 12px",fontSize:"12px",fontWeight:"900",cursor:"pointer",display:"flex",alignItems:"center",gap:"6px"}}>
+            🔑 Abonnements
+          </button>
           {/* Concepteur / Pilotage / Métreur retirés du bandeau : accès centralisé uniquement via le Module Contrôle (admin.html). */}
           <button onClick={charger} style={{background:C.orDim,border:"1px solid "+C.orBord,color:C.or,borderRadius:"8px",padding:"6px 14px",fontSize:"12px",fontWeight:"700",cursor:"pointer"}}>↺</button>
           <div style={{width:"1px",height:"24px",background:C.border,margin:"0 4px"}}/>

@@ -110,7 +110,35 @@ async function transcrireAudio(req, res, contentType) {
   return res.status(200).json({ texte });
 }
 
+async function recupererUsageElevenLabs(req, res) {
+  const cle = process.env.ELEVENLABS_API_KEY;
+  if (!cle) {
+    return res.status(500).json({ erreur: "Configuration serveur incomplete" });
+  }
+  try {
+    const reponse = await fetch("https://api.elevenlabs.io/v1/user/subscription", {
+      headers: { "xi-api-key": cle },
+    });
+    if (!reponse.ok) {
+      return res.status(502).json({ erreur: "Usage ElevenLabs indisponible." });
+    }
+    const data = await reponse.json();
+    return res.status(200).json({
+      utilises: data.character_count,
+      limite: data.character_limit,
+      restants: data.character_limit - data.character_count,
+    });
+  } catch (e) {
+    console.error("Erreur usage ElevenLabs:", e);
+    return res.status(500).json({ erreur: "Une erreur est survenue." });
+  }
+}
+
 export default async function handler(req, res) {
+  if (req.method === "GET") {
+    if (!verifierOrigine(req)) return reponseBloquee(res, "origine");
+    return await recupererUsageElevenLabs(req, res);
+  }
   if (req.method !== "POST") {
     return res.status(405).json({ erreur: "Methode non autorisee" });
   }
