@@ -395,7 +395,7 @@
         </div>
 
         <div id="diagramWrap" style="display:none;">
-          <div class="diag-label">Schéma des flux</div>
+          <div class="diag-label">Schéma des flux <button type="button" class="diag-fs-btn" id="diagFsBtn">Plein écran</button></div>
           <div id="diagramSvg"></div>
         </div>
 
@@ -784,13 +784,19 @@ function ouvrirDiagrammePleinEcran(){
   document.getElementById("fsOverlay").style.display = "block";
 }
 
-document.getElementById("diagFsBtn").addEventListener("click", ouvrirDiagrammePleinEcran);
-document.getElementById("fsCloseBtn").addEventListener("click", function(){
-  document.getElementById("fsOverlay").style.display = "none";
-});
-document.getElementById("fsOverlay").addEventListener("click", function(e){
-  if (e.target.id === "fsOverlay") document.getElementById("fsOverlay").style.display = "none";
-});
+if (document.getElementById("diagFsBtn")) {
+  document.getElementById("diagFsBtn").addEventListener("click", ouvrirDiagrammePleinEcran);
+}
+if (document.getElementById("fsCloseBtn")) {
+  document.getElementById("fsCloseBtn").addEventListener("click", function(){
+    document.getElementById("fsOverlay").style.display = "none";
+  });
+}
+if (document.getElementById("fsOverlay")) {
+  document.getElementById("fsOverlay").addEventListener("click", function(e){
+    if (e.target.id === "fsOverlay") document.getElementById("fsOverlay").style.display = "none";
+  });
+}
 
 /* ---- Réglages par module (panneau propre au client, pas au code partagé) ----
    Les boutons sont crees et branches directement dans genererDiagramme(). */
