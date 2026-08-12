@@ -131,7 +131,150 @@ function CreneauPicker({ agenceVille, onSelect }) {
   );
 }
 
+function DevisItemiseView({ devisId }) {
+  const [statutPage, setStatutPage] = React.useState("chargement"); // chargement|introuvable|attente|refuser|termine
+  const [devis, setDevis] = React.useState(null);
+  const [motifRefus, setMotifRefus] = React.useState("");
+  const [saving, setSaving] = React.useState(false);
+  const [resultat, setResultat] = React.useState(null); // 'accepte' | 'refuse'
+  const [refreshing, setRefreshing] = React.useState(false);
+
+  const charger = async () => {
+    try {
+      const r = await fetch('/api/airtable/Devis/' + devisId);
+      if (!r.ok) { setStatutPage("introuvable"); return; }
+      const d = await r.json();
+      if (!d || !d.fields) { setStatutPage("introuvable"); return; }
+      setDevis(d);
+      if (d.fields["Devis refusé"]) { setResultat('refuse'); setStatutPage("termine"); }
+      else if (d.fields.Statut === "Validé") { setResultat('accepte'); setStatutPage("termine"); }
+      else { setStatutPage("attente"); }
+    } catch(e) { setStatutPage("introuvable"); }
+  };
+
+  React.useEffect(() => { charger(); }, []);
+
+  const refuser = async () => {
+    setSaving(true);
+    try {
+      await fetch('/api/airtable/Devis/' + devisId, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fields: { "Devis refusé": true, "Motif refus": motifRefus || '(sans motif précisé)' } })
+      });
+      setResultat('refuse'); setStatutPage("termine");
+    } catch(e) { console.error(e); }
+    setSaving(false);
+  };
+
+  const rafraichir = async () => { setRefreshing(true); await charger(); setRefreshing(false); };
+
+  let lignes = [];
+  try { lignes = JSON.parse(devis?.fields?.["Lignes devis (JSON)"] || "[]"); } catch(e){}
+
+  return (
+    <div style={{width:"100%",maxWidth:"480px"}}>
+      <div style={{display:"flex",justifyContent:"center",marginBottom:"28px"}}>
+        <img src={IKO_LOGO} alt="Iko" style={{width:"200px",height:"auto"}}/>
+      </div>
+
+      {statutPage === "chargement" && (
+        <div style={{textAlign:"center",padding:"40px 0",color:"#64748B"}}>⏳ Chargement de votre devis...</div>
+      )}
+
+      {statutPage === "introuvable" && (
+        <div style={{background:F.blanc,borderRadius:"14px",padding:"28px",textAlign:"center",border:"1px solid "+F.grisBord}}>
+          <div style={{fontSize:"36px",marginBottom:"10px"}}>🔍</div>
+          <div style={{fontSize:"15px",fontWeight:"700",color:F.marine,marginBottom:"6px"}}>Devis introuvable</div>
+          <div style={{fontSize:"13px",color:"#64748B"}}>Le lien est invalide ou a expiré. Contactez votre agence pour plus d'informations.</div>
+        </div>
+      )}
+
+      {statutPage === "attente" && devis && (
+        <div style={{background:F.blanc,borderRadius:"14px",padding:"24px",border:"1px solid "+F.grisBord}}>
+          <div style={{fontSize:"11px",color:F.or,fontWeight:"700",fontFamily:"monospace",marginBottom:"6px"}}>{devis.fields["N° devis"]}</div>
+          <div style={{fontSize:"17px",fontWeight:"900",color:F.marine,marginBottom:"14px"}}>Votre devis SAV</div>
+
+          <div style={{border:"1px solid "+F.grisBord,borderRadius:"10px",overflow:"hidden",marginBottom:"14px"}}>
+            {lignes.map((l, i) => (
+              <div key={i} style={{display:"flex",justifyContent:"space-between",padding:"9px 12px",borderBottom:i<lignes.length-1?"1px solid "+F.grisBord:"none",fontSize:"12px"}}>
+                <span>{l.designation} <span style={{color:"#94A3B8"}}>×{l.qte}</span></span>
+                <span style={{fontWeight:"700"}}>{(l.totalHT||0).toFixed(2)} €</span>
+              </div>
+            ))}
+          </div>
+
+          <div style={{background:F.marine,borderRadius:"12px",padding:"16px",textAlign:"center",marginBottom:"18px"}}>
+            <div style={{color:F.orClair,fontSize:"10px",fontWeight:"600",letterSpacing:"2px",marginBottom:"6px"}}>MONTANT TTC</div>
+            <div style={{color:F.or,fontSize:"26px",fontWeight:"900"}}>{(devis.fields["Montant TTC"]||0).toFixed(2)} €</div>
+          </div>
+
+          {saving ? (
+            <div style={{textAlign:"center",padding:"20px 0",color:"#64748B",fontSize:"13px"}}>⏳ Enregistrement en cours...</div>
+          ) : devis.fields["Yousign Signer Link"] ? (
+            <div>
+              <a href={devis.fields["Yousign Signer Link"]} target="_blank" rel="noopener noreferrer"
+                style={{display:"block",textAlign:"center",padding:"13px",background:F.or,color:"#111",borderRadius:"10px",fontSize:"13px",fontWeight:"900",textDecoration:"none",marginBottom:"10px"}}>
+                ✍️ Signer électroniquement mon devis
+              </a>
+              <button onClick={rafraichir} disabled={refreshing}
+                style={{width:"100%",padding:"10px",background:"#F3F4F6",color:"#374151",border:"1px solid #E2E2E2",borderRadius:"10px",fontSize:"12px",fontWeight:"700",cursor:refreshing?"not-allowed":"pointer",marginBottom:"10px"}}>
+                {refreshing ? "⏳ Vérification..." : "🔄 J'ai signé, actualiser"}
+              </button>
+              <button onClick={() => setStatutPage("refuser")} style={{width:"100%",padding:"11px",background:"transparent",color:"#94A3B8",border:"none",fontSize:"12px",cursor:"pointer",textDecoration:"underline"}}>
+                Je refuse ce devis
+              </button>
+            </div>
+          ) : (
+            <div style={{textAlign:"center",fontSize:"12px",color:"#94A3B8"}}>Signature électronique indisponible pour le moment — contactez votre agence.</div>
+          )}
+        </div>
+      )}
+
+      {statutPage === "refuser" && devis && (
+        <div style={{background:F.blanc,borderRadius:"14px",padding:"24px",border:"1px solid "+F.grisBord}}>
+          <button onClick={() => setStatutPage("attente")} style={{background:"none",border:"none",color:"#94A3B8",cursor:"pointer",fontSize:"12px",marginBottom:"14px"}}>← Retour</button>
+          <div style={{fontSize:"15px",fontWeight:"900",color:F.marine,marginBottom:"10px"}}>❌ Refuser ce devis</div>
+          <label style={{fontSize:"11px",fontWeight:"700",color:"#64748B",display:"block",marginBottom:"6px"}}>Motif (facultatif)</label>
+          <textarea rows={3} placeholder="Ex : Trop cher, je préfère faire appel à quelqu'un d'autre..." value={motifRefus} onChange={e => setMotifRefus(e.target.value)} style={{resize:"none",marginBottom:"14px"}}/>
+          <button onClick={refuser} disabled={saving}
+            style={{width:"100%",padding:"13px",background:saving?"#D1D5DB":F.rouge,color:"#fff",border:"none",borderRadius:"10px",fontSize:"13px",fontWeight:"900",cursor:saving?"not-allowed":"pointer"}}>
+            {saving ? "⏳ Envoi..." : "Confirmer le refus"}
+          </button>
+        </div>
+      )}
+
+      {statutPage === "termine" && resultat === "accepte" && (
+        <div style={{background:F.blanc,borderRadius:"14px",padding:"28px",textAlign:"center",border:"1px solid "+F.grisBord}}>
+          <div style={{fontSize:"40px",marginBottom:"10px"}}>✅</div>
+          <div style={{fontSize:"16px",fontWeight:"900",color:F.marine,marginBottom:"6px"}}>Devis signé, merci !</div>
+          <div style={{fontSize:"13px",color:"#64748B",marginBottom:"14px"}}>
+            {devis?.fields?.["Date intervention proposée"] ? "Votre intervention est planifiée :" : "Votre agence va vous recontacter pour planifier l'intervention."}
+          </div>
+          {devis?.fields?.["Date intervention proposée"] && (
+            <div style={{background:F.marine,borderRadius:"10px",padding:"12px",color:F.or,fontWeight:"700",fontSize:"13px"}}>{devis.fields["Date intervention proposée"]}</div>
+          )}
+        </div>
+      )}
+
+      {statutPage === "termine" && resultat === "refuse" && (
+        <div style={{background:F.blanc,borderRadius:"14px",padding:"28px",textAlign:"center",border:"1px solid "+F.grisBord}}>
+          <div style={{fontSize:"40px",marginBottom:"10px"}}>👍</div>
+          <div style={{fontSize:"16px",fontWeight:"900",color:F.marine,marginBottom:"6px"}}>Devis refusé</div>
+          <div style={{fontSize:"13px",color:"#64748B"}}>Votre réponse a bien été transmise à l'agence. N'hésitez pas à nous recontacter si besoin.</div>
+        </div>
+      )}
+
+      <div style={{textAlign:"center",marginTop:"24px",fontSize:"10px",color:"#94A3B8"}}>© Iko Suite — Solutions IA pour les PME du bâtiment</div>
+    </div>
+  );
+}
+
 function App() {
+  const devisId = new URLSearchParams(window.location.search).get('devisId');
+  if (devisId) {
+    return <div style={{minHeight:"100vh",display:"flex",flexDirection:"column",alignItems:"center",padding:"24px 16px"}}><DevisItemiseView devisId={devisId}/></div>;
+  }
+
   const [statutPage, setStatutPage] = React.useState("chargement"); // chargement|introuvable|attente|refuser|accepte_creneau|termine
   const [ticket, setTicket] = React.useState(null);
   const [motifRefus, setMotifRefus] = React.useState("");

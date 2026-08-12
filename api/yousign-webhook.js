@@ -76,23 +76,42 @@ export default async function handler(req, res) {
 
     const baseId = process.env.AIRTABLE_BASE_ID || 'appkI8RKHkYNWY86U'; // base démo Iko Suite
     const filter = encodeURIComponent('{Yousign Request ID}="' + signatureRequestId + '"');
+    const headers = { Authorization: 'Bearer ' + airtableToken };
+
+    // Nouveau flux itemisé (table Devis, catalogue + mise en page) : on
+    // cherche en priorité ici. Ancien flux (montant libre sur le ticket)
+    // conservé en repli pour ne pas casser des liens déjà envoyés.
+    const devisSearchUrl = 'https://api.airtable.com/v0/' + baseId + '/Devis?filterByFormula=' + filter + '&maxRecords=1';
+    const devisSearchRes = await fetch(devisSearchUrl, { headers });
+    const devisSearchJson = await devisSearchRes.json();
+    const devisRecord = devisSearchJson.records?.[0];
+
+    if (devisRecord) {
+      await fetch('https://api.airtable.com/v0/' + baseId + '/Devis/' + devisRecord.id, {
+        method: 'PATCH',
+        headers: { ...headers, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fields: { "Statut": "Validé", "Date validation client": new Date().toISOString() } })
+      });
+      return res.status(200).json({ ok: true, table: 'Devis' });
+    }
+
     const searchUrl = 'https://api.airtable.com/v0/' + baseId + '/Tickets%20SAV?filterByFormula=' + filter + '&maxRecords=1';
-    const searchRes = await fetch(searchUrl, { headers: { Authorization: 'Bearer ' + airtableToken } });
+    const searchRes = await fetch(searchUrl, { headers });
     const searchJson = await searchRes.json();
     const record = searchJson.records?.[0];
 
     if (!record) {
-      console.error('Aucun ticket trouvé pour Yousign Request ID', signatureRequestId);
-      return res.status(200).json({ ok: true, note: 'Ticket introuvable' });
+      console.error('Aucun ticket ni devis trouvé pour Yousign Request ID', signatureRequestId);
+      return res.status(200).json({ ok: true, note: 'Introuvable (Devis et Tickets SAV)' });
     }
 
     await fetch('https://api.airtable.com/v0/' + baseId + '/Tickets%20SAV/' + record.id, {
       method: 'PATCH',
-      headers: { Authorization: 'Bearer ' + airtableToken, 'Content-Type': 'application/json' },
+      headers: { ...headers, 'Content-Type': 'application/json' },
       body: JSON.stringify({ fields: { "Devis Signé": true } })
     });
 
-    return res.status(200).json({ ok: true });
+    return res.status(200).json({ ok: true, table: 'Tickets SAV' });
   } catch (err) {
     console.error('Erreur traitement webhook Yousign', err);
     // On répond quand même 200 pour éviter des retries infinis sur une

@@ -882,77 +882,165 @@ function ModalSuccess({ ticket, onClose }) {
   );
 }
 
-function genererPdfDevis(ticket, montant, message) {
+/* ---- Résolution catalogue / mise en page pour le client d'un ticket ---- */
+async function resoudreClientDepuisAgence(agenceLabel) {
+  const nomAirtable = AGENCE_VERS_AIRTABLE[agenceLabel] || agenceLabel;
+  const fA = encodeURIComponent('{Nom agence}="' + nomAirtable + '"');
+  const rA = await fetch('/api/airtable/Agences?filterByFormula=' + fA + '&maxRecords=1');
+  const jA = await rA.json();
+  const agenceRec = (jA.records || [])[0];
+  const clientId = agenceRec?.fields?.Client?.[0];
+  if (!clientId) return null;
+  const rC = await fetch('/api/airtable/Clients/' + clientId);
+  const clientRec = await rC.json();
+  return { agenceId: agenceRec.id, clientId, clientNom: clientRec.fields?.["Nom client"] || "" };
+}
+
+async function chargerCatalogueDevis(clientNom) {
+  const nomEchappe = (clientNom || "").replace(/'/g, "\\'");
+  const formule = "FIND('" + nomEchappe + "', ARRAYJOIN({Client}))";
+  const [rProd, rMo, rMep] = await Promise.all([
+    fetch('/api/airtable/Catalogue%20Produits?filterByFormula=' + encodeURIComponent(formule)),
+    fetch('/api/airtable/Grille%20Main%20d%27%C5%93uvre?filterByFormula=' + encodeURIComponent(formule)),
+    fetch('/api/airtable/Mise%20en%20page%20Devis?filterByFormula=' + encodeURIComponent(formule)),
+  ]);
+  const [jProd, jMo, jMep] = await Promise.all([rProd.json(), rMo.json(), rMep.json()]);
+  const mepRec = (jMep.records || [])[0];
+  let identite = {}, assurance = {};
+  try { identite = JSON.parse(mepRec?.fields?.["Identité entreprise (JSON)"] || "{}"); } catch(e){}
+  try { assurance = JSON.parse(mepRec?.fields?.["Assurance décennale (JSON)"] || "{}"); } catch(e){}
+  return {
+    produits: jProd.records || [],
+    mo: jMo.records || [],
+    mep: {
+      couleur: mepRec?.fields?.["Couleur primaire"] || "#FF6B00",
+      piedPage: mepRec?.fields?.["Texte pied de page"] || "",
+      dureeValidite: mepRec?.fields?.["Durée validité devis (jours)"] || 30,
+      identite, assurance,
+    }
+  };
+}
+
+/* ---- Génération PDF itemisée (logo, catalogue, mentions légales) ---- */
+async function chargerImageEnDataUrl(url) {
+  if (!url) return null;
+  try {
+    const res = await fetch(url);
+    const blob = await res.blob();
+    return await new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = () => resolve(null);
+      reader.readAsDataURL(blob);
+    });
+  } catch(e) { return null; }
+}
+
+async function genererPdfDevis({ numero, ticket, client, lignes, montantHT, montantTTC, mep }) {
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ unit: 'mm', format: 'a4' });
-  const marge = 20;
-  let y = 25;
-  doc.setFont('helvetica', 'bold'); doc.setFontSize(18);
-  doc.setTextColor(0, 26, 66);
-  doc.text('Iko Suite — Devis SAV', marge, y); y += 6;
-  doc.setDrawColor(218, 178, 57); doc.setLineWidth(0.8);
-  doc.line(marge, y, 210 - marge, y); y += 10;
+  const marge = 18;
+  const largeurUtile = 210 - 2 * marge;
+  let y = 20;
 
-  doc.setFont('helvetica', 'normal'); doc.setFontSize(11); doc.setTextColor(20, 20, 20);
-  const ligne = (label, valeur) => {
-    doc.setFont('helvetica', 'bold'); doc.text(label, marge, y);
-    doc.setFont('helvetica', 'normal'); doc.text(String(valeur || '—'), marge + 45, y);
-    y += 7;
-  };
-  ligne('N° Ticket :', ticket.fields?.Name);
-  ligne('Client :', ticket.fields?.Client);
-  ligne('Agence :', ticket.fields?.Agence);
-  ligne('Produit :', ticket.fields?.Produit);
-  ligne('Problème :', ticket.fields?.Problème);
-  y += 4;
-
-  doc.setFillColor(0, 26, 66);
-  doc.rect(marge, y, 210 - 2 * marge, 18, 'F');
-  doc.setTextColor(218, 178, 57); doc.setFont('helvetica', 'bold'); doc.setFontSize(13);
-  doc.text('Montant du devis : ' + (montant || '—'), marge + 6, y + 11.5);
-  y += 28;
-
-  if (message && message.trim()) {
-    doc.setTextColor(20, 20, 20); doc.setFont('helvetica', 'bold'); doc.setFontSize(11);
-    doc.text('Détails complémentaires :', marge, y); y += 7;
-    doc.setFont('helvetica', 'normal');
-    const lignesMsg = doc.splitTextToSize(message, 210 - 2 * marge);
-    doc.text(lignesMsg, marge, y);
-    y += lignesMsg.length * 6 + 6;
+  const logoDataUrl = await chargerImageEnDataUrl(mep.identite.logoUrl);
+  if (logoDataUrl) {
+    try { doc.addImage(logoDataUrl, 'PNG', marge, y - 6, 30, 16, undefined, 'FAST'); } catch(e){}
   }
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(16);
+  doc.setTextColor(20, 20, 20);
+  doc.text('DEVIS', 210 - marge, y, { align: 'right' });
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(100, 100, 100);
+  doc.text('N° ' + numero, 210 - marge, y + 5, { align: 'right' });
+  y += 18;
 
-  doc.setFontSize(9); doc.setTextColor(120, 120, 120);
-  doc.text('Ce devis engage Iko Suite pour la prestation décrite ci-dessus. En signant électroniquement', marge, 255);
-  doc.text('ce document, le client accepte le devis et son montant.', marge, 260);
-  doc.text('Signature du client :', marge, 275);
+  doc.setDrawColor(220, 220, 220); doc.setLineWidth(0.3);
+  doc.line(marge, y, 210 - marge, y); y += 7;
+
+  doc.setFontSize(8); doc.setTextColor(80, 80, 80);
+  const identite = mep.identite || {};
+  doc.text([
+    (identite.raisonSociale || 'Raison sociale') + (identite.formeJuridique ? ' — ' + identite.formeJuridique : ''),
+    identite.adresse || '',
+  ], marge, y);
+  y += 12;
+
+  doc.setFillColor(245, 245, 245);
+  doc.rect(marge, y, largeurUtile * 0.55, 16, 'F');
+  doc.setFontSize(7); doc.setTextColor(140, 140, 140);
+  doc.text('CLIENT', marge + 4, y + 5);
+  doc.setFontSize(9); doc.setTextColor(20, 20, 20);
+  doc.text(client.nom || ticket.fields?.Client || '—', marge + 4, y + 10);
+  doc.setFontSize(8); doc.setTextColor(80, 80, 80);
+  doc.text(client.adresse || ticket.fields?.Adresse || '', marge + 4, y + 14.5);
+  y += 24;
+
+  // Tableau des lignes (dessiné manuellement, pas de plugin autoTable chargé)
+  const colX = [marge, marge + largeurUtile * 0.55, marge + largeurUtile * 0.72, marge + largeurUtile * 0.87];
+  doc.setFillColor(20, 20, 20);
+  doc.rect(marge, y, largeurUtile, 7, 'F');
+  doc.setFontSize(7.5); doc.setTextColor(255, 255, 255); doc.setFont('helvetica', 'bold');
+  doc.text('DÉSIGNATION', colX[0] + 2, y + 4.8);
+  doc.text('QTÉ', colX[1] + 2, y + 4.8);
+  doc.text('PU HT', colX[2] + 2, y + 4.8);
+  doc.text('TOTAL HT', colX[3] + 2, y + 4.8);
+  y += 7;
+
+  doc.setFont('helvetica', 'normal'); doc.setTextColor(30, 30, 30);
+  lignes.forEach((l, i) => {
+    const hauteur = 7;
+    if (i % 2 === 1) { doc.setFillColor(248, 248, 248); doc.rect(marge, y, largeurUtile, hauteur, 'F'); }
+    doc.setFontSize(8.5);
+    doc.text(String(l.designation || ''), colX[0] + 2, y + 4.8, { maxWidth: largeurUtile * 0.53 });
+    doc.text(String(l.qte), colX[1] + 2, y + 4.8);
+    doc.text((l.puHT || 0).toFixed(2) + ' €', colX[2] + 2, y + 4.8);
+    doc.text((l.totalHT || 0).toFixed(2) + ' €', colX[3] + 2, y + 4.8);
+    y += hauteur;
+    if (y > 250) { doc.addPage(); y = 20; }
+  });
+  y += 4;
+  doc.setDrawColor(220, 220, 220);
+  doc.line(marge, y, 210 - marge, y); y += 8;
+
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(20, 20, 20);
+  doc.text('Total HT : ' + montantHT.toFixed(2) + ' €', 210 - marge, y, { align: 'right' }); y += 5.5;
+  doc.text('Total TTC : ' + montantTTC.toFixed(2) + ' €', 210 - marge, y, { align: 'right' }); y += 12;
+
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(6.5); doc.setTextColor(130, 130, 130);
+  const assurance = mep.assurance || {};
+  const mentions = [
+    'SIRET ' + (identite.siret || '—') + '  ·  RCS ' + (identite.rcs || '—') + '  ·  TVA intracom. ' + (identite.tva || '—'),
+    'Assurance décennale : ' + (assurance.assureur || '—') + (assurance.numPolice ? ' — police n° ' + assurance.numPolice : '') + (assurance.zone ? ' — zone : ' + assurance.zone : ''),
+    'Devis valable ' + (mep.dureeValidite || 30) + ' jours à compter de sa date d\'émission. Bon pour accord — signature électronique ci-après.',
+  ];
+  doc.text(mentions, marge, 275);
+  if (mep.piedPage) {
+    doc.setFontSize(6.5); doc.setTextColor(160, 160, 160);
+    doc.text(mep.piedPage, 105, 290, { align: 'center' });
+  }
 
   return doc.output('blob');
 }
 
-async function creerDemandeSignatureYousign(ticket, montant, message, email) {
-  const pdfBlob = genererPdfDevis(ticket, montant, message);
-
+async function creerDemandeSignatureYousign(pdfBlob, nomFichier, personneNom, email, telephone) {
   const reqRes = await fetch('/api/yousign/signature_requests', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name: 'Devis ' + (ticket.fields?.Name || ''), delivery_mode: 'none', timezone: 'Europe/Paris' })
+    body: JSON.stringify({ name: nomFichier, delivery_mode: 'none', timezone: 'Europe/Paris' })
   });
   if (!reqRes.ok) throw new Error('Yousign: création de la demande échouée');
   const signatureRequest = await reqRes.json();
   const srId = signatureRequest.id;
 
   const form = new FormData();
-  form.append('file', pdfBlob, 'devis-' + (ticket.fields?.Name || 'iko') + '.pdf');
+  form.append('file', pdfBlob, nomFichier + '.pdf');
   form.append('nature', 'signable_document');
   form.append('parse_anchors', 'false');
-  const docRes = await fetch('/api/yousign/signature_requests/' + srId + '/documents', {
-    method: 'POST',
-    body: form
-  });
+  const docRes = await fetch('/api/yousign/signature_requests/' + srId + '/documents', { method: 'POST', body: form });
   if (!docRes.ok) throw new Error('Yousign: envoi du document échoué');
   const document = await docRes.json();
 
-  const nomParts = (ticket.fields?.Client || 'Client Iko Suite').trim().split(/\s+/);
+  const nomParts = (personneNom || 'Client Iko Suite').trim().split(/\s+/);
   const firstName = nomParts.length > 1 ? nomParts.slice(0, -1).join(' ') : nomParts[0];
   const lastName = nomParts.length > 1 ? nomParts[nomParts.length - 1] : '—';
 
@@ -960,10 +1048,7 @@ async function creerDemandeSignatureYousign(ticket, montant, message, email) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      info: {
-        first_name: firstName, last_name: lastName, email: email,
-        phone_number: ticket.fields?.Téléphone || undefined, locale: 'fr'
-      },
+      info: { first_name: firstName, last_name: lastName, email, phone_number: telephone || undefined, locale: 'fr' },
       signature_level: 'electronic_signature',
       signature_authentication_mode: 'no_otp',
       fields: [{ document_id: document.id, type: 'signature', page: 1, x: 60, y: 700 }]
@@ -971,55 +1056,151 @@ async function creerDemandeSignatureYousign(ticket, montant, message, email) {
   });
   if (!signerRes.ok) throw new Error('Yousign: ajout du signataire échoué');
   const signer = await signerRes.json();
-  const lienSignature = signer.signature_link || signer.signature_url || (signer.signature_link_url) || '';
+  const lienSignature = signer.signature_link || signer.signature_url || signer.signature_link_url || '';
 
   await fetch('/api/yousign/signature_requests/' + srId + '/activate', { method: 'POST' });
-
   return { signatureRequestId: srId, lienSignature };
 }
 
+function LigneDevisEditeur({ produits, mo, lignes, onAjouter, onSupprimer }) {
+  const [choix, setChoix] = React.useState("");
+  const [qte, setQte] = React.useState(1);
+
+  const ajouter = () => {
+    if (!choix) return;
+    const [type, id] = choix.split('|');
+    const source = type === 'produit' ? produits.find(p => p.id === id) : mo.find(m => m.id === id);
+    if (!source) return;
+    const f = source.fields || {};
+    const designation = type === 'produit' ? (f["Désignation"] || '—') : (f["Type d'action"] || '—');
+    const puHT = type === 'produit' ? (f["Prix unitaire HT"] || 0) : (f["Prix forfait HT"] || f["Taux horaire HT"] || 0);
+    onAjouter({ designation, qte: Number(qte) || 1, puHT, totalHT: (Number(qte) || 1) * puHT });
+    setChoix(""); setQte(1);
+  };
+
+  const total = lignes.reduce((s, l) => s + (l.totalHT || 0), 0);
+
+  return (
+    <div style={{marginBottom:"14px"}}>
+      <label style={{fontSize:"11px",fontWeight:"700",color:C.muted,display:"block",marginBottom:"6px"}}>Lignes du devis (catalogue du client)</label>
+      <div style={{display:"flex",gap:"8px",marginBottom:"10px"}}>
+        <select value={choix} onChange={e => setChoix(e.target.value)} style={{flex:1}}>
+          <option value="">— Ajouter une ligne —</option>
+          {produits.length > 0 && <optgroup label="Produits">
+            {produits.map(p => <option key={p.id} value={"produit|"+p.id}>{p.fields?.["Désignation"]} — {(p.fields?.["Prix unitaire HT"]||0).toFixed(2)} € HT</option>)}
+          </optgroup>}
+          {mo.length > 0 && <optgroup label="Main d'œuvre">
+            {mo.map(m => <option key={m.id} value={"mo|"+m.id}>{m.fields?.["Type d'action"]} — {(m.fields?.["Prix forfait HT"]||m.fields?.["Taux horaire HT"]||0).toFixed(2)} € HT</option>)}
+          </optgroup>}
+        </select>
+        <input type="number" min="1" value={qte} onChange={e => setQte(e.target.value)} style={{width:"60px"}}/>
+        <button type="button" onClick={ajouter} style={{padding:"0 14px",background:"#F3F4F6",border:"1px solid "+C.border,borderRadius:"8px",cursor:"pointer",fontSize:"13px",fontWeight:"700"}}>+</button>
+      </div>
+      {(produits.length === 0 && mo.length === 0) && (
+        <div style={{fontSize:"11px",color:C.rouge,marginBottom:"10px"}}>⚠️ Aucun catalogue configuré pour ce client — configure-le dans le Poste de pilotage (fiche client → Devis &amp; Facturation).</div>
+      )}
+      {lignes.length > 0 && (
+        <div style={{border:"1px solid "+C.border,borderRadius:"8px",overflow:"hidden",marginBottom:"6px"}}>
+          {lignes.map((l, i) => (
+            <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 12px",borderBottom:i<lignes.length-1?"1px solid "+C.border:"none",fontSize:"12px"}}>
+              <span>{l.designation} <span style={{color:C.muted}}>×{l.qte}</span></span>
+              <span style={{display:"flex",alignItems:"center",gap:"10px"}}>
+                <b>{l.totalHT.toFixed(2)} €</b>
+                <span onClick={() => onSupprimer(i)} style={{cursor:"pointer",color:C.muted}}>✕</span>
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+      <div style={{textAlign:"right",fontSize:"13px",fontWeight:"900",color:C.white}}>Total HT : {total.toFixed(2)} €</div>
+    </div>
+  );
+}
+
 function ModalDevis({ ticket, onClose, onSent }) {
-  const [montant, setMontant] = React.useState("");
+  const [chargement, setChargement] = React.useState(true);
+  const [catalogue, setCatalogue] = React.useState({ produits: [], mo: [], mep: null });
+  const [clientInfo, setClientInfo] = React.useState(null);
+  const [lignes, setLignes] = React.useState([]);
   const [email, setEmail] = React.useState(ticket.fields?.Email || "");
   const [message, setMessage] = React.useState("");
   const [saving, setSaving] = React.useState(false);
   const [error, setError] = React.useState("");
 
+  React.useEffect(() => {
+    (async () => {
+      try {
+        const resolu = await resoudreClientDepuisAgence(ticket.fields?.Agence);
+        if (!resolu) { setChargement(false); return; }
+        setClientInfo(resolu);
+        const cat = await chargerCatalogueDevis(resolu.clientNom);
+        setCatalogue(cat);
+      } catch(e) { console.error(e); }
+      setChargement(false);
+    })();
+  }, []);
+
   const genererToken = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-6);
   const emailValide = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+  const montantHT = lignes.reduce((s, l) => s + (l.totalHT || 0), 0);
+  const montantTTC = montantHT * 1.2; // TVA 20% par défaut (démo) ; taux détaillé par ligne géré au niveau du catalogue
 
   const envoyer = async () => {
-    if (!montant.trim()) { setError("Indique un montant."); return; }
-    if (!emailValide) { setError("Indique un email client valide — sans ça, le devis ne peut pas être envoyé."); return; }
+    if (!lignes.length) { setError("Ajoute au moins une ligne au devis."); return; }
+    if (!emailValide) { setError("Indique un email client valide."); return; }
+    if (!clientInfo) { setError("Impossible de résoudre le client de cette agence — vérifie la configuration."); return; }
     setSaving(true); setError("");
     try {
+      const numero = "DEV-" + new Date().getFullYear() + "-" + Math.floor(1000 + Math.random() * 9000);
       const token = genererToken();
-      const fields = { Statut: 'Devis envoyé', "Montant devis": montant, "Devis Token": token, Email: email.trim() };
-      try {
-        const { signatureRequestId, lienSignature } = await creerDemandeSignatureYousign(ticket, montant, message, email.trim());
-        fields["Yousign Request ID"] = signatureRequestId;
-        if (lienSignature) fields["Yousign Signer Link"] = lienSignature;
-      } catch (yousignErr) {
-        console.error('Yousign indisponible, envoi du devis sans signature électronique :', yousignErr);
-      }
-      await fetch('/api/airtable/Tickets%20SAV/'+ticket.id, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fields })
+      const mep = catalogue.mep || { identite: {}, assurance: {}, piedPage: "", dureeValidite: 30 };
+      const client = { nom: ticket.fields?.Client, adresse: ticket.fields?.Adresse || "" };
+
+      const devisRes = await fetch('/api/airtable/Devis', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ records: [{ fields: {
+          "N° devis": numero, "Ticket lié": [ticket.id], "Client": [clientInfo.clientId], "Agence": [clientInfo.agenceId],
+          "Nom client": client.nom, "Adresse client": client.adresse,
+          "Lignes devis (JSON)": JSON.stringify(lignes), "Montant HT": montantHT, "Montant TTC": montantTTC,
+          "Statut": "Envoyé", "Mode": "Manuel",
+        } }] })
       });
-      const lienDevis = window.location.origin + '/devis.html?token=' + token;
+      const devisJson = await devisRes.json();
+      const devisRec = devisJson.records?.[0];
+      if (!devisRec) throw new Error("Création du devis échouée.");
+
+      const pdfBlob = await genererPdfDevis({ numero, ticket, client, lignes, montantHT, montantTTC, mep });
+
+      let yousignFields = {};
+      try {
+        const { signatureRequestId, lienSignature } = await creerDemandeSignatureYousign(pdfBlob, numero, client.nom, email.trim(), ticket.fields?.Téléphone);
+        yousignFields = { "Yousign Request ID": signatureRequestId, "Yousign Signer Link": lienSignature };
+      } catch (yousignErr) {
+        console.error('Yousign indisponible, devis envoyé sans signature électronique :', yousignErr);
+      }
+      await fetch('/api/airtable/Devis/' + devisRec.id, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fields: yousignFields })
+      });
+
+      // Compatibilité avec le pipeline existant (ModalGestionDevis, badges, filtres par Statut de ticket).
+      await fetch('/api/airtable/Tickets%20SAV/' + ticket.id, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fields: { Statut: 'Devis envoyé', "Montant devis": montantTTC.toFixed(2) + ' € TTC', "Devis Token": token, Email: email.trim() } })
+      });
+
+      const lienDevis = window.location.origin + '/devis.html?devisId=' + devisRec.id;
       await fetch(WEBHOOK, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           marque: 'iko', action: 'devis_envoye',
           ticket: ticket.fields?.Name, nom: ticket.fields?.Client, "e-mail": email.trim(),
           agence: ticket.fields?.Agence, produit: ticket.fields?.Produit, probleme: ticket.fields?.Problème,
-          diagnostic: ticket.fields?.Diagnostic || '', montant, message, lien: lienDevis
+          diagnostic: ticket.fields?.Diagnostic || '', montant: montantTTC.toFixed(2) + ' €', message, lien: lienDevis
         })
       });
       onSent();
     } catch(e) {
+      console.error(e);
       setError("Erreur lors de l'envoi. Vérifie la connexion.");
     }
     setSaving(false);
@@ -1027,7 +1208,7 @@ function ModalDevis({ ticket, onClose, onSent }) {
 
   return (
     <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="modal-box" style={{maxWidth:"460px"}}>
+      <div className="modal-box" style={{maxWidth:"520px"}}>
         <div style={{fontSize:"16px",fontWeight:"900",color:C.white,marginBottom:"4px"}}>💶 Établir le devis</div>
         <div style={{fontSize:"12px",color:C.or,fontFamily:"monospace",marginBottom:"14px"}}>{ticket.fields?.Name} — {ticket.fields?.Client}</div>
         {ticket.fields?.Diagnostic && (
@@ -1035,24 +1216,28 @@ function ModalDevis({ ticket, onClose, onSent }) {
             📋 Diagnostic technicien : {ticket.fields.Diagnostic}
           </div>
         )}
-        <label style={{fontSize:"11px",fontWeight:"700",color:C.muted,display:"block",marginBottom:"6px"}}>Montant du devis *</label>
-        <input placeholder="Ex : 145 € TTC" value={montant} onChange={e => setMontant(e.target.value)} style={{marginBottom:"14px"}}/>
+
+        {chargement && <div style={{textAlign:"center",padding:"20px 0",color:C.muted,fontSize:"12px"}}>⏳ Chargement du catalogue client...</div>}
+
+        {!chargement && (
+          <LigneDevisEditeur produits={catalogue.produits} mo={catalogue.mo} lignes={lignes}
+            onAjouter={l => setLignes([...lignes, l])} onSupprimer={i => setLignes(lignes.filter((_,idx) => idx!==i))}/>
+        )}
+
         <label style={{fontSize:"11px",fontWeight:"700",color:C.muted,display:"block",marginBottom:"6px"}}>Email client *</label>
         <input type="email" placeholder="client@exemple.fr" value={email} onChange={e => setEmail(e.target.value)}
-          style={{marginBottom:"6px",border:"1.5px solid "+(email && !emailValide ? C.rouge : "#D1D5DB")}}/>
-        {!ticket.fields?.Email && <div style={{fontSize:"10px",color:C.rouge,marginBottom:"14px"}}>⚠️ Aucun email enregistré sur ce ticket — indispensable pour envoyer le devis.</div>}
-        {ticket.fields?.Email && <div style={{fontSize:"10px",color:C.muted,marginBottom:"14px"}}>Pré-rempli depuis le ticket, modifiable si besoin.</div>}
+          style={{marginBottom:"14px",border:"1.5px solid "+(email && !emailValide ? C.rouge : "#D1D5DB")}}/>
         <label style={{fontSize:"11px",fontWeight:"700",color:C.muted,display:"block",marginBottom:"6px"}}>Message complémentaire (facultatif)</label>
-        <textarea rows={3} placeholder="Ex : Détail de la pièce, délai de livraison estimé..."
-          value={message} onChange={e => setMessage(e.target.value)} style={{resize:"none",marginBottom:"14px"}}/>
+        <textarea rows={2} placeholder="Ex : délai de livraison estimé..." value={message} onChange={e => setMessage(e.target.value)} style={{resize:"none",marginBottom:"14px"}}/>
+
         <div style={{background:"#F3F4F6",border:"1px solid "+C.border,borderRadius:"8px",padding:"9px 12px",fontSize:"11px",color:C.muted,marginBottom:"14px"}}>
-          Le client recevra un email avec un lien pour consulter et valider ce devis. La validation planifiera automatiquement un nouveau rendez-vous.
+          PDF itemisé généré avec le catalogue et la mise en page du client, signature électronique Yousign. Le client recevra un lien pour consulter, signer et valider.
         </div>
         {error && <div style={{background:C.rougeDim,border:"1px solid rgba(220,38,38,0.3)",borderRadius:"8px",padding:"8px 12px",fontSize:"11px",color:C.rouge,marginBottom:"14px"}}>{error}</div>}
         <div style={{display:"flex",gap:"10px"}}>
           <button onClick={onClose} style={{flex:1,padding:"11px",background:"transparent",color:C.muted,border:"1px solid "+C.border,borderRadius:"10px",fontSize:"12px",cursor:"pointer"}}>Annuler</button>
-          <button onClick={envoyer} disabled={saving||!montant.trim()||!emailValide}
-            style={{flex:2,padding:"11px",background:saving||!montant.trim()||!emailValide?"#D1D5DB":"#0D0D0D",color:"#fff",border:"none",borderRadius:"10px",fontSize:"13px",fontWeight:"900",cursor:saving||!montant.trim()||!emailValide?"not-allowed":"pointer"}}>
+          <button onClick={envoyer} disabled={saving||!lignes.length||!emailValide}
+            style={{flex:2,padding:"11px",background:saving||!lignes.length||!emailValide?"#D1D5DB":"#0D0D0D",color:"#fff",border:"none",borderRadius:"10px",fontSize:"13px",fontWeight:"900",cursor:saving||!lignes.length||!emailValide?"not-allowed":"pointer"}}>
             {saving ? "⏳ Envoi..." : "📧 Envoyer le devis au client"}
           </button>
         </div>

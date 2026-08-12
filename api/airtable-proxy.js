@@ -44,6 +44,31 @@ export default async function handler(req, res) {
 
   const { path, ...rest } = req.query || {};
   const subPathRaw = Array.isArray(path) ? path.join('/') : (path || '');
+
+  // Upload de pièces jointes (ex : PDF de devis généré côté client) : Airtable
+  // sert cette route sur un domaine distinct (content.airtable.com) avec un
+  // corps JSON dédié {contentType, file (base64), filename}. Convention :
+  // /api/airtable/content/<recordId>/<fieldIdOrName>/uploadAttachment
+  // On la détecte via le préfixe "content/" et on route vers ce domaine à la
+  // place d'api.airtable.com, sans créer de fonction Vercel supplémentaire
+  // (le projet est déjà au plafond de 12 fonctions sur le plan Hobby).
+  if (subPathRaw.startsWith('content/')) {
+    const contentSubPath = subPathRaw.slice('content/'.length).split('/').filter(Boolean).map(encodeURIComponent).join('/');
+    const baseId = process.env.AIRTABLE_BASE_ID || 'appkI8RKHkYNWY86U';
+    const contentUrl = 'https://content.airtable.com/v0/' + baseId + '/' + contentSubPath;
+    try {
+      const contentRes = await fetch(contentUrl, {
+        method: req.method,
+        headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+        body: req.method !== 'GET' && req.method !== 'HEAD' ? JSON.stringify(req.body) : undefined,
+      });
+      const data = await contentRes.json().catch(() => ({}));
+      return res.status(contentRes.status).json(data);
+    } catch (err) {
+      return res.status(502).json({ error: 'Erreur en contactant Airtable (content)', details: String(err) });
+    }
+  }
+
   // req.query est déjà décodé par Vercel/Node : on ré-encode proprement
   // chaque segment (utile notamment pour "Tickets SAV" -> "Tickets%20SAV").
   const encodedSubPath = subPathRaw.split('/').filter(Boolean).map(encodeURIComponent).join('/');
