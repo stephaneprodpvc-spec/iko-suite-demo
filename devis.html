@@ -143,8 +143,28 @@ function DevisItemiseView({ devisId }) {
     try {
       const r = await fetch('/api/airtable/Devis/' + devisId);
       if (!r.ok) { setStatutPage("introuvable"); return; }
-      const d = await r.json();
+      let d = await r.json();
       if (!d || !d.fields) { setStatutPage("introuvable"); return; }
+
+      // Le lien Yousign peut ne pas avoir été prêt au moment de l'envoi du
+      // devis (génération asynchrone côté Yousign) : on va le chercher ici
+      // directement, quel que soit le délai réel de leur plateforme.
+      if (!d.fields["Yousign Signer Link"] && d.fields["Yousign Request ID"] && d.fields["Yousign Signer ID"]) {
+        try {
+          const sRes = await fetch('/api/yousign/signature_requests/' + d.fields["Yousign Request ID"] + '/signers/' + d.fields["Yousign Signer ID"]);
+          if (sRes.ok) {
+            const sJson = await sRes.json();
+            if (sJson.signature_link) {
+              await fetch('/api/airtable/Devis/' + devisId, {
+                method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ fields: { "Yousign Signer Link": sJson.signature_link } })
+              });
+              d = { ...d, fields: { ...d.fields, "Yousign Signer Link": sJson.signature_link } };
+            }
+          }
+        } catch(e) {}
+      }
+
       setDevis(d);
       if (d.fields["Devis refusé"]) { setResultat('refuse'); setStatutPage("termine"); }
       else if (d.fields.Statut === "Validé") { setResultat('accepte'); setStatutPage("termine"); }
@@ -225,7 +245,13 @@ function DevisItemiseView({ devisId }) {
               </button>
             </div>
           ) : (
-            <div style={{textAlign:"center",fontSize:"12px",color:"#94A3B8"}}>Signature électronique indisponible pour le moment — contactez votre agence.</div>
+            <div>
+              <div style={{textAlign:"center",fontSize:"12px",color:"#94A3B8",marginBottom:"10px"}}>La signature électronique se prépare, ça peut prendre un instant.</div>
+              <button onClick={rafraichir} disabled={refreshing}
+                style={{width:"100%",padding:"11px",background:"#F3F4F6",color:"#374151",border:"1px solid #E2E2E2",borderRadius:"10px",fontSize:"12px",fontWeight:"700",cursor:refreshing?"not-allowed":"pointer"}}>
+                {refreshing ? "⏳ Vérification..." : "🔄 Réessayer"}
+              </button>
+            </div>
           )}
         </div>
       )}

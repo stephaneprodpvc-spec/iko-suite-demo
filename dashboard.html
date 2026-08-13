@@ -1111,41 +1111,23 @@ async function creerDemandeSignatureYousign(pdfBlob, nomFichier, personneNom, em
   const signer = await signerRes.json();
   const signerId = signer.id;
 
-  const activateRes = await fetch('/api/yousign/signature_requests/' + srId + '/activate', { method: 'POST' });
+  await fetch('/api/yousign/signature_requests/' + srId + '/activate', { method: 'POST' });
+
+  // signature_link peut mettre un instant a etre genere cote Yousign. On
+  // tente une seule fois rapidement ici (ne bloque pas l'envoi du devis) ;
+  // si absent, devis.html le recuperera lui-meme a l'ouverture (via
+  // Yousign Request ID + Yousign Signer ID stockes sur le devis), quel
+  // que soit le delai reel de Yousign.
   let lienSignature = '';
-  let debugRecuperation = { etape: 'activate', statut: activateRes.status };
   try {
-    const activateJson = await activateRes.json();
-    const signerActive = (activateJson.signers || []).find(s => s.id === signerId);
-    if (signerActive) {
-      lienSignature = signerActive.signature_link || '';
-      debugRecuperation = { etape: 'activate', statut: activateRes.status, champSignature: signerActive.signature_link, statutSigner: signerActive.status };
+    const signerFraisRes = await fetch('/api/yousign/signature_requests/' + srId + '/signers/' + signerId);
+    if (signerFraisRes.ok) {
+      const signerFrais = await signerFraisRes.json();
+      lienSignature = signerFrais.signature_link || '';
     }
-  } catch(e) {
-    debugRecuperation = { etape: 'activate', erreur: String(e) };
-  }
+  } catch(e) {}
 
-  // Repli : si le lien n'est pas encore dans la reponse d'activation, on
-  // retente via GET /signers/{id} (comportement documente par Yousign,
-  // parfois le lien met un instant a etre genere).
-  for (let tentative = 0; tentative < 4 && !lienSignature; tentative++) {
-    await new Promise(r => setTimeout(r, 800));
-    try {
-      const signerFraisRes = await fetch('/api/yousign/signature_requests/' + srId + '/signers/' + signerId);
-      const bodyText = await signerFraisRes.text();
-      if (signerFraisRes.ok) {
-        const signerFrais = JSON.parse(bodyText);
-        lienSignature = signerFrais.signature_link || signerFrais.signature_url || signerFrais.signature_link_url || '';
-        debugRecuperation = { etape: 'GET signer', tentative: tentative + 1, statut: signerFraisRes.status, cles: Object.keys(signerFrais), champSignature: signerFrais.signature_link };
-      } else {
-        debugRecuperation = { etape: 'GET signer', tentative: tentative + 1, statut: signerFraisRes.status, corps: bodyText.slice(0, 300) };
-      }
-    } catch(e) {
-      debugRecuperation = { etape: 'GET signer', tentative: tentative + 1, erreurFetch: String(e) };
-    }
-  }
-
-  return { signatureRequestId: srId, lienSignature, debugRecuperation };
+  return { signatureRequestId: srId, signerId, lienSignature };
 }
 
 function tauxTvaVersDecimal(label) {
@@ -1276,11 +1258,10 @@ function ModalDevis({ ticket, onClose, onSent }) {
 
       let yousignFields = {};
       try {
-        const { signatureRequestId, lienSignature, debugRecuperation } = await creerDemandeSignatureYousign(pdfBlob, numero, client.nom, email.trim(), ticket.fields?.Téléphone);
-        yousignFields = { "Yousign Request ID": signatureRequestId, "Yousign Signer Link": lienSignature };
-        diag.yousignOk = !!lienSignature;
-        diag.lienSignature = lienSignature || "(vide — Yousign n'a pas encore généré le lien après plusieurs tentatives)";
-        diag.debugRecuperationLien = debugRecuperation;
+        const { signatureRequestId, signerId, lienSignature } = await creerDemandeSignatureYousign(pdfBlob, numero, client.nom, email.trim(), ticket.fields?.Téléphone);
+        yousignFields = { "Yousign Request ID": signatureRequestId, "Yousign Signer ID": signerId, "Yousign Signer Link": lienSignature };
+        diag.yousignOk = true;
+        diag.lienSignature = lienSignature || "(pas encore prêt — devis.html le récupérera à l'ouverture)";
       } catch (yousignErr) {
         console.error('Yousign indisponible, devis envoyé sans signature électronique :', yousignErr);
         diag.yousignErreur = String(yousignErr && yousignErr.message || yousignErr);
