@@ -1384,6 +1384,8 @@ function ModalGestionDevis({ tickets, onClose, onRefresh }) {
   const [agenceFiltreDevis, setAgenceFiltreDevis] = React.useState("global");
   const [ticketDevisActif, setTicketDevisActif] = React.useState(null);
   const [changing, setChanging] = React.useState(null);
+  const [devisSignes, setDevisSignes] = React.useState([]);
+  const [chargementSignes, setChargementSignes] = React.useState(false);
 
   const STATUTS_DEVIS = [
     { id: "a_faire", label: "À faire", statut: "Devis à faire", couleur: "#FF6B00" },
@@ -1391,10 +1393,31 @@ function ModalGestionDevis({ tickets, onClose, onRefresh }) {
     { id: "suivi", label: "Suivi", statut: "Devis - Suivi", couleur: "#FF6B00" },
     { id: "fournisseur", label: "Attente fournisseur", statut: "Devis - Attente fournisseur", couleur: "#7c3aed" },
     { id: "refuse", label: "Refusé", statut: "Devis refusé", couleur: "#DC2626" },
+    { id: "signe", label: "Signés", statut: null, couleur: "#16A34A" },
   ];
 
-  const compteur = (statut) => tickets.filter(t => t.fields?.Statut === statut && (agenceFiltreDevis==="global" || t.fields?.Agence===AGENCE_VERS_AIRTABLE[agenceFiltreDevis])).length;
-  const listeActuelle = tickets.filter(t => t.fields?.Statut === STATUTS_DEVIS.find(s => s.id === sousOnglet)?.statut && (agenceFiltreDevis==="global" || t.fields?.Agence===AGENCE_VERS_AIRTABLE[agenceFiltreDevis]));
+  // Onglet "Signés" : les tickets liés repassent en statut "Nouveau" après
+  // signature (planification auto), donc invisibles ailleurs dans ce modal.
+  // On interroge directement la table Devis (Statut = "Validé").
+  React.useEffect(() => {
+    if (sousOnglet !== "signe") return;
+    setChargementSignes(true);
+    const formule = encodeURIComponent('{Statut}="Validé"');
+    fetch('/api/airtable/Devis?filterByFormula=' + formule + '&sort[0][field]=Date%20validation%20client&sort[0][direction]=desc&maxRecords=50')
+      .then(r => r.json())
+      .then(j => setDevisSignes(j.records || []))
+      .catch(e => console.error(e))
+      .finally(() => setChargementSignes(false));
+  }, [sousOnglet]);
+
+  // Note : la table Devis n'a pas de champ Agence propre — le filtre agence
+  // du modal ne s'applique donc pas à l'onglet Signés (comptage global).
+  const compteur = (id) => {
+    if (id === "signe") return devisSignes.length;
+    const statut = STATUTS_DEVIS.find(s => s.id === id)?.statut;
+    return tickets.filter(t => t.fields?.Statut === statut && (agenceFiltreDevis==="global" || t.fields?.Agence===AGENCE_VERS_AIRTABLE[agenceFiltreDevis])).length;
+  };
+  const listeActuelle = sousOnglet === "signe" ? [] : tickets.filter(t => t.fields?.Statut === STATUTS_DEVIS.find(s => s.id === sousOnglet)?.statut && (agenceFiltreDevis==="global" || t.fields?.Agence===AGENCE_VERS_AIRTABLE[agenceFiltreDevis]));
 
   const changerStatut = async (ticketId, nouveauStatut) => {
     setChanging(ticketId);
@@ -1438,16 +1461,40 @@ function ModalGestionDevis({ tickets, onClose, onRefresh }) {
             <button key={s.id} onClick={() => setSousOnglet(s.id)}
               style={{padding:"8px 14px",borderRadius:"20px",border:"2px solid "+(sousOnglet===s.id?s.couleur:C.border),background:sousOnglet===s.id?s.couleur+"22":"transparent",color:sousOnglet===s.id?s.couleur:C.muted,fontSize:"12px",fontWeight:"700",cursor:"pointer",display:"flex",alignItems:"center",gap:"6px"}}>
               {s.label}
-              <span style={{background:sousOnglet===s.id?s.couleur:C.border,color:sousOnglet===s.id?"#fff":C.muted,borderRadius:"10px",padding:"1px 7px",fontSize:"10px"}}>{compteur(s.statut)}</span>
+              <span style={{background:sousOnglet===s.id?s.couleur:C.border,color:sousOnglet===s.id?"#fff":C.muted,borderRadius:"10px",padding:"1px 7px",fontSize:"10px"}}>{compteur(s.id)}</span>
             </button>
           ))}
         </div>
 
         <div style={{display:"flex",flexDirection:"column",gap:"10px",maxHeight:"420px",overflowY:"auto"}}>
-          {listeActuelle.length === 0 && (
+          {sousOnglet === "signe" && chargementSignes && (
+            <div style={{textAlign:"center",padding:"40px",color:C.muted}}>Chargement...</div>
+          )}
+          {sousOnglet === "signe" && !chargementSignes && devisSignes.length === 0 && (
+            <div style={{textAlign:"center",padding:"40px",color:C.muted,border:"1px dashed "+C.border,borderRadius:"12px"}}>Aucun devis signé pour le moment</div>
+          )}
+          {sousOnglet === "signe" && devisSignes.map(d => (
+            <div key={d.id} style={{background:C.card,border:"1px solid "+C.border,borderRadius:"10px",padding:"14px 16px"}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:"8px"}}>
+                <span style={{fontSize:"11px",fontWeight:"900",color:"#16A34A",fontFamily:"monospace"}}>{d.fields?.["N° devis"]}</span>
+                <span style={{fontSize:"13px",fontWeight:"900",color:C.white}}>{d.fields?.["Montant TTC"]} € TTC</span>
+              </div>
+              <div style={{fontSize:"11px",color:C.muted,marginBottom:"10px"}}>
+                Signé le {d.fields?.["Date validation client"] ? new Date(d.fields["Date validation client"]).toLocaleDateString('fr-FR') : "—"}
+                {d.fields?.["Date intervention proposée"] && " · Intervention prévue le " + new Date(d.fields["Date intervention proposée"]+'T12:00:00').toLocaleDateString('fr-FR')}
+              </div>
+              {d.fields?.["Yousign Request ID"] && (
+                <a href={"/api/yousign-webhook?download=" + encodeURIComponent(d.fields["Yousign Request ID"])} target="_blank" rel="noreferrer"
+                  style={{display:"inline-block",fontSize:"12px",fontWeight:"700",color:"#16A34A",textDecoration:"none",border:"1px solid rgba(22,163,74,0.4)",borderRadius:"8px",padding:"6px 12px"}}>
+                  📄 Voir le PDF signé
+                </a>
+              )}
+            </div>
+          ))}
+          {sousOnglet !== "signe" && listeActuelle.length === 0 && (
             <div style={{textAlign:"center",padding:"40px",color:C.muted,border:"1px dashed "+C.border,borderRadius:"12px"}}>Aucun dossier dans cette catégorie</div>
           )}
-          {listeActuelle.map(t => (
+          {sousOnglet !== "signe" && listeActuelle.map(t => (
             <div key={t.id} style={{background:C.card,border:"1px solid "+C.border,borderRadius:"10px",padding:"14px 16px"}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:"8px"}}>
                 <div>

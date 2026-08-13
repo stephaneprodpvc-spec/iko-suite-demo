@@ -28,7 +28,36 @@ async function readRawBody(req) {
   return Buffer.concat(chunks);
 }
 
+async function handleDownload(req, res) {
+  const requestId = req.query?.download;
+  const token = process.env.YOUSIGN_API_KEY;
+  if (!requestId || !token) {
+    return res.status(400).json({ error: 'Paramètre download manquant ou YOUSIGN_API_KEY absente.' });
+  }
+  const base = process.env.YOUSIGN_ENV === 'production'
+    ? 'https://api.yousign.app/v3'
+    : 'https://api-sandbox.yousign.app/v3';
+  try {
+    const ysRes = await fetch(base + '/signature_requests/' + encodeURIComponent(requestId) + '/documents/download', {
+      headers: { Authorization: 'Bearer ' + token }
+    });
+    if (!ysRes.ok) {
+      return res.status(ysRes.status).json({ error: 'Téléchargement Yousign échoué' });
+    }
+    const buf = Buffer.from(await ysRes.arrayBuffer());
+    res.setHeader('Content-Type', ysRes.headers.get('content-type') || 'application/pdf');
+    res.setHeader('Content-Disposition', 'inline; filename="devis-signe.pdf"');
+    return res.status(200).send(buf);
+  } catch (err) {
+    return res.status(502).json({ error: 'Erreur en contactant Yousign', details: String(err) });
+  }
+}
+
 export default async function handler(req, res) {
+  if (req.method === 'GET') {
+    return handleDownload(req, res);
+  }
+
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }

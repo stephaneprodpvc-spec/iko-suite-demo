@@ -707,12 +707,12 @@ function ModalAction({ ticket, onClose, onDone }) {
                 <div style={{fontSize:"10px",color:"rgba(217,119,6,0.7)",marginTop:"3px"}}>Choisir une autre date</div>
               </button>
             </div>
-            <button onClick={() => setMode("devis_place")}
-              style={{width:"100%",padding:"14px",background:C.vertDim,border:"2px solid rgba(22,163,74,0.4)",borderRadius:"14px",color:C.vert,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:"10px",marginBottom:"10px"}}>
+            <button onClick={() => setMode("devis_choix")}
+              style={{width:"100%",padding:"14px",background:"rgba(0,26,66,0.06)",border:"2px solid rgba(0,26,66,0.3)",borderRadius:"14px",color:"#0D0D0D",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:"10px",marginBottom:"10px"}}>
               <span style={{fontSize:"20px"}}>💶</span>
               <div style={{textAlign:"left"}}>
-                <div style={{fontSize:"13px",fontWeight:"900"}}>Devis sur place</div>
-                <div style={{fontSize:"10px",color:"rgba(22,163,74,0.7)"}}>Client payant, matériel disponible</div>
+                <div style={{fontSize:"13px",fontWeight:"900"}}>Devis</div>
+                <div style={{fontSize:"10px",color:"rgba(0,26,66,0.7)"}}>Client payant</div>
               </div>
             </button>
             <button onClick={() => setMode("annuler")}
@@ -723,17 +723,28 @@ function ModalAction({ ticket, onClose, onDone }) {
                 <div style={{fontSize:"10px",color:"rgba(220,38,38,0.7)"}}>Client absent / annulation</div>
               </div>
             </button>
-            <button onClick={() => setMode("devis")}
-              style={{width:"100%",padding:"14px",background:"rgba(0,26,66,0.06)",border:"2px solid rgba(0,26,66,0.3)",borderRadius:"14px",color:"#0D0D0D",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:"10px",marginBottom:"10px"}}>
-              <span style={{fontSize:"20px"}}>📋</span>
-              <div style={{textAlign:"left"}}>
-                <div style={{fontSize:"13px",fontWeight:"900"}}>Devis nécessaire</div>
-                <div style={{fontSize:"10px",color:"rgba(0,26,66,0.7)"}}>Réparation impossible sur place</div>
-              </div>
-            </button>
             <button onClick={onClose}
               style={{width:"100%",padding:"11px",background:"transparent",color:C.muted,border:"1px solid "+C.border,borderRadius:"10px",fontSize:"12px",cursor:"pointer"}}>
               Fermer
+            </button>
+          </>
+        )}
+        {mode === "devis_choix" && (
+          <>
+            <div style={{display:"flex",alignItems:"center",gap:"8px",marginBottom:"16px"}}>
+              <button onClick={() => setMode(null)} style={{background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:"18px"}}>←</button>
+              <span style={{fontSize:"14px",fontWeight:"700",color:C.white}}>💶 Devis</span>
+            </div>
+            <div style={{fontSize:"12px",color:C.muted,marginBottom:"14px",textAlign:"center"}}>As-tu le matériel disponible pour le poser aujourd'hui ?</div>
+            <button onClick={() => setMode("devis_place")}
+              style={{width:"100%",padding:"16px",background:C.vertDim,border:"2px solid rgba(22,163,74,0.4)",borderRadius:"14px",color:C.vert,cursor:"pointer",textAlign:"center",marginBottom:"10px"}}>
+              <div style={{fontSize:"13px",fontWeight:"900"}}>✅ Oui, j'ai le matériel</div>
+              <div style={{fontSize:"10px",color:"rgba(22,163,74,0.7)",marginTop:"3px"}}>Devis + signature immédiate sur place</div>
+            </button>
+            <button onClick={() => setMode("devis")}
+              style={{width:"100%",padding:"16px",background:"rgba(0,26,66,0.06)",border:"2px solid rgba(0,26,66,0.3)",borderRadius:"14px",color:"#0D0D0D",cursor:"pointer",textAlign:"center",marginBottom:"10px"}}>
+              <div style={{fontSize:"13px",fontWeight:"900"}}>📋 Non, réparation impossible sur place</div>
+              <div style={{fontSize:"10px",color:"rgba(0,26,66,0.7)",marginTop:"3px"}}>Diagnostic transmis, devis établi ensuite</div>
             </button>
           </>
         )}
