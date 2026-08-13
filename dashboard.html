@@ -134,9 +134,15 @@ function appliquerConfigEntreprise(cfg) {
 // Combine une formule Airtable existante avec le filtre "appartient au
 // client courant" (si un client est charge via ?client=slug). Retourne la
 // formule brute (non encodee), a passer ensuite a encodeURIComponent.
+//
+// IMPORTANT : ARRAYJOIN() sur un champ lien renvoie le nom affiche (champ
+// primaire) des enregistrements lies, jamais leur record ID — confirme en
+// prod (requete 200 OK, 0 resultat avec un filtre par ID). Le filtre doit
+// donc porter sur le NOM du client, pas sur window.IKO_CLIENT_ID.
 function filtreAvecClient(baseFormula) {
-  if (!window.IKO_CLIENT_ID) return baseFormula;
-  var clause = 'FIND("' + window.IKO_CLIENT_ID + '", ARRAYJOIN({Compte client}))';
+  var nom = window.IKO_CLIENT_INFO && window.IKO_CLIENT_INFO["Nom client"];
+  if (!nom) return baseFormula;
+  var clause = 'FIND("' + String(nom).replace(/"/g, '\\"') + '", ARRAYJOIN({Compte client}))';
   if (!baseFormula) return clause;
   return 'AND(' + baseFormula + ',' + clause + ')';
 }
@@ -884,18 +890,24 @@ function ModalSuccess({ ticket, onClose }) {
 
 /* ---- Résolution catalogue / mise en page pour le client d'un ticket ---- */
 async function resoudreClientDepuisAgence(agenceLabel) {
+  const clientId = window.IKO_CLIENT_ID;
+  const clientNom = window.IKO_CLIENT_INFO && window.IKO_CLIENT_INFO["Nom client"];
+  if (!clientId || !clientNom) return null;
   const nomAirtable = AGENCE_VERS_AIRTABLE[agenceLabel] || agenceLabel;
-  const fA = encodeURIComponent('{Nom agence}="' + nomAirtable + '"');
-  const rA = await fetch('/api/airtable/Agences?filterByFormula=' + fA + '&maxRecords=1');
-  const jA = await rA.json();
-  const agenceRec = (jA.records || [])[0];
-  const clientId = agenceRec?.fields?.Client?.[0];
-  if (!clientId) return null;
-  return { agenceId: agenceRec.id, clientId };
+  let agenceId = null;
+  try {
+    const fA = encodeURIComponent('{Nom agence}="' + nomAirtable + '"');
+    const rA = await fetch('/api/airtable/Agences?filterByFormula=' + fA + '&maxRecords=1');
+    const jA = await rA.json();
+    agenceId = (jA.records || [])[0]?.id || null;
+  } catch(e) {}
+  return { agenceId, clientId, clientNom };
 }
 
-async function chargerCatalogueDevis(clientId) {
-  const formule = "FIND('" + clientId + "', ARRAYJOIN({Client}))";
+async function chargerCatalogueDevis(clientNom) {
+  // ARRAYJOIN() sur un lien renvoie le nom affiche, jamais l'ID (confirme en prod).
+  const nomEchappe = String(clientNom).replace(/"/g, '\\"');
+  const formule = 'FIND("' + nomEchappe + '", ARRAYJOIN({Client}))';
   const [rProd, rMo, rMep] = await Promise.all([
     fetch('/api/airtable/Catalogue%20Produits?filterByFormula=' + encodeURIComponent(formule)),
     fetch('/api/airtable/Grille%20Main%20d%27%C5%93uvre?filterByFormula=' + encodeURIComponent(formule)),
@@ -1143,7 +1155,7 @@ function ModalDevis({ ticket, onClose, onSent }) {
         const resolu = await resoudreClientDepuisAgence(ticket.fields?.Agence);
         if (!resolu) { setChargement(false); return; }
         setClientInfo(resolu);
-        const cat = await chargerCatalogueDevis(resolu.clientId);
+        const cat = await chargerCatalogueDevis(resolu.clientNom);
         setCatalogue(cat);
       } catch(e) { console.error(e); }
       setChargement(false);
@@ -1169,12 +1181,16 @@ function ModalDevis({ ticket, onClose, onSent }) {
 
       const devisRes = await fetch('/api/airtable/Devis', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ records: [{ fields: {
-          "N° devis": numero, "Ticket lié": [ticket.id], "Client": [clientInfo.clientId], "Agence": [clientInfo.agenceId],
-          "Nom client": client.nom, "Adresse client": client.adresse, "CP client": client.cp,
-          "Lignes devis (JSON)": JSON.stringify(lignes), "Montant HT": montantHT, "Montant TTC": montantTTC,
-          "Statut": "Envoyé", "Mode": "Manuel",
-        } }] })
+        body: JSON.stringify({ records: [{ fields: (() => {
+          const champs = {
+            "N° devis": numero, "Ticket lié": [ticket.id], "Client": [clientInfo.clientId],
+            "Nom client": client.nom, "Adresse client": client.adresse, "CP client": client.cp,
+            "Lignes devis (JSON)": JSON.stringify(lignes), "Montant HT": montantHT, "Montant TTC": montantTTC,
+            "Statut": "Envoyé", "Mode": "Manuel",
+          };
+          if (clientInfo.agenceId) champs["Agence"] = [clientInfo.agenceId];
+          return champs;
+        })() }] })
       });
       const devisJson = await devisRes.json();
       const devisRec = devisJson.records?.[0];

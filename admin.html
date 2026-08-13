@@ -1155,7 +1155,10 @@ function chargerAgencesClient(clientId){
   var wrap = document.getElementById("agencesWrap");
   if (!clientId) { wrap.style.display = "none"; return; }
   wrap.style.display = "block";
-  var formule = encodeURIComponent('FIND("' + clientId + '", ARRAYJOIN({Client}))');
+  var clientRec = clients.find(function(c){ return c.id === clientId; });
+  var nom = (clientRec && clientRec.fields && clientRec.fields["Nom client"]) || "";
+  if (!nom) { document.getElementById("agencesListe").innerHTML = "<div style='color:#FF453A;font-size:12px;'>Client introuvable.</div>"; return; }
+  var formule = encodeURIComponent('FIND("' + nom.replace(/"/g, '\\"') + '", ARRAYJOIN({Client}))');
   fetch("/api/airtable/" + encodeURIComponent(AGENCES_TABLE) + "?filterByFormula=" + formule + "&maxRecords=10")
     .then(function(r){ return r.json(); })
     .then(function(data){ afficherAgences(data.records || []); })
@@ -1224,7 +1227,10 @@ function chargerQuestionnaire(clientId){
   var wrap = document.getElementById("questionnaireWrap");
   if (!clientId) { wrap.style.display = "none"; return; }
   wrap.style.display = "block";
-  var formule = encodeURIComponent('FIND("' + clientId + '", ARRAYJOIN({Client}))');
+  var clientRec = clients.find(function(c){ return c.id === clientId; });
+  var nom = (clientRec && clientRec.fields && clientRec.fields["Nom client"]) || "";
+  if (!nom) { document.getElementById("questionnaireListe").innerHTML = "<div style='color:#FF453A;font-size:12px;'>Client introuvable.</div>"; return; }
+  var formule = encodeURIComponent('FIND("' + nom.replace(/"/g, '\\"') + '", ARRAYJOIN({Client}))');
   fetch("/api/airtable/" + encodeURIComponent(QUESTIONNAIRE_TABLE) + "?filterByFormula=" + formule + "&sort[0][field]=Ordre&sort[0][direction]=asc&maxRecords=30")
     .then(function(r){ return r.json(); })
     .then(function(data){ afficherQuestionnaire(data.records || []); })
@@ -1291,7 +1297,10 @@ document.getElementById("ajouterQuestionBtn").addEventListener("click", function
 function chargerActivite(clientId){
   var el = document.getElementById("activiteInfo");
   el.textContent = "Chargement de l'activité…";
-  var formule = encodeURIComponent('FIND("' + clientId + '", ARRAYJOIN({Compte client}))');
+  var clientRec = clients.find(function(c){ return c.id === clientId; });
+  var nom = (clientRec && clientRec.fields && clientRec.fields["Nom client"]) || "";
+  if (!nom) { el.textContent = "Client introuvable."; return; }
+  var formule = encodeURIComponent('FIND("' + nom.replace(/"/g, '\\"') + '", ARRAYJOIN({Compte client}))');
   Promise.all([
     fetch("/api/airtable/Tickets%20SAV?filterByFormula=" + formule + "&maxRecords=200").then(function(r){ return r.json(); }).catch(function(){ return {records:[]}; }),
     fetch("/api/airtable/RDV%20Commercial?filterByFormula=" + formule + "&maxRecords=200").then(function(r){ return r.json(); }).catch(function(){ return {records:[]}; })
@@ -1760,7 +1769,8 @@ Array.prototype.forEach.call(document.querySelectorAll(".devis-tab"), function(t
 });
 
 function filtreFormuleClient(){
-  return "FIND('" + devisClientId + "', ARRAYJOIN({Client}))";
+  var nom = (devisClientNom || "").replace(/"/g, '\\"');
+  return 'FIND("' + nom + '", ARRAYJOIN({Client}))';
 }
 
 /* ---- Catalogue produits ---- */
