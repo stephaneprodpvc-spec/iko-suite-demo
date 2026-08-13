@@ -1111,27 +1111,37 @@ async function creerDemandeSignatureYousign(pdfBlob, nomFichier, personneNom, em
   const signer = await signerRes.json();
   const signerId = signer.id;
 
-  await fetch('/api/yousign/signature_requests/' + srId + '/activate', { method: 'POST' });
-
-  // signature_link est null a la creation du signataire ET juste apres
-  // activation (delivery_mode "none") - il faut un GET dedie pour le
-  // recuperer une fois genere (comportement documente par Yousign).
+  const activateRes = await fetch('/api/yousign/signature_requests/' + srId + '/activate', { method: 'POST' });
   let lienSignature = '';
-  let debugRecuperation = null;
+  let debugRecuperation = { etape: 'activate', statut: activateRes.status };
+  try {
+    const activateJson = await activateRes.json();
+    const signerActive = (activateJson.signers || []).find(s => s.id === signerId);
+    if (signerActive) {
+      lienSignature = signerActive.signature_link || '';
+      debugRecuperation = { etape: 'activate', statut: activateRes.status, champSignature: signerActive.signature_link, statutSigner: signerActive.status };
+    }
+  } catch(e) {
+    debugRecuperation = { etape: 'activate', erreur: String(e) };
+  }
+
+  // Repli : si le lien n'est pas encore dans la reponse d'activation, on
+  // retente via GET /signers/{id} (comportement documente par Yousign,
+  // parfois le lien met un instant a etre genere).
   for (let tentative = 0; tentative < 4 && !lienSignature; tentative++) {
-    if (tentative > 0) await new Promise(r => setTimeout(r, 800));
+    await new Promise(r => setTimeout(r, 800));
     try {
       const signerFraisRes = await fetch('/api/yousign/signature_requests/' + srId + '/signers/' + signerId);
       const bodyText = await signerFraisRes.text();
       if (signerFraisRes.ok) {
         const signerFrais = JSON.parse(bodyText);
         lienSignature = signerFrais.signature_link || signerFrais.signature_url || signerFrais.signature_link_url || '';
-        debugRecuperation = { tentative: tentative + 1, statut: signerFraisRes.status, cles: Object.keys(signerFrais), champSignature: signerFrais.signature_link };
+        debugRecuperation = { etape: 'GET signer', tentative: tentative + 1, statut: signerFraisRes.status, cles: Object.keys(signerFrais), champSignature: signerFrais.signature_link };
       } else {
-        debugRecuperation = { tentative: tentative + 1, statut: signerFraisRes.status, corps: bodyText.slice(0, 300) };
+        debugRecuperation = { etape: 'GET signer', tentative: tentative + 1, statut: signerFraisRes.status, corps: bodyText.slice(0, 300) };
       }
     } catch(e) {
-      debugRecuperation = { tentative: tentative + 1, erreurFetch: String(e) };
+      debugRecuperation = { etape: 'GET signer', tentative: tentative + 1, erreurFetch: String(e) };
     }
   }
 
