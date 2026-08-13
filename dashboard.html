@@ -1117,18 +1117,25 @@ async function creerDemandeSignatureYousign(pdfBlob, nomFichier, personneNom, em
   // activation (delivery_mode "none") - il faut un GET dedie pour le
   // recuperer une fois genere (comportement documente par Yousign).
   let lienSignature = '';
+  let debugRecuperation = null;
   for (let tentative = 0; tentative < 4 && !lienSignature; tentative++) {
     if (tentative > 0) await new Promise(r => setTimeout(r, 800));
     try {
       const signerFraisRes = await fetch('/api/yousign/signature_requests/' + srId + '/signers/' + signerId);
+      const bodyText = await signerFraisRes.text();
       if (signerFraisRes.ok) {
-        const signerFrais = await signerFraisRes.json();
+        const signerFrais = JSON.parse(bodyText);
         lienSignature = signerFrais.signature_link || signerFrais.signature_url || signerFrais.signature_link_url || '';
+        debugRecuperation = { tentative: tentative + 1, statut: signerFraisRes.status, cles: Object.keys(signerFrais), champSignature: signerFrais.signature_link };
+      } else {
+        debugRecuperation = { tentative: tentative + 1, statut: signerFraisRes.status, corps: bodyText.slice(0, 300) };
       }
-    } catch(e) {}
+    } catch(e) {
+      debugRecuperation = { tentative: tentative + 1, erreurFetch: String(e) };
+    }
   }
 
-  return { signatureRequestId: srId, lienSignature };
+  return { signatureRequestId: srId, lienSignature, debugRecuperation };
 }
 
 function tauxTvaVersDecimal(label) {
@@ -1259,10 +1266,11 @@ function ModalDevis({ ticket, onClose, onSent }) {
 
       let yousignFields = {};
       try {
-        const { signatureRequestId, lienSignature } = await creerDemandeSignatureYousign(pdfBlob, numero, client.nom, email.trim(), ticket.fields?.Téléphone);
+        const { signatureRequestId, lienSignature, debugRecuperation } = await creerDemandeSignatureYousign(pdfBlob, numero, client.nom, email.trim(), ticket.fields?.Téléphone);
         yousignFields = { "Yousign Request ID": signatureRequestId, "Yousign Signer Link": lienSignature };
         diag.yousignOk = !!lienSignature;
         diag.lienSignature = lienSignature || "(vide — Yousign n'a pas encore généré le lien après plusieurs tentatives)";
+        diag.debugRecuperationLien = debugRecuperation;
       } catch (yousignErr) {
         console.error('Yousign indisponible, devis envoyé sans signature électronique :', yousignErr);
         diag.yousignErreur = String(yousignErr && yousignErr.message || yousignErr);
