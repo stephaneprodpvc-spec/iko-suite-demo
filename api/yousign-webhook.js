@@ -92,6 +92,51 @@ export default async function handler(req, res) {
         headers: { ...headers, 'Content-Type': 'application/json' },
         body: JSON.stringify({ fields: { "Statut": "Validé", "Date validation client": new Date().toISOString() } })
       });
+
+      // Planifie automatiquement le prochain créneau libre de l'agence
+      // concernée (même logique que l'ancien parcours devis.html côté
+      // client), pour que la date d'intervention soit retournée sans
+      // intervention manuelle de l'agence.
+      try {
+        const ticketId = devisRecord.fields?.["Ticket lié"]?.[0];
+        if (ticketId) {
+          const ticketRes = await fetch('https://api.airtable.com/v0/' + baseId + '/Tickets%20SAV/' + ticketId, { headers });
+          const ticketJson = await ticketRes.json();
+          const agence = ticketJson.fields?.Agence;
+          if (agence) {
+            const planFilter = encodeURIComponent('AND({Agence}="' + agence + '",{Statut}="Libre")');
+            const planUrl = 'https://api.airtable.com/v0/' + baseId + '/Planning?filterByFormula=' + planFilter + '&sort[0][field]=Date&sort[0][direction]=asc&maxRecords=1';
+            const planRes = await fetch(planUrl, { headers });
+            const planJson = await planRes.json();
+            const slot = planJson.records?.[0];
+            if (slot) {
+              const dateObj = new Date((slot.fields.Date || '') + 'T12:00:00');
+              const dateLabel = isNaN(dateObj) ? slot.fields.Date : dateObj.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+              const creneauLabel = (slot.fields.Créneau || '') + ' — ' + dateLabel;
+
+              await fetch('https://api.airtable.com/v0/' + baseId + '/Planning/' + slot.id, {
+                method: 'PATCH', headers: { ...headers, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ fields: { Statut: 'Pris' } })
+              });
+              await fetch('https://api.airtable.com/v0/' + baseId + '/Devis/' + devisRecord.id, {
+                method: 'PATCH', headers: { ...headers, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ fields: { "Date intervention proposée": slot.fields.Date } })
+              });
+              await fetch('https://api.airtable.com/v0/' + baseId + '/Tickets%20SAV/' + ticketId, {
+                method: 'PATCH', headers: { ...headers, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ fields: { Statut: 'Nouveau', "Créneau": creneauLabel, PlanningID: slot.id } })
+              });
+            } else {
+              console.error('Aucun créneau Planning libre pour l\'agence', agence, '- date intervention non planifiée automatiquement.');
+            }
+          }
+        }
+      } catch (planErr) {
+        // Non bloquant : le devis reste validé même si la planification
+        // automatique échoue ; l'agence peut planifier manuellement.
+        console.error('Erreur planification automatique après signature', planErr);
+      }
+
       return res.status(200).json({ ok: true, table: 'Devis' });
     }
 

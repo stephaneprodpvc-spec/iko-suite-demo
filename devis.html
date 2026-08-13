@@ -251,7 +251,9 @@ function DevisItemiseView({ devisId }) {
             {devis?.fields?.["Date intervention proposée"] ? "Votre intervention est planifiée :" : "Votre agence va vous recontacter pour planifier l'intervention."}
           </div>
           {devis?.fields?.["Date intervention proposée"] && (
-            <div style={{background:F.marine,borderRadius:"10px",padding:"12px",color:F.or,fontWeight:"700",fontSize:"13px"}}>{devis.fields["Date intervention proposée"]}</div>
+            <div style={{background:F.marine,borderRadius:"10px",padding:"12px",color:F.or,fontWeight:"700",fontSize:"13px"}}>
+              {new Date(devis.fields["Date intervention proposée"] + 'T12:00:00').toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}
+            </div>
           )}
         </div>
       )}

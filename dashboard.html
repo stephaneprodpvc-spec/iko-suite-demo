@@ -974,14 +974,15 @@ async function genererPdfDevis({ numero, ticket, client, lignes, montantHT, mont
   y += 24;
 
   // Tableau des lignes (dessiné manuellement, pas de plugin autoTable chargé)
-  const colX = [marge, marge + largeurUtile * 0.55, marge + largeurUtile * 0.72, marge + largeurUtile * 0.87];
+  const colX = [marge, marge + largeurUtile * 0.46, marge + largeurUtile * 0.63, marge + largeurUtile * 0.75, marge + largeurUtile * 0.88];
   doc.setFillColor(20, 20, 20);
   doc.rect(marge, y, largeurUtile, 7, 'F');
   doc.setFontSize(7.5); doc.setTextColor(255, 255, 255); doc.setFont('helvetica', 'bold');
   doc.text('DÉSIGNATION', colX[0] + 2, y + 4.8);
   doc.text('QTÉ', colX[1] + 2, y + 4.8);
   doc.text('PU HT', colX[2] + 2, y + 4.8);
-  doc.text('TOTAL HT', colX[3] + 2, y + 4.8);
+  doc.text('TVA', colX[3] + 2, y + 4.8);
+  doc.text('TOTAL HT', colX[4] + 2, y + 4.8);
   y += 7;
 
   doc.setFont('helvetica', 'normal'); doc.setTextColor(30, 30, 30);
@@ -989,10 +990,11 @@ async function genererPdfDevis({ numero, ticket, client, lignes, montantHT, mont
     const hauteur = 7;
     if (i % 2 === 1) { doc.setFillColor(248, 248, 248); doc.rect(marge, y, largeurUtile, hauteur, 'F'); }
     doc.setFontSize(8.5);
-    doc.text(String(l.designation || ''), colX[0] + 2, y + 4.8, { maxWidth: largeurUtile * 0.53 });
+    doc.text(String(l.designation || ''), colX[0] + 2, y + 4.8, { maxWidth: largeurUtile * 0.44 });
     doc.text(String(l.qte), colX[1] + 2, y + 4.8);
     doc.text((l.puHT || 0).toFixed(2) + ' €', colX[2] + 2, y + 4.8);
-    doc.text((l.totalHT || 0).toFixed(2) + ' €', colX[3] + 2, y + 4.8);
+    doc.text(Math.round((l.tauxTva != null ? l.tauxTva : 0.20) * 100) + '%', colX[3] + 2, y + 4.8);
+    doc.text((l.totalHT || 0).toFixed(2) + ' €', colX[4] + 2, y + 4.8);
     y += hauteur;
     if (y > 250) { doc.addPage(); y = 20; }
   });
@@ -1000,8 +1002,10 @@ async function genererPdfDevis({ numero, ticket, client, lignes, montantHT, mont
   doc.setDrawColor(220, 220, 220);
   doc.line(marge, y, 210 - marge, y); y += 8;
 
-  doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(20, 20, 20);
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(80, 80, 80);
   doc.text('Total HT : ' + montantHT.toFixed(2) + ' €', 210 - marge, y, { align: 'right' }); y += 5.5;
+  doc.text('Total TVA : ' + (montantTTC - montantHT).toFixed(2) + ' €', 210 - marge, y, { align: 'right' }); y += 5.5;
+  doc.setFont('helvetica', 'bold'); doc.setTextColor(20, 20, 20);
   doc.text('Total TTC : ' + montantTTC.toFixed(2) + ' €', 210 - marge, y, { align: 'right' }); y += 12;
 
   doc.setFont('helvetica', 'normal'); doc.setFontSize(6.5); doc.setTextColor(130, 130, 130);
@@ -1060,6 +1064,12 @@ async function creerDemandeSignatureYousign(pdfBlob, nomFichier, personneNom, em
   return { signatureRequestId: srId, lienSignature };
 }
 
+function tauxTvaVersDecimal(label) {
+  if (!label) return 0.20;
+  const m = String(label).match(/([\d.,]+)/);
+  return m ? parseFloat(m[1].replace(',', '.')) / 100 : 0.20;
+}
+
 function LigneDevisEditeur({ produits, mo, lignes, onAjouter, onSupprimer }) {
   const [choix, setChoix] = React.useState("");
   const [qte, setQte] = React.useState(1);
@@ -1072,7 +1082,9 @@ function LigneDevisEditeur({ produits, mo, lignes, onAjouter, onSupprimer }) {
     const f = source.fields || {};
     const designation = type === 'produit' ? (f["Désignation"] || '—') : (f["Type d'action"] || '—');
     const puHT = type === 'produit' ? (f["Prix unitaire HT"] || 0) : (f["Prix forfait HT"] || f["Taux horaire HT"] || 0);
-    onAjouter({ designation, qte: Number(qte) || 1, puHT, totalHT: (Number(qte) || 1) * puHT });
+    const tauxTva = type === 'produit' ? tauxTvaVersDecimal(f["Taux TVA"]) : 0.20;
+    const totalHT = (Number(qte) || 1) * puHT;
+    onAjouter({ designation, qte: Number(qte) || 1, puHT, tauxTva, totalHT, totalTTC: totalHT * (1 + tauxTva) });
     setChoix(""); setQte(1);
   };
 
@@ -1141,7 +1153,7 @@ function ModalDevis({ ticket, onClose, onSent }) {
   const genererToken = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-6);
   const emailValide = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
   const montantHT = lignes.reduce((s, l) => s + (l.totalHT || 0), 0);
-  const montantTTC = montantHT * 1.2; // TVA 20% par défaut (démo) ; taux détaillé par ligne géré au niveau du catalogue
+  const montantTTC = lignes.reduce((s, l) => s + (l.totalTTC != null ? l.totalTTC : l.totalHT * 1.2), 0);
 
   const envoyer = async () => {
     if (!lignes.length) { setError("Ajoute au moins une ligne au devis."); return; }
@@ -1152,13 +1164,14 @@ function ModalDevis({ ticket, onClose, onSent }) {
       const numero = "DEV-" + new Date().getFullYear() + "-" + Math.floor(1000 + Math.random() * 9000);
       const token = genererToken();
       const mep = catalogue.mep || { identite: {}, assurance: {}, piedPage: "", dureeValidite: 30 };
-      const client = { nom: ticket.fields?.Client, adresse: ticket.fields?.Adresse || "" };
+      const cpMatch = (ticket.fields?.Adresse || "").match(/\b\d{5}\b/);
+      const client = { nom: ticket.fields?.Client, adresse: ticket.fields?.Adresse || "", cp: cpMatch ? cpMatch[0] : "" };
 
       const devisRes = await fetch('/api/airtable/Devis', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ records: [{ fields: {
           "N° devis": numero, "Ticket lié": [ticket.id], "Client": [clientInfo.clientId], "Agence": [clientInfo.agenceId],
-          "Nom client": client.nom, "Adresse client": client.adresse,
+          "Nom client": client.nom, "Adresse client": client.adresse, "CP client": client.cp,
           "Lignes devis (JSON)": JSON.stringify(lignes), "Montant HT": montantHT, "Montant TTC": montantTTC,
           "Statut": "Envoyé", "Mode": "Manuel",
         } }] })

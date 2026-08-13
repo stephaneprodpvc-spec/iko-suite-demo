@@ -626,10 +626,7 @@
       </div>
 
       <div class="devis-panel" id="devisPanelListe">
-        <div class="devis-toolbar">
-          <button type="button" class="primary" id="devisNouveauBtn" style="flex:none;padding:12px 20px;">+ Nouveau devis</button>
-        </div>
-        <div class="devis-import-hint">Brouillon créé ici ; le détail des lignes, l'envoi client et les factures se gèrent depuis le tableau de bord (module à venir).</div>
+        <div class="devis-import-hint">Suivi en lecture seule. Un devis se crée depuis un ticket, dans le tableau de bord de l'agence concernée (bouton « Établir le devis ») — il utilise automatiquement le catalogue et la mise en page configurés ici.</div>
         <div id="devisListeWrap" style="margin-top:12px;"></div>
         <div class="msg" id="devisListeMsg"></div>
       </div>
@@ -2125,30 +2122,17 @@ function chargerDevisListe(){
 
 function afficherDevisListe(){
   var wrap = document.getElementById("devisListeWrap");
-  if (!devisListe.length){ wrap.innerHTML = "<div class='hint' style='color:var(--texte-faint);font-size:12.5px;'>Aucun devis pour l'instant.</div>"; return; }
+  if (!devisListe.length){ wrap.innerHTML = "<div class='hint' style='color:var(--texte-faint);font-size:12.5px;'>Aucun devis pour l'instant — le premier se crée depuis un ticket dans le tableau de bord.</div>"; return; }
   wrap.innerHTML = devisListe.map(function(rec){
     var f = rec.fields || {};
     var statut = f["Statut"] || "Brouillon";
     var montant = f["Montant TTC"] != null ? f["Montant TTC"].toLocaleString("fr-FR", { style: "currency", currency: "EUR" }) : "—";
     return "<div class='devis-liste-item'>" +
-      "<span><b>" + escHtml(f["N° devis"] || rec.id) + "</b> — " + escHtml(f["Nom client"] || devisClientNom) + "</span>" +
+      "<span><b>" + escHtml(f["N° devis"] || rec.id) + "</b> — " + escHtml(f["Nom client"] || devisClientNom) + " <span style='color:var(--texte-faint);font-size:10.5px;'>(" + escHtml(f["Mode"] || "—") + ")</span></span>" +
       "<span style='display:flex;align-items:center;gap:10px;'>" + montant + "<span class='devis-liste-statut " + statut + "'>" + statut + "</span></span>" +
       "</div>";
   }).join("");
 }
-
-document.getElementById("devisNouveauBtn").addEventListener("click", function(){
-  if (!devisClientId) return;
-  var msg = document.getElementById("devisListeMsg");
-  msg.style.color = ""; msg.textContent = "Création du brouillon…";
-  var numero = "DEV-" + new Date().getFullYear() + "-" + Math.floor(1000 + Math.random() * 9000);
-  fetch("/api/airtable/" + encodeURIComponent(TBL_DEVIS), {
-    method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ records: [{ fields: { "N° devis": numero, "Client": [devisClientId], "Nom client": devisClientNom, "Statut": "Brouillon", "Mode": "Manuel" } }] })
-  }).then(function(r){ return r.json(); })
-    .then(function(){ msg.textContent = ""; chargerDevisListe(); })
-    .catch(function(){ msg.style.color = "#FF453A"; msg.textContent = "Erreur de création."; });
-});
 // ==================== /Devis & Facturation ====================
 
 // --- Navigation sidebar (rail IDE) ---
