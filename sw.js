@@ -23,6 +23,31 @@ self.addEventListener('activate', (event) => {
   );
 });
 
+self.addEventListener('push', (event) => {
+  let data = {};
+  try { data = event.data ? event.data.json() : {}; } catch (e) {}
+  const title = data.title || 'Iko Suite';
+  event.waitUntil(
+    self.registration.showNotification(title, {
+      body: data.body || '',
+      icon: '/icon-192.png',
+      badge: '/icon-192.png',
+      data: { url: data.url || '/technicien.html' },
+    })
+  );
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const url = (event.notification.data && event.notification.data.url) || '/technicien.html';
+  event.waitUntil(
+    clients.matchAll({ type: 'window' }).then((list) => {
+      for (const c of list) { if (c.url.includes(url) && 'focus' in c) return c.focus(); }
+      if (clients.openWindow) return clients.openWindow(url);
+    })
+  );
+});
+
 // Network-first for navigation/API calls, cache-first fallback for core static assets.
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;

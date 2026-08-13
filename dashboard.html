@@ -549,6 +549,16 @@ function ModalRdv({ agenceAccess, onClose, onSuccess, initialAgence }) {
           garantie: garantieTexte, facture: form.facture, urgent: urgentTexte, photos: '', planningId
         })
       });
+      try {
+        await fetch('/api/push', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'send', agence: AGENCE_VERS_AIRTABLE[form.agence] || form.agence,
+            title: '📞 Nouveau RDV — ' + num,
+            body: form.nom + ' — ' + form.produit + ' — ' + dateLabel,
+          })
+        });
+      } catch (pushErr) { /* non bloquant */ }
       onSuccess(num);
     } catch(e) {
       setError("Erreur lors de l'enregistrement. Vérifiez la connexion.");
