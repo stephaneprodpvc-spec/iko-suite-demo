@@ -913,6 +913,7 @@ async function chargerCatalogueDevis(clientId) {
       couleur: mepRec?.fields?.["Couleur primaire"] || "#FF6B00",
       piedPage: mepRec?.fields?.["Texte pied de page"] || "",
       dureeValidite: mepRec?.fields?.["Durée validité devis (jours)"] || 30,
+      logoUrl: (mepRec?.fields?.["Logo"]?.[0]?.url) || identite.logoUrl || "",
       identite, assurance,
     }
   };
@@ -940,7 +941,7 @@ async function genererPdfDevis({ numero, ticket, client, lignes, montantHT, mont
   const largeurUtile = 210 - 2 * marge;
   let y = 20;
 
-  const logoDataUrl = await chargerImageEnDataUrl(mep.identite.logoUrl);
+  const logoDataUrl = await chargerImageEnDataUrl(mep.logoUrl);
   if (logoDataUrl) {
     try { doc.addImage(logoDataUrl, 'PNG', marge, y - 6, 30, 16, undefined, 'FAST'); } catch(e){}
   }

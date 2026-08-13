@@ -518,8 +518,13 @@
       <div class="devis-panel actif" id="devisPanelMEP">
         <div class="devis-mep-layout">
           <div class="devis-mep-form">
-            <label>Logo (URL image)</label>
-            <input type="url" id="mepLogo" placeholder="https://…">
+            <label>Logo</label>
+            <div style="display:flex;gap:8px;">
+              <input type="url" id="mepLogo" placeholder="https://…" style="flex:1;">
+              <button type="button" class="secondary" id="mepLogoUploadBtn" style="flex:none;white-space:nowrap;">Depuis mon appareil</button>
+              <input type="file" id="mepLogoFile" accept="image/*" style="display:none;">
+            </div>
+            <div class="devis-import-hint" id="mepLogoMsg">URL directe, ou upload d'un fichier depuis l'appareil (stocké dans Airtable).</div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:0 16px;">
               <div><label>Couleur principale</label><input type="color" id="mepCouleur" value="#FF6B00"></div>
               <div><label>Police</label>
@@ -1951,7 +1956,7 @@ function remplirFormMEP(rec){
 
   var identite = {};
   try { identite = JSON.parse(f["Identité entreprise (JSON)"] || "{}"); } catch(e){}
-  document.getElementById("mepLogo").value = identite.logoUrl || "";
+  document.getElementById("mepLogo").value = (f["Logo"] && f["Logo"][0] && f["Logo"][0].url) || identite.logoUrl || "";
   document.getElementById("mepRaisonSociale").value = identite.raisonSociale || "";
   document.getElementById("mepFormeJuridique").value = identite.formeJuridique || "";
   document.getElementById("mepAdresseEntreprise").value = identite.adresse || "";
@@ -2010,18 +2015,72 @@ Array.prototype.forEach.call(
   function(champ){ champ.addEventListener("input", majApercuA4); }
 );
 
+document.getElementById("mepLogoUploadBtn").addEventListener("click", function(){
+  document.getElementById("mepLogoFile").click();
+});
+
+document.getElementById("mepLogoFile").addEventListener("change", function(e){
+  var fichier = e.target.files[0];
+  if (!fichier || !devisClientId) return;
+  var msg = document.getElementById("mepLogoMsg");
+  msg.style.color = ""; msg.textContent = "Envoi en cours…";
+
+  var uploader = function(recordId){
+    var reader = new FileReader();
+    reader.onload = function(evt){
+      var base64 = evt.target.result.split(",")[1];
+      fetch("/api/airtable/content/" + recordId + "/Logo/uploadAttachment", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ contentType: fichier.type || "image/png", file: base64, filename: fichier.name })
+      }).then(function(r){ return r.json(); })
+        .then(function(data){
+          var url = data && data.fields && data.fields.Logo && data.fields.Logo[0] && data.fields.Logo[0].url;
+          if (url){
+            document.getElementById("mepLogo").value = url;
+            majApercuA4();
+            msg.style.color = "#32D74B"; msg.textContent = "Logo uploadé et enregistré.";
+          } else {
+            msg.style.color = "#FF453A"; msg.textContent = "Échec de l'upload : " + (data && data.error && data.error.message || "réponse inattendue.");
+          }
+        })
+        .catch(function(){ msg.style.color = "#FF453A"; msg.textContent = "Erreur réseau pendant l'upload."; });
+    };
+    reader.readAsDataURL(fichier);
+  };
+
+  if (devisMEPRecordId){
+    uploader(devisMEPRecordId);
+  } else {
+    // Aucune mise en page enregistrée pour ce client pour l'instant : on crée
+    // l'enregistrement minimal d'abord, pour avoir un ID cible pour l'upload.
+    fetch("/api/airtable/" + encodeURIComponent(TBL_MEP), {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ records: [{ fields: { "Client": [devisClientId] } }] })
+    }).then(function(r){ return r.json(); })
+      .then(function(data){
+        var rec = data.records && data.records[0];
+        if (!rec) { msg.style.color = "#FF453A"; msg.textContent = "Impossible de créer l'enregistrement de mise en page."; return; }
+        devisMEPRecordId = rec.id;
+        uploader(rec.id);
+      })
+      .catch(function(){ msg.style.color = "#FF453A"; msg.textContent = "Erreur réseau."; });
+  }
+  e.target.value = "";
+});
+
 document.getElementById("mepSaveBtn").addEventListener("click", function(){
   var msg = document.getElementById("devisMEPMsg");
   if (!devisClientId){ return; }
+  var logoUrl = document.getElementById("mepLogo").value.trim();
   var champs = {
     "Client": [devisClientId],
+    "Logo": logoUrl ? [{ url: logoUrl }] : [],
     "Couleur primaire": document.getElementById("mepCouleur").value,
     "Police": document.getElementById("mepPolice").value,
     "Marges": document.getElementById("mepMarges").value,
     "Texte pied de page": document.getElementById("mepPiedPage").value,
     "Durée validité devis (jours)": parseInt(document.getElementById("mepDureeValidite").value, 10) || 30,
     "Identité entreprise (JSON)": JSON.stringify({
-      logoUrl: document.getElementById("mepLogo").value,
       raisonSociale: document.getElementById("mepRaisonSociale").value,
       formeJuridique: document.getElementById("mepFormeJuridique").value,
       adresse: document.getElementById("mepAdresseEntreprise").value,
