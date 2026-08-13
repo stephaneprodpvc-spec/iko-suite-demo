@@ -174,6 +174,30 @@
   @media (max-width:700px){.devis-modal-box{padding:20px;}.devis-modal-overlay{padding:0;align-items:stretch;}.devis-modal-box{border-radius:0;max-width:none;min-height:100%;}}
   .devis-mep-layout{display:grid;grid-template-columns:minmax(280px,1fr) minmax(280px,340px);gap:24px;align-items:start;}
   @media (max-width:900px){.devis-mep-layout{grid-template-columns:1fr;}}
+
+  #devisPanelMEP.mep-fullscreen{position:fixed;inset:0;z-index:2100;background:rgba(0,0,0,0.72);backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center;padding:20px;}
+  #devisPanelMEP.mep-fullscreen .mep-shell{display:flex;flex-direction:column;width:100%;height:100%;max-width:1400px;background:var(--g2);border:1px solid var(--border-strong);border-radius:14px;overflow:hidden;box-shadow:0 30px 90px rgba(0,0,0,0.6);}
+  #devisPanelMEP:not(.mep-fullscreen){display:none !important;}
+  .mep-topbar{display:flex;align-items:center;gap:10px;padding:10px 16px;border-bottom:1px solid var(--border);background:var(--g1);flex:none;}
+  .mep-topbar-titre{font-weight:700;font-size:13px;color:var(--texte);}
+  .mep-topbar-spacer{flex:1;}
+  .mep-close-btn{background:none;border:1px solid var(--border);color:var(--texte-faint);width:30px;height:30px;border-radius:8px;cursor:pointer;font-size:15px;line-height:1;}
+  .mep-close-btn:hover{color:var(--texte);border-color:var(--border-strong);}
+  .mep-body{display:flex;flex:1;min-height:0;}
+  .mep-toolrail{display:flex;flex-direction:column;gap:4px;padding:8px 6px;border-right:1px solid var(--border);background:var(--g1);flex:none;}
+  .mep-tool-btn{width:32px;height:32px;border-radius:8px;border:1px solid transparent;background:none;color:var(--texte-faint);cursor:pointer;font-size:15px;display:flex;align-items:center;justify-content:center;}
+  .mep-tool-btn.actif{background:rgba(255,107,0,0.14);border-color:rgba(255,107,0,0.4);color:var(--orange);}
+  .mep-tool-btn[disabled]{opacity:0.3;cursor:not-allowed;}
+  .mep-main{flex:1;display:flex;min-height:0;overflow:hidden;}
+  .mep-form-col{flex:1;display:flex;flex-direction:column;min-width:280px;overflow:hidden;}
+  .mep-subtabs{display:flex;gap:2px;padding:8px 12px 0;border-bottom:1px solid var(--border);flex:none;flex-wrap:wrap;}
+  .mep-subtab{padding:8px 12px;font-size:12px;font-weight:600;color:var(--texte-faint);cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;}
+  .mep-subtab.actif{color:var(--orange);border-bottom-color:var(--orange);}
+  .mep-content-scroll{flex:1;overflow-y:auto;padding:18px;}
+  .mep-subpanel{display:none;}
+  .mep-subpanel.actif{display:block;}
+  .mep-apercu-col{width:340px;flex:none;padding:18px;border-left:1px solid var(--border);overflow-y:auto;}
+  @media (max-width:900px){#devisPanelMEP.mep-fullscreen .mep-main{flex-direction:column;}#devisPanelMEP.mep-fullscreen .mep-apercu-col{width:100%;border-left:none;border-top:1px solid var(--border);}}
   .devis-mep-apercu{position:sticky;top:12px;}
   .devis-apercu-label{font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--texte-faint);margin-bottom:8px;text-align:center;}
   .a4-page{width:100%;aspect-ratio:210/297;background:#ffffff;border-radius:3px;box-shadow:0 2px 4px rgba(0,0,0,0.35),0 18px 40px -14px rgba(0,0,0,0.55);overflow:hidden;position:relative;}
@@ -550,15 +574,40 @@
         <div style="border-top:1px solid var(--border);margin:24px 0 20px;"></div>
         <h2>▥ Devis &amp; Facturation — <span id="devisTitreClient">—</span></h2>
       <div class="devis-tabs">
-        <div class="devis-tab actif" data-panel="devisPanelMEP">Mise en page</div>
-        <div class="devis-tab" data-panel="devisPanelCatalogue">Catalogue produits</div>
+        <div class="devis-tab" data-panel="devisPanelMEP">Mise en page</div>
+        <div class="devis-tab actif" data-panel="devisPanelCatalogue">Catalogue produits</div>
         <div class="devis-tab" data-panel="devisPanelMO">Main d'œuvre</div>
         <div class="devis-tab" data-panel="devisPanelListe">Devis &amp; factures</div>
       </div>
 
-      <div class="devis-panel actif" id="devisPanelMEP">
-        <div class="devis-mep-layout">
+      <div class="devis-panel" id="devisPanelMEP">
+       <div class="mep-shell">
+        <div class="mep-topbar">
+          <span class="mep-topbar-titre">✎ Éditeur de mise en page — <span id="devisTitreClientMep">—</span></span>
+          <span class="mep-topbar-spacer"></span>
+          <button type="button" class="mep-tool-btn" disabled title="Zoom (bientôt)">🔍</button>
+          <button type="button" class="mep-close-btn" id="mepFermerBtn" title="Fermer">✕</button>
+        </div>
+        <div class="mep-body">
+          <div class="mep-toolrail">
+            <button type="button" class="mep-tool-btn actif" title="Sélection">↖</button>
+            <button type="button" class="mep-tool-btn" disabled title="Texte (bientôt)">T</button>
+            <button type="button" class="mep-tool-btn" disabled title="Image (bientôt)">▢</button>
+            <button type="button" class="mep-tool-btn" disabled title="Forme (bientôt)">◇</button>
+            <button type="button" class="mep-tool-btn" disabled title="Trait / flèche (bientôt)">↗</button>
+            <button type="button" class="mep-tool-btn" disabled title="Calques (bientôt)">▤</button>
+          </div>
+          <div class="mep-main">
+          <div class="mep-form-col">
+          <div class="mep-subtabs">
+            <div class="mep-subtab actif" data-mepsub="mepSubLogo">Logo</div>
+            <div class="mep-subtab" data-mepsub="mepSubCouleurs">Couleurs &amp; marges</div>
+            <div class="mep-subtab" data-mepsub="mepSubTexte">Texte</div>
+            <div class="mep-subtab" data-mepsub="mepSubLegal">Légal &amp; assurance</div>
+          </div>
+          <div class="mep-content-scroll">
           <div class="devis-mep-form">
+            <div class="mep-subpanel actif" id="mepSubLogo">
             <label>Logo</label>
             <div style="display:flex;gap:8px;">
               <input type="url" id="mepLogo" placeholder="https://…" style="flex:1;">
@@ -573,6 +622,9 @@
             </div>
             <button type="button" class="secondary" id="mepLogoCentrerBtn" style="width:100%;margin-bottom:14px;">↔ Centrer le logo horizontalement</button>
             <div class="devis-import-hint">Astuce : sur l'aperçu à droite, touche le logo et fais-le glisser pour le repositionner directement.</div>
+            </div>
+
+            <div class="mep-subpanel" id="mepSubCouleurs">
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:0 16px;">
               <div><label>Couleur principale</label><input type="color" id="mepCouleur" value="#FF6B00"></div>
               <div><label>Police</label>
@@ -603,6 +655,9 @@
                 <input type="number" id="mepMargeBas" value="20" min="0" max="80" step="1"><span class="marges-unite">mm</span>
               </div>
             </div>
+            </div>
+
+            <div class="mep-subpanel" id="mepSubTexte">
             <label>Texte pied de page</label>
             <div class="texte-toolbar">
               <button type="button" data-cmd="bold" title="Gras"><b>G</b></button>
@@ -614,8 +669,12 @@
               <button type="button" data-cmd="justifyRight" title="Aligner à droite">⟹</button>
             </div>
             <div id="mepPiedPage" contenteditable="true" class="texte-editable"></div>
+            <label style="margin-top:14px;">Durée de validité du devis (jours)</label>
+            <input type="text" id="mepDureeValidite" placeholder="30">
+            </div>
 
-            <h2 style="margin-top:22px;">Identité entreprise (mentions légales obligatoires)</h2>
+            <div class="mep-subpanel" id="mepSubLegal">
+            <h2 style="margin-top:0;">Identité entreprise (mentions légales obligatoires)</h2>
             <div class="devis-legal-grid">
               <div><label>Raison sociale</label><input type="text" id="mepRaisonSociale"></div>
               <div><label>Forme juridique</label><input type="text" id="mepFormeJuridique" placeholder="SARL, SASU…"></div>
@@ -631,17 +690,17 @@
               <div><label>N° de police</label><input type="text" id="mepNumPolice"></div>
               <div style="grid-column:1/-1;"><label>Zone de couverture géographique</label><input type="text" id="mepZoneCouverture"></div>
             </div>
-
-            <label>Durée de validité du devis (jours)</label>
-            <input type="text" id="mepDureeValidite" placeholder="30">
+            </div>
 
             <div class="devis-save-bar">
               <button type="button" class="primary" id="mepSaveBtn" style="flex:none;padding:12px 22px;">Enregistrer la mise en page</button>
               <div class="msg" id="devisMEPMsg"></div>
             </div>
           </div>
+          </div>
+          </div>
 
-          <div class="devis-mep-apercu">
+          <div class="mep-apercu-col">
             <div class="devis-apercu-label">Aperçu — A4 portrait (210 × 297 mm)</div>
             <div class="a4-page" id="a4Page">
               <img id="a4Logo" class="a4-logo" alt="">
@@ -670,10 +729,12 @@
               </div>
             </div>
           </div>
+          </div>
         </div>
+       </div>
       </div>
 
-      <div class="devis-panel" id="devisPanelCatalogue">
+      <div class="devis-panel actif" id="devisPanelCatalogue">
         <div class="devis-toolbar">
           <button type="button" class="secondary" id="devisProduitAjoutBtn">+ Ligne</button>
           <button type="button" class="secondary" id="devisImportBtn">Importer un fichier (Excel/CSV)</button>
@@ -1899,10 +1960,30 @@ function fermerDevis(){
 
 Array.prototype.forEach.call(document.querySelectorAll(".devis-tab"), function(tab){
   tab.addEventListener("click", function(){
+    if (tab.getAttribute("data-panel") === "devisPanelMEP") {
+      var t = document.getElementById("devisTitreClientMep");
+      if (t) t.textContent = (document.getElementById("devisTitreClient") || {}).textContent || "—";
+      document.getElementById("devisPanelMEP").classList.add("mep-fullscreen");
+      return;
+    }
     Array.prototype.forEach.call(document.querySelectorAll(".devis-tab"), function(t){ t.classList.remove("actif"); });
     Array.prototype.forEach.call(document.querySelectorAll(".devis-panel"), function(p){ p.classList.remove("actif"); });
     tab.classList.add("actif");
     document.getElementById(tab.getAttribute("data-panel")).classList.add("actif");
+  });
+});
+
+var mepFermerBtnEl = document.getElementById("mepFermerBtn");
+if (mepFermerBtnEl) mepFermerBtnEl.addEventListener("click", function(){
+  document.getElementById("devisPanelMEP").classList.remove("mep-fullscreen");
+});
+
+Array.prototype.forEach.call(document.querySelectorAll(".mep-subtab"), function(st){
+  st.addEventListener("click", function(){
+    Array.prototype.forEach.call(document.querySelectorAll(".mep-subtab"), function(t){ t.classList.remove("actif"); });
+    Array.prototype.forEach.call(document.querySelectorAll(".mep-subpanel"), function(p){ p.classList.remove("actif"); });
+    st.classList.add("actif");
+    document.getElementById(st.getAttribute("data-mepsub")).classList.add("actif");
   });
 });
 
