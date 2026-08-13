@@ -1042,7 +1042,10 @@ async function creerDemandeSignatureYousign(pdfBlob, nomFichier, personneNom, em
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ name: nomFichier, delivery_mode: 'none', timezone: 'Europe/Paris' })
   });
-  if (!reqRes.ok) throw new Error('Yousign: création de la demande échouée');
+  if (!reqRes.ok) {
+    const detail = await reqRes.text().catch(() => '');
+    throw new Error('Yousign: création de la demande échouée (HTTP ' + reqRes.status + ') ' + detail.slice(0, 300));
+  }
   const signatureRequest = await reqRes.json();
   const srId = signatureRequest.id;
 
@@ -1051,7 +1054,10 @@ async function creerDemandeSignatureYousign(pdfBlob, nomFichier, personneNom, em
   form.append('nature', 'signable_document');
   form.append('parse_anchors', 'false');
   const docRes = await fetch('/api/yousign/signature_requests/' + srId + '/documents', { method: 'POST', body: form });
-  if (!docRes.ok) throw new Error('Yousign: envoi du document échoué');
+  if (!docRes.ok) {
+    const detail = await docRes.text().catch(() => '');
+    throw new Error('Yousign: envoi du document échoué (HTTP ' + docRes.status + ') ' + detail.slice(0, 300));
+  }
   const document = await docRes.json();
 
   const nomParts = (personneNom || 'Client Iko Suite').trim().split(/\s+/);
@@ -1068,7 +1074,10 @@ async function creerDemandeSignatureYousign(pdfBlob, nomFichier, personneNom, em
       fields: [{ document_id: document.id, type: 'signature', page: 1, x: 60, y: 700 }]
     })
   });
-  if (!signerRes.ok) throw new Error('Yousign: ajout du signataire échoué');
+  if (!signerRes.ok) {
+    const detail = await signerRes.text().catch(() => '');
+    throw new Error('Yousign: ajout du signataire échoué (HTTP ' + signerRes.status + ') ' + detail.slice(0, 300));
+  }
   const signer = await signerRes.json();
   const lienSignature = signer.signature_link || signer.signature_url || signer.signature_link_url || '';
 
@@ -1222,6 +1231,9 @@ function ModalDevis({ ticket, onClose, onSent }) {
         body: JSON.stringify({ fields: { Statut: 'Devis envoyé', "Montant devis": montantTTC.toFixed(2) + ' € TTC', "Devis Token": token, Email: email.trim() } })
       });
       diag.ticketMisAJour = ticketPatchRes.ok;
+      if (!ticketPatchRes.ok) {
+        diag.ticketErreur = await ticketPatchRes.text().catch(() => '(corps illisible)');
+      }
 
       const lienDevis = window.location.origin + '/devis.html?devisId=' + devisRec.id;
       diag.lienDevis = lienDevis;
