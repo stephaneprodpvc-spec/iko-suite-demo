@@ -153,6 +153,12 @@
   .devis-legal-grid{display:grid;grid-template-columns:1fr 1fr;gap:0 16px;}
   .devis-legal-grid label{margin:14px 0 6px;}
   .devis-save-bar{display:flex;align-items:center;gap:12px;margin-top:18px;}
+  .texte-toolbar{display:flex;gap:4px;margin-bottom:6px;}
+  .texte-toolbar button{width:32px;height:32px;border-radius:8px;border:1px solid var(--border);background:rgba(255,255,255,0.04);color:var(--texte);font-size:13px;cursor:pointer;}
+  .texte-toolbar button:hover{background:rgba(255,255,255,0.09);}
+  .texte-sep{width:1px;background:var(--border);margin:4px 4px;}
+  .texte-editable{width:100%;min-height:44px;padding:12px 14px;border-radius:13px;border:1px solid var(--border);background:rgba(255,255,255,0.04);color:var(--texte);font-size:13.5px;outline:none;font-family:inherit;}
+  .texte-editable:focus{border-color:var(--orange);}
   .devis-modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.6);backdrop-filter:blur(4px);z-index:2000;display:flex;align-items:flex-start;justify-content:center;padding:32px 16px;overflow-y:auto;}
   .devis-modal-box{background:var(--g2);border:1px solid var(--border);border-radius:20px;padding:28px 32px;width:100%;max-width:980px;box-shadow:0 20px 60px rgba(0,0,0,0.5);backdrop-filter:blur(24px) saturate(150%);-webkit-backdrop-filter:blur(24px) saturate(150%);}
   @media (max-width:700px){.devis-modal-box{padding:20px;}.devis-modal-overlay{padding:0;align-items:stretch;}.devis-modal-box{border-radius:0;max-width:none;min-height:100%;}}
@@ -483,17 +489,25 @@
         </select>
 
         <div id="agencesWrap" style="display:none;">
-          <label style="margin-top:18px;">Agences</label>
-          <div id="agencesListe" style="display:flex;flex-direction:column;gap:8px;"></div>
-          <button type="button" class="secondary" id="ajouterAgenceBtn" style="margin-top:8px;width:100%;">+ Ajouter une agence</button>
-          <div class="hint" style="font-size:11px;color:var(--texte-faint);margin-top:5px;">Nom + emails de notification par agence. Enregistrement automatique à chaque champ quitté.</div>
+          <button type="button" class="secondary" id="agencesToggleBtn" style="width:100%;text-align:left;display:flex;justify-content:space-between;align-items:center;margin-top:18px;">
+            <span>Agences <span id="agencesCount" style="color:var(--texte-faint);font-weight:400;"></span></span><span id="agencesChevron">▾</span>
+          </button>
+          <div id="agencesBody" style="display:none;margin-top:10px;">
+            <div id="agencesListe" style="display:flex;flex-direction:column;gap:8px;"></div>
+            <button type="button" class="secondary" id="ajouterAgenceBtn" style="margin-top:8px;width:100%;">+ Ajouter une agence</button>
+            <div class="hint" style="font-size:11px;color:var(--texte-faint);margin-top:5px;">Nom + emails de notification par agence. Enregistrement automatique à chaque champ quitté.</div>
+          </div>
         </div>
 
         <div id="questionnaireWrap" style="display:none;">
-          <label style="margin-top:18px;">Questionnaire SAV personnalisé</label>
-          <div id="questionnaireListe" style="display:flex;flex-direction:column;gap:10px;"></div>
-          <button type="button" class="secondary" id="ajouterQuestionBtn" style="margin-top:8px;width:100%;">+ Ajouter une question</button>
-          <div class="hint" style="font-size:11px;color:var(--texte-faint);margin-top:5px;">Amandine posera ces questions dans l'ordre, en plus du déroulé standard SAV. Enregistrement automatique.</div>
+          <button type="button" class="secondary" id="questionnaireToggleBtn" style="width:100%;text-align:left;display:flex;justify-content:space-between;align-items:center;margin-top:18px;">
+            <span>Questionnaire SAV personnalisé <span id="questionnaireCount" style="color:var(--texte-faint);font-weight:400;"></span></span><span id="questionnaireChevron">▾</span>
+          </button>
+          <div id="questionnaireBody" style="display:none;margin-top:10px;">
+            <div id="questionnaireListe" style="display:flex;flex-direction:column;gap:10px;"></div>
+            <button type="button" class="secondary" id="ajouterQuestionBtn" style="margin-top:8px;width:100%;">+ Ajouter une question</button>
+            <div class="hint" style="font-size:11px;color:var(--texte-faint);margin-top:5px;">Amandine posera ces questions dans l'ordre, en plus du déroulé standard SAV. Enregistrement automatique.</div>
+          </div>
         </div>
 
         <div id="diagramWrap" style="display:none;">
@@ -543,6 +557,8 @@
               <div><label>Logo — Y (mm depuis le haut)</label><input type="number" id="mepLogoY" value="14" min="0" max="280" step="1"></div>
               <div><label>Logo — largeur (mm)</label><input type="number" id="mepLogoW" value="30" min="5" max="100" step="1"></div>
             </div>
+            <button type="button" class="secondary" id="mepLogoCentrerBtn" style="width:100%;margin-bottom:14px;">↔ Centrer le logo horizontalement</button>
+            <div class="devis-import-hint">Astuce : sur l'aperçu à droite, touche le logo et fais-le glisser pour le repositionner directement.</div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:0 16px;">
               <div><label>Couleur principale</label><input type="color" id="mepCouleur" value="#FF6B00"></div>
               <div><label>Police</label>
@@ -559,7 +575,16 @@
               <div><label style="font-size:10.5px;">Droite</label><input type="number" id="mepMargeDroite" value="18" min="0" max="80" step="1"></div>
             </div>
             <label>Texte pied de page</label>
-            <textarea id="mepPiedPage" rows="2" style="width:100%;padding:12px 14px;border-radius:13px;border:1px solid var(--border);background:rgba(255,255,255,0.04);color:var(--texte);font-size:13.5px;outline:none;font-family:inherit;resize:vertical;"></textarea>
+            <div class="texte-toolbar">
+              <button type="button" data-cmd="bold" title="Gras"><b>G</b></button>
+              <button type="button" data-cmd="italic" title="Italique"><i>I</i></button>
+              <button type="button" data-cmd="underline" title="Souligné"><u>S</u></button>
+              <span class="texte-sep"></span>
+              <button type="button" data-cmd="justifyLeft" title="Aligner à gauche">⟸</button>
+              <button type="button" data-cmd="justifyCenter" title="Centrer">☰</button>
+              <button type="button" data-cmd="justifyRight" title="Aligner à droite">⟹</button>
+            </div>
+            <div id="mepPiedPage" contenteditable="true" class="texte-editable"></div>
 
             <h2 style="margin-top:22px;">Identité entreprise (mentions légales obligatoires)</h2>
             <div class="devis-legal-grid">
@@ -1210,12 +1235,32 @@ function chargerAgencesClient(clientId){
   var formule = encodeURIComponent('FIND("' + nom.replace(/"/g, '\\"') + '", ARRAYJOIN({Client}))');
   fetch("/api/airtable/" + encodeURIComponent(AGENCES_TABLE) + "?filterByFormula=" + formule + "&maxRecords=10")
     .then(function(r){ return r.json(); })
-    .then(function(data){ afficherAgences(data.records || []); })
+    .then(function(data){ synchroniserAgences(data.records || []); })
     .catch(function(){ document.getElementById("agencesListe").innerHTML = "<div style='color:#FF453A;font-size:12px;'>Erreur de chargement.</div>"; });
+}
+
+// Cree automatiquement les agences manquantes pour atteindre "Nombre agences"
+// (nommees "Agence N" par defaut, jamais laissees en "Nouvelle agence" non
+// renommee). Ne supprime jamais d'agence existante en trop (suppression
+// irreversible = toujours manuelle, cf regle permanente).
+function synchroniserAgences(records){
+  var cible = Math.max(1, Math.min(10, parseInt(document.getElementById("fNbAgences").value, 10) || 1));
+  if (records.length >= cible){ afficherAgences(records); return; }
+  var manquantes = [];
+  for (var i = records.length + 1; i <= cible; i++){
+    manquantes.push({ fields: { "Client": [editingId], "Nom agence": "Agence " + i, "Actif": true } });
+  }
+  document.getElementById("agencesListe").innerHTML = "<div style='font-size:12px;color:var(--texte-faint);'>Création des agences manquantes…</div>";
+  fetch("/api/airtable/" + encodeURIComponent(AGENCES_TABLE), {
+    method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ records: manquantes })
+  }).then(function(r){ return r.json(); })
+    .then(function(data){ afficherAgences(records.concat(data.records || [])); })
+    .catch(function(){ afficherAgences(records); });
 }
 
 function afficherAgences(records){
   var el = document.getElementById("agencesListe");
+  document.getElementById("agencesCount").textContent = "(" + records.length + ")";
   var max = Math.max(1, Math.min(10, parseInt(document.getElementById("fNbAgences").value, 10) || 1));
   document.getElementById("ajouterAgenceBtn").style.display = records.length >= max ? "none" : "block";
 
@@ -1260,15 +1305,27 @@ function afficherAgences(records){
 
 document.getElementById("ajouterAgenceBtn").addEventListener("click", function(){
   if (!editingId) return;
+  var n = document.getElementById("agencesListe").querySelectorAll("input[data-champ='Nom agence']").length + 1;
   fetch("/api/airtable/" + encodeURIComponent(AGENCES_TABLE), {
     method: "POST", headers: {"Content-Type":"application/json"},
-    body: JSON.stringify({ fields: { "Client": [editingId], "Nom agence": "Nouvelle agence", "Actif": true } })
+    body: JSON.stringify({ fields: { "Client": [editingId], "Nom agence": "Agence " + n, "Actif": true } })
   }).then(function(){ chargerAgencesClient(editingId); });
 });
 
 document.getElementById("fNbAgences").addEventListener("change", function(){
   if (editingId) chargerAgencesClient(editingId);
 });
+
+function toggleSection(btnId, bodyId, chevronId){
+  var btn = document.getElementById(btnId), body = document.getElementById(bodyId), chev = document.getElementById(chevronId);
+  btn.addEventListener("click", function(){
+    var ouvert = body.style.display !== "none";
+    body.style.display = ouvert ? "none" : "block";
+    chev.textContent = ouvert ? "▾" : "▴";
+  });
+}
+toggleSection("agencesToggleBtn", "agencesBody", "agencesChevron");
+toggleSection("questionnaireToggleBtn", "questionnaireBody", "questionnaireChevron");
 
 // --- Questionnaire SAV par client ---------------------------------------
 
@@ -1288,6 +1345,7 @@ function chargerQuestionnaire(clientId){
 
 function afficherQuestionnaire(records){
   var el = document.getElementById("questionnaireListe");
+  document.getElementById("questionnaireCount").textContent = "(" + records.length + ")";
   if (!records.length) {
     el.innerHTML = "<div style='font-size:12px;color:var(--texte-faint);'>Aucune question. Le déroulé standard s'applique.</div>";
     return;
@@ -2000,7 +2058,7 @@ function remplirFormMEP(rec){
   devisMEPRecordId = rec ? rec.id : null;
   document.getElementById("mepCouleur").value = f["Couleur primaire"] || "#FF6B00";
   document.getElementById("mepPolice").value = f["Police"] || "Helvetica";
-  document.getElementById("mepPiedPage").value = f["Texte pied de page"] || "";
+  document.getElementById("mepPiedPage").innerHTML = f["Texte pied de page"] || "";
   document.getElementById("mepDureeValidite").value = f["Durée validité devis (jours)"] != null ? f["Durée validité devis (jours)"] : "30";
 
   var marges = { haut: 20, bas: 20, gauche: 18, droite: 18 };
@@ -2066,7 +2124,8 @@ function majApercuA4(){
     "SIRET " + escHtml(siret) + " · RCS " + escHtml(rcs) + " · TVA intracom. " + escHtml(tva) +
     "<br>Assurance décennale : " + escHtml(assureur) + " · Validité devis : " + escHtml(validite) + " jours";
 
-  document.getElementById("a4Pied").textContent = document.getElementById("mepPiedPage").value.trim() || "Texte de pied de page";
+  var piedHtml = document.getElementById("mepPiedPage").innerHTML.trim();
+  document.getElementById("a4Pied").innerHTML = (piedHtml && piedHtml !== "<br>") ? piedHtml : "Texte de pied de page";
 
   var mHaut = parseFloat(document.getElementById("mepMargeHaut").value) || 0;
   var mBas = parseFloat(document.getElementById("mepMargeBas").value) || 0;
@@ -2082,6 +2141,56 @@ Array.prototype.forEach.call(
   document.querySelectorAll("#devisPanelMEP input, #devisPanelMEP select, #devisPanelMEP textarea"),
   function(champ){ champ.addEventListener("input", majApercuA4); }
 );
+document.getElementById("mepPiedPage").addEventListener("input", majApercuA4);
+
+/* ---- Barre d'outils texte (façon Word) ---- */
+Array.prototype.forEach.call(document.querySelectorAll(".texte-toolbar button"), function(btn){
+  btn.addEventListener("click", function(e){
+    e.preventDefault();
+    document.getElementById("mepPiedPage").focus();
+    document.execCommand(btn.getAttribute("data-cmd"), false, null);
+    majApercuA4();
+  });
+});
+
+/* ---- Centrer le logo horizontalement ---- */
+document.getElementById("mepLogoCentrerBtn").addEventListener("click", function(){
+  var w = parseFloat(document.getElementById("mepLogoW").value) || 30;
+  document.getElementById("mepLogoX").value = Math.round((210 - w) / 2);
+  majApercuA4();
+});
+
+/* ---- Glisser-déposer le logo directement sur l'aperçu (souris + tactile) ---- */
+(function(){
+  var img = document.getElementById("a4Logo");
+  var page = document.getElementById("a4Page");
+  var actif = false;
+  img.style.cursor = "grab";
+  img.style.touchAction = "none";
+  img.addEventListener("pointerdown", function(e){
+    if (!img.getAttribute("src")) return;
+    actif = true;
+    img.setPointerCapture(e.pointerId);
+    img.style.cursor = "grabbing";
+  });
+  img.addEventListener("pointermove", function(e){
+    if (!actif) return;
+    var rect = page.getBoundingClientRect();
+    var xMm = ((e.clientX - rect.left) / rect.width) * 210;
+    var yMm = ((e.clientY - rect.top) / rect.height) * 297;
+    var w = parseFloat(document.getElementById("mepLogoW").value) || 30;
+    xMm = Math.max(0, Math.min(210 - w, xMm - w / 2));
+    yMm = Math.max(0, Math.min(280, yMm - 8));
+    document.getElementById("mepLogoX").value = Math.round(xMm);
+    document.getElementById("mepLogoY").value = Math.round(yMm);
+    majApercuA4();
+  });
+  img.addEventListener("pointerup", function(e){
+    actif = false;
+    img.style.cursor = "grab";
+    try { img.releasePointerCapture(e.pointerId); } catch(err){}
+  });
+})();
 
 document.getElementById("mepLogoUploadBtn").addEventListener("click", function(){
   document.getElementById("mepLogoFile").click();
@@ -2151,7 +2260,7 @@ document.getElementById("mepSaveBtn").addEventListener("click", function(){
       gauche: parseFloat(document.getElementById("mepMargeGauche").value) || 18,
       droite: parseFloat(document.getElementById("mepMargeDroite").value) || 18
     }),
-    "Texte pied de page": document.getElementById("mepPiedPage").value,
+    "Texte pied de page": document.getElementById("mepPiedPage").innerHTML,
     "Durée validité devis (jours)": parseInt(document.getElementById("mepDureeValidite").value, 10) || 30,
     "Identité entreprise (JSON)": JSON.stringify({
       logoX: parseFloat(document.getElementById("mepLogoX").value) || 18,

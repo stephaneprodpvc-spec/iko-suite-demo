@@ -954,6 +954,18 @@ async function chargerImageEnDataUrl(url) {
   } catch(e) { return null; }
 }
 
+function rendrePiedPageRiche(html) {
+  if (!html) return null;
+  const gras = /<(b|strong)[ >]/i.test(html);
+  const italique = /<(i|em)[ >]/i.test(html);
+  let align = 'center';
+  if (/text-align:\s*right/i.test(html)) align = 'right';
+  else if (/text-align:\s*left/i.test(html)) align = 'left';
+  const texte = html.replace(/<[^>]+>/g, ' ').replace(/&nbsp;/gi, ' ').replace(/\s+/g, ' ').trim();
+  if (!texte) return null;
+  return { texte, gras, italique, align };
+}
+
 async function genererPdfDevis({ numero, ticket, client, lignes, montantHT, montantTTC, mep }) {
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ unit: 'mm', format: 'a4' });
@@ -1041,9 +1053,13 @@ async function genererPdfDevis({ numero, ticket, client, lignes, montantHT, mont
     'Devis valable ' + (mep.dureeValidite || 30) + ' jours à compter de sa date d\'émission. Bon pour accord — signature électronique ci-après.',
   ];
   doc.text(mentions, mL, 297 - mBas - 15);
-  if (mep.piedPage) {
+  const pied = rendrePiedPageRiche(mep.piedPage);
+  if (pied) {
     doc.setFontSize(6.5); doc.setTextColor(160, 160, 160);
-    doc.text(mep.piedPage, 105, 297 - mBas, { align: 'center' });
+    doc.setFont('helvetica', pied.gras && pied.italique ? 'bolditalic' : pied.gras ? 'bold' : pied.italique ? 'italic' : 'normal');
+    const xPied = pied.align === 'left' ? mL : pied.align === 'right' ? 210 - mR : 105;
+    doc.text(pied.texte, xPied, 297 - mBas, { align: pied.align });
+    doc.setFont('helvetica', 'normal');
   }
 
   return doc.output('blob');

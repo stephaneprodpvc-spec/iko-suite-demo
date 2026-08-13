@@ -148,6 +148,18 @@ async function chargerImageEnDataUrlTech(url) {
   } catch(e) { return null; }
 }
 
+function rendrePiedPageRicheTech(html) {
+  if (!html) return null;
+  const gras = /<(b|strong)[ >]/i.test(html);
+  const italique = /<(i|em)[ >]/i.test(html);
+  let align = 'center';
+  if (/text-align:\s*right/i.test(html)) align = 'right';
+  else if (/text-align:\s*left/i.test(html)) align = 'left';
+  const texte = html.replace(/<[^>]+>/g, ' ').replace(/&nbsp;/gi, ' ').replace(/\s+/g, ' ').trim();
+  if (!texte) return null;
+  return { texte, gras, italique, align };
+}
+
 async function genererPdfDevisTech({ numero, ticket, client, lignes, montantHT, montantTTC, mep }) {
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ unit: 'mm', format: 'a4' });
@@ -229,7 +241,14 @@ async function genererPdfDevisTech({ numero, ticket, client, lignes, montantHT, 
     'Assurance décennale : ' + (assurance.assureur || '—') + (assurance.numPolice ? ' — police n° ' + assurance.numPolice : '') + (assurance.zone ? ' — zone : ' + assurance.zone : ''),
     'Devis généré automatiquement suite à intervention · valable ' + (mep.dureeValidite || 30) + ' jours · Bon pour accord — signature électronique ci-après.',
   ], mL, 297 - mBas - 15);
-  if (mep.piedPage) { doc.setFontSize(6.5); doc.setTextColor(160, 160, 160); doc.text(mep.piedPage, 105, 297 - mBas, { align: 'center' }); }
+  const pied = rendrePiedPageRicheTech(mep.piedPage);
+  if (pied) {
+    doc.setFontSize(6.5); doc.setTextColor(160, 160, 160);
+    doc.setFont('helvetica', pied.gras && pied.italique ? 'bolditalic' : pied.gras ? 'bold' : pied.italique ? 'italic' : 'normal');
+    const xPied = pied.align === 'left' ? mL : pied.align === 'right' ? 210 - mR : 105;
+    doc.text(pied.texte, xPied, 297 - mBas, { align: pied.align });
+    doc.setFont('helvetica', 'normal');
+  }
 
   return doc.output('blob');
 }
