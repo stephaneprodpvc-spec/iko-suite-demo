@@ -501,7 +501,7 @@ function ModalAction({ ticket, onClose, onDone }) {
 
     await fetch('/api/airtable/Tickets%20SAV/' + ticket.id, {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ fields: { "Montant devis": montantTTC.toFixed(2) + ' € TTC', Email: emailAuto.trim() } })
+      body: JSON.stringify({ fields: { "Montant devis": Math.round(montantTTC * 100) / 100, Email: emailAuto.trim() } })
     });
 
     const lienDevis = window.location.origin + '/devis.html?devisId=' + devisRec.id;
@@ -1099,7 +1099,7 @@ function TicketCard({ ticket, onAction, onAcquitterRdv }) {
           </div>
         )}
         {ticket.fields?.["Montant devis"] && (isDevisEnvoye || isDevisRefuse) && (
-          <div style={{fontSize:"12px",color:C.text,marginBottom:"12px"}}>💶 Devis envoyé : <strong>{ticket.fields["Montant devis"]}</strong></div>
+          <div style={{fontSize:"12px",color:C.text,marginBottom:"12px"}}>💶 Devis envoyé : <strong>{ticket.fields["Montant devis"]} € TTC</strong></div>
         )}
         {!isTermine && !isAnnule && !isEnAttenteDevis && (
           <button onClick={() => onAction(ticket)}

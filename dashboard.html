@@ -424,7 +424,7 @@ function TicketRow({ t, onStatusChange, onAnnuler, onSupprimer, onSupprimerDefin
           </div>
         )}
         {t.fields?.["Montant devis"] && (statut === "Devis envoyé" || statut === "Devis refusé") && (
-          <div style={{marginTop:"8px",fontSize:"12px",color:C.text}}>💶 Devis envoyé : <strong>{t.fields["Montant devis"]}</strong></div>
+          <div style={{marginTop:"8px",fontSize:"12px",color:C.text}}>💶 Devis envoyé : <strong>{t.fields["Montant devis"]} € TTC</strong></div>
         )}
         {statut === "Devis à faire" && (
           <button onClick={() => onDevis(t)} style={{marginTop:"10px",width:"100%",background:"#0D0D0D",color:"#fff",border:"none",borderRadius:"8px",padding:"10px",fontWeight:"700",fontSize:"12px",cursor:"pointer"}}>
@@ -1228,7 +1228,7 @@ function ModalDevis({ ticket, onClose, onSent }) {
       // Compatibilité avec le pipeline existant (ModalGestionDevis, badges, filtres par Statut de ticket).
       const ticketPatchRes = await fetch('/api/airtable/Tickets%20SAV/' + ticket.id, {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fields: { Statut: 'Devis envoyé', "Montant devis": montantTTC.toFixed(2) + ' € TTC', "Devis Token": token, Email: email.trim() } })
+        body: JSON.stringify({ fields: { Statut: 'Devis envoyé', "Montant devis": Math.round(montantTTC * 100) / 100, "Devis Token": token, Email: email.trim() } })
       });
       diag.ticketMisAJour = ticketPatchRes.ok;
       if (!ticketPatchRes.ok) {
@@ -1409,7 +1409,7 @@ function ModalGestionDevis({ tickets, onClose, onRefresh }) {
                   <span style={{fontSize:"11px",fontWeight:"900",color:C.or,fontFamily:"monospace"}}>{t.fields?.Name}</span>
                   <span style={{fontSize:"11px",color:C.muted,marginLeft:"10px"}}>{t.fields?.Agence}</span>
                 </div>
-                {t.fields?.["Montant devis"] && <span style={{fontSize:"13px",fontWeight:"900",color:C.white}}>{t.fields["Montant devis"]}</span>}
+                {t.fields?.["Montant devis"] && <span style={{fontSize:"13px",fontWeight:"900",color:C.white}}>{t.fields["Montant devis"]} € TTC</span>}
               </div>
               <div style={{fontSize:"13px",fontWeight:"700",color:C.white,marginBottom:"4px"}}>{t.fields?.Client}</div>
               <div style={{fontSize:"11px",color:C.muted,marginBottom:"10px"}}>{t.fields?.Produit} — {t.fields?.Problème}</div>
