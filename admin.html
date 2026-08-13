@@ -57,7 +57,6 @@
   .menu-sep{height:1px;background:var(--border);margin:5px 4px;}
 
   main{padding:32px;max-width:1280px;margin:0 auto;}
-  .grid{display:grid;grid-template-columns:1fr;gap:20px;}
   .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;align-items:start;}
 
   .card{
@@ -110,6 +109,8 @@
   .ci-modules{display:flex;gap:4px;flex-wrap:wrap;margin-top:6px;}
   .badge{font-size:10px;padding:2.5px 8px;border-radius:6px;background:var(--g3);color:var(--texte-dim);font-weight:500;border:1px solid var(--border);}
   .statut-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;}
+  .client-devis-btn{flex-shrink:0;width:32px;height:32px;border-radius:9px;background:rgba(255,107,0,0.12);border:1px solid rgba(255,107,0,0.3);color:var(--orange);font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:center;}
+  .client-devis-btn:hover{background:rgba(255,107,0,0.22);}
   .statut-dot.Actif{background:#30D158;box-shadow:0 0 6px rgba(48,209,88,0.6);}
   .statut-dot.Pause{background:var(--texte-faint);}
   #empty{color:var(--texte-faint);font-size:13px;padding:20px 10px;text-align:center;}
@@ -883,9 +884,19 @@ function afficherClients(){
         "<div class='ci-metier'>" + (f["Métier"] || "—") + "</div>" +
         "<div class='ci-modules'>" + modules + "</div>" +
       "</div>" +
+      "<button type='button' class='client-devis-btn' data-id='" + c.id + "' title='Devis & Facturation'>🧾</button>" +
       "<span class='statut-dot " + statut + "' title='" + statut + "'></span>" +
       "</div>";
   }).join("");
+
+  Array.prototype.forEach.call(wrap.querySelectorAll(".client-devis-btn"), function(btn){
+    btn.addEventListener("click", function(e){
+      e.stopPropagation();
+      var id = btn.getAttribute("data-id");
+      var rec = clients.find(function(c){ return c.id === id; });
+      ouvrirDevisPourClient(id, (rec && rec.fields) || {});
+    });
+  });
 
   Array.prototype.forEach.call(wrap.querySelectorAll(".client-item"), function(el){
     el.addEventListener("click", function(){
