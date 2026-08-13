@@ -1148,6 +1148,8 @@ function ModalDevis({ ticket, onClose, onSent }) {
   const [message, setMessage] = React.useState("");
   const [saving, setSaving] = React.useState(false);
   const [error, setError] = React.useState("");
+  const [envoye, setEnvoye] = React.useState(false);
+  const [debugEnvoi, setDebugEnvoi] = React.useState(null);
 
   React.useEffect(() => {
     (async () => {
@@ -1172,6 +1174,7 @@ function ModalDevis({ ticket, onClose, onSent }) {
     if (!emailValide) { setError("Indique un email client valide."); return; }
     if (!clientInfo) { setError("Impossible de résoudre le client de cette agence — vérifie la configuration."); return; }
     setSaving(true); setError("");
+    const diag = { devisId: null, pdfGenere: false, yousignOk: false, yousignErreur: null, ticketMisAJour: false, webhookStatut: null, webhookErreur: null, lienDevis: null };
     try {
       const numero = "DEV-" + new Date().getFullYear() + "-" + Math.floor(1000 + Math.random() * 9000);
       const token = genererToken();
@@ -1194,44 +1197,90 @@ function ModalDevis({ ticket, onClose, onSent }) {
       });
       const devisJson = await devisRes.json();
       const devisRec = devisJson.records?.[0];
-      if (!devisRec) throw new Error("Création du devis échouée.");
+      if (!devisRec) throw new Error("Création du devis échouée : " + JSON.stringify(devisJson));
+      diag.devisId = devisRec.id;
 
       const pdfBlob = await genererPdfDevis({ numero, ticket, client, lignes, montantHT, montantTTC, mep });
+      diag.pdfGenere = !!(pdfBlob && pdfBlob.size);
 
       let yousignFields = {};
       try {
         const { signatureRequestId, lienSignature } = await creerDemandeSignatureYousign(pdfBlob, numero, client.nom, email.trim(), ticket.fields?.Téléphone);
         yousignFields = { "Yousign Request ID": signatureRequestId, "Yousign Signer Link": lienSignature };
+        diag.yousignOk = true;
       } catch (yousignErr) {
         console.error('Yousign indisponible, devis envoyé sans signature électronique :', yousignErr);
+        diag.yousignErreur = String(yousignErr && yousignErr.message || yousignErr);
       }
       await fetch('/api/airtable/Devis/' + devisRec.id, {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fields: yousignFields })
       });
 
       // Compatibilité avec le pipeline existant (ModalGestionDevis, badges, filtres par Statut de ticket).
-      await fetch('/api/airtable/Tickets%20SAV/' + ticket.id, {
+      const ticketPatchRes = await fetch('/api/airtable/Tickets%20SAV/' + ticket.id, {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ fields: { Statut: 'Devis envoyé', "Montant devis": montantTTC.toFixed(2) + ' € TTC', "Devis Token": token, Email: email.trim() } })
       });
+      diag.ticketMisAJour = ticketPatchRes.ok;
 
       const lienDevis = window.location.origin + '/devis.html?devisId=' + devisRec.id;
-      await fetch(WEBHOOK, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          marque: 'iko', action: 'devis_envoye',
-          ticket: ticket.fields?.Name, nom: ticket.fields?.Client, "e-mail": email.trim(),
-          agence: ticket.fields?.Agence, produit: ticket.fields?.Produit, probleme: ticket.fields?.Problème,
-          diagnostic: ticket.fields?.Diagnostic || '', montant: montantTTC.toFixed(2) + ' €', message, lien: lienDevis
-        })
-      });
-      onSent();
+      diag.lienDevis = lienDevis;
+      try {
+        const webhookRes = await fetch(WEBHOOK, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            marque: 'iko', action: 'devis_envoye',
+            ticket: ticket.fields?.Name, nom: ticket.fields?.Client, "e-mail": email.trim(),
+            agence: ticket.fields?.Agence, produit: ticket.fields?.Produit, probleme: ticket.fields?.Problème,
+            diagnostic: ticket.fields?.Diagnostic || '', montant: montantTTC.toFixed(2) + ' €', message, lien: lienDevis
+          })
+        });
+        diag.webhookStatut = webhookRes.status;
+      } catch (webhookErr) {
+        diag.webhookErreur = String(webhookErr && webhookErr.message || webhookErr);
+      }
+
+      setDebugEnvoi(diag);
+      setEnvoye(true);
     } catch(e) {
       console.error(e);
-      setError("Erreur lors de l'envoi. Vérifie la connexion.");
+      diag.erreurFatale = String(e && e.message || e);
+      setDebugEnvoi(diag);
+      setError("Erreur lors de l'envoi — détail dans le diagnostic ci-dessous.");
     }
     setSaving(false);
   };
+
+  if (envoye) {
+    return (
+      <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
+        <div className="modal-box" style={{maxWidth:"520px"}}>
+          <div style={{fontSize:"16px",fontWeight:"900",color:C.white,marginBottom:"10px"}}>✅ Devis créé — diagnostic</div>
+          <div style={{background:"#111",color:"#0f0",borderRadius:"8px",padding:"12px",fontFamily:"monospace",fontSize:"10.5px",whiteSpace:"pre-wrap",wordBreak:"break-all",marginBottom:"14px",maxHeight:"320px",overflow:"auto"}}>
+            {JSON.stringify(debugEnvoi, null, 2)}
+          </div>
+          {!debugEnvoi?.yousignOk && (
+            <div style={{background:C.rougeDim,border:"1px solid rgba(220,38,38,0.3)",borderRadius:"8px",padding:"8px 12px",fontSize:"11px",color:C.rouge,marginBottom:"14px"}}>
+              ⚠️ Yousign a échoué ({debugEnvoi?.yousignErreur}) — le devis est créé mais sans lien de signature.
+            </div>
+          )}
+          {debugEnvoi?.webhookStatut && debugEnvoi.webhookStatut >= 300 && (
+            <div style={{background:C.rougeDim,border:"1px solid rgba(220,38,38,0.3)",borderRadius:"8px",padding:"8px 12px",fontSize:"11px",color:C.rouge,marginBottom:"14px"}}>
+              ⚠️ Le webhook Make a répondu avec le statut {debugEnvoi.webhookStatut} — l'email n'a probablement pas été envoyé.
+            </div>
+          )}
+          {debugEnvoi?.webhookStatut && debugEnvoi.webhookStatut < 300 && (
+            <div style={{background:"#F3F4F6",border:"1px solid "+C.border,borderRadius:"8px",padding:"8px 12px",fontSize:"11px",color:C.muted,marginBottom:"14px"}}>
+              Le webhook Make a bien été accepté (statut {debugEnvoi.webhookStatut}). Si aucun email n'arrive, le souci est dans le scénario Make lui-même (pas dans le code de l'app) — vérifie son historique d'exécution.
+            </div>
+          )}
+          <button onClick={() => { onSent(); }} style={{width:"100%",padding:"11px",background:"#0D0D0D",color:"#fff",border:"none",borderRadius:"10px",fontSize:"13px",fontWeight:"900",cursor:"pointer"}}>
+            Fermer
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
