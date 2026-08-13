@@ -374,7 +374,10 @@
     <div class="card tilt-3d" id="sec-clients">
       <h2>Clients</h2>
       <div id="statsBar">Chargement des statistiques…</div>
-      <button type="button" class="btn-export" id="exportCsvBtn">Exporter en CSV (Excel)</button>
+      <div style="display:flex;gap:8px;margin-bottom:10px;">
+        <button type="button" class="primary" id="nouveauClientBtn" style="flex:none;padding:10px 18px;">+ Nouveau client</button>
+        <button type="button" class="btn-export" id="exportCsvBtn">Exporter en CSV (Excel)</button>
+      </div>
       <div id="tbody-wrap"><div id="empty">Chargement…</div></div>
     </div>
 
@@ -431,8 +434,12 @@
       <div class="msg" id="verifMsg"></div>
     </div>
 
-    <div class="card tilt-3d">
-      <h2 id="formTitle">Nouveau client</h2>
+    <div class="devis-modal-overlay" id="fiche-client-modal" style="display:none;">
+    <div class="devis-modal-box">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+        <h2 id="formTitle">Nouveau client</h2>
+        <button type="button" id="ficheFermerBtn" style="background:none;border:none;color:var(--texte-faint);font-size:22px;cursor:pointer;line-height:1;padding:4px 8px;">✕</button>
+      </div>
       <form id="clientForm">
         <label>Nom du client</label>
         <input type="text" id="fNom" required placeholder="Ex : Menuiserie Dupont">
@@ -503,19 +510,14 @@
           <button type="submit" class="primary" id="submitBtn">Créer le client</button>
           <button type="button" class="secondary" id="cancelBtn" style="display:none;">Annuler</button>
           <button type="button" class="secondary" id="printBtn" style="display:none;">Imprimer</button>
-          <button type="button" class="secondary" id="devisOuvrirBtn" style="display:none;">🧾 Devis &amp; Facturation</button>
           <button type="button" class="secondary" id="deleteBtn" style="display:none;color:#FF453A;border-color:rgba(255,69,58,0.3);">Supprimer</button>
         </div>
         <div class="msg" id="formMsg"></div>
       </form>
-    </div>
 
-    <div class="devis-modal-overlay" id="sec-devis" style="display:none;">
-    <div class="devis-modal-box">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+      <div id="devisWrap" style="display:none;">
+        <div style="border-top:1px solid var(--border);margin:24px 0 20px;"></div>
         <h2>▥ Devis &amp; Facturation — <span id="devisTitreClient">—</span></h2>
-        <button type="button" id="devisFermerBtn" style="background:none;border:none;color:var(--texte-faint);font-size:22px;cursor:pointer;line-height:1;padding:4px 8px;">✕</button>
-      </div>
       <div class="devis-tabs">
         <div class="devis-tab actif" data-panel="devisPanelMEP">Mise en page</div>
         <div class="devis-tab" data-panel="devisPanelCatalogue">Catalogue produits</div>
@@ -638,6 +640,7 @@
         <div id="devisListeWrap" style="margin-top:12px;"></div>
         <div class="msg" id="devisListeMsg"></div>
       </div>
+    </div>
     </div>
     </div>
 
@@ -893,8 +896,8 @@ function afficherClients(){
     btn.addEventListener("click", function(e){
       e.stopPropagation();
       var id = btn.getAttribute("data-id");
-      var rec = clients.find(function(c){ return c.id === id; });
-      ouvrirDevisPourClient(id, (rec && rec.fields) || {});
+      chargerDansFormulaire(id);
+      ouvrirFicheModal();
     });
   });
 
@@ -903,10 +906,25 @@ function afficherClients(){
       Array.prototype.forEach.call(wrap.querySelectorAll(".client-item"), function(x){ x.classList.remove("selected"); });
       el.classList.add("selected");
       chargerDansFormulaire(el.getAttribute("data-id"));
-      ouvrirDiagrammePleinEcran();
+      ouvrirFicheModal();
     });
   });
 }
+
+function ouvrirFicheModal(){
+  document.getElementById("fiche-client-modal").style.display = "flex";
+}
+function fermerFicheModal(){
+  document.getElementById("fiche-client-modal").style.display = "none";
+}
+document.getElementById("nouveauClientBtn").addEventListener("click", function(){
+  reinitialiserFormulaire();
+  ouvrirFicheModal();
+});
+document.getElementById("ficheFermerBtn").addEventListener("click", fermerFicheModal);
+document.getElementById("fiche-client-modal").addEventListener("click", function(e){
+  if (e.target === e.currentTarget) fermerFicheModal();
+});
 
 Array.prototype.forEach.call(document.querySelectorAll("#fModules .chip"), function(chip){
   chip.addEventListener("click", function(){ chip.classList.toggle("on"); dessinerDiagramme(); });
@@ -1151,12 +1169,11 @@ function chargerDansFormulaire(id){
   document.getElementById("cancelBtn").style.display = "inline-block";
   document.getElementById("printBtn").style.display = "inline-block";
   document.getElementById("deleteBtn").style.display = "inline-block";
-  document.getElementById("devisOuvrirBtn").style.display = "inline-block";
-  if (devisClientId && devisClientId !== id) fermerDevis();
   document.getElementById("formMsg").textContent = "";
   chargerActivite(id);
   chargerAgencesClient(id);
   chargerQuestionnaire(id);
+  ouvrirDevisPourClient(id, f);
 }
 
 var AGENCES_TABLE = "Agences";
@@ -1410,6 +1427,7 @@ document.getElementById("exportCsvBtn").addEventListener("click", function(){
 
 document.getElementById("cancelBtn").addEventListener("click", function(){
   reinitialiserFormulaire();
+  fermerFicheModal();
 });
 
 document.getElementById("printBtn").addEventListener("click", function(){
@@ -1443,6 +1461,7 @@ document.getElementById("deleteBtn").addEventListener("click", function(){
     .then(function(r){ if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
     .then(function(){
       reinitialiserFormulaire();
+      fermerFicheModal();
       chargerClients();
     })
     .catch(function(err){
@@ -1462,7 +1481,6 @@ function reinitialiserFormulaire(){
   document.getElementById("cancelBtn").style.display = "none";
   document.getElementById("printBtn").style.display = "none";
   document.getElementById("deleteBtn").style.display = "none";
-  document.getElementById("devisOuvrirBtn").style.display = "none";
   fermerDevis();
   document.getElementById("formMsg").textContent = "";
   document.getElementById("activiteInfo").textContent = "";
@@ -1754,24 +1772,12 @@ var devisMO = [];
 var devisMEPRecordId = null;
 var devisListe = [];
 
-document.getElementById("devisOuvrirBtn").addEventListener("click", function(){
-  ouvrirDevisPourClient(editingId, (clients.find(function(c){ return c.id === editingId; })||{}).fields || {});
-});
-
-document.getElementById("devisFermerBtn").addEventListener("click", function(){
-  document.getElementById("sec-devis").style.display = "none";
-});
-document.getElementById("sec-devis").addEventListener("click", function(e){
-  if (e.target === e.currentTarget) document.getElementById("sec-devis").style.display = "none";
-});
-
 function ouvrirDevisPourClient(id, fieldsClient){
   if (!id) return;
   devisClientId = id;
   devisClientNom = fieldsClient["Nom client"] || "";
   document.getElementById("devisTitreClient").textContent = devisClientNom || "—";
-  document.getElementById("sec-devis").style.display = "flex";
-  document.getElementById("devisOuvrirBtn").style.display = "inline-block";
+  document.getElementById("devisWrap").style.display = "block";
   chargerCatalogue();
   chargerMO();
   chargerMEP();
@@ -1780,8 +1786,7 @@ function ouvrirDevisPourClient(id, fieldsClient){
 
 function fermerDevis(){
   devisClientId = null;
-  document.getElementById("sec-devis").style.display = "none";
-  document.getElementById("devisOuvrirBtn").style.display = "none";
+  document.getElementById("devisWrap").style.display = "none";
 }
 
 Array.prototype.forEach.call(document.querySelectorAll(".devis-tab"), function(tab){
