@@ -454,6 +454,16 @@ function ModalAction({ ticket, onClose, onDone }) {
   const [explication, setExplication] = React.useState("");
   const today = new Date().toISOString().split('T')[0];
 
+  // Frais diagnostic (cas client non garanti + non existant + technicien
+  // sans le matériel sur place) : montant paramétré par client pro dans le
+  // Poste de pilotage (window.IKO_CLIENT_INFO, déjà chargé au boot, aucun
+  // fetch supplémentaire). Déduit automatiquement du devis si accepté plus
+  // tard (géré côté yousign-webhook.js).
+  const nonGarantiTicket = /^non/i.test((ticket.fields?.Garantie || "").trim());
+  const [clientExistantDevis, setClientExistantDevis] = React.useState(ticket.fields?.["Client existant"] !== false);
+  const montantDiagnostic = Number(window.IKO_CLIENT_INFO?.["Montant diagnostic HT"]) || 0;
+  const fraisDiagnosticApplicable = nonGarantiTicket && !clientExistantDevis && montantDiagnostic > 0;
+
   // Devis auto (Iko) : proposé au moment de valider l'intervention. Le
   // technicien peut piocher dans le catalogue du client, et si des lignes
   // sont ajoutées, le devis est généré et envoyé au client automatiquement
@@ -592,6 +602,13 @@ function ModalAction({ ticket, onClose, onDone }) {
         fields.Statut = "Devis à faire";
         const tagsTexte = tags.length ? "[" + tags.join(" · ") + "]\n" : "";
         fields.Diagnostic = tagsTexte + explication;
+        if (nonGarantiTicket) {
+          fields["Client existant"] = clientExistantDevis;
+          if (fraisDiagnosticApplicable) {
+            fields["Frais diagnostic facturés"] = montantDiagnostic;
+            fields["Frais diagnostic déduits"] = false;
+          }
+        }
       } else if (mode === "debloquer") {
         const dateLabel = new Date(newDate+'T12:00:00').toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'});
         dateLabelDeblocage = newCreneau + ' — ' + dateLabel;
@@ -857,6 +874,31 @@ function ModalAction({ ticket, onClose, onDone }) {
             <div style={{background:"rgba(0,26,66,0.05)",border:"1px solid rgba(0,26,66,0.2)",borderRadius:"10px",padding:"10px 14px",marginBottom:"14px",fontSize:"12px",color:"#0D0D0D"}}>
               Le ticket passera en "Devis à faire" — le SAV établira le devis et le transmettra au client.
             </div>
+            {nonGarantiTicket && (
+              <div style={{marginBottom:"14px"}}>
+                <label style={{fontSize:"11px",color:C.muted,display:"block",marginBottom:"8px",fontWeight:"700"}}>Ce client est-il déjà client de l'entreprise ?</label>
+                <div style={{display:"flex",gap:"8px"}}>
+                  <button type="button" onClick={() => setClientExistantDevis(true)}
+                    style={{flex:1,padding:"10px",borderRadius:"8px",border:"1px solid "+(clientExistantDevis?"#0D0D0D":C.border),background:clientExistantDevis?"#0D0D0D":"#F3F4F6",color:clientExistantDevis?"#fff":C.text,fontSize:"12px",fontWeight:"700",cursor:"pointer"}}>
+                    Oui, déjà client
+                  </button>
+                  <button type="button" onClick={() => setClientExistantDevis(false)}
+                    style={{flex:1,padding:"10px",borderRadius:"8px",border:"1px solid "+(!clientExistantDevis?"#0D0D0D":C.border),background:!clientExistantDevis?"#0D0D0D":"#F3F4F6",color:!clientExistantDevis?"#fff":C.text,fontSize:"12px",fontWeight:"700",cursor:"pointer"}}>
+                    Non / nouveau
+                  </button>
+                </div>
+                {fraisDiagnosticApplicable && (
+                  <div style={{marginTop:"10px",background:"rgba(255,107,0,0.08)",border:"1px solid #FF6B00",borderRadius:"10px",padding:"10px 14px",fontSize:"12px",color:"#0D0D0D"}}>
+                    💶 Client non garanti et non existant, sans matériel sur place : <strong>{montantDiagnostic.toFixed(2)} € HT</strong> de frais de déplacement/diagnostic à faire régler au client (CB, chèque ou virement). Ce montant sera automatiquement déduit du devis si le client l'accepte ensuite.
+                  </div>
+                )}
+                {!montantDiagnostic && !clientExistantDevis && (
+                  <div style={{marginTop:"10px",fontSize:"11px",color:C.muted}}>
+                    Aucun montant diagnostic paramétré pour ce client pro (Poste de pilotage) — rien ne sera facturé automatiquement.
+                  </div>
+                )}
+              </div>
+            )}
             <div style={{marginBottom:"14px"}}>
               <label style={{fontSize:"11px",color:C.muted,display:"block",marginBottom:"8px",fontWeight:"700"}}>Ce qui explique le devis (plusieurs choix possibles)</label>
               <div style={{display:"flex",flexDirection:"column",gap:"6px"}}>
