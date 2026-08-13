@@ -475,9 +475,10 @@ function ModalAction({ ticket, onClose, onDone }) {
   const [choixLigneAuto, setChoixLigneAuto] = React.useState("");
   const [qteLigneAuto, setQteLigneAuto] = React.useState(1);
   const [emailAuto, setEmailAuto] = React.useState(ticket.fields?.Email || "");
+  const [modePaiementPlace, setModePaiementPlace] = React.useState("");
 
   React.useEffect(() => {
-    if (mode !== "terminer" || catalogueAuto.mep !== null) return;
+    if (mode !== "devis_place" || catalogueAuto.mep !== null) return;
     setChargementCatalogueAuto(true);
     (async () => {
       try {
@@ -576,7 +577,7 @@ function ModalAction({ ticket, onClose, onDone }) {
     if (mode === "debloquer" && !newDate) return;
     if (mode === "annuler" && !commentaire.trim()) return;
     if (mode === "devis" && !explication.trim()) return;
-    if (mode === "terminer" && lignesAuto.length > 0 && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailAuto.trim())) return;
+    if (mode === "devis_place" && (!lignesAuto.length || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailAuto.trim()) || !modePaiementPlace)) return;
     setSaving(true);
     try {
       const fields = {};
@@ -584,6 +585,12 @@ function ModalAction({ ticket, onClose, onDone }) {
       let noteToken = "";
       if (mode === "terminer") {
         fields.Statut = "Terminé";
+        if (commentaire) fields.Commentaire = commentaire;
+        noteToken = Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-6);
+        fields["Note Token"] = noteToken;
+      } else if (mode === "devis_place") {
+        fields.Statut = "Terminé";
+        fields["Mode paiement"] = modePaiementPlace;
         if (commentaire) fields.Commentaire = commentaire;
         noteToken = Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-6);
         fields["Note Token"] = noteToken;
@@ -650,10 +657,10 @@ function ModalAction({ ticket, onClose, onDone }) {
           });
         } catch(e) { console.error(e); }
       }
-      if (mode === "terminer" && lignesAuto.length > 0) {
+      if (mode === "devis_place" && lignesAuto.length > 0) {
         try { await envoyerDevisAuto(); } catch(e) { console.error('Erreur devis auto', e); }
       }
-      if (mode === "terminer" && ticket.fields?.Email) {
+      if ((mode === "terminer" || mode === "devis_place") && ticket.fields?.Email) {
         try {
           const lienNote = window.location.origin + '/avis.html?token=' + noteToken;
           await fetch(WEBHOOK, {
@@ -700,6 +707,14 @@ function ModalAction({ ticket, onClose, onDone }) {
                 <div style={{fontSize:"10px",color:"rgba(217,119,6,0.7)",marginTop:"3px"}}>Choisir une autre date</div>
               </button>
             </div>
+            <button onClick={() => setMode("devis_place")}
+              style={{width:"100%",padding:"14px",background:C.vertDim,border:"2px solid rgba(22,163,74,0.4)",borderRadius:"14px",color:C.vert,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:"10px",marginBottom:"10px"}}>
+              <span style={{fontSize:"20px"}}>💶</span>
+              <div style={{textAlign:"left"}}>
+                <div style={{fontSize:"13px",fontWeight:"900"}}>Devis sur place</div>
+                <div style={{fontSize:"10px",color:"rgba(22,163,74,0.7)"}}>Client payant, matériel disponible</div>
+              </div>
+            </button>
             <button onClick={() => setMode("annuler")}
               style={{width:"100%",padding:"14px",background:C.rougeDim,border:"2px solid rgba(220,38,38,0.4)",borderRadius:"14px",color:C.rouge,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:"10px",marginBottom:"10px"}}>
               <span style={{fontSize:"20px"}}>❌</span>
@@ -728,14 +743,32 @@ function ModalAction({ ticket, onClose, onDone }) {
               <button onClick={() => setMode(null)} style={{background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:"18px"}}>←</button>
               <span style={{fontSize:"14px",fontWeight:"700",color:C.white}}>✅ Valider l'intervention</span>
             </div>
+            <div style={{background:C.vertDim,border:"1px solid rgba(22,163,74,0.3)",borderRadius:"10px",padding:"10px 14px",marginBottom:"14px",fontSize:"12px",color:C.vert}}>
+              Intervention sous garantie — rien à facturer au client.
+            </div>
             <div style={{marginBottom:"14px"}}>
               <label style={{fontSize:"11px",color:C.muted,display:"block",marginBottom:"6px",fontWeight:"700"}}>Commentaire (facultatif)</label>
               <textarea rows={3} placeholder="Ex : Joint remplacé, fenêtre fonctionnelle. Client satisfait."
                 value={commentaire} onChange={e => setCommentaire(e.target.value)} style={{resize:"none"}}/>
             </div>
+            <button onClick={confirmer} disabled={saving}
+              style={{width:"100%",padding:"14px",background:saving?"#D1D5DB":C.vert,color:saving?C.muted:"#fff",border:"none",borderRadius:"12px",fontSize:"14px",fontWeight:"900",cursor:saving?"not-allowed":"pointer"}}>
+              {saving ? "⏳ Enregistrement..." : "✅ Confirmer — SAV terminé"}
+            </button>
+          </>
+        )}
+        {mode === "devis_place" && (
+          <>
+            <div style={{display:"flex",alignItems:"center",gap:"8px",marginBottom:"16px"}}>
+              <button onClick={() => setMode(null)} style={{background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:"18px"}}>←</button>
+              <span style={{fontSize:"14px",fontWeight:"700",color:C.white}}>💶 Devis sur place</span>
+            </div>
+            <div style={{background:C.vertDim,border:"1px solid rgba(22,163,74,0.3)",borderRadius:"10px",padding:"10px 14px",marginBottom:"14px",fontSize:"12px",color:C.vert}}>
+              Sélectionnez les pièces/actions posées, faites signer le client, encaissez, puis intervenez.
+            </div>
 
             <div style={{border:"1px solid "+C.border,borderRadius:"10px",padding:"12px",marginBottom:"14px"}}>
-              <label style={{fontSize:"11px",color:C.muted,display:"block",marginBottom:"8px",fontWeight:"700"}}>💶 Devis auto (facultatif) — pièces/actions utilisées</label>
+              <label style={{fontSize:"11px",color:C.muted,display:"block",marginBottom:"8px",fontWeight:"700"}}>💶 Pièces/actions facturées *</label>
               {chargementCatalogueAuto && <div style={{fontSize:"11px",color:C.muted}}>⏳ Chargement du catalogue...</div>}
               {!chargementCatalogueAuto && !clientInfoAuto && (
                 <div style={{fontSize:"11px",color:C.muted,fontStyle:"italic"}}>Catalogue indisponible pour ce client.</div>
@@ -756,27 +789,47 @@ function ModalAction({ ticket, onClose, onDone }) {
                     <button type="button" onClick={ajouterLigneAuto} style={{padding:"0 12px",background:C.card2,border:"1px solid "+C.border,borderRadius:"8px",cursor:"pointer",fontWeight:"700"}}>+</button>
                   </div>
                   {lignesAuto.length > 0 && (
-                    <>
-                      <div style={{borderTop:"1px solid "+C.border,paddingTop:"8px",marginBottom:"8px"}}>
-                        {lignesAuto.map((l, i) => (
-                          <div key={i} style={{display:"flex",justifyContent:"space-between",fontSize:"11px",padding:"3px 0"}}>
-                            <span>{l.designation} ×{l.qte}</span>
-                            <span>{l.totalHT.toFixed(2)} € <span onClick={() => setLignesAuto(lignesAuto.filter((_,idx)=>idx!==i))} style={{cursor:"pointer",color:C.muted,marginLeft:"6px"}}>✕</span></span>
-                          </div>
-                        ))}
-                      </div>
-                      <label style={{fontSize:"11px",color:C.muted,display:"block",marginBottom:"4px",fontWeight:"700"}}>Email client *</label>
-                      <input type="email" value={emailAuto} onChange={e => setEmailAuto(e.target.value)} placeholder="client@exemple.fr" style={{fontSize:"12px",marginBottom:"4px"}}/>
-                      <div style={{fontSize:"10px",color:C.muted}}>Le devis (PDF + signature électronique) sera envoyé automatiquement au client dès la validation.</div>
-                    </>
+                    <div style={{borderTop:"1px solid "+C.border,paddingTop:"8px",marginBottom:"8px"}}>
+                      {lignesAuto.map((l, i) => (
+                        <div key={i} style={{display:"flex",justifyContent:"space-between",fontSize:"11px",padding:"3px 0"}}>
+                          <span>{l.designation} ×{l.qte}</span>
+                          <span>{l.totalHT.toFixed(2)} € <span onClick={() => setLignesAuto(lignesAuto.filter((_,idx)=>idx!==i))} style={{cursor:"pointer",color:C.muted,marginLeft:"6px"}}>✕</span></span>
+                        </div>
+                      ))}
+                    </div>
                   )}
+                  {!lignesAuto.length && <div style={{fontSize:"10px",color:C.muted}}>Ajoutez au moins une ligne pour générer le devis.</div>}
                 </>
               )}
             </div>
 
-            <button onClick={confirmer} disabled={saving}
-              style={{width:"100%",padding:"14px",background:saving?"#D1D5DB":C.vert,color:saving?C.muted:"#fff",border:"none",borderRadius:"12px",fontSize:"14px",fontWeight:"900",cursor:saving?"not-allowed":"pointer"}}>
-              {saving ? "⏳ Enregistrement..." : "✅ Confirmer — SAV terminé"}
+            <div style={{marginBottom:"14px"}}>
+              <label style={{fontSize:"11px",color:C.muted,display:"block",marginBottom:"6px",fontWeight:"700"}}>Email client *</label>
+              <input type="email" value={emailAuto} onChange={e => setEmailAuto(e.target.value)} placeholder="client@exemple.fr" style={{fontSize:"12px"}}/>
+              <div style={{fontSize:"10px",color:C.muted,marginTop:"4px"}}>Le devis (PDF + signature électronique) sera envoyé et proposé à la signature immédiatement.</div>
+            </div>
+
+            <div style={{marginBottom:"14px"}}>
+              <label style={{fontSize:"11px",color:C.muted,display:"block",marginBottom:"8px",fontWeight:"700"}}>Mode de règlement du client *</label>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"8px"}}>
+                {["CB","Chèque","Virement","Signature électronique"].map(m => (
+                  <button key={m} type="button" onClick={() => setModePaiementPlace(m)}
+                    style={{padding:"10px 8px",borderRadius:"8px",border:"1px solid "+(modePaiementPlace===m?"#16A34A":C.border),background:modePaiementPlace===m?C.vert:"#F3F4F6",color:modePaiementPlace===m?"#fff":C.text,fontSize:"11px",fontWeight:"700",cursor:"pointer"}}>
+                    {m}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div style={{marginBottom:"14px"}}>
+              <label style={{fontSize:"11px",color:C.muted,display:"block",marginBottom:"6px",fontWeight:"700"}}>Commentaire (facultatif)</label>
+              <textarea rows={2} placeholder="Ex : Vitrage remplacé, réglage gâche."
+                value={commentaire} onChange={e => setCommentaire(e.target.value)} style={{resize:"none"}}/>
+            </div>
+
+            <button onClick={confirmer} disabled={saving||!lignesAuto.length||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailAuto.trim())||!modePaiementPlace}
+              style={{width:"100%",padding:"14px",background:(saving||!lignesAuto.length||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailAuto.trim())||!modePaiementPlace)?"#D1D5DB":C.vert,color:(saving||!lignesAuto.length)?C.muted:"#fff",border:"none",borderRadius:"12px",fontSize:"14px",fontWeight:"900",cursor:saving?"not-allowed":"pointer"}}>
+              {saving ? "⏳ Enregistrement..." : "💶 Confirmer devis, encaissement et intervention"}
             </button>
           </>
         )}
