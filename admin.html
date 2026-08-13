@@ -159,6 +159,16 @@
   .texte-sep{width:1px;background:var(--border);margin:4px 4px;}
   .texte-editable{width:100%;min-height:44px;padding:12px 14px;border-radius:13px;border:1px solid var(--border);background:rgba(255,255,255,0.04);color:var(--texte);font-size:13.5px;outline:none;font-family:inherit;}
   .texte-editable:focus{border-color:var(--orange);}
+  .marges-editeur{display:flex;flex-direction:column;align-items:center;gap:6px;margin-bottom:16px;}
+  .marges-milieu{display:flex;align-items:center;gap:6px;width:100%;}
+  .marges-champ{display:flex;flex-direction:column;align-items:center;gap:3px;}
+  .marges-label{font-size:9.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--texte-faint);}
+  .marges-champ input{width:52px;padding:6px 4px;text-align:center;border-radius:8px;border:1px solid var(--border);background:rgba(255,255,255,0.04);color:var(--texte);font-size:12.5px;outline:none;}
+  .marges-unite{font-size:9px;color:var(--texte-faint);}
+  .marges-gauche,.marges-droite{flex-direction:row;}
+  .marges-gauche{flex-direction:column;}
+  .marges-droite{flex-direction:column;}
+  .marges-page-icone{flex:1;height:70px;border:1.5px dashed var(--border);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:9px;color:var(--texte-faint);text-transform:uppercase;letter-spacing:.06em;background:rgba(255,255,255,0.02);}
   .devis-modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.6);backdrop-filter:blur(4px);z-index:2000;display:flex;align-items:flex-start;justify-content:center;padding:32px 16px;overflow-y:auto;}
   .devis-modal-box{background:var(--g2);border:1px solid var(--border);border-radius:20px;padding:28px 32px;width:100%;max-width:980px;box-shadow:0 20px 60px rgba(0,0,0,0.5);backdrop-filter:blur(24px) saturate(150%);-webkit-backdrop-filter:blur(24px) saturate(150%);}
   @media (max-width:700px){.devis-modal-box{padding:20px;}.devis-modal-overlay{padding:0;align-items:stretch;}.devis-modal-box{border-radius:0;max-width:none;min-height:100%;}}
@@ -567,12 +577,27 @@
                 </select>
               </div>
             </div>
-            <label>Marges (mm)</label>
-            <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:0 10px;">
-              <div><label style="font-size:10.5px;">Haut</label><input type="number" id="mepMargeHaut" value="20" min="0" max="80" step="1"></div>
-              <div><label style="font-size:10.5px;">Bas</label><input type="number" id="mepMargeBas" value="20" min="0" max="80" step="1"></div>
-              <div><label style="font-size:10.5px;">Gauche</label><input type="number" id="mepMargeGauche" value="18" min="0" max="80" step="1"></div>
-              <div><label style="font-size:10.5px;">Droite</label><input type="number" id="mepMargeDroite" value="18" min="0" max="80" step="1"></div>
+            <label>Marges de la page</label>
+            <div class="marges-editeur">
+              <div class="marges-champ marges-haut">
+                <span class="marges-label">Haut</span>
+                <input type="number" id="mepMargeHaut" value="20" min="0" max="80" step="1"><span class="marges-unite">mm</span>
+              </div>
+              <div class="marges-milieu">
+                <div class="marges-champ marges-gauche">
+                  <span class="marges-label">Gauche</span>
+                  <input type="number" id="mepMargeGauche" value="18" min="0" max="80" step="1"><span class="marges-unite">mm</span>
+                </div>
+                <div class="marges-page-icone">Page</div>
+                <div class="marges-champ marges-droite">
+                  <span class="marges-label">Droite</span>
+                  <input type="number" id="mepMargeDroite" value="18" min="0" max="80" step="1"><span class="marges-unite">mm</span>
+                </div>
+              </div>
+              <div class="marges-champ marges-bas">
+                <span class="marges-label">Bas</span>
+                <input type="number" id="mepMargeBas" value="20" min="0" max="80" step="1"><span class="marges-unite">mm</span>
+              </div>
             </div>
             <label>Texte pied de page</label>
             <div class="texte-toolbar">
@@ -1258,17 +1283,22 @@ function synchroniserAgences(records){
     .catch(function(){ afficherAgences(records); });
 }
 
-function afficherAgences(records){
+function afficherAgences(recordsBruts){
   var el = document.getElementById("agencesListe");
-  document.getElementById("agencesCount").textContent = "(" + records.length + ")";
   var max = Math.max(1, Math.min(10, parseInt(document.getElementById("fNbAgences").value, 10) || 1));
+  var records = recordsBruts.slice(0, max);
+  var enTrop = recordsBruts.length - records.length;
+  document.getElementById("agencesCount").textContent = "(" + records.length + ")";
   document.getElementById("ajouterAgenceBtn").style.display = records.length >= max ? "none" : "block";
 
   if (!records.length) {
     el.innerHTML = "<div style='font-size:12px;color:var(--texte-faint);'>Aucune agence configurée pour ce client.</div>";
     return;
   }
-  el.innerHTML = records.map(function(rec){
+  var avertissement = enTrop > 0
+    ? "<div style='font-size:11px;color:#FF9F0A;margin-bottom:8px;'>⚠️ " + enTrop + " agence(s) supplémentaire(s) existent en base mais ne sont pas affichées (au-delà du nombre choisi ci-dessus). Rien n'a été supprimé.</div>"
+    : "";
+  el.innerHTML = avertissement + records.map(function(rec){
     var f = rec.fields || {};
     var actif = f["Actif"] !== false ? "checked" : "";
     return "<div style='border:1px solid var(--border);border-radius:12px;padding:10px;display:flex;flex-direction:column;gap:6px;'>" +
