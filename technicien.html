@@ -271,13 +271,14 @@ async function creerDemandeSignatureYousignTech(pdfBlob, nomFichier, personneNom
   const document = await docRes.json();
 
   const nomParts = (personneNom || 'Client Iko Suite').trim().split(/\s+/);
-  const firstName = nomParts.length > 1 ? nomParts.slice(0, -1).join(' ') : nomParts[0];
-  const lastName = nomParts.length > 1 ? nomParts[nomParts.length - 1] : '—';
+  const firstName = nomParts.length > 1 ? nomParts.slice(0, -1).join(' ') : 'Client';
+  const lastName = nomParts.length > 1 ? nomParts[nomParts.length - 1] : nomParts[0];
+  const telValide = telephone && /^(\+33|0)[1-9](\d{2}){4}$/.test(String(telephone).replace(/[\s.-]/g, ''));
 
   const signerRes = await fetch('/api/yousign/signature_requests/' + srId + '/signers', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      info: { first_name: firstName, last_name: lastName, email, phone_number: telephone || undefined, locale: 'fr' },
+      info: { first_name: firstName, last_name: lastName, email, phone_number: telValide ? String(telephone).replace(/[\s.-]/g, '') : undefined, locale: 'fr' },
       signature_level: 'electronic_signature', signature_authentication_mode: 'no_otp',
       fields: [{ document_id: document.id, type: 'signature', page: 1, x: 60, y: 700 }]
     })
