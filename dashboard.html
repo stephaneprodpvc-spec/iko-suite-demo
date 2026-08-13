@@ -1186,7 +1186,6 @@ function ModalDevis({ ticket, onClose, onSent }) {
     const diag = { devisId: null, pdfGenere: false, yousignOk: false, yousignErreur: null, ticketMisAJour: false, webhookStatut: null, webhookErreur: null, lienDevis: null };
     try {
       const numero = "DEV-" + new Date().getFullYear() + "-" + Math.floor(1000 + Math.random() * 9000);
-      const token = genererToken();
       const mep = catalogue.mep || { identite: {}, assurance: {}, piedPage: "", dureeValidite: 30 };
       const cpMatch = (ticket.fields?.Adresse || "").match(/\b\d{5}\b/);
       const client = { nom: ticket.fields?.Client, adresse: ticket.fields?.Adresse || "", cp: cpMatch ? cpMatch[0] : "" };
@@ -1228,7 +1227,7 @@ function ModalDevis({ ticket, onClose, onSent }) {
       // Compatibilité avec le pipeline existant (ModalGestionDevis, badges, filtres par Statut de ticket).
       const ticketPatchRes = await fetch('/api/airtable/Tickets%20SAV/' + ticket.id, {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fields: { Statut: 'Devis envoyé', "Montant devis": Math.round(montantTTC * 100) / 100, "Devis Token": token, Email: email.trim() } })
+        body: JSON.stringify({ fields: { Statut: 'Devis envoyé', "Montant devis": Math.round(montantTTC * 100) / 100, Email: email.trim() } })
       });
       diag.ticketMisAJour = ticketPatchRes.ok;
       if (!ticketPatchRes.ok) {
