@@ -163,7 +163,7 @@
   .a4-page{width:100%;aspect-ratio:210/297;background:#ffffff;border-radius:3px;box-shadow:0 2px 4px rgba(0,0,0,0.35),0 18px 40px -14px rgba(0,0,0,0.55);overflow:hidden;position:relative;}
   .a4-marge-guide{position:absolute;inset:7% 6%;display:flex;flex-direction:column;border:1px dashed rgba(0,0,0,0.14);padding:3%;box-sizing:border-box;}
   .a4-entete{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;}
-  .a4-logo{max-width:34%;max-height:36px;object-fit:contain;}
+  .a4-logo{position:absolute;object-fit:contain;z-index:2;}
   .a4-logo:not([src]),.a4-logo[src=""]{display:none;}
   .a4-entete-droite{text-align:right;}
   .a4-devis-titre{font-size:15px;font-weight:700;letter-spacing:.04em;color:#111;}
@@ -477,7 +477,10 @@
         </div>
 
         <label>Nombre d'agences (1 à 10)</label>
-        <input type="number" id="fNbAgences" min="1" max="10" value="1">
+        <select id="fNbAgences">
+          <option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option>
+          <option value="6">6</option><option value="7">7</option><option value="8">8</option><option value="9">9</option><option value="10">10</option>
+        </select>
 
         <div id="agencesWrap" style="display:none;">
           <label style="margin-top:18px;">Agences</label>
@@ -535,6 +538,11 @@
               <input type="file" id="mepLogoFile" accept="image/*" style="display:none;">
             </div>
             <div class="devis-import-hint" id="mepLogoMsg">URL directe, ou upload d'un fichier depuis l'appareil (stocké dans Airtable).</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:0 12px;">
+              <div><label>Logo — X (mm depuis la gauche)</label><input type="number" id="mepLogoX" value="18" min="0" max="190" step="1"></div>
+              <div><label>Logo — Y (mm depuis le haut)</label><input type="number" id="mepLogoY" value="14" min="0" max="280" step="1"></div>
+              <div><label>Logo — largeur (mm)</label><input type="number" id="mepLogoW" value="30" min="5" max="100" step="1"></div>
+            </div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:0 16px;">
               <div><label>Couleur principale</label><input type="color" id="mepCouleur" value="#FF6B00"></div>
               <div><label>Police</label>
@@ -543,8 +551,13 @@
                 </select>
               </div>
             </div>
-            <label>Marges</label>
-            <input type="text" id="mepMarges" placeholder="20mm haut/bas, 15mm gauche/droite">
+            <label>Marges (mm)</label>
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:0 10px;">
+              <div><label style="font-size:10.5px;">Haut</label><input type="number" id="mepMargeHaut" value="20" min="0" max="80" step="1"></div>
+              <div><label style="font-size:10.5px;">Bas</label><input type="number" id="mepMargeBas" value="20" min="0" max="80" step="1"></div>
+              <div><label style="font-size:10.5px;">Gauche</label><input type="number" id="mepMargeGauche" value="18" min="0" max="80" step="1"></div>
+              <div><label style="font-size:10.5px;">Droite</label><input type="number" id="mepMargeDroite" value="18" min="0" max="80" step="1"></div>
+            </div>
             <label>Texte pied de page</label>
             <textarea id="mepPiedPage" rows="2" style="width:100%;padding:12px 14px;border-radius:13px;border:1px solid var(--border);background:rgba(255,255,255,0.04);color:var(--texte);font-size:13.5px;outline:none;font-family:inherit;resize:vertical;"></textarea>
 
@@ -577,10 +590,10 @@
           <div class="devis-mep-apercu">
             <div class="devis-apercu-label">Aperçu — A4 portrait (210 × 297 mm)</div>
             <div class="a4-page" id="a4Page">
+              <img id="a4Logo" class="a4-logo" alt="">
               <div class="a4-marge-guide" id="a4MargeGuide">
                 <div class="a4-entete">
-                  <img id="a4Logo" class="a4-logo" alt="">
-                  <div class="a4-entete-droite">
+                  <div class="a4-entete-droite" style="margin-left:auto;">
                     <div class="a4-devis-titre" id="a4DevisTitre">DEVIS</div>
                     <div class="a4-devis-num">N° DEV-2026-0001</div>
                   </div>
@@ -1987,13 +2000,25 @@ function remplirFormMEP(rec){
   devisMEPRecordId = rec ? rec.id : null;
   document.getElementById("mepCouleur").value = f["Couleur primaire"] || "#FF6B00";
   document.getElementById("mepPolice").value = f["Police"] || "Helvetica";
-  document.getElementById("mepMarges").value = f["Marges"] || "";
   document.getElementById("mepPiedPage").value = f["Texte pied de page"] || "";
   document.getElementById("mepDureeValidite").value = f["Durée validité devis (jours)"] != null ? f["Durée validité devis (jours)"] : "30";
+
+  var marges = { haut: 20, bas: 20, gauche: 18, droite: 18 };
+  try {
+    var m = JSON.parse(f["Marges"] || "null");
+    if (m && typeof m === "object") marges = Object.assign(marges, m);
+  } catch(e){}
+  document.getElementById("mepMargeHaut").value = marges.haut;
+  document.getElementById("mepMargeBas").value = marges.bas;
+  document.getElementById("mepMargeGauche").value = marges.gauche;
+  document.getElementById("mepMargeDroite").value = marges.droite;
 
   var identite = {};
   try { identite = JSON.parse(f["Identité entreprise (JSON)"] || "{}"); } catch(e){}
   document.getElementById("mepLogo").value = (f["Logo"] && f["Logo"][0] && f["Logo"][0].url) || identite.logoUrl || "";
+  document.getElementById("mepLogoX").value = identite.logoX != null ? identite.logoX : 18;
+  document.getElementById("mepLogoY").value = identite.logoY != null ? identite.logoY : 14;
+  document.getElementById("mepLogoW").value = identite.logoW != null ? identite.logoW : 30;
   document.getElementById("mepRaisonSociale").value = identite.raisonSociale || "";
   document.getElementById("mepFormeJuridique").value = identite.formeJuridique || "";
   document.getElementById("mepAdresseEntreprise").value = identite.adresse || "";
@@ -2013,7 +2038,15 @@ function remplirFormMEP(rec){
 function majApercuA4(){
   var logo = document.getElementById("mepLogo").value.trim();
   var img = document.getElementById("a4Logo");
-  if (logo){ img.src = logo; img.style.display = ""; } else { img.removeAttribute("src"); img.style.display = "none"; }
+  var logoX = parseFloat(document.getElementById("mepLogoX").value) || 0;
+  var logoY = parseFloat(document.getElementById("mepLogoY").value) || 0;
+  var logoW = parseFloat(document.getElementById("mepLogoW").value) || 30;
+  if (logo){
+    img.src = logo; img.style.display = "";
+    img.style.left = (logoX / 210 * 100) + "%";
+    img.style.top = (logoY / 297 * 100) + "%";
+    img.style.width = (logoW / 210 * 100) + "%";
+  } else { img.removeAttribute("src"); img.style.display = "none"; }
 
   var couleur = document.getElementById("mepCouleur").value || "#FF6B00";
   document.getElementById("a4DevisTitre").style.color = couleur;
@@ -2035,16 +2068,14 @@ function majApercuA4(){
 
   document.getElementById("a4Pied").textContent = document.getElementById("mepPiedPage").value.trim() || "Texte de pied de page";
 
-  var marges = document.getElementById("mepMarges").value.trim();
+  var mHaut = parseFloat(document.getElementById("mepMargeHaut").value) || 0;
+  var mBas = parseFloat(document.getElementById("mepMargeBas").value) || 0;
+  var mGauche = parseFloat(document.getElementById("mepMargeGauche").value) || 0;
+  var mDroite = parseFloat(document.getElementById("mepMargeDroite").value) || 0;
   var guide = document.getElementById("a4MargeGuide");
-  // Interprete un nombre de mm en tête de chaîne pour ajuster grossièrement les marges de l'aperçu ; sinon garde le défaut.
-  var mmMatch = marges.match(/(\d+)/);
-  if (mmMatch){
-    var pct = Math.min(18, Math.max(4, Math.round(parseInt(mmMatch[1], 10) / 297 * 100)));
-    guide.style.inset = pct + "% " + Math.round(pct * 0.85) + "%";
-  } else {
-    guide.style.inset = "7% 6%";
-  }
+  guide.style.inset =
+    (mHaut / 297 * 100) + "% " + (mDroite / 210 * 100) + "% " +
+    (mBas / 297 * 100) + "% " + (mGauche / 210 * 100) + "%";
 }
 
 Array.prototype.forEach.call(
@@ -2114,10 +2145,18 @@ document.getElementById("mepSaveBtn").addEventListener("click", function(){
     "Logo": logoUrl ? [{ url: logoUrl }] : [],
     "Couleur primaire": document.getElementById("mepCouleur").value,
     "Police": document.getElementById("mepPolice").value,
-    "Marges": document.getElementById("mepMarges").value,
+    "Marges": JSON.stringify({
+      haut: parseFloat(document.getElementById("mepMargeHaut").value) || 20,
+      bas: parseFloat(document.getElementById("mepMargeBas").value) || 20,
+      gauche: parseFloat(document.getElementById("mepMargeGauche").value) || 18,
+      droite: parseFloat(document.getElementById("mepMargeDroite").value) || 18
+    }),
     "Texte pied de page": document.getElementById("mepPiedPage").value,
     "Durée validité devis (jours)": parseInt(document.getElementById("mepDureeValidite").value, 10) || 30,
     "Identité entreprise (JSON)": JSON.stringify({
+      logoX: parseFloat(document.getElementById("mepLogoX").value) || 18,
+      logoY: parseFloat(document.getElementById("mepLogoY").value) || 14,
+      logoW: parseFloat(document.getElementById("mepLogoW").value) || 30,
       raisonSociale: document.getElementById("mepRaisonSociale").value,
       formeJuridique: document.getElementById("mepFormeJuridique").value,
       adresse: document.getElementById("mepAdresseEntreprise").value,

@@ -110,9 +110,10 @@ async function chargerCatalogueDevisTech(clientNom) {
   ]);
   const [jProd, jMo, jMep] = await Promise.all([rProd.json(), rMo.json(), rMep.json()]);
   const mepRec = (jMep.records || [])[0];
-  let identite = {}, assurance = {};
+  let identite = {}, assurance = {}, marges = {};
   try { identite = JSON.parse(mepRec?.fields?.["Identité entreprise (JSON)"] || "{}"); } catch(e){}
   try { assurance = JSON.parse(mepRec?.fields?.["Assurance décennale (JSON)"] || "{}"); } catch(e){}
+  try { marges = JSON.parse(mepRec?.fields?.["Marges"] || "{}"); } catch(e){}
   return {
     produits: jProd.records || [],
     mo: jMo.records || [],
@@ -121,6 +122,13 @@ async function chargerCatalogueDevisTech(clientNom) {
       piedPage: mepRec?.fields?.["Texte pied de page"] || "",
       dureeValidite: mepRec?.fields?.["Durée validité devis (jours)"] || 30,
       logoUrl: (mepRec?.fields?.["Logo"]?.[0]?.url) || identite.logoUrl || "",
+      logoX: identite.logoX != null ? identite.logoX : 18,
+      logoY: identite.logoY != null ? identite.logoY : 14,
+      logoW: identite.logoW != null ? identite.logoW : 30,
+      margeHaut: marges.haut != null ? marges.haut : 20,
+      margeBas: marges.bas != null ? marges.bas : 20,
+      margeGauche: marges.gauche != null ? marges.gauche : 18,
+      margeDroite: marges.droite != null ? marges.droite : 18,
       identite, assurance,
     }
   };
@@ -143,42 +151,45 @@ async function chargerImageEnDataUrlTech(url) {
 async function genererPdfDevisTech({ numero, ticket, client, lignes, montantHT, montantTTC, mep }) {
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ unit: 'mm', format: 'a4' });
-  const marge = 18;
-  const largeurUtile = 210 - 2 * marge;
-  let y = 20;
+  const mL = mep.margeGauche != null ? mep.margeGauche : 18;
+  const mR = mep.margeDroite != null ? mep.margeDroite : 18;
+  const mHaut = mep.margeHaut != null ? mep.margeHaut : 20;
+  const mBas = mep.margeBas != null ? mep.margeBas : 20;
+  const largeurUtile = 210 - mL - mR;
+  let y = mHaut;
 
   const logoDataUrl = await chargerImageEnDataUrlTech(mep.logoUrl);
-  if (logoDataUrl) { try { doc.addImage(logoDataUrl, 'PNG', marge, y - 6, 30, 16, undefined, 'FAST'); } catch(e){} }
+  if (logoDataUrl) { const logoW = mep.logoW || 30; try { doc.addImage(logoDataUrl, 'PNG', mep.logoX != null ? mep.logoX : mL, mep.logoY != null ? mep.logoY : (y - 6), logoW, logoW * 16 / 30, undefined, 'FAST'); } catch(e){} }
   doc.setFont('helvetica', 'bold'); doc.setFontSize(16); doc.setTextColor(20, 20, 20);
-  doc.text('DEVIS', 210 - marge, y, { align: 'right' });
+  doc.text('DEVIS', 210 - mR, y, { align: 'right' });
   doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(100, 100, 100);
-  doc.text('N° ' + numero, 210 - marge, y + 5, { align: 'right' });
+  doc.text('N° ' + numero, 210 - mR, y + 5, { align: 'right' });
   y += 18;
 
   doc.setDrawColor(220, 220, 220); doc.setLineWidth(0.3);
-  doc.line(marge, y, 210 - marge, y); y += 7;
+  doc.line(mL, y, 210 - mR, y); y += 7;
 
   doc.setFontSize(8); doc.setTextColor(80, 80, 80);
   const identite = mep.identite || {};
   doc.text([
     (identite.raisonSociale || 'Raison sociale') + (identite.formeJuridique ? ' — ' + identite.formeJuridique : ''),
     identite.adresse || '',
-  ], marge, y);
+  ], mL, y);
   y += 12;
 
   doc.setFillColor(245, 245, 245);
-  doc.rect(marge, y, largeurUtile * 0.55, 16, 'F');
+  doc.rect(mL, y, largeurUtile * 0.55, 16, 'F');
   doc.setFontSize(7); doc.setTextColor(140, 140, 140);
-  doc.text('CLIENT', marge + 4, y + 5);
+  doc.text('CLIENT', mL + 4, y + 5);
   doc.setFontSize(9); doc.setTextColor(20, 20, 20);
-  doc.text(client.nom || ticket.fields?.Client || '—', marge + 4, y + 10);
+  doc.text(client.nom || ticket.fields?.Client || '—', mL + 4, y + 10);
   doc.setFontSize(8); doc.setTextColor(80, 80, 80);
-  doc.text(client.adresse || ticket.fields?.Adresse || '', marge + 4, y + 14.5);
+  doc.text(client.adresse || ticket.fields?.Adresse || '', mL + 4, y + 14.5);
   y += 24;
 
-  const colX = [marge, marge + largeurUtile * 0.46, marge + largeurUtile * 0.63, marge + largeurUtile * 0.75, marge + largeurUtile * 0.88];
+  const colX = [mL, mL + largeurUtile * 0.46, mL + largeurUtile * 0.63, mL + largeurUtile * 0.75, mL + largeurUtile * 0.88];
   doc.setFillColor(20, 20, 20);
-  doc.rect(marge, y, largeurUtile, 7, 'F');
+  doc.rect(mL, y, largeurUtile, 7, 'F');
   doc.setFontSize(7.5); doc.setTextColor(255, 255, 255); doc.setFont('helvetica', 'bold');
   doc.text('DÉSIGNATION', colX[0] + 2, y + 4.8);
   doc.text('QTÉ', colX[1] + 2, y + 4.8);
@@ -188,9 +199,10 @@ async function genererPdfDevisTech({ numero, ticket, client, lignes, montantHT, 
   y += 7;
 
   doc.setFont('helvetica', 'normal'); doc.setTextColor(30, 30, 30);
+  const yLimite = 297 - mBas - 30;
   lignes.forEach((l, i) => {
     const hauteur = 7;
-    if (i % 2 === 1) { doc.setFillColor(248, 248, 248); doc.rect(marge, y, largeurUtile, hauteur, 'F'); }
+    if (i % 2 === 1) { doc.setFillColor(248, 248, 248); doc.rect(mL, y, largeurUtile, hauteur, 'F'); }
     doc.setFontSize(8.5);
     doc.text(String(l.designation || ''), colX[0] + 2, y + 4.8, { maxWidth: largeurUtile * 0.44 });
     doc.text(String(l.qte), colX[1] + 2, y + 4.8);
@@ -198,17 +210,17 @@ async function genererPdfDevisTech({ numero, ticket, client, lignes, montantHT, 
     doc.text(Math.round((l.tauxTva != null ? l.tauxTva : 0.20) * 100) + '%', colX[3] + 2, y + 4.8);
     doc.text((l.totalHT || 0).toFixed(2) + ' €', colX[4] + 2, y + 4.8);
     y += hauteur;
-    if (y > 250) { doc.addPage(); y = 20; }
+    if (y > yLimite) { doc.addPage(); y = mHaut; }
   });
   y += 4;
   doc.setDrawColor(220, 220, 220);
-  doc.line(marge, y, 210 - marge, y); y += 8;
+  doc.line(mL, y, 210 - mR, y); y += 8;
 
   doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(80, 80, 80);
-  doc.text('Total HT : ' + montantHT.toFixed(2) + ' €', 210 - marge, y, { align: 'right' }); y += 5.5;
-  doc.text('Total TVA : ' + (montantTTC - montantHT).toFixed(2) + ' €', 210 - marge, y, { align: 'right' }); y += 5.5;
+  doc.text('Total HT : ' + montantHT.toFixed(2) + ' €', 210 - mR, y, { align: 'right' }); y += 5.5;
+  doc.text('Total TVA : ' + (montantTTC - montantHT).toFixed(2) + ' €', 210 - mR, y, { align: 'right' }); y += 5.5;
   doc.setFont('helvetica', 'bold'); doc.setTextColor(20, 20, 20);
-  doc.text('Total TTC : ' + montantTTC.toFixed(2) + ' €', 210 - marge, y, { align: 'right' }); y += 12;
+  doc.text('Total TTC : ' + montantTTC.toFixed(2) + ' €', 210 - mR, y, { align: 'right' }); y += 12;
 
   doc.setFont('helvetica', 'normal'); doc.setFontSize(6.5); doc.setTextColor(130, 130, 130);
   const assurance = mep.assurance || {};
@@ -216,8 +228,8 @@ async function genererPdfDevisTech({ numero, ticket, client, lignes, montantHT, 
     'SIRET ' + (identite.siret || '—') + '  ·  RCS ' + (identite.rcs || '—') + '  ·  TVA intracom. ' + (identite.tva || '—'),
     'Assurance décennale : ' + (assurance.assureur || '—') + (assurance.numPolice ? ' — police n° ' + assurance.numPolice : '') + (assurance.zone ? ' — zone : ' + assurance.zone : ''),
     'Devis généré automatiquement suite à intervention · valable ' + (mep.dureeValidite || 30) + ' jours · Bon pour accord — signature électronique ci-après.',
-  ], marge, 275);
-  if (mep.piedPage) { doc.setFontSize(6.5); doc.setTextColor(160, 160, 160); doc.text(mep.piedPage, 105, 290, { align: 'center' }); }
+  ], mL, 297 - mBas - 15);
+  if (mep.piedPage) { doc.setFontSize(6.5); doc.setTextColor(160, 160, 160); doc.text(mep.piedPage, 105, 297 - mBas, { align: 'center' }); }
 
   return doc.output('blob');
 }
