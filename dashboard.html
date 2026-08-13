@@ -945,12 +945,20 @@ async function chargerImageEnDataUrl(url) {
   try {
     const res = await fetch(url);
     const blob = await res.blob();
-    return await new Promise((resolve) => {
+    const dataUrl = await new Promise((resolve) => {
       const reader = new FileReader();
       reader.onload = () => resolve(reader.result);
       reader.onerror = () => resolve(null);
       reader.readAsDataURL(blob);
     });
+    if (!dataUrl) return null;
+    const ratio = await new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => resolve(img.naturalWidth && img.naturalHeight ? img.naturalWidth / img.naturalHeight : null);
+      img.onerror = () => resolve(null);
+      img.src = dataUrl;
+    });
+    return { url: dataUrl, ratio };
   } catch(e) { return null; }
 }
 
@@ -976,10 +984,11 @@ async function genererPdfDevis({ numero, ticket, client, lignes, montantHT, mont
   const largeurUtile = 210 - mL - mR;
   let y = mHaut;
 
-  const logoDataUrl = await chargerImageEnDataUrl(mep.logoUrl);
-  if (logoDataUrl) {
+  const logoInfo = await chargerImageEnDataUrl(mep.logoUrl);
+  if (logoInfo && logoInfo.url) {
     const logoW = mep.logoW || 30;
-    try { doc.addImage(logoDataUrl, 'PNG', mep.logoX != null ? mep.logoX : mL, mep.logoY != null ? mep.logoY : (y - 6), logoW, logoW * 16 / 30, undefined, 'FAST'); } catch(e){}
+    const ratio = logoInfo.ratio || (30 / 16);
+    try { doc.addImage(logoInfo.url, 'PNG', mep.logoX != null ? mep.logoX : mL, mep.logoY != null ? mep.logoY : (y - 6), logoW, logoW / ratio, undefined, 'FAST'); } catch(e){}
   }
   doc.setFont('helvetica', 'bold'); doc.setFontSize(16);
   doc.setTextColor(20, 20, 20);
@@ -2064,6 +2073,7 @@ function Dashboard({ agenceAccess, onClose }) {
     window.IKO_CLIENT_READY.then(() => {
       const info = window.IKO_CLIENT_INFO;
       if (!info) return;
+      if (info["Nombre agences"]) appliquerNombreAgences(info["Nombre agences"]);
       appliquerConfigEntreprise({
         couleurAccent: info["Couleur principale"] || CONFIG_ENTREPRISE.couleurAccent,
         logoUrl: (info["Logo"] && info["Logo"][0] && info["Logo"][0].url) || CONFIG_ENTREPRISE.logoUrl,
