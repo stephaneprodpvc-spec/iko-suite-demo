@@ -498,6 +498,10 @@
           <option value="6">6</option><option value="7">7</option><option value="8">8</option><option value="9">9</option><option value="10">10</option>
         </select>
 
+        <label>Montant diagnostic HT (€)</label>
+        <input type="number" id="fMontantDiag" min="0" step="0.01" placeholder="Ex : 45.00" style="width:100%;padding:12px 14px;border-radius:13px;border:1px solid var(--border);background:rgba(255,255,255,0.04);color:var(--texte);font-size:13.5px;outline:none;font-family:inherit;">
+        <div class="hint" style="font-size:11px;color:var(--texte-faint);margin-top:5px;">Facturé au client non garanti et non existant si le technicien n'a pas le matériel sur place. Déduit automatiquement si le devis proposé ensuite est accepté.</div>
+
         <div id="agencesWrap" style="display:none;">
           <button type="button" class="secondary" id="agencesToggleBtn" style="width:100%;text-align:left;display:flex;justify-content:space-between;align-items:center;margin-top:18px;">
             <span>Agences <span id="agencesCount" style="color:var(--texte-faint);font-weight:400;"></span></span><span id="agencesChevron">▾</span>
@@ -1226,6 +1230,7 @@ function chargerDansFormulaire(id){
   document.getElementById("fC2").value = f["Couleur secondaire"] || "#111111";
   document.getElementById("fStatut").value = f["Statut client"] || "Actif";
   document.getElementById("fNbAgences").value = f["Nombre agences"] || 1;
+  document.getElementById("fMontantDiag").value = f["Montant diagnostic HT"] != null ? f["Montant diagnostic HT"] : "";
   setModulesActifs(f["Modules actifs"]);
   dessinerDiagramme();
   document.getElementById("submitBtn").textContent = "Enregistrer les modifications";
@@ -1587,6 +1592,7 @@ function reinitialiserFormulaire(){
   document.getElementById("activiteInfo").textContent = "";
   document.getElementById("diagramWrap").style.display = "none";
   document.getElementById("fNbAgences").value = 1;
+  document.getElementById("fMontantDiag").value = "";
   document.getElementById("agencesWrap").style.display = "none";
   document.getElementById("questionnaireWrap").style.display = "none";
   Array.prototype.forEach.call(document.querySelectorAll(".client-item"), function(x){ x.classList.remove("selected"); });
@@ -1607,7 +1613,8 @@ document.getElementById("clientForm").addEventListener("submit", function(e){
     "Modules actifs": getModulesActifs(),
     "Statut client": document.getElementById("fStatut").value,
     "Emails contact": document.getElementById("fEmails").value.trim(),
-    "Nombre agences": Math.max(1, Math.min(10, parseInt(document.getElementById("fNbAgences").value, 10) || 1))
+    "Nombre agences": Math.max(1, Math.min(10, parseInt(document.getElementById("fNbAgences").value, 10) || 1)),
+    "Montant diagnostic HT": document.getElementById("fMontantDiag").value.trim() === "" ? null : Math.max(0, parseFloat(document.getElementById("fMontantDiag").value) || 0)
   };
   if (logoUrl) fields["Logo"] = [{ url: logoUrl }];
 
