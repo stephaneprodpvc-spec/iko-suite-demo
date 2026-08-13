@@ -285,9 +285,22 @@ async function creerDemandeSignatureYousignTech(pdfBlob, nomFichier, personneNom
   });
   if (!signerRes.ok) throw new Error('Yousign: ajout du signataire échoué');
   const signer = await signerRes.json();
-  const lienSignature = signer.signature_link || signer.signature_url || signer.signature_link_url || '';
+  const signerId = signer.id;
 
   await fetch('/api/yousign/signature_requests/' + srId + '/activate', { method: 'POST' });
+
+  let lienSignature = '';
+  for (let tentative = 0; tentative < 4 && !lienSignature; tentative++) {
+    if (tentative > 0) await new Promise(r => setTimeout(r, 800));
+    try {
+      const signerFraisRes = await fetch('/api/yousign/signature_requests/' + srId + '/signers/' + signerId);
+      if (signerFraisRes.ok) {
+        const signerFrais = await signerFraisRes.json();
+        lienSignature = signerFrais.signature_link || signerFrais.signature_url || signerFrais.signature_link_url || '';
+      }
+    } catch(e) {}
+  }
+
   return { signatureRequestId: srId, lienSignature };
 }
 // ==================== /Devis Auto (Iko) ====================

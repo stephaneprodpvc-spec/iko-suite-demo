@@ -1109,9 +1109,25 @@ async function creerDemandeSignatureYousign(pdfBlob, nomFichier, personneNom, em
     throw new Error('Yousign: ajout du signataire échoué (HTTP ' + signerRes.status + ') ' + detail.slice(0, 300));
   }
   const signer = await signerRes.json();
-  const lienSignature = signer.signature_link || signer.signature_url || signer.signature_link_url || '';
+  const signerId = signer.id;
 
   await fetch('/api/yousign/signature_requests/' + srId + '/activate', { method: 'POST' });
+
+  // signature_link est null a la creation du signataire ET juste apres
+  // activation (delivery_mode "none") - il faut un GET dedie pour le
+  // recuperer une fois genere (comportement documente par Yousign).
+  let lienSignature = '';
+  for (let tentative = 0; tentative < 4 && !lienSignature; tentative++) {
+    if (tentative > 0) await new Promise(r => setTimeout(r, 800));
+    try {
+      const signerFraisRes = await fetch('/api/yousign/signature_requests/' + srId + '/signers/' + signerId);
+      if (signerFraisRes.ok) {
+        const signerFrais = await signerFraisRes.json();
+        lienSignature = signerFrais.signature_link || signerFrais.signature_url || signerFrais.signature_link_url || '';
+      }
+    } catch(e) {}
+  }
+
   return { signatureRequestId: srId, lienSignature };
 }
 
@@ -1245,7 +1261,8 @@ function ModalDevis({ ticket, onClose, onSent }) {
       try {
         const { signatureRequestId, lienSignature } = await creerDemandeSignatureYousign(pdfBlob, numero, client.nom, email.trim(), ticket.fields?.Téléphone);
         yousignFields = { "Yousign Request ID": signatureRequestId, "Yousign Signer Link": lienSignature };
-        diag.yousignOk = true;
+        diag.yousignOk = !!lienSignature;
+        diag.lienSignature = lienSignature || "(vide — Yousign n'a pas encore généré le lien après plusieurs tentatives)";
       } catch (yousignErr) {
         console.error('Yousign indisponible, devis envoyé sans signature électronique :', yousignErr);
         diag.yousignErreur = String(yousignErr && yousignErr.message || yousignErr);
