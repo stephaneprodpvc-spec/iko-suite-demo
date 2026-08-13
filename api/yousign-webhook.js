@@ -102,6 +102,33 @@ export default async function handler(req, res) {
         if (ticketId) {
           const ticketRes = await fetch('https://api.airtable.com/v0/' + baseId + '/Tickets%20SAV/' + ticketId, { headers });
           const ticketJson = await ticketRes.json();
+
+          // Déduit du devis les frais de déplacement/diagnostic déjà réglés
+          // par le client (cas : technicien sans matériel sur place, client
+          // non garanti et non existant — voir technicien.html mode "devis").
+          // Non bloquant : une erreur ici ne doit jamais empêcher la
+          // validation du devis lui-même.
+          try {
+            const fraisDiag = Number(ticketJson.fields?.["Frais diagnostic facturés"]) || 0;
+            const dejaDeduits = !!ticketJson.fields?.["Frais diagnostic déduits"];
+            if (fraisDiag > 0 && !dejaDeduits) {
+              const montantHT = Number(devisRecord.fields?.["Montant HT"]) || 0;
+              const montantTTC = Number(devisRecord.fields?.["Montant TTC"]) || 0;
+              const nouveauHT = Math.max(0, Math.round((montantHT - fraisDiag) * 100) / 100);
+              const nouveauTTC = Math.max(0, Math.round((montantTTC - fraisDiag) * 100) / 100);
+              await fetch('https://api.airtable.com/v0/' + baseId + '/Devis/' + devisRecord.id, {
+                method: 'PATCH', headers: { ...headers, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ fields: { "Montant HT": nouveauHT, "Montant TTC": nouveauTTC } })
+              });
+              await fetch('https://api.airtable.com/v0/' + baseId + '/Tickets%20SAV/' + ticketId, {
+                method: 'PATCH', headers: { ...headers, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ fields: { "Frais diagnostic déduits": true } })
+              });
+            }
+          } catch (deducErr) {
+            console.error('Erreur déduction frais diagnostic (non bloquant)', deducErr);
+          }
+
           const agence = ticketJson.fields?.Agence;
           if (agence) {
             const planFilter = encodeURIComponent('AND({Agence}="' + agence + '",{Statut}="Libre")');
