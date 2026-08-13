@@ -17,6 +17,76 @@
 // dans vercel.json (/api/airtable/:path* -> /api/airtable-proxy?path=:path*).
 // Le code ci-dessous n'a donc plus jamais à dépendre du routing dynamique
 // par fichier.
+//
+// Notifications push (path=push) : fusionnées ici plutôt que dans un
+// fichier api/push.js séparé, car le projet est déjà au plafond de 12
+// fonctions Vercel (Hobby) — voir la fonction handlerPush ci-dessous.
+// Appelé via /api/airtable/push (même route réécrite que le reste).
+
+import webpush from 'web-push';
+
+const CONFIG_RECORD_ID = 'rec45X231n9dXnyaU';
+
+async function lireConfigPush(baseId, headers) {
+  const res = await fetch('https://api.airtable.com/v0/' + baseId + '/Planning/' + CONFIG_RECORD_ID, { headers });
+  const json = await res.json();
+  let config = {};
+  try { config = JSON.parse(json.fields?.['Config JSON'] || '{}'); } catch (e) { config = {}; }
+  if (!Array.isArray(config.pushSubscriptions)) config.pushSubscriptions = [];
+  return config;
+}
+
+async function ecrireConfigPush(baseId, headers, config) {
+  await fetch('https://api.airtable.com/v0/' + baseId + '/Planning/' + CONFIG_RECORD_ID, {
+    method: 'PATCH',
+    headers: { ...headers, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ fields: { 'Config JSON': JSON.stringify(config) } }),
+  });
+}
+
+async function handlerPush(req, res, baseId, headers) {
+  const vapidPublic = process.env.VAPID_PUBLIC_KEY;
+  const vapidPrivate = process.env.VAPID_PRIVATE_KEY;
+
+  if (req.method === 'GET') {
+    if (!vapidPublic) return res.status(500).json({ error: 'VAPID_PUBLIC_KEY manquante.' });
+    return res.status(200).json({ publicKey: vapidPublic });
+  }
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  if (!vapidPublic || !vapidPrivate) return res.status(500).json({ error: 'Configuration VAPID incomplète.' });
+
+  webpush.setVapidDetails(process.env.VAPID_SUBJECT || 'mailto:stephane.prodpvc@gmail.com', vapidPublic, vapidPrivate);
+  const body = req.body || {};
+
+  try {
+    if (body.subscribe && body.subscription && body.agence) {
+      const config = await lireConfigPush(baseId, headers);
+      const endpoint = body.subscription.endpoint;
+      config.pushSubscriptions = config.pushSubscriptions.filter((s) => s.endpoint !== endpoint);
+      config.pushSubscriptions.push({ agence: body.agence, endpoint, keys: body.subscription.keys });
+      await ecrireConfigPush(baseId, headers, config);
+      return res.status(200).json({ ok: true });
+    }
+    if (body.action === 'send' && body.agence) {
+      const config = await lireConfigPush(baseId, headers);
+      const cibles = config.pushSubscriptions.filter((s) => s.agence === body.agence);
+      const payload = JSON.stringify({ title: body.title || 'Iko Suite', body: body.body || '', url: body.url || '/technicien.html' });
+      const morts = [];
+      await Promise.all(cibles.map(async (s) => {
+        try { await webpush.sendNotification({ endpoint: s.endpoint, keys: s.keys }, payload); }
+        catch (err) { if (err.statusCode === 404 || err.statusCode === 410) morts.push(s.endpoint); }
+      }));
+      if (morts.length) {
+        config.pushSubscriptions = config.pushSubscriptions.filter((s) => !morts.includes(s.endpoint));
+        await ecrireConfigPush(baseId, headers, config);
+      }
+      return res.status(200).json({ ok: true, envoyes: cibles.length - morts.length });
+    }
+    return res.status(400).json({ error: 'Requête push invalide.' });
+  } catch (err) {
+    return res.status(502).json({ error: 'Erreur push', details: String(err) });
+  }
+}
 
 export default async function handler(req, res) {
   const token = process.env.AIRTABLE_TOKEN;
@@ -44,6 +114,12 @@ export default async function handler(req, res) {
 
   const { path, ...rest } = req.query || {};
   const subPathRaw = Array.isArray(path) ? path.join('/') : (path || '');
+  const baseId = process.env.AIRTABLE_BASE_ID || 'appkI8RKHkYNWY86U'; // base démo Iko Suite
+  const headers = { Authorization: 'Bearer ' + token };
+
+  if (subPathRaw === 'push') {
+    return handlerPush(req, res, baseId, headers);
+  }
 
   // Upload de pièces jointes (ex : PDF de devis généré côté client) : Airtable
   // sert cette route sur un domaine distinct (content.airtable.com) avec un
@@ -95,7 +171,6 @@ export default async function handler(req, res) {
     }
   }
   const qs = params.toString();
-  const baseId = process.env.AIRTABLE_BASE_ID || 'appkI8RKHkYNWY86U'; // base démo Iko Suite
   const airtableUrl = 'https://api.airtable.com/v0/' + baseId + '/' + encodedSubPath + (qs ? '?' + qs : '');
 
   const init = {

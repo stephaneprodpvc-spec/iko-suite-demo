@@ -1337,12 +1337,12 @@ function Technicien({ agence, onClose }) {
         if (!sub) {
           const perm = await Notification.requestPermission();
           if (perm !== 'granted') return;
-          const keyRes = await fetch('/api/push');
+          const keyRes = await fetch('/api/airtable/push');
           const { publicKey } = await keyRes.json();
           if (!publicKey) return;
           sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(publicKey) });
         }
-        await fetch('/api/push', {
+        await fetch('/api/airtable/push', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ subscribe: true, agence, subscription: sub.toJSON() }),
         });

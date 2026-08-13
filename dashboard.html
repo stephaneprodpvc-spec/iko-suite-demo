@@ -550,7 +550,7 @@ function ModalRdv({ agenceAccess, onClose, onSuccess, initialAgence }) {
         })
       });
       try {
-        await fetch('/api/push', {
+        await fetch('/api/airtable/push', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             action: 'send', agence: AGENCE_VERS_AIRTABLE[form.agence] || form.agence,

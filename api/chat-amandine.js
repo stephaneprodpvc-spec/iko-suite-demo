@@ -11,8 +11,8 @@
 // Amandine ; dans les deux cas, le meme systeme derriere est utilise.
 
 import { verifierOrigine, verifierDebit } from "./_securite.js";
-import vocabMenuiserie from "../trades/menuiserie.js";
-import vocabPlomberieChauffage from "../trades/plomberie_chauffage.js";
+import vocabMenuiserie from "./_trades/menuiserie.js";
+import vocabPlomberieChauffage from "./_trades/plomberie_chauffage.js";
 
 // Vocabulaire parametrable par metier (voir trades/*.js). Menuiserie reste
 // le repli par defaut pour ne rien casser sur les clients demo existants.
