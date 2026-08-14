@@ -169,6 +169,10 @@
   .mep-calque-item button{background:none;border:none;color:var(--texte-faint);cursor:pointer;font-size:12px;width:22px;height:22px;border-radius:6px;}
   .mep-calque-item button:hover{background:rgba(255,255,255,0.06);color:var(--texte);}
   .mep-calque-item button.actif{color:var(--orange);}
+  .a4-shape.tp-texte{cursor:text;white-space:pre-wrap;overflow:hidden;outline:none;line-height:1.35;padding:1px;font-size:calc(var(--fs,12px) * var(--scale,1));}
+  .a4-shape.tp-texte[contenteditable="true"]{cursor:text;background:rgba(255,107,0,0.06);}
+  .mep-page-del{background:none;border:none;color:var(--texte-faint);cursor:pointer;font-size:10px;margin-left:-3px;padding:0 3px;}
+  .mep-page-del:hover{color:#FF453A;}
   .panel-empty{font-size:11.5px;color:var(--texte-faint);text-align:center;padding:20px 8px;}
 </style>
 </head>
@@ -205,7 +209,7 @@
       <button type="button" class="mep-tool-btn" id="mepToolCercle" title="Cercle">◯</button>
       <button type="button" class="mep-tool-btn" id="mepToolLigne" title="Trait / flèche">↗</button>
       <button type="button" class="mep-tool-btn" id="mepToolImage" title="Image">▢</button>
-      <button type="button" class="mep-tool-btn" disabled title="Texte (bientôt)">T</button>
+      <button type="button" class="mep-tool-btn" id="mepToolTexte" title="Texte">T</button>
     </div>
     <div class="tp-groupe">
       <button type="button" class="mep-tool-btn" id="mepToolCalques" title="Calques">▤</button>
@@ -221,14 +225,9 @@
         <div class="a4-entete">
           <div class="a4-entete-droite" style="margin-left:auto;text-align:right;">
             <div class="a4-devis-titre" id="a4DevisTitre">DEVIS</div>
-            <div class="a4-devis-num">N° DEV-2026-0001</div>
           </div>
         </div>
         <div class="a4-identite" id="a4Identite">Raison sociale — Forme juridique<br>Adresse entreprise</div>
-        <div class="a4-client-bloc">
-          <div class="a4-client-label">Client</div>
-          <div>Nom du client<br>Adresse, Code postal Ville</div>
-        </div>
         <table class="a4-table-apercu">
           <thead><tr><th>Désignation</th><th>Qté</th><th>PU HT</th><th>Total HT</th></tr></thead>
           <tbody>
@@ -487,6 +486,16 @@ function remplirFormMEP(rec){
 
   mepElements = [];
   try { var els = JSON.parse(f["Éléments graphiques (JSON)"] || "[]"); if (Array.isArray(els)) mepElements = els; } catch(e){}
+  if (!devisMEPRecordId && mepElements.length === 0){
+    mepElements = [
+      { id: genMepId(), type: "texte", contenu: "N° DEV-2026-0001", x: 140, y: 16, w: 55, h: 8,
+        fontSize: 8, fontFamily: "Helvetica", color: "#666666", bold: false, italic: false, underline: false, align: "right",
+        zIndex: 0, visible: true, locked: false, page: 0 },
+      { id: genMepId(), type: "texte", contenu: "CLIENT\nNom du client\nAdresse, Code postal Ville", x: 18, y: 46, w: 110, h: 26,
+        fontSize: 8, fontFamily: "Helvetica", color: "#222222", bold: false, italic: false, underline: false, align: "left",
+        zIndex: 1, visible: true, locked: false, page: 0 }
+    ];
+  }
   mepSelectionId = null;
   mepPageActive = 0;
   mepPageCountUI = 1;
@@ -610,7 +619,10 @@ function renderPageBar(){
   var bar = document.getElementById("mepPageBar");
   var html = "";
   for (var i = 0; i < mepPageCountUI; i++){
+    html += '<span style="display:inline-flex;align-items:center;">';
     html += '<button type="button" class="mep-page-btn' + (i === mepPageActive ? " actif" : "") + '" data-page="' + i + '" title="Page ' + (i+1) + (i===0 ? " (contenu principal)" : " (annexe)") + '">' + (i+1) + '</button>';
+    if (i > 0) html += '<button type="button" class="mep-page-del" data-page="' + i + '" title="Supprimer la page ' + (i+1) + '">✕</button>';
+    html += '</span>';
   }
   if (mepPageCountUI < 10) html += '<button type="button" class="mep-page-add" id="mepPageAdd" title="Ajouter une page (max 10)">+</button>';
   bar.innerHTML = html;
@@ -621,6 +633,12 @@ function renderPageBar(){
       renderMepElements();
     });
   });
+  Array.prototype.forEach.call(bar.querySelectorAll(".mep-page-del"), function(b){
+    b.addEventListener("click", function(e){
+      e.stopPropagation();
+      supprimerPage(parseInt(this.getAttribute("data-page"), 10));
+    });
+  });
   var addBtn = document.getElementById("mepPageAdd");
   if (addBtn) addBtn.addEventListener("click", function(){
     if (mepPageCountUI >= 10) return;
@@ -629,13 +647,24 @@ function renderPageBar(){
   });
 }
 
+function supprimerPage(index){
+  if (index === 0) return;
+  if (!window.confirm("Supprimer la page " + (index + 1) + " et ses éléments ?")) return;
+  mepElements = mepElements.filter(function(e){ return (e.page || 0) !== index; });
+  mepElements.forEach(function(e){ if ((e.page || 0) > index) e.page = e.page - 1; });
+  mepPageCountUI = Math.max(1, mepPageCountUI - 1);
+  if (mepPageActive >= index) mepPageActive = Math.max(0, mepPageActive - 1);
+  mepSelectionId = null;
+  renderMepElements();
+}
+
 var mepCalquesActif = false;
 function setOutilMep(nom){
   mepOutilActif = nom;
   var page = document.getElementById("a4Page");
-  page.style.cursor = (nom === "rect" || nom === "circle" || nom === "line") ? "crosshair" : (nom === "image" ? "copy" : "");
-  Array.prototype.forEach.call(document.querySelectorAll("#mepToolSelect, #mepToolRect, #mepToolCercle, #mepToolLigne, #mepToolImage"), function(b){ b.classList.remove("actif"); });
-  var map = { select: "mepToolSelect", rect: "mepToolRect", circle: "mepToolCercle", line: "mepToolLigne", image: "mepToolImage" };
+  page.style.cursor = (nom === "rect" || nom === "circle" || nom === "line") ? "crosshair" : (nom === "image" ? "copy" : (nom === "texte" ? "text" : ""));
+  Array.prototype.forEach.call(document.querySelectorAll("#mepToolSelect, #mepToolRect, #mepToolCercle, #mepToolLigne, #mepToolImage, #mepToolTexte"), function(b){ b.classList.remove("actif"); });
+  var map = { select: "mepToolSelect", rect: "mepToolRect", circle: "mepToolCercle", line: "mepToolLigne", image: "mepToolImage", texte: "mepToolTexte" };
   var btn = document.getElementById(map[nom]);
   if (btn) btn.classList.add("actif");
   document.getElementById("optionsHint").style.display = (nom === "select") ? "" : "none";
@@ -645,6 +674,7 @@ document.getElementById("mepToolRect").addEventListener("click", function(){ set
 document.getElementById("mepToolCercle").addEventListener("click", function(){ setOutilMep("circle"); });
 document.getElementById("mepToolLigne").addEventListener("click", function(){ setOutilMep("line"); });
 document.getElementById("mepToolImage").addEventListener("click", function(){ setOutilMep("image"); });
+document.getElementById("mepToolTexte").addEventListener("click", function(){ setOutilMep("texte"); });
 
 document.getElementById("mepToolCalques").addEventListener("click", function(){
   mepCalquesActif = !mepCalquesActif;
@@ -687,6 +717,33 @@ function renderFormeEl(conteneur, el){
     div.style.backgroundSize = "contain";
     div.style.backgroundRepeat = "no-repeat";
     div.style.backgroundPosition = "center";
+  } else if (el.type === "texte"){
+    div.className += " tp-texte";
+    div.style.setProperty("--fs", (el.fontSize || 12) + "px");
+    div.style.fontFamily = el.fontFamily || "Helvetica";
+    div.style.color = el.color || "#111111";
+    div.style.fontWeight = el.bold ? "700" : "400";
+    div.style.fontStyle = el.italic ? "italic" : "normal";
+    div.style.textDecoration = el.underline ? "underline" : "none";
+    div.style.textAlign = el.align || "left";
+    div.textContent = el.contenu || "";
+    if (!el.locked){
+      div.addEventListener("dblclick", function(ev){
+        ev.stopPropagation();
+        div.contentEditable = "true";
+        div.focus();
+        var range = document.createRange(); range.selectNodeContents(div);
+        var sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(range);
+      });
+      div.addEventListener("blur", function(){
+        if (div.isContentEditable){
+          el.contenu = div.textContent;
+          div.contentEditable = "false";
+          renderMepElements();
+        }
+      });
+      div.addEventListener("keydown", function(ev){ if (ev.key === "Escape") div.blur(); });
+    }
   } else {
     div.style.borderWidth = (el.strokeWidth != null ? el.strokeWidth : 1) + "px";
     div.style.borderColor = el.stroke || "#111111";
@@ -747,6 +804,7 @@ function attacherDeplacement(div, el){
   var actif = false, decalX = 0, decalY = 0;
   div.addEventListener("pointerdown", function(e){
     if (e.target !== div) return;
+    if (div.isContentEditable) return;
     mepSelectionId = el.id;
     renderMepElements();
     var page = document.getElementById("a4Page");
@@ -804,6 +862,17 @@ function renderPropsBar(){
     html += '<button type="button" class="mep-props-btn' + (el.arrowEnd ? " actif" : "") + '" id="propFleche" title="Tête de flèche">➜</button>';
   } else if (el.type === "image"){
     html += '<label>URL <input type="url" id="propImgUrl" value="' + (el.url || "").replace(/"/g, "&quot;") + '"></label>';
+  } else if (el.type === "texte"){
+    html += '<select id="propFontFamily" style="padding:4px 6px;font-size:11px;border-radius:6px;border:1px solid var(--border);background:var(--g1);color:var(--texte);">' +
+      ["Helvetica","Arial","Times New Roman","Georgia","Roboto"].map(function(f){ return '<option' + (el.fontFamily===f?' selected':'') + '>' + f + '</option>'; }).join("") + '</select>';
+    html += '<label>Taille <input type="number" id="propFontSize" min="6" max="72" value="' + (el.fontSize || 12) + '"></label>';
+    html += '<button type="button" class="mep-props-btn' + (el.bold ? " actif" : "") + '" id="propBold" title="Gras"><b>G</b></button>';
+    html += '<button type="button" class="mep-props-btn' + (el.italic ? " actif" : "") + '" id="propItalic" title="Italique"><i>I</i></button>';
+    html += '<button type="button" class="mep-props-btn' + (el.underline ? " actif" : "") + '" id="propUnderline" title="Souligné"><u>S</u></button>';
+    html += '<label>Couleur <input type="color" id="propColor" value="' + (el.color || "#111111") + '"></label>';
+    html += '<button type="button" class="mep-props-btn' + (el.align==="left"||!el.align ? " actif" : "") + '" id="propAlignL" title="Aligner à gauche">⟸</button>';
+    html += '<button type="button" class="mep-props-btn' + (el.align==="center" ? " actif" : "") + '" id="propAlignC" title="Centrer">☰</button>';
+    html += '<button type="button" class="mep-props-btn' + (el.align==="right" ? " actif" : "") + '" id="propAlignR" title="Aligner à droite">⟹</button>';
   }
   html += '<button type="button" class="mep-props-btn" id="propMonter" title="Monter d\'un calque">↑</button>';
   html += '<button type="button" class="mep-props-btn" id="propDescendre" title="Descendre d\'un calque">↓</button>';
@@ -817,6 +886,15 @@ function renderPropsBar(){
   var fn = document.getElementById("propFillNone"); if (fn) fn.addEventListener("click", function(){ el.fill = (el.fill === "none" || !el.fill) ? "#ffffff" : "none"; renderMepElements(); });
   var fe = document.getElementById("propFleche"); if (fe) fe.addEventListener("click", function(){ el.arrowEnd = !el.arrowEnd; renderMepElements(); });
   var iu = document.getElementById("propImgUrl"); if (iu) iu.addEventListener("change", function(){ el.url = this.value.trim(); renderMepElements(); });
+  var pf = document.getElementById("propFontFamily"); if (pf) pf.addEventListener("change", function(){ el.fontFamily = this.value; renderMepElements(); });
+  var ps = document.getElementById("propFontSize"); if (ps) ps.addEventListener("input", function(){ el.fontSize = parseFloat(this.value) || 12; renderMepElements(); });
+  var pb = document.getElementById("propBold"); if (pb) pb.addEventListener("click", function(){ el.bold = !el.bold; renderMepElements(); });
+  var pi = document.getElementById("propItalic"); if (pi) pi.addEventListener("click", function(){ el.italic = !el.italic; renderMepElements(); });
+  var pun = document.getElementById("propUnderline"); if (pun) pun.addEventListener("click", function(){ el.underline = !el.underline; renderMepElements(); });
+  var pc = document.getElementById("propColor"); if (pc) pc.addEventListener("input", function(){ el.color = this.value; renderMepElements(); });
+  var pal = document.getElementById("propAlignL"); if (pal) pal.addEventListener("click", function(){ el.align = "left"; renderMepElements(); });
+  var pac = document.getElementById("propAlignC"); if (pac) pac.addEventListener("click", function(){ el.align = "center"; renderMepElements(); });
+  var par = document.getElementById("propAlignR"); if (par) par.addEventListener("click", function(){ el.align = "right"; renderMepElements(); });
   document.getElementById("propMonter").addEventListener("click", function(){ deplacerCalque(el.id, 1); });
   document.getElementById("propDescendre").addEventListener("click", function(){ deplacerCalque(el.id, -1); });
   document.getElementById("propVerrou").addEventListener("click", function(){ el.locked = !el.locked; renderMepElements(); });
@@ -835,7 +913,7 @@ function renderCalquesList(){
   compte.textContent = elementsPage.length;
   vide.style.display = elementsPage.length ? "none" : "block";
   list.innerHTML = "";
-  var libelles = { rect: "Rectangle", circle: "Cercle", line: "Trait", image: "Image" };
+  var libelles = { rect: "Rectangle", circle: "Cercle", line: "Trait", image: "Image", texte: "Texte" };
   elementsPage.slice().reverse().forEach(function(el){
     var nom = (el.type === "line" && el.arrowEnd) ? "Flèche" : (libelles[el.type] || el.type);
     var row = document.createElement("div");
@@ -882,6 +960,25 @@ document.getElementById("a4Page").addEventListener("pointerdown", function(e){
     mepSelectionId = nouvelleLigne.id;
     renderMepElements();
     setOutilMep("select");
+    return;
+  }
+
+  if (mepOutilActif === "texte"){
+    var wT = 60, hT = 14;
+    var nouveauTexte = {
+      id: genMepId(), type: "texte", contenu: "Texte",
+      x: Math.max(0, Math.min(210 - wT, xMm - wT / 2)),
+      y: Math.max(0, Math.min(297 - hT, yMm - hT / 2)),
+      w: wT, h: hT, fontSize: 12, fontFamily: "Helvetica", color: "#111111",
+      bold: false, italic: false, underline: false, align: "left",
+      zIndex: trierParZ(mepPageActive).length, visible: true, locked: false, page: mepPageActive
+    };
+    mepElements.push(nouveauTexte);
+    mepSelectionId = nouveauTexte.id;
+    renderMepElements();
+    setOutilMep("select");
+    var nouveauDiv = document.querySelector('.a4-shape[data-id="' + nouveauTexte.id + '"]');
+    if (nouveauDiv) { nouveauDiv.dispatchEvent(new Event("dblclick", { bubbles: true })); }
     return;
   }
 
@@ -1029,6 +1126,7 @@ function ajusterTaillePage(){
   var h = w / ratio;
   page.style.width = Math.max(200, w) + "px";
   page.style.height = Math.max(283, h) + "px";
+  page.style.setProperty("--scale", Math.max(200, w) / 793);
 }
 window.addEventListener("resize", ajusterTaillePage);
 if (window.ResizeObserver) {

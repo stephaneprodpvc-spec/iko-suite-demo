@@ -551,9 +551,10 @@
 
     <div class="devis-modal-overlay" id="fiche-client-modal" style="display:none;">
     <div class="devis-modal-box">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;">
-        <h2 id="formTitle">Nouveau client</h2>
-        <button type="button" id="ficheFermerBtn" style="background:none;border:none;color:var(--texte-faint);font-size:22px;cursor:pointer;line-height:1;padding:4px 8px;">✕</button>
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;">
+        <h2 id="formTitle" style="flex:1;">Nouveau client</h2>
+        <button type="button" class="primary" id="ficheMepBtn" style="display:none;flex:none;padding:9px 14px;font-size:12.5px;">✎ Mise en page</button>
+        <button type="button" id="ficheFermerBtn" style="background:none;border:none;color:var(--texte-faint);font-size:22px;cursor:pointer;line-height:1;padding:4px 8px;flex:none;">✕</button>
       </div>
       <form id="clientForm">
         <label>Nom du client</label>
@@ -1884,6 +1885,7 @@ function ouvrirDevisPourClient(id, fieldsClient){
   devisClientNom = fieldsClient["Nom client"] || "";
   document.getElementById("devisTitreClient").textContent = devisClientNom || "—";
   document.getElementById("devisWrap").style.display = "block";
+  document.getElementById("ficheMepBtn").style.display = "inline-block";
   chargerCatalogue();
   chargerMO();
   chargerDevisListe();
@@ -1892,6 +1894,7 @@ function ouvrirDevisPourClient(id, fieldsClient){
 function fermerDevis(){
   devisClientId = null;
   document.getElementById("devisWrap").style.display = "none";
+  document.getElementById("ficheMepBtn").style.display = "none";
 }
 
 Array.prototype.forEach.call(document.querySelectorAll(".devis-tab"), function(tab){
@@ -1903,11 +1906,14 @@ Array.prototype.forEach.call(document.querySelectorAll(".devis-tab"), function(t
   });
 });
 
-var ouvrirEditeurMepBtnEl = document.getElementById("ouvrirEditeurMepBtn");
-if (ouvrirEditeurMepBtnEl) ouvrirEditeurMepBtnEl.addEventListener("click", function(){
+function ouvrirEditeurMep(){
   if (!devisClientId) return;
   location.href = "devis-editeur.html?client=" + encodeURIComponent(devisClientId);
-});
+}
+var ouvrirEditeurMepBtnEl = document.getElementById("ouvrirEditeurMepBtn");
+if (ouvrirEditeurMepBtnEl) ouvrirEditeurMepBtnEl.addEventListener("click", ouvrirEditeurMep);
+document.getElementById("ficheMepBtn").addEventListener("click", ouvrirEditeurMep);
+
 
 function filtreFormuleClient(){
   var nom = (devisClientNom || "").replace(/"/g, '\\"');
