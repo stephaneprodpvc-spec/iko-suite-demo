@@ -2,7 +2,7 @@
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>Iko — Éditeur de mise en page devis</title>
 <meta name="theme-color" content="#0A0A0A">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -595,16 +595,21 @@ function appliquerPositionsBlocs(){
 function rendreBlocDeplacable(elId, cle){
   var el = document.getElementById(elId);
   var page = document.getElementById("a4Page");
-  var actif = false;
+  var actif = false, decalX = 0, decalY = 0;
   el.addEventListener("pointerdown", function(e){
+    var rect = page.getBoundingClientRect();
+    var xMm = ((e.clientX - rect.left) / rect.width) * 210;
+    var yMm = ((e.clientY - rect.top) / rect.height) * 297;
+    decalX = xMm - posBlocs[cle].x; decalY = yMm - posBlocs[cle].y;
     actif = true; el.setPointerCapture(e.pointerId); el.style.cursor = "grabbing";
   });
   el.addEventListener("pointermove", function(e){
     if (!actif) return;
     var rect = page.getBoundingClientRect();
-    var xMm = Math.max(0, Math.min(210 - posBlocs[cle].w, ((e.clientX - rect.left) / rect.width) * 210));
-    var yMm = Math.max(0, Math.min(290, ((e.clientY - rect.top) / rect.height) * 297));
-    posBlocs[cle].x = xMm; posBlocs[cle].y = yMm;
+    var xMm = ((e.clientX - rect.left) / rect.width) * 210;
+    var yMm = ((e.clientY - rect.top) / rect.height) * 297;
+    posBlocs[cle].x = Math.max(0, Math.min(210 - posBlocs[cle].w, xMm - decalX));
+    posBlocs[cle].y = Math.max(0, Math.min(290, yMm - decalY));
     appliquerPositionsBlocs();
   });
   el.addEventListener("pointerup", function(e){ actif = false; el.style.cursor = "grab"; try { el.releasePointerCapture(e.pointerId); } catch(err){} });
