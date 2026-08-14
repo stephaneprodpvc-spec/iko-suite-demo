@@ -1,0 +1,1040 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Iko — Éditeur de mise en page devis</title>
+<meta name="theme-color" content="#0A0A0A">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --noir:#0A0A0A; --panel: rgba(255,255,255,0.045); --panel-hover: rgba(255,255,255,0.07);
+    --g1:#101012; --g2:#151517; --g3:#1C1C1F; --pasteboard:#232326;
+    --border: rgba(255,255,255,0.09); --border-strong: rgba(255,255,255,0.18); --orange:#FF6B00; --orange-dim: rgba(255,107,0,0.15);
+    --texte:#F5F5F7; --texte-dim:#98989D; --texte-faint:#636366;
+    --radius-sm:12px;
+    --f-ui:-apple-system,BlinkMacSystemFont,"SF Pro Display","SF Pro Text","Segoe UI",sans-serif;
+    --f-display:"Space Grotesk",var(--f-ui);
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  html,body{height:100%;overflow:hidden;-webkit-font-smoothing:antialiased;}
+  body{font-family:var(--f-ui);background:var(--noir);color:var(--texte);letter-spacing:-0.01em;}
+  ::selection{background:var(--orange-dim);}
+  button{font-family:inherit;}
+
+  label{display:block;font-size:11.5px;color:var(--texte-dim);margin:14px 0 6px;font-weight:500;}
+  label:first-of-type{margin-top:0;}
+  input[type=text],input[type=url],select{
+    width:100%;padding:11px 13px;border-radius:11px;border:1px solid var(--border);
+    background:rgba(255,255,255,0.04);color:var(--texte);font-size:13px;outline:none;
+    transition:border-color .2s; font-family:inherit;
+  }
+  input[type=number]{
+    width:100%;padding:9px 10px;border-radius:9px;border:1px solid var(--border);
+    background:rgba(255,255,255,0.04);color:var(--texte);font-size:12.5px;outline:none;font-family:inherit;
+  }
+  input:focus,select:focus{border-color:var(--orange);}
+  select{appearance:none;-webkit-appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='%2398989D'%3E%3Cpath d='M5.5 7.5L10 12l4.5-4.5' stroke='%2398989D' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;padding-right:32px;}
+  input[type=color]{width:100%;height:36px;border:1px solid var(--border);border-radius:10px;background:none;cursor:pointer;padding:3px;}
+  button.primary{padding:10px 18px;border:none;border-radius:11px;background:var(--orange);color:#0A0A0A;font-weight:600;cursor:pointer;font-size:12.5px;box-shadow:0 8px 20px -8px rgba(255,107,0,0.5);}
+  button.primary:active{transform:scale(0.97);}
+  button.secondary{padding:10px 16px;border:1px solid var(--border);border-radius:11px;background:transparent;color:var(--texte-dim);cursor:pointer;font-size:12.5px;}
+  button.secondary:hover{background:var(--panel-hover);}
+
+  /* ---- Redirection si non authentifié ---- */
+  #gate{position:fixed;inset:0;background:var(--noir);z-index:9999;display:flex;align-items:center;justify-content:center;color:var(--texte-faint);font-size:13px;}
+
+  /* ---- Structure générale : grille figée plein écran ---- */
+  .editeur-shell{
+    height:100vh; display:grid;
+    grid-template-columns:64px 1fr 300px;
+    grid-template-rows:52px 40px 1fr;
+    grid-template-areas:"topbar topbar topbar" "options options options" "tools canvas panel";
+    transition:grid-template-columns .2s var(--ease,ease);
+  }
+  .editeur-shell.panel-ferme{grid-template-columns:64px 1fr 0px;}
+
+  /* ---- Barre du haut ---- */
+  .topbar{grid-area:topbar;display:flex;align-items:center;gap:14px;padding:0 16px;border-bottom:1px solid var(--border);background:var(--g2);}
+  .tb-retour{width:32px;height:32px;border-radius:9px;border:1px solid var(--border);background:none;color:var(--texte-dim);cursor:pointer;font-size:15px;display:flex;align-items:center;justify-content:center;flex:none;}
+  .tb-retour:hover{color:var(--texte);border-color:var(--border-strong);}
+  .tb-titre{font-family:var(--f-display);font-size:13.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .tb-sous{font-size:10.5px;color:var(--texte-faint);font-weight:500;}
+  .tb-spacer{flex:1;}
+  .tb-msg{font-size:11.5px;color:var(--texte-faint);}
+  .tb-panel-toggle{width:32px;height:32px;border-radius:9px;border:1px solid var(--border);background:none;color:var(--texte-dim);cursor:pointer;font-size:13px;flex:none;}
+  .tb-panel-toggle.actif{border-color:var(--orange);color:var(--orange);}
+
+  /* ---- Barre d'options contextuelle (pages + propriétés sélection) ---- */
+  .options-bar{grid-area:options;display:flex;align-items:center;gap:10px;padding:0 16px;border-bottom:1px solid var(--border);background:var(--g1);overflow-x:auto;}
+  .mep-page-btn{min-width:24px;height:24px;padding:0 6px;border-radius:6px;border:1px solid var(--border);background:var(--g2);color:var(--texte-faint);font-size:10.5px;font-weight:700;cursor:pointer;flex:none;}
+  .mep-page-btn.actif{background:rgba(255,107,0,0.14);border-color:rgba(255,107,0,0.4);color:var(--orange);}
+  .mep-page-add{width:24px;height:24px;border-radius:6px;border:1px dashed var(--border-strong);background:none;color:var(--texte-faint);cursor:pointer;font-size:12px;flex:none;}
+  .mep-page-add:hover{color:var(--orange);border-color:var(--orange);}
+  .options-sep{width:1px;height:20px;background:var(--border);flex:none;}
+  .mep-props-bar{display:none;align-items:center;gap:8px;font-size:11px;color:var(--texte-faint);}
+  .mep-props-bar.actif{display:flex;}
+  .mep-props-bar label{display:flex;align-items:center;gap:4px;white-space:nowrap;margin:0;font-size:11px;}
+  .mep-props-bar input[type=color]{width:24px;height:24px;padding:0;border:1px solid var(--border);border-radius:6px;}
+  .mep-props-bar input[type=number]{width:48px;padding:4px 5px;font-size:11px;}
+  .mep-props-bar input[type=url]{width:180px;padding:5px 8px;font-size:11px;}
+  .mep-props-btn{background:none;border:1px solid var(--border);color:var(--texte-faint);border-radius:6px;width:24px;height:24px;cursor:pointer;font-size:11.5px;flex:none;}
+  .mep-props-btn.actif{border-color:var(--orange);color:var(--orange);}
+  .options-hint{font-size:11px;color:var(--texte-faint);}
+
+  /* ---- Palette d'outils (façon Photoshop) ---- */
+  .toolpalette{grid-area:tools;display:flex;flex-direction:column;align-items:center;gap:6px;padding:10px 0;background:var(--g2);border-right:1px solid var(--border);overflow-y:auto;}
+  .tp-groupe{display:flex;flex-direction:column;align-items:center;gap:4px;padding-bottom:8px;margin-bottom:8px;border-bottom:1px solid var(--border);width:100%;}
+  .tp-groupe:last-child{border-bottom:none;}
+  .mep-tool-btn{width:42px;height:42px;border-radius:11px;border:1px solid transparent;background:none;color:var(--texte-dim);font-size:17px;cursor:pointer;display:flex;align-items:center;justify-content:center;}
+  .mep-tool-btn:hover{background:var(--panel-hover);color:var(--texte);}
+  .mep-tool-btn.actif{background:var(--orange-dim);border-color:rgba(255,107,0,0.4);color:var(--orange);}
+  .mep-tool-btn:disabled{opacity:.3;cursor:default;}
+  .mep-tool-btn:disabled:hover{background:none;color:var(--texte-dim);}
+  .tp-label{font-size:8px;color:var(--texte-faint);text-transform:uppercase;letter-spacing:.05em;margin-top:-4px;}
+
+  /* ---- Zone de canevas : figée, jamais de scroll de page ---- */
+  .canvaszone{grid-area:canvas;display:flex;align-items:center;justify-content:center;overflow:hidden;padding:26px;min-width:0;min-height:0;position:relative;
+    background:
+      radial-gradient(circle at 20% 15%, rgba(255,107,0,0.05), transparent 45%),
+      var(--pasteboard);
+  }
+  .a4-page{background:#ffffff;border-radius:2px;box-shadow:0 2px 4px rgba(0,0,0,0.35),0 30px 70px -20px rgba(0,0,0,0.7);overflow:hidden;position:relative;flex:none;}
+  .a4-marge-guide{position:absolute;inset:7% 6%;display:flex;flex-direction:column;border:1px dashed rgba(0,0,0,0.14);padding:3%;box-sizing:border-box;}
+  .a4-entete{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;}
+  .a4-logo{position:absolute;object-fit:contain;z-index:2;cursor:grab;touch-action:none;}
+  .a4-logo:not([src]),.a4-logo[src=""]{display:none;}
+  .a4-shape{position:absolute;box-sizing:border-box;touch-action:none;cursor:grab;z-index:3;}
+  .a4-shape.tp-rect{border-style:solid;}
+  .a4-shape.tp-circle{border-style:solid;border-radius:50%;}
+  .a4-shape.selectionnee{outline:2px dashed var(--orange);outline-offset:2px;cursor:grabbing;}
+  .a4-shape-handle{position:absolute;right:-7px;bottom:-7px;width:13px;height:13px;background:var(--orange);border-radius:3px;cursor:nwse-resize;display:none;touch-action:none;}
+  .a4-shape.selectionnee .a4-shape-handle{display:block;}
+  #a4Lines{position:absolute;inset:0;width:100%;height:100%;z-index:3;pointer-events:none;}
+  .a4-line-hit{pointer-events:stroke;cursor:pointer;}
+  .a4-line-hit.selectionnee{stroke-dasharray:4 3;}
+  .a4-line-handle{pointer-events:all;cursor:move;touch-action:none;}
+  .a4-devis-titre{font-size:15px;font-weight:700;letter-spacing:.04em;color:#111;}
+  .a4-devis-num{font-size:7px;color:#666;margin-top:2px;}
+  .a4-identite{font-size:6.3px;color:#444;margin-top:8px;line-height:1.5;}
+  .a4-client-bloc{margin-top:14px;font-size:6.8px;color:#222;line-height:1.5;background:#f4f4f4;border-radius:3px;padding:6px 8px;max-width:60%;}
+  .a4-client-label{font-size:5.6px;text-transform:uppercase;letter-spacing:.05em;color:#888;margin-bottom:2px;}
+  .a4-table-apercu{width:100%;border-collapse:collapse;margin-top:14px;font-size:6.5px;}
+  .a4-table-apercu th{text-align:left;border-bottom:1px solid #ccc;padding:3px 4px;font-size:5.8px;text-transform:uppercase;letter-spacing:.04em;color:#777;}
+  .a4-table-apercu td{padding:4px;border-bottom:1px solid #eee;color:#333;}
+  .a4-totaux{text-align:right;font-size:6.8px;color:#222;margin-top:8px;}
+  .a4-mentions{font-size:5.2px;color:#999;margin-top:auto;padding-top:10px;line-height:1.6;}
+  .a4-pied{font-size:5.2px;color:#aaa;text-align:center;border-top:1px solid #eee;padding-top:6px;margin-top:6px;}
+
+  /* ---- Panneau droit : Réglages / Calques ---- */
+  .panel{grid-area:panel;display:flex;flex-direction:column;background:var(--g2);border-left:1px solid var(--border);overflow:hidden;min-width:0;}
+  .editeur-shell.panel-ferme .panel{display:none;}
+  .panel-tabs{display:flex;flex:none;border-bottom:1px solid var(--border);}
+  .panel-tab{flex:1;padding:11px 0;text-align:center;font-size:11.5px;font-weight:600;color:var(--texte-faint);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;}
+  .panel-tab.actif{color:var(--orange);border-bottom-color:var(--orange);}
+  .panel-scroll{flex:1;overflow-y:auto;padding:16px;}
+  .panel-sub{display:none;}
+  .panel-sub.panel-view{display:block;}
+  .mep-subtabs{display:flex;gap:4px;margin-bottom:14px;flex-wrap:wrap;}
+  .mep-subtab{padding:6px 10px;font-size:10.5px;font-weight:600;color:var(--texte-faint);cursor:pointer;border-radius:7px;background:var(--g1);border:1px solid var(--border);}
+  .mep-subtab.actif{color:var(--orange);border-color:rgba(255,107,0,0.4);background:var(--orange-dim);}
+  .mep-subpanel{display:none;}
+  .mep-subpanel.actif{display:block;}
+  .devis-import-hint{font-size:10.5px;color:var(--texte-faint);margin-top:6px;line-height:1.5;}
+  .devis-legal-grid{display:grid;grid-template-columns:1fr 1fr;gap:0 12px;}
+  .devis-legal-grid label{margin:12px 0 5px;}
+  .devis-legal-grid h2{font-size:12px;margin:0 0 4px;color:var(--texte);}
+  .devis-save-bar{display:flex;align-items:center;gap:10px;margin-top:16px;}
+  .texte-toolbar{display:flex;gap:4px;margin-bottom:6px;}
+  .texte-toolbar button{width:28px;height:28px;border-radius:7px;border:1px solid var(--border);background:rgba(255,255,255,0.04);color:var(--texte);font-size:12px;cursor:pointer;}
+  .texte-toolbar button:hover{background:rgba(255,255,255,0.09);}
+  .texte-editable{width:100%;min-height:40px;padding:10px 12px;border-radius:11px;border:1px solid var(--border);background:rgba(255,255,255,0.04);color:var(--texte);font-size:12.5px;outline:none;font-family:inherit;}
+  .texte-editable:focus{border-color:var(--orange);}
+  .marges-editeur{display:flex;flex-direction:column;align-items:center;gap:6px;margin-bottom:14px;}
+  .marges-milieu{display:flex;align-items:center;gap:6px;width:100%;}
+  .marges-champ{display:flex;flex-direction:column;align-items:center;gap:3px;}
+  .marges-label{font-size:9px;text-transform:uppercase;letter-spacing:.04em;color:var(--texte-faint);}
+  .marges-champ input{width:48px;padding:5px 3px;text-align:center;}
+  .marges-unite{font-size:8.5px;color:var(--texte-faint);}
+  .marges-gauche,.marges-droite{flex-direction:column;}
+  .marges-page-icone{flex:1;height:60px;border:1.5px dashed var(--border);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:8.5px;color:var(--texte-faint);text-transform:uppercase;letter-spacing:.06em;background:rgba(255,255,255,0.02);}
+  .row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:0 10px;}
+
+  .mep-calques-list{display:flex;flex-direction:column;gap:6px;}
+  .mep-calque-item{display:flex;align-items:center;gap:6px;padding:7px 9px;border:1px solid var(--border);border-radius:9px;background:var(--g1);font-size:11.5px;}
+  .mep-calque-item.selectionne{border-color:var(--orange);background:rgba(255,107,0,0.08);}
+  .mep-calque-nom{flex:1;color:var(--texte);cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .mep-calque-item button{background:none;border:none;color:var(--texte-faint);cursor:pointer;font-size:12px;width:22px;height:22px;border-radius:6px;}
+  .mep-calque-item button:hover{background:rgba(255,255,255,0.06);color:var(--texte);}
+  .mep-calque-item button.actif{color:var(--orange);}
+  .panel-empty{font-size:11.5px;color:var(--texte-faint);text-align:center;padding:20px 8px;}
+</style>
+</head>
+<body>
+
+<div id="gate">Vérification de l'accès…</div>
+
+<div class="editeur-shell" id="shell" style="display:none;">
+  <div class="topbar">
+    <button type="button" class="tb-retour" id="btnRetour" title="Retour au poste de pilotage">←</button>
+    <div>
+      <div class="tb-titre" id="tbTitre">Éditeur de mise en page</div>
+      <div class="tb-sous" id="tbSousTitre">—</div>
+    </div>
+    <div class="tb-spacer"></div>
+    <span class="tb-msg" id="tbMsg"></span>
+    <button type="button" class="primary" id="mepSaveBtn">Enregistrer</button>
+    <button type="button" class="tb-panel-toggle actif" id="tbPanelToggle" title="Afficher/masquer le panneau">▤</button>
+  </div>
+
+  <div class="options-bar">
+    <div class="mep-page-bar" id="mepPageBar" style="display:flex;gap:6px;flex:none;"></div>
+    <div class="options-sep"></div>
+    <div class="mep-props-bar" id="mepPropsBar"></div>
+    <div class="options-hint" id="optionsHint">Sélectionne un outil à gauche, puis clique sur la page pour créer un élément.</div>
+  </div>
+
+  <div class="toolpalette">
+    <div class="tp-groupe">
+      <button type="button" class="mep-tool-btn actif" id="mepToolSelect" title="Sélection">↖</button>
+    </div>
+    <div class="tp-groupe">
+      <button type="button" class="mep-tool-btn" id="mepToolRect" title="Rectangle">▭</button>
+      <button type="button" class="mep-tool-btn" id="mepToolCercle" title="Cercle">◯</button>
+      <button type="button" class="mep-tool-btn" id="mepToolLigne" title="Trait / flèche">↗</button>
+      <button type="button" class="mep-tool-btn" id="mepToolImage" title="Image">▢</button>
+      <button type="button" class="mep-tool-btn" disabled title="Texte (bientôt)">T</button>
+    </div>
+    <div class="tp-groupe">
+      <button type="button" class="mep-tool-btn" id="mepToolCalques" title="Calques">▤</button>
+    </div>
+  </div>
+
+  <div class="canvaszone" id="canvasZone">
+    <div class="a4-page" id="a4Page">
+      <img id="a4Logo" class="a4-logo" alt="">
+      <div id="a4Elements"></div>
+      <svg id="a4Lines" viewBox="0 0 210 297" preserveAspectRatio="none"></svg>
+      <div class="a4-marge-guide" id="a4MargeGuide">
+        <div class="a4-entete">
+          <div class="a4-entete-droite" style="margin-left:auto;text-align:right;">
+            <div class="a4-devis-titre" id="a4DevisTitre">DEVIS</div>
+            <div class="a4-devis-num">N° DEV-2026-0001</div>
+          </div>
+        </div>
+        <div class="a4-identite" id="a4Identite">Raison sociale — Forme juridique<br>Adresse entreprise</div>
+        <div class="a4-client-bloc">
+          <div class="a4-client-label">Client</div>
+          <div>Nom du client<br>Adresse, Code postal Ville</div>
+        </div>
+        <table class="a4-table-apercu">
+          <thead><tr><th>Désignation</th><th>Qté</th><th>PU HT</th><th>Total HT</th></tr></thead>
+          <tbody>
+            <tr><td>Exemple de ligne produit</td><td>1</td><td>—</td><td>—</td></tr>
+            <tr><td>Exemple main d'œuvre</td><td>2h</td><td>—</td><td>—</td></tr>
+          </tbody>
+        </table>
+        <div class="a4-totaux">Total HT — · TVA — · <b>Total TTC —</b></div>
+        <div class="a4-mentions" id="a4Mentions">SIRET — · RCS — · TVA intracom. —<br>Assurance décennale : — · Validité devis : 30 jours</div>
+        <div class="a4-pied" id="a4Pied">Texte de pied de page</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-tabs">
+      <div class="panel-tab actif" data-panelsub="panelReglages">Réglages</div>
+      <div class="panel-tab" data-panelsub="panelCalques">Calques</div>
+    </div>
+    <div class="panel-scroll">
+
+      <div class="panel-sub panel-view" id="panelReglages">
+        <div class="mep-subtabs" id="mepSubtabsRow">
+          <div class="mep-subtab actif" data-mepsub="mepSubLogo">Logo</div>
+          <div class="mep-subtab" data-mepsub="mepSubCouleurs">Couleurs &amp; marges</div>
+          <div class="mep-subtab" data-mepsub="mepSubTexte">Texte</div>
+          <div class="mep-subtab" data-mepsub="mepSubLegal">Légal</div>
+        </div>
+
+        <div class="mep-subpanel actif" id="mepSubLogo">
+          <label>Logo</label>
+          <input type="url" id="mepLogo" placeholder="https://…">
+          <div style="display:flex;gap:8px;margin-top:8px;">
+            <button type="button" class="secondary" id="mepLogoUploadBtn" style="flex:1;">Depuis mon appareil</button>
+            <input type="file" id="mepLogoFile" accept="image/*" style="display:none;">
+          </div>
+          <div class="devis-import-hint" id="mepLogoMsg">URL directe, ou upload d'un fichier depuis l'appareil.</div>
+          <div class="row3">
+            <div><label>X (mm)</label><input type="number" id="mepLogoX" value="18" min="0" max="190" step="1"></div>
+            <div><label>Y (mm)</label><input type="number" id="mepLogoY" value="14" min="0" max="280" step="1"></div>
+            <div><label>Largeur (mm)</label><input type="number" id="mepLogoW" value="30" min="5" max="100" step="1"></div>
+          </div>
+          <button type="button" class="secondary" id="mepLogoCentrerBtn" style="width:100%;margin-top:12px;">↔ Centrer le logo horizontalement</button>
+          <div class="devis-import-hint">Astuce : sur la page, touche le logo et fais-le glisser pour le repositionner directement.</div>
+        </div>
+
+        <div class="mep-subpanel" id="mepSubCouleurs">
+          <label>Couleur principale</label><input type="color" id="mepCouleur" value="#FF6B00">
+          <label>Police</label>
+          <select id="mepPolice">
+            <option>Helvetica</option><option>Arial</option><option>Times New Roman</option><option>Georgia</option><option>Roboto</option>
+          </select>
+          <label>Marges de la page</label>
+          <div class="marges-editeur">
+            <div class="marges-champ marges-haut">
+              <span class="marges-label">Haut</span>
+              <input type="number" id="mepMargeHaut" value="20" min="0" max="80" step="1"><span class="marges-unite">mm</span>
+            </div>
+            <div class="marges-milieu">
+              <div class="marges-champ marges-gauche">
+                <span class="marges-label">Gauche</span>
+                <input type="number" id="mepMargeGauche" value="18" min="0" max="80" step="1"><span class="marges-unite">mm</span>
+              </div>
+              <div class="marges-page-icone">Page</div>
+              <div class="marges-champ marges-droite">
+                <span class="marges-label">Droite</span>
+                <input type="number" id="mepMargeDroite" value="18" min="0" max="80" step="1"><span class="marges-unite">mm</span>
+              </div>
+            </div>
+            <div class="marges-champ marges-bas">
+              <span class="marges-label">Bas</span>
+              <input type="number" id="mepMargeBas" value="20" min="0" max="80" step="1"><span class="marges-unite">mm</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="mep-subpanel" id="mepSubTexte">
+          <label>Texte pied de page</label>
+          <div class="texte-toolbar">
+            <button type="button" data-cmd="bold" title="Gras"><b>G</b></button>
+            <button type="button" data-cmd="italic" title="Italique"><i>I</i></button>
+            <button type="button" data-cmd="underline" title="Souligné"><u>S</u></button>
+            <span style="width:1px;background:var(--border);margin:0 2px;"></span>
+            <button type="button" data-cmd="justifyLeft" title="Aligner à gauche">⟸</button>
+            <button type="button" data-cmd="justifyCenter" title="Centrer">☰</button>
+            <button type="button" data-cmd="justifyRight" title="Aligner à droite">⟹</button>
+          </div>
+          <div id="mepPiedPage" contenteditable="true" class="texte-editable"></div>
+          <label>Durée de validité du devis (jours)</label>
+          <input type="text" id="mepDureeValidite" placeholder="30">
+        </div>
+
+        <div class="mep-subpanel" id="mepSubLegal">
+          <h2>Identité entreprise</h2>
+          <div class="devis-legal-grid">
+            <div><label>Raison sociale</label><input type="text" id="mepRaisonSociale"></div>
+            <div><label>Forme juridique</label><input type="text" id="mepFormeJuridique" placeholder="SARL, SASU…"></div>
+            <div style="grid-column:1/-1;"><label>Adresse entreprise</label><input type="text" id="mepAdresseEntreprise"></div>
+            <div><label>SIRET</label><input type="text" id="mepSiret"></div>
+            <div><label>RCS / RM</label><input type="text" id="mepRcs"></div>
+            <div style="grid-column:1/-1;"><label>TVA intracommunautaire</label><input type="text" id="mepTva" placeholder="FR… ou « non applicable art. 293 B »"></div>
+          </div>
+          <h2 style="margin-top:18px;">Assurance décennale</h2>
+          <div class="devis-legal-grid">
+            <div><label>Assureur</label><input type="text" id="mepAssureur"></div>
+            <div><label>N° de police</label><input type="text" id="mepNumPolice"></div>
+            <div style="grid-column:1/-1;"><label>Zone de couverture</label><input type="text" id="mepZoneCouverture"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel-sub" id="panelCalques">
+        <label style="margin-top:0;">Calques — <span id="mepCalquesCompte">0</span> élément(s)</label>
+        <div class="devis-import-hint" style="margin-top:0;margin-bottom:12px;">Glisse un élément sur la page pour le sélectionner. ↑/↓ change l'ordre d'empilement, 👁 masque/affiche, 🔒 verrouille.</div>
+        <div class="mep-calques-list" id="mepCalquesList"></div>
+        <div class="panel-empty" id="mepCalquesVide" style="display:none;">Aucun élément sur cette page. Choisis un outil forme/trait/image à gauche puis clique sur la page.</div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+/* ---- Contrôle d'accès : même verrou que le poste de pilotage (sessionStorage) ---- */
+if (sessionStorage.getItem("iko_admin_ok") !== "1") {
+  location.href = "admin.html";
+} else {
+  document.getElementById("gate").style.display = "none";
+  document.getElementById("shell").style.display = "grid";
+}
+
+var APP_SECRET = "97960bb3f41d75c71ba3e831a7acb90ab324549734e27d6a";
+var _fetch = window.fetch;
+window.fetch = function(url, opts){
+  if (typeof url === "string" && url.indexOf("/api/airtable") === 0){
+    opts = opts || {};
+    opts.headers = Object.assign({}, opts.headers || {}, {"X-App-Secret": APP_SECRET});
+  }
+  return _fetch(url, opts);
+};
+
+function escHtml(s){
+  return String(s == null ? "" : s).replace(/[&<>"']/g, function(c){
+    return { "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c];
+  });
+}
+
+var TBL_MEP = "Mise en page Devis";
+var TABLE_CLIENTS = "Clients";
+var mepElements = [];
+var mepSelectionId = null;
+var mepOutilActif = "select";
+var mepPageActive = 0;
+var mepPageCountUI = 1;
+var devisClientId = null;
+var devisClientNom = "";
+var devisMEPRecordId = null;
+
+/* ---- Amorçage depuis le paramètre ?client=recXXX ---- */
+(function(){
+  var params = new URLSearchParams(location.search);
+  devisClientId = params.get("client");
+  if (!devisClientId) {
+    document.getElementById("tbMsg").textContent = "Aucun client précisé dans l'URL.";
+    return;
+  }
+  fetch("/api/airtable/" + encodeURIComponent(TABLE_CLIENTS) + "/" + devisClientId)
+    .then(function(r){ return r.json(); })
+    .then(function(data){
+      devisClientNom = (data.fields && data.fields["Nom client"]) || "—";
+      document.getElementById("tbTitre").textContent = "Mise en page devis";
+      document.getElementById("tbSousTitre").textContent = devisClientNom;
+      chargerMEP();
+    })
+    .catch(function(){ document.getElementById("tbMsg").textContent = "Client introuvable."; });
+})();
+
+document.getElementById("btnRetour").addEventListener("click", function(){ location.href = "admin.html"; });
+
+function filtreFormuleClient(){
+  var nom = (devisClientNom || "").replace(/"/g, '\\"');
+  return 'FIND("' + nom + '", ARRAYJOIN({Client}))';
+}
+
+/* ---- Panneau droit : onglets Réglages / Calques ---- */
+Array.prototype.forEach.call(document.querySelectorAll(".panel-tab"), function(tab){
+  tab.addEventListener("click", function(){
+    Array.prototype.forEach.call(document.querySelectorAll(".panel-tab"), function(t){ t.classList.remove("actif"); });
+    Array.prototype.forEach.call(document.querySelectorAll(".panel-sub"), function(p){ p.classList.remove("panel-view"); });
+    tab.classList.add("actif");
+    document.getElementById(tab.getAttribute("data-panelsub")).classList.add("panel-view");
+  });
+});
+Array.prototype.forEach.call(document.querySelectorAll(".mep-subtab"), function(st){
+  st.addEventListener("click", function(){
+    Array.prototype.forEach.call(document.querySelectorAll(".mep-subtab"), function(t){ t.classList.remove("actif"); });
+    Array.prototype.forEach.call(document.querySelectorAll(".mep-subpanel"), function(p){ p.classList.remove("actif"); });
+    st.classList.add("actif");
+    document.getElementById(st.getAttribute("data-mepsub")).classList.add("actif");
+  });
+});
+
+document.getElementById("tbPanelToggle").addEventListener("click", function(){
+  var shell = document.getElementById("shell");
+  var ferme = shell.classList.toggle("panel-ferme");
+  this.classList.toggle("actif", !ferme);
+  ajusterTaillePage();
+});
+/* Panneau masqué par défaut sur petit écran (tablette portrait) pour laisser la place au canevas */
+if (window.innerWidth < 900) {
+  document.getElementById("shell").classList.add("panel-ferme");
+  document.getElementById("tbPanelToggle").classList.remove("actif");
+}
+
+/* ---- Mise en page devis : chargement / sauvegarde ---- */
+function chargerMEP(){
+  fetch("/api/airtable/" + encodeURIComponent(TBL_MEP) + "?filterByFormula=" + encodeURIComponent(filtreFormuleClient()))
+    .then(function(r){ return r.json(); })
+    .then(function(data){ remplirFormMEP((data.records || [])[0]); })
+    .catch(function(){ document.getElementById("tbMsg").textContent = "Erreur de chargement."; });
+}
+
+function remplirFormMEP(rec){
+  var f = (rec && rec.fields) || {};
+  devisMEPRecordId = rec ? rec.id : null;
+  document.getElementById("mepCouleur").value = f["Couleur primaire"] || "#FF6B00";
+  document.getElementById("mepPolice").value = f["Police"] || "Helvetica";
+  document.getElementById("mepPiedPage").innerHTML = f["Texte pied de page"] || "";
+  document.getElementById("mepDureeValidite").value = f["Durée validité devis (jours)"] != null ? f["Durée validité devis (jours)"] : "30";
+
+  var marges = { haut: 20, bas: 20, gauche: 18, droite: 18 };
+  try { var m = JSON.parse(f["Marges"] || "null"); if (m && typeof m === "object") marges = Object.assign(marges, m); } catch(e){}
+  document.getElementById("mepMargeHaut").value = marges.haut;
+  document.getElementById("mepMargeBas").value = marges.bas;
+  document.getElementById("mepMargeGauche").value = marges.gauche;
+  document.getElementById("mepMargeDroite").value = marges.droite;
+
+  var identite = {};
+  try { identite = JSON.parse(f["Identité entreprise (JSON)"] || "{}"); } catch(e){}
+  document.getElementById("mepLogo").value = (f["Logo"] && f["Logo"][0] && f["Logo"][0].url) || identite.logoUrl || "";
+  document.getElementById("mepLogoX").value = identite.logoX != null ? identite.logoX : 18;
+  document.getElementById("mepLogoY").value = identite.logoY != null ? identite.logoY : 14;
+  document.getElementById("mepLogoW").value = identite.logoW != null ? identite.logoW : 30;
+  document.getElementById("mepRaisonSociale").value = identite.raisonSociale || "";
+  document.getElementById("mepFormeJuridique").value = identite.formeJuridique || "";
+  document.getElementById("mepAdresseEntreprise").value = identite.adresse || "";
+  document.getElementById("mepSiret").value = identite.siret || "";
+  document.getElementById("mepRcs").value = identite.rcs || "";
+  document.getElementById("mepTva").value = identite.tva || "";
+
+  var assurance = {};
+  try { assurance = JSON.parse(f["Assurance décennale (JSON)"] || "{}"); } catch(e){}
+  document.getElementById("mepAssureur").value = assurance.assureur || "";
+  document.getElementById("mepNumPolice").value = assurance.numPolice || "";
+  document.getElementById("mepZoneCouverture").value = assurance.zone || "";
+
+  mepElements = [];
+  try { var els = JSON.parse(f["Éléments graphiques (JSON)"] || "[]"); if (Array.isArray(els)) mepElements = els; } catch(e){}
+  mepSelectionId = null;
+  mepPageActive = 0;
+  mepPageCountUI = 1;
+  recalcMepPages();
+  renderMepElements();
+  majApercuA4();
+  ajusterTaillePage();
+}
+
+function majApercuA4(){
+  var logo = document.getElementById("mepLogo").value.trim();
+  var img = document.getElementById("a4Logo");
+  var logoX = parseFloat(document.getElementById("mepLogoX").value) || 0;
+  var logoY = parseFloat(document.getElementById("mepLogoY").value) || 0;
+  var logoW = parseFloat(document.getElementById("mepLogoW").value) || 30;
+  if (logo){
+    img.src = logo; img.style.display = "";
+    img.style.left = (logoX / 210 * 100) + "%";
+    img.style.top = (logoY / 297 * 100) + "%";
+    img.style.width = (logoW / 210 * 100) + "%";
+  } else { img.removeAttribute("src"); img.style.display = "none"; }
+
+  var couleur = document.getElementById("mepCouleur").value || "#FF6B00";
+  document.getElementById("a4DevisTitre").style.color = couleur;
+  document.getElementById("a4MargeGuide").style.fontFamily = document.getElementById("mepPolice").value || "Helvetica";
+
+  var raison = document.getElementById("mepRaisonSociale").value.trim() || "Raison sociale";
+  var forme = document.getElementById("mepFormeJuridique").value.trim();
+  var adresse = document.getElementById("mepAdresseEntreprise").value.trim() || "Adresse entreprise";
+  document.getElementById("a4Identite").innerHTML = escHtml(raison + (forme ? " — " + forme : "")) + "<br>" + escHtml(adresse);
+
+  var siret = document.getElementById("mepSiret").value.trim() || "—";
+  var rcs = document.getElementById("mepRcs").value.trim() || "—";
+  var tva = document.getElementById("mepTva").value.trim() || "—";
+  var assureur = document.getElementById("mepAssureur").value.trim() || "—";
+  var validite = document.getElementById("mepDureeValidite").value.trim() || "30";
+  document.getElementById("a4Mentions").innerHTML =
+    "SIRET " + escHtml(siret) + " · RCS " + escHtml(rcs) + " · TVA intracom. " + escHtml(tva) +
+    "<br>Assurance décennale : " + escHtml(assureur) + " · Validité devis : " + escHtml(validite) + " jours";
+
+  var piedHtml = document.getElementById("mepPiedPage").innerHTML.trim();
+  document.getElementById("a4Pied").innerHTML = (piedHtml && piedHtml !== "<br>") ? piedHtml : "Texte de pied de page";
+
+  var mHaut = parseFloat(document.getElementById("mepMargeHaut").value) || 0;
+  var mBas = parseFloat(document.getElementById("mepMargeBas").value) || 0;
+  var mGauche = parseFloat(document.getElementById("mepMargeGauche").value) || 0;
+  var mDroite = parseFloat(document.getElementById("mepMargeDroite").value) || 0;
+  var guide = document.getElementById("a4MargeGuide");
+  guide.style.inset =
+    (mHaut / 297 * 100) + "% " + (mDroite / 210 * 100) + "% " +
+    (mBas / 297 * 100) + "% " + (mGauche / 210 * 100) + "%";
+}
+Array.prototype.forEach.call(document.querySelectorAll(".panel-scroll input, .panel-scroll select"), function(champ){ champ.addEventListener("input", majApercuA4); });
+document.getElementById("mepPiedPage").addEventListener("input", majApercuA4);
+
+Array.prototype.forEach.call(document.querySelectorAll(".texte-toolbar button"), function(btn){
+  btn.addEventListener("click", function(e){
+    e.preventDefault();
+    document.getElementById("mepPiedPage").focus();
+    document.execCommand(btn.getAttribute("data-cmd"), false, null);
+    majApercuA4();
+  });
+});
+
+document.getElementById("mepLogoCentrerBtn").addEventListener("click", function(){
+  var w = parseFloat(document.getElementById("mepLogoW").value) || 30;
+  document.getElementById("mepLogoX").value = Math.round((210 - w) / 2);
+  majApercuA4();
+});
+
+(function(){
+  var img = document.getElementById("a4Logo");
+  var page = document.getElementById("a4Page");
+  var actif = false;
+  img.addEventListener("pointerdown", function(e){
+    if (!img.getAttribute("src")) return;
+    actif = true; img.setPointerCapture(e.pointerId); img.style.cursor = "grabbing";
+  });
+  img.addEventListener("pointermove", function(e){
+    if (!actif) return;
+    var rect = page.getBoundingClientRect();
+    var xMm = ((e.clientX - rect.left) / rect.width) * 210;
+    var yMm = ((e.clientY - rect.top) / rect.height) * 297;
+    var w = parseFloat(document.getElementById("mepLogoW").value) || 30;
+    xMm = Math.max(0, Math.min(210 - w, xMm - w / 2));
+    yMm = Math.max(0, Math.min(280, yMm - 8));
+    document.getElementById("mepLogoX").value = Math.round(xMm);
+    document.getElementById("mepLogoY").value = Math.round(yMm);
+    majApercuA4();
+  });
+  img.addEventListener("pointerup", function(e){ actif = false; img.style.cursor = "grab"; try { img.releasePointerCapture(e.pointerId); } catch(err){} });
+})();
+
+/* ---- Éditeur graphique : formes, traits/flèches, images, calques ---- */
+function genMepId(){ return "el" + Date.now().toString(36) + Math.random().toString(36).slice(2,6); }
+function trierParZ(page){
+  var arr = mepElements.slice();
+  if (page !== undefined) arr = arr.filter(function(e){ return (e.page || 0) === page; });
+  return arr.sort(function(a,b){ return (a.zIndex||0) - (b.zIndex||0); });
+}
+function deplacerCalque(id, delta){
+  var el = mepElements.find(function(e){ return e.id === id; });
+  if (!el) return;
+  var tri = trierParZ(el.page || 0);
+  var idx = tri.findIndex(function(e){ return e.id === id; });
+  var cible = idx + delta;
+  if (idx === -1 || cible < 0 || cible >= tri.length) return;
+  var zA = tri[idx].zIndex || 0, zB = tri[cible].zIndex || 0;
+  tri[idx].zIndex = zB; tri[cible].zIndex = zA;
+  renderMepElements();
+}
+
+function recalcMepPages(){
+  var maxPage = 0;
+  mepElements.forEach(function(el){ if ((el.page || 0) > maxPage) maxPage = el.page || 0; });
+  mepPageCountUI = Math.max(mepPageCountUI, maxPage + 1, 1);
+  if (mepPageActive >= mepPageCountUI) mepPageActive = mepPageCountUI - 1;
+}
+
+function renderPageBar(){
+  var bar = document.getElementById("mepPageBar");
+  var html = "";
+  for (var i = 0; i < mepPageCountUI; i++){
+    html += '<button type="button" class="mep-page-btn' + (i === mepPageActive ? " actif" : "") + '" data-page="' + i + '" title="Page ' + (i+1) + (i===0 ? " (contenu principal)" : " (annexe)") + '">' + (i+1) + '</button>';
+  }
+  if (mepPageCountUI < 10) html += '<button type="button" class="mep-page-add" id="mepPageAdd" title="Ajouter une page (max 10)">+</button>';
+  bar.innerHTML = html;
+  Array.prototype.forEach.call(bar.querySelectorAll(".mep-page-btn"), function(b){
+    b.addEventListener("click", function(){
+      mepPageActive = parseInt(this.getAttribute("data-page"), 10);
+      mepSelectionId = null;
+      renderMepElements();
+    });
+  });
+  var addBtn = document.getElementById("mepPageAdd");
+  if (addBtn) addBtn.addEventListener("click", function(){
+    if (mepPageCountUI >= 10) return;
+    mepPageCountUI++; mepPageActive = mepPageCountUI - 1; mepSelectionId = null;
+    renderMepElements();
+  });
+}
+
+var mepCalquesActif = false;
+function setOutilMep(nom){
+  mepOutilActif = nom;
+  var page = document.getElementById("a4Page");
+  page.style.cursor = (nom === "rect" || nom === "circle" || nom === "line") ? "crosshair" : (nom === "image" ? "copy" : "");
+  Array.prototype.forEach.call(document.querySelectorAll("#mepToolSelect, #mepToolRect, #mepToolCercle, #mepToolLigne, #mepToolImage"), function(b){ b.classList.remove("actif"); });
+  var map = { select: "mepToolSelect", rect: "mepToolRect", circle: "mepToolCercle", line: "mepToolLigne", image: "mepToolImage" };
+  var btn = document.getElementById(map[nom]);
+  if (btn) btn.classList.add("actif");
+  document.getElementById("optionsHint").style.display = (nom === "select") ? "" : "none";
+}
+document.getElementById("mepToolSelect").addEventListener("click", function(){ setOutilMep("select"); });
+document.getElementById("mepToolRect").addEventListener("click", function(){ setOutilMep("rect"); });
+document.getElementById("mepToolCercle").addEventListener("click", function(){ setOutilMep("circle"); });
+document.getElementById("mepToolLigne").addEventListener("click", function(){ setOutilMep("line"); });
+document.getElementById("mepToolImage").addEventListener("click", function(){ setOutilMep("image"); });
+
+document.getElementById("mepToolCalques").addEventListener("click", function(){
+  mepCalquesActif = !mepCalquesActif;
+  this.classList.toggle("actif", mepCalquesActif);
+  if (mepCalquesActif) {
+    document.querySelector('.panel-tab[data-panelsub="panelCalques"]').click();
+    if (document.getElementById("shell").classList.contains("panel-ferme")) document.getElementById("tbPanelToggle").click();
+  }
+  setOutilMep("select");
+  renderMepElements();
+});
+
+function renderMepElements(){
+  var conteneur = document.getElementById("a4Elements");
+  var svg = document.getElementById("a4Lines");
+  conteneur.innerHTML = "";
+  svg.innerHTML = '<defs><marker id="mepFlecheTete" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="context-stroke"></path></marker></defs>';
+
+  trierParZ(mepPageActive).forEach(function(el){
+    if (el.visible === false) return;
+    if (el.type === "line") { renderLigneEl(svg, el); return; }
+    renderFormeEl(conteneur, el);
+  });
+
+  renderPageBar();
+  renderPropsBar();
+  renderCalquesList();
+}
+
+function renderFormeEl(conteneur, el){
+  var div = document.createElement("div");
+  div.className = "a4-shape tp-" + el.type + (el.id === mepSelectionId ? " selectionnee" : "");
+  div.style.left = (el.x / 210 * 100) + "%";
+  div.style.top = (el.y / 297 * 100) + "%";
+  div.style.width = (el.w / 210 * 100) + "%";
+  div.style.height = (el.h / 297 * 100) + "%";
+  div.dataset.id = el.id;
+  if (el.type === "image"){
+    div.style.backgroundImage = el.url ? "url('" + el.url.replace(/'/g, "%27") + "')" : "none";
+    div.style.backgroundSize = "contain";
+    div.style.backgroundRepeat = "no-repeat";
+    div.style.backgroundPosition = "center";
+  } else {
+    div.style.borderWidth = (el.strokeWidth != null ? el.strokeWidth : 1) + "px";
+    div.style.borderColor = el.stroke || "#111111";
+    div.style.background = el.fill && el.fill !== "none" ? el.fill : "transparent";
+  }
+  if (!el.locked){
+    var handle = document.createElement("div");
+    handle.className = "a4-shape-handle"; handle.title = "Redimensionner";
+    div.appendChild(handle);
+    attacherRedimensionnement(handle, el);
+  }
+  attacherDeplacement(div, el);
+  conteneur.appendChild(div);
+}
+
+function renderLigneEl(svg, el){
+  var ns = "http://www.w3.org/2000/svg";
+  var line = document.createElementNS(ns, "line");
+  line.setAttribute("x1", el.x1); line.setAttribute("y1", el.y1);
+  line.setAttribute("x2", el.x2); line.setAttribute("y2", el.y2);
+  line.setAttribute("stroke", el.stroke || "#111111");
+  line.setAttribute("stroke-width", el.strokeWidth != null ? el.strokeWidth : 2);
+  line.setAttribute("stroke-linecap", "round");
+  line.setAttribute("class", "a4-line-hit" + (el.id === mepSelectionId ? " selectionnee" : ""));
+  if (el.arrowEnd) line.setAttribute("marker-end", "url(#mepFlecheTete)");
+  line.addEventListener("pointerdown", function(e){ e.stopPropagation(); mepSelectionId = el.id; renderMepElements(); });
+  svg.appendChild(line);
+
+  if (el.id === mepSelectionId && !el.locked){
+    [["x1","y1"],["x2","y2"]].forEach(function(paire){
+      var c = document.createElementNS(ns, "circle");
+      c.setAttribute("cx", el[paire[0]]); c.setAttribute("cy", el[paire[1]]);
+      c.setAttribute("r", 2.4); c.setAttribute("fill", "#FF6B00"); c.setAttribute("class", "a4-line-handle");
+      svg.appendChild(c);
+      attacherPoigneeLigne(c, el, paire[0], paire[1]);
+    });
+  }
+}
+
+function attacherPoigneeLigne(circle, el, champX, champY){
+  var actif = false;
+  circle.addEventListener("pointerdown", function(e){ e.stopPropagation(); actif = true; circle.setPointerCapture(e.pointerId); });
+  circle.addEventListener("pointermove", function(e){
+    if (!actif) return;
+    e.stopPropagation();
+    var page = document.getElementById("a4Page");
+    var rect = page.getBoundingClientRect();
+    var xMm = ((e.clientX - rect.left) / rect.width) * 210;
+    var yMm = ((e.clientY - rect.top) / rect.height) * 297;
+    el[champX] = Math.max(0, Math.min(210, xMm));
+    el[champY] = Math.max(0, Math.min(297, yMm));
+    renderMepElements();
+  });
+  circle.addEventListener("pointerup", function(e){ e.stopPropagation(); actif = false; try{ circle.releasePointerCapture(e.pointerId); }catch(err){} });
+}
+
+function attacherDeplacement(div, el){
+  var actif = false, decalX = 0, decalY = 0;
+  div.addEventListener("pointerdown", function(e){
+    if (e.target !== div) return;
+    mepSelectionId = el.id;
+    renderMepElements();
+    var page = document.getElementById("a4Page");
+    var rect = page.getBoundingClientRect();
+    var xMm = ((e.clientX - rect.left) / rect.width) * 210;
+    var yMm = ((e.clientY - rect.top) / rect.height) * 297;
+    decalX = xMm - el.x; decalY = yMm - el.y;
+    actif = true;
+    div.setPointerCapture(e.pointerId);
+  });
+  div.addEventListener("pointermove", function(e){
+    if (!actif) return;
+    var page = document.getElementById("a4Page");
+    var rect = page.getBoundingClientRect();
+    var xMm = ((e.clientX - rect.left) / rect.width) * 210;
+    var yMm = ((e.clientY - rect.top) / rect.height) * 297;
+    el.x = Math.max(0, Math.min(210 - el.w, xMm - decalX));
+    el.y = Math.max(0, Math.min(297 - el.h, yMm - decalY));
+    renderMepElements();
+  });
+  div.addEventListener("pointerup", function(e){ actif = false; try{ div.releasePointerCapture(e.pointerId); }catch(err){} });
+}
+
+function attacherRedimensionnement(handle, el){
+  var actif = false;
+  handle.addEventListener("pointerdown", function(e){ e.stopPropagation(); actif = true; handle.setPointerCapture(e.pointerId); });
+  handle.addEventListener("pointermove", function(e){
+    if (!actif) return;
+    e.stopPropagation();
+    var page = document.getElementById("a4Page");
+    var rect = page.getBoundingClientRect();
+    var xMm = ((e.clientX - rect.left) / rect.width) * 210;
+    var yMm = ((e.clientY - rect.top) / rect.height) * 297;
+    el.w = Math.max(5, Math.min(210 - el.x, xMm - el.x));
+    el.h = Math.max(5, Math.min(297 - el.y, yMm - el.y));
+    renderMepElements();
+  });
+  handle.addEventListener("pointerup", function(e){ e.stopPropagation(); actif = false; try{ handle.releasePointerCapture(e.pointerId); }catch(err){} });
+}
+
+function renderPropsBar(){
+  var bar = document.getElementById("mepPropsBar");
+  var el = mepElements.find(function(e){ return e.id === mepSelectionId; });
+  if (!el){ bar.classList.remove("actif"); bar.innerHTML = ""; return; }
+  bar.classList.add("actif");
+  var html = "";
+  if (el.type === "rect" || el.type === "circle"){
+    html += '<label>Trait <input type="color" id="propStroke" value="' + (el.stroke || "#111111") + '"></label>';
+    html += '<label>Ép. <input type="number" id="propStrokeW" min="0" max="10" value="' + (el.strokeWidth != null ? el.strokeWidth : 1) + '"></label>';
+    html += '<label>Fond <input type="color" id="propFill" value="' + (el.fill && el.fill !== "none" ? el.fill : "#ffffff") + '"></label>';
+    html += '<button type="button" class="mep-props-btn' + ((el.fill === "none" || !el.fill) ? " actif" : "") + '" id="propFillNone" title="Fond transparent">⌀</button>';
+  } else if (el.type === "line"){
+    html += '<label>Trait <input type="color" id="propStroke" value="' + (el.stroke || "#111111") + '"></label>';
+    html += '<label>Ép. <input type="number" id="propStrokeW" min="1" max="10" value="' + (el.strokeWidth != null ? el.strokeWidth : 2) + '"></label>';
+    html += '<button type="button" class="mep-props-btn' + (el.arrowEnd ? " actif" : "") + '" id="propFleche" title="Tête de flèche">➜</button>';
+  } else if (el.type === "image"){
+    html += '<label>URL <input type="url" id="propImgUrl" value="' + (el.url || "").replace(/"/g, "&quot;") + '"></label>';
+  }
+  html += '<button type="button" class="mep-props-btn" id="propMonter" title="Monter d\'un calque">↑</button>';
+  html += '<button type="button" class="mep-props-btn" id="propDescendre" title="Descendre d\'un calque">↓</button>';
+  html += '<button type="button" class="mep-props-btn' + (el.locked ? " actif" : "") + '" id="propVerrou" title="Verrouiller">🔒</button>';
+  html += '<button type="button" class="mep-props-btn" id="propSupprimer" title="Supprimer">🗑</button>';
+  bar.innerHTML = html;
+
+  var sc = document.getElementById("propStroke"); if (sc) sc.addEventListener("input", function(){ el.stroke = this.value; renderMepElements(); });
+  var sw = document.getElementById("propStrokeW"); if (sw) sw.addEventListener("input", function(){ el.strokeWidth = parseFloat(this.value) || 0; renderMepElements(); });
+  var fl = document.getElementById("propFill"); if (fl) fl.addEventListener("input", function(){ el.fill = this.value; renderMepElements(); });
+  var fn = document.getElementById("propFillNone"); if (fn) fn.addEventListener("click", function(){ el.fill = (el.fill === "none" || !el.fill) ? "#ffffff" : "none"; renderMepElements(); });
+  var fe = document.getElementById("propFleche"); if (fe) fe.addEventListener("click", function(){ el.arrowEnd = !el.arrowEnd; renderMepElements(); });
+  var iu = document.getElementById("propImgUrl"); if (iu) iu.addEventListener("change", function(){ el.url = this.value.trim(); renderMepElements(); });
+  document.getElementById("propMonter").addEventListener("click", function(){ deplacerCalque(el.id, 1); });
+  document.getElementById("propDescendre").addEventListener("click", function(){ deplacerCalque(el.id, -1); });
+  document.getElementById("propVerrou").addEventListener("click", function(){ el.locked = !el.locked; renderMepElements(); });
+  document.getElementById("propSupprimer").addEventListener("click", function(){
+    mepElements = mepElements.filter(function(x){ return x.id !== el.id; });
+    mepSelectionId = null;
+    renderMepElements();
+  });
+}
+
+function renderCalquesList(){
+  var list = document.getElementById("mepCalquesList");
+  var compte = document.getElementById("mepCalquesCompte");
+  var vide = document.getElementById("mepCalquesVide");
+  var elementsPage = trierParZ(mepPageActive);
+  compte.textContent = elementsPage.length;
+  vide.style.display = elementsPage.length ? "none" : "block";
+  list.innerHTML = "";
+  var libelles = { rect: "Rectangle", circle: "Cercle", line: "Trait", image: "Image" };
+  elementsPage.slice().reverse().forEach(function(el){
+    var nom = (el.type === "line" && el.arrowEnd) ? "Flèche" : (libelles[el.type] || el.type);
+    var row = document.createElement("div");
+    row.className = "mep-calque-item" + (el.id === mepSelectionId ? " selectionne" : "");
+    row.innerHTML =
+      '<span class="mep-calque-nom">' + escHtml(nom) + '</span>' +
+      '<button type="button" data-act="oeil" title="Afficher/masquer">' + (el.visible === false ? "🚫" : "👁") + '</button>' +
+      '<button type="button" data-act="verrou" class="' + (el.locked ? "actif" : "") + '" title="Verrouiller">🔒</button>' +
+      '<button type="button" data-act="haut" title="Monter">↑</button>' +
+      '<button type="button" data-act="bas" title="Descendre">↓</button>' +
+      '<button type="button" data-act="suppr" title="Supprimer">🗑</button>';
+    row.querySelector(".mep-calque-nom").addEventListener("click", function(){ mepSelectionId = el.id; renderMepElements(); });
+    row.querySelector('[data-act="oeil"]').addEventListener("click", function(){ el.visible = el.visible === false; renderMepElements(); });
+    row.querySelector('[data-act="verrou"]').addEventListener("click", function(){ el.locked = !el.locked; renderMepElements(); });
+    row.querySelector('[data-act="haut"]').addEventListener("click", function(){ deplacerCalque(el.id, 1); });
+    row.querySelector('[data-act="bas"]').addEventListener("click", function(){ deplacerCalque(el.id, -1); });
+    row.querySelector('[data-act="suppr"]').addEventListener("click", function(){
+      mepElements = mepElements.filter(function(x){ return x.id !== el.id; });
+      if (mepSelectionId === el.id) mepSelectionId = null;
+      renderMepElements();
+    });
+    list.appendChild(row);
+  });
+}
+
+document.getElementById("a4Page").addEventListener("pointerdown", function(e){
+  if (mepOutilActif === "select") {
+    if (e.target.id === "a4Page" || e.target.id === "a4MargeGuide" || e.target.id === "a4Lines") { mepSelectionId = null; renderMepElements(); }
+    return;
+  }
+  if (e.target.closest(".a4-shape") || e.target.closest("#a4Lines")) return;
+  var rect = this.getBoundingClientRect();
+  var xMm = ((e.clientX - rect.left) / rect.width) * 210;
+  var yMm = ((e.clientY - rect.top) / rect.height) * 297;
+
+  if (mepOutilActif === "line"){
+    var nouvelleLigne = {
+      id: genMepId(), type: "line",
+      x1: Math.max(0, xMm - 15), y1: yMm, x2: Math.min(210, xMm + 15), y2: yMm,
+      stroke: "#111111", strokeWidth: 2, arrowEnd: true,
+      zIndex: trierParZ(mepPageActive).length, visible: true, locked: false, page: mepPageActive
+    };
+    mepElements.push(nouvelleLigne);
+    mepSelectionId = nouvelleLigne.id;
+    renderMepElements();
+    setOutilMep("select");
+    return;
+  }
+
+  if (mepOutilActif === "image"){
+    var url = window.prompt("URL de l'image (photo produit, tampon, etc.) :", "https://");
+    setOutilMep("select");
+    if (!url || !url.trim()) return;
+    var w = 40, h = 40;
+    var nouvelleImage = {
+      id: genMepId(), type: "image", url: url.trim(),
+      x: Math.max(0, Math.min(210 - w, xMm - w / 2)),
+      y: Math.max(0, Math.min(297 - h, yMm - h / 2)),
+      w: w, h: h, zIndex: trierParZ(mepPageActive).length, visible: true, locked: false, page: mepPageActive
+    };
+    mepElements.push(nouvelleImage);
+    mepSelectionId = nouvelleImage.id;
+    renderMepElements();
+    return;
+  }
+
+  var w = mepOutilActif === "circle" ? 30 : 40, h = 30;
+  var nouveau = {
+    id: genMepId(), type: mepOutilActif,
+    x: Math.max(0, Math.min(210 - w, xMm - w / 2)),
+    y: Math.max(0, Math.min(297 - h, yMm - h / 2)),
+    w: w, h: h, stroke: "#111111", strokeWidth: 1, fill: "none",
+    zIndex: trierParZ(mepPageActive).length, visible: true, locked: false, page: mepPageActive
+  };
+  mepElements.push(nouveau);
+  mepSelectionId = nouveau.id;
+  renderMepElements();
+  setOutilMep("select");
+});
+
+document.getElementById("mepLogoUploadBtn").addEventListener("click", function(){ document.getElementById("mepLogoFile").click(); });
+document.getElementById("mepLogoFile").addEventListener("change", function(e){
+  var fichier = e.target.files[0];
+  if (!fichier || !devisClientId) return;
+  var msg = document.getElementById("mepLogoMsg");
+  msg.style.color = ""; msg.textContent = "Envoi en cours…";
+
+  var uploader = function(recordId){
+    var reader = new FileReader();
+    reader.onload = function(evt){
+      var base64 = evt.target.result.split(",")[1];
+      fetch("/api/airtable/content/" + recordId + "/Logo/uploadAttachment", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ contentType: fichier.type || "image/png", file: base64, filename: fichier.name })
+      }).then(function(r){ return r.json(); })
+        .then(function(data){
+          var url = data && data.fields && data.fields.Logo && data.fields.Logo[0] && data.fields.Logo[0].url;
+          if (url){
+            document.getElementById("mepLogo").value = url;
+            majApercuA4();
+            msg.style.color = "#32D74B"; msg.textContent = "Logo uploadé et enregistré.";
+          } else {
+            msg.style.color = "#FF453A"; msg.textContent = "Échec de l'upload : " + (data && data.error && data.error.message || "réponse inattendue.");
+          }
+        })
+        .catch(function(){ msg.style.color = "#FF453A"; msg.textContent = "Erreur réseau pendant l'upload."; });
+    };
+    reader.readAsDataURL(fichier);
+  };
+
+  if (devisMEPRecordId){
+    uploader(devisMEPRecordId);
+  } else {
+    fetch("/api/airtable/" + encodeURIComponent(TBL_MEP), {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ records: [{ fields: { "Client": [devisClientId] } }] })
+    }).then(function(r){ return r.json(); })
+      .then(function(data){
+        var rec = data.records && data.records[0];
+        if (!rec) { msg.style.color = "#FF453A"; msg.textContent = "Impossible de créer l'enregistrement de mise en page."; return; }
+        devisMEPRecordId = rec.id;
+        uploader(rec.id);
+      })
+      .catch(function(){ msg.style.color = "#FF453A"; msg.textContent = "Erreur réseau."; });
+  }
+  e.target.value = "";
+});
+
+document.getElementById("mepSaveBtn").addEventListener("click", function(){
+  var msg = document.getElementById("tbMsg");
+  if (!devisClientId){ return; }
+  var logoUrl = document.getElementById("mepLogo").value.trim();
+  var champs = {
+    "Client": [devisClientId],
+    "Logo": logoUrl ? [{ url: logoUrl }] : [],
+    "Couleur primaire": document.getElementById("mepCouleur").value,
+    "Police": document.getElementById("mepPolice").value,
+    "Marges": JSON.stringify({
+      haut: parseFloat(document.getElementById("mepMargeHaut").value) || 20,
+      bas: parseFloat(document.getElementById("mepMargeBas").value) || 20,
+      gauche: parseFloat(document.getElementById("mepMargeGauche").value) || 18,
+      droite: parseFloat(document.getElementById("mepMargeDroite").value) || 18
+    }),
+    "Texte pied de page": document.getElementById("mepPiedPage").innerHTML,
+    "Durée validité devis (jours)": parseInt(document.getElementById("mepDureeValidite").value, 10) || 30,
+    "Identité entreprise (JSON)": JSON.stringify({
+      logoX: parseFloat(document.getElementById("mepLogoX").value) || 18,
+      logoY: parseFloat(document.getElementById("mepLogoY").value) || 14,
+      logoW: parseFloat(document.getElementById("mepLogoW").value) || 30,
+      raisonSociale: document.getElementById("mepRaisonSociale").value,
+      formeJuridique: document.getElementById("mepFormeJuridique").value,
+      adresse: document.getElementById("mepAdresseEntreprise").value,
+      siret: document.getElementById("mepSiret").value,
+      rcs: document.getElementById("mepRcs").value,
+      tva: document.getElementById("mepTva").value
+    }),
+    "Assurance décennale (JSON)": JSON.stringify({
+      assureur: document.getElementById("mepAssureur").value,
+      numPolice: document.getElementById("mepNumPolice").value,
+      zone: document.getElementById("mepZoneCouverture").value
+    }),
+    "Éléments graphiques (JSON)": JSON.stringify(mepElements)
+  };
+  msg.style.color = ""; msg.textContent = "Enregistrement…";
+  var requete = devisMEPRecordId
+    ? fetch("/api/airtable/" + encodeURIComponent(TBL_MEP) + "/" + devisMEPRecordId, {
+        method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ fields: champs })
+      })
+    : fetch("/api/airtable/" + encodeURIComponent(TBL_MEP), {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ records: [{ fields: champs }] })
+      });
+  requete.then(function(r){ return r.json(); })
+    .then(function(data){
+      if (!devisMEPRecordId && data.records && data.records[0]) devisMEPRecordId = data.records[0].id;
+      msg.style.color = "#32D74B"; msg.textContent = "Enregistré.";
+      setTimeout(function(){ msg.textContent = ""; }, 3000);
+    })
+    .catch(function(){ msg.style.color = "#FF453A"; msg.textContent = "Erreur d'enregistrement."; });
+});
+
+/* ---- Canevas figé : la page A4 s'ajuste à la zone disponible sans jamais scroller ---- */
+function ajusterTaillePage(){
+  var zone = document.getElementById("canvasZone");
+  var page = document.getElementById("a4Page");
+  var padding = 52; // 26px de chaque côté
+  var dispoW = zone.clientWidth - padding;
+  var dispoH = zone.clientHeight - padding;
+  var ratio = 210 / 297;
+  var w = dispoH * ratio;
+  if (w > dispoW) w = dispoW;
+  var h = w / ratio;
+  page.style.width = Math.max(200, w) + "px";
+  page.style.height = Math.max(283, h) + "px";
+}
+window.addEventListener("resize", ajusterTaillePage);
+if (window.ResizeObserver) {
+  new ResizeObserver(ajusterTaillePage).observe(document.getElementById("canvasZone"));
+}
+ajusterTaillePage();
+</script>
+</body>
+</html>
