@@ -179,9 +179,9 @@
   .marges-gauche{flex-direction:column;}
   .marges-droite{flex-direction:column;}
   .marges-page-icone{flex:1;height:70px;border:1.5px dashed var(--border);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:9px;color:var(--texte-faint);text-transform:uppercase;letter-spacing:.06em;background:rgba(255,255,255,0.02);}
-  .devis-modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.6);backdrop-filter:blur(4px);z-index:2000;display:flex;align-items:flex-start;justify-content:center;padding:32px 16px;overflow-y:auto;}
-  .devis-modal-box{background:var(--g2);border:1px solid var(--border);border-radius:20px;padding:28px 32px;width:100%;max-width:980px;box-shadow:0 20px 60px rgba(0,0,0,0.5);backdrop-filter:blur(24px) saturate(150%);-webkit-backdrop-filter:blur(24px) saturate(150%);}
-  @media (max-width:700px){.devis-modal-box{padding:20px;}.devis-modal-overlay{padding:0;align-items:stretch;}.devis-modal-box{border-radius:0;max-width:none;min-height:100%;}}
+  .devis-modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.6);backdrop-filter:blur(4px);z-index:2000;display:flex;align-items:center;justify-content:center;padding:24px 16px;overflow:hidden;}
+  .devis-modal-box{background:var(--g2);border:1px solid var(--border);border-radius:20px;padding:28px 32px;width:100%;max-width:980px;box-shadow:0 20px 60px rgba(0,0,0,0.5);backdrop-filter:blur(24px) saturate(150%);-webkit-backdrop-filter:blur(24px) saturate(150%);max-height:calc(100vh - 48px);overflow-y:auto;}
+  @media (max-width:700px){.devis-modal-box{padding:20px;}.devis-modal-overlay{padding:0;}.devis-modal-box{border-radius:0;max-width:none;max-height:100vh;height:100vh;}}
   .devis-mep-layout{display:grid;grid-template-columns:minmax(280px,1fr) minmax(280px,340px);gap:24px;align-items:start;}
   @media (max-width:900px){.devis-mep-layout{grid-template-columns:1fr;}}
 
@@ -811,7 +811,7 @@ document.getElementById("lockForm").addEventListener("submit", function(e){
 });
 if (sessionStorage.getItem("iko_admin_ok") === "1"){
   document.getElementById("lock").style.display = "none";
-  chargerAbonnements();
+  setTimeout(chargerAbonnements, 0);
 }
 
 function couleurDe(nom){
