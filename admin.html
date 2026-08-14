@@ -13,6 +13,8 @@
     --noir:#0A0A0A; --panel: rgba(255,255,255,0.045); --panel-hover: rgba(255,255,255,0.07);
     --g2:#151517; --g3:#1C1C1F;
     --border: rgba(255,255,255,0.09); --border-strong: rgba(255,255,255,0.18); --orange:#FF6B00; --orange-dim: rgba(255,107,0,0.15);
+    --teal:#2DD4BF; --teal-dim: rgba(45,212,191,0.14); --teal-glow: rgba(45,212,191,0.45);
+    --corail:#FF6452; --corail-dim: rgba(255,100,82,0.14); --corail-glow: rgba(255,100,82,0.5);
     --texte:#F5F5F7; --texte-dim:#98989D; --texte-faint:#636366;
     --radius:20px; --radius-sm:12px;
     --shadow: 0 20px 60px rgba(0,0,0,0.5);
@@ -27,7 +29,7 @@
     font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","SF Pro Text","Segoe UI",sans-serif;
     background:
       radial-gradient(circle at 15% 0%, rgba(255,107,0,0.10), transparent 45%),
-      radial-gradient(circle at 85% 100%, rgba(255,107,0,0.06), transparent 40%),
+      radial-gradient(circle at 85% 100%, rgba(45,212,191,0.07), transparent 40%),
       var(--noir);
     color:var(--texte); min-height:100vh; letter-spacing:-0.01em;
   }
@@ -73,8 +75,9 @@
     background:var(--g2); border:1px solid var(--border); border-radius:var(--radius);
     padding:20px; backdrop-filter:blur(24px) saturate(150%); -webkit-backdrop-filter:blur(24px) saturate(150%);
     box-shadow:0 1px 0 rgba(255,255,255,0.03) inset, 0 20px 50px -28px rgba(0,0,0,0.7);
-    transition:box-shadow .25s var(--ease);
+    transition:box-shadow .25s var(--ease), border-color .25s var(--ease);
   }
+  .card:hover{border-color:rgba(45,212,191,0.28);box-shadow:0 1px 0 rgba(255,255,255,0.03) inset, 0 20px 50px -28px rgba(0,0,0,0.7), 0 0 0 1px rgba(45,212,191,0.08), 0 0 24px -6px var(--teal-glow);}
   .rsia-logo{width:40px;height:40px;border-radius:11px;background:var(--noir);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:17px;color:var(--orange);letter-spacing:-2px;flex-shrink:0;}
   .rsia-logo span:last-child{display:inline-block;transform:scaleX(-1);}
   .card h2{font-family:var(--f-display);font-size:13px;color:var(--texte-dim);text-transform:uppercase;letter-spacing:.06em;font-weight:600;margin-bottom:16px;display:flex;align-items:center;gap:8px;padding-bottom:12px;border-bottom:1px solid var(--border);}
@@ -121,8 +124,9 @@
   .statut-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;}
   .client-devis-btn{flex-shrink:0;width:32px;height:32px;border-radius:9px;background:rgba(255,107,0,0.12);border:1px solid rgba(255,107,0,0.3);color:var(--orange);font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:center;}
   .client-devis-btn:hover{background:rgba(255,107,0,0.22);}
-  .statut-dot.Actif{background:#30D158;box-shadow:0 0 6px rgba(48,209,88,0.6);}
+  .statut-dot.Actif{background:var(--teal);box-shadow:0 0 6px var(--teal-glow);}
   .statut-dot.Pause{background:var(--texte-faint);}
+  .statut-dot:not(.Actif):not(.Pause){background:var(--corail);box-shadow:0 0 6px var(--corail-glow);}
   #empty{color:var(--texte-faint);font-size:13px;padding:20px 10px;text-align:center;}
 
   label{display:block;font-size:12px;color:var(--texte-dim);margin:16px 0 7px;font-weight:500;}
@@ -271,6 +275,13 @@
     background:var(--g2);
     border:1px solid var(--border);
     animation:heroIn .5s var(--ease) both;}
+  .hero:before{content:"";position:absolute;top:-60%;right:-10%;width:60%;height:220%;
+    background:radial-gradient(circle,var(--teal-glow),transparent 70%);opacity:.10;pointer-events:none;}
+  .hero-stat{position:relative;z-index:1;}
+  .hero-stat:before{content:"";position:absolute;left:30px;top:14px;width:6px;height:6px;border-radius:50%;
+    background:var(--teal);box-shadow:0 0 8px var(--teal-glow);}
+  .hero-stat:nth-child(3):before{background:var(--orange);box-shadow:0 0 8px rgba(255,107,0,.5);}
+  .hero-stat b,.hero-stat span{padding-left:16px;display:block;}
   .hero-eyebrow{font-size:10.5px;color:var(--texte-faint);text-transform:uppercase;letter-spacing:.12em;font-weight:600;margin-bottom:10px;font-family:var(--f-mono);}
   .hero h2{font-family:var(--f-display);font-size:25px;font-weight:600;letter-spacing:-0.02em;margin-bottom:6px;}
   .hero p{color:var(--texte-dim);font-size:13px;max-width:520px;line-height:1.5;margin-bottom:24px;}
@@ -282,8 +293,9 @@
   .hero-stat + .hero-stat{border-left:1px solid var(--border);}
   .hero-stat b{
     font-family:var(--f-mono);font-size:24px;font-weight:600;font-variant-numeric:tabular-nums;
-    color:var(--orange);line-height:1;
+    color:var(--teal);line-height:1;
   }
+  .hero-stat:nth-child(3) b{color:var(--orange);}
   .hero-stat span{font-size:10.5px;color:var(--texte-faint);text-transform:uppercase;letter-spacing:.07em;font-weight:600;}
 
   @keyframes heroIn{from{opacity:0;transform:translateY(-14px);}to{opacity:1;transform:translateY(0);}}
@@ -849,7 +861,7 @@ function chargerAbonnements(){
     .then(function(r){ return r.ok ? r.json() : null; })
     .then(function(data){
       if (!data || data.erreur){ badge.textContent = "Quota ElevenLabs indisponible."; return; }
-      var couleur = data.restants < 1000 ? "#FF453A" : "var(--texte-faint)";
+      var couleur = data.restants < 1000 ? "var(--corail)" : "var(--texte-faint)";
       badge.innerHTML = "🎙️ ElevenLabs : <b style='color:" + couleur + ";'>" + data.restants.toLocaleString("fr-FR") + " / " + data.limite.toLocaleString("fr-FR") + "</b> crédits restants ce mois";
     })
     .catch(function(){ badge.textContent = "Quota ElevenLabs indisponible."; });
