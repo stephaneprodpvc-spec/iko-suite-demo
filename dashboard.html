@@ -925,10 +925,14 @@ async function chargerCatalogueDevis(clientNom) {
   ]);
   const [jProd, jMo, jMep] = await Promise.all([rProd.json(), rMo.json(), rMep.json()]);
   const mepRec = (jMep.records || [])[0];
-  let identite = {}, assurance = {}, marges = {};
+  let identite = {}, assurance = {}, marges = {}, elementsGraphiques = [];
   try { identite = JSON.parse(mepRec?.fields?.["Identité entreprise (JSON)"] || "{}"); } catch(e){}
   try { assurance = JSON.parse(mepRec?.fields?.["Assurance décennale (JSON)"] || "{}"); } catch(e){}
   try { marges = JSON.parse(mepRec?.fields?.["Marges"] || "{}"); } catch(e){}
+  try {
+    const els = JSON.parse(mepRec?.fields?.["Éléments graphiques (JSON)"] || "[]");
+    if (Array.isArray(els)) elementsGraphiques = els;
+  } catch(e){}
   return {
     produits: jProd.records || [],
     mo: jMo.records || [],
@@ -944,7 +948,7 @@ async function chargerCatalogueDevis(clientNom) {
       margeBas: marges.bas != null ? marges.bas : 20,
       margeGauche: marges.gauche != null ? marges.gauche : 18,
       margeDroite: marges.droite != null ? marges.droite : 18,
-      identite, assurance,
+      identite, assurance, elements: elementsGraphiques,
     }
   };
 }
@@ -984,6 +988,57 @@ function rendrePiedPageRiche(html) {
   return { texte, gras, italique, align };
 }
 
+/* ---- Éléments graphiques du configurateur (formes/traits/images) — identique à l'aperçu admin.html ---- */
+function hexVersRgb(hex, secours) {
+  hex = String(hex || secours || '#111111').replace('#', '');
+  if (hex.length === 3) hex = hex.split('').map(c => c + c).join('');
+  const num = parseInt(hex, 16);
+  if (isNaN(num)) return [17, 17, 17];
+  return [(num >> 16) & 255, (num >> 8) & 255, num & 255];
+}
+
+async function dessinerElementsGraphiques(doc, elements) {
+  if (!Array.isArray(elements) || !elements.length) return;
+  const tries = elements.filter(el => el && el.visible !== false).sort((a, b) => (a.zIndex || 0) - (b.zIndex || 0));
+  for (const el of tries) {
+    try {
+      if (el.type === 'rect' || el.type === 'circle') {
+        const [dr, dg, db] = hexVersRgb(el.stroke);
+        doc.setDrawColor(dr, dg, db);
+        doc.setLineWidth(el.strokeWidth != null ? el.strokeWidth : 1);
+        const aRemplir = el.fill && el.fill !== 'none';
+        if (aRemplir) { const [fr, fg, fb] = hexVersRgb(el.fill); doc.setFillColor(fr, fg, fb); }
+        const style = aRemplir ? 'FD' : 'S';
+        if (el.type === 'rect') {
+          doc.rect(el.x, el.y, el.w, el.h, style);
+        } else {
+          doc.ellipse(el.x + el.w / 2, el.y + el.h / 2, el.w / 2, el.h / 2, style);
+        }
+      } else if (el.type === 'line') {
+        const [dr, dg, db] = hexVersRgb(el.stroke);
+        doc.setDrawColor(dr, dg, db);
+        doc.setLineWidth(el.strokeWidth != null ? el.strokeWidth : 2);
+        doc.line(el.x1, el.y1, el.x2, el.y2);
+        if (el.arrowEnd) {
+          const angle = Math.atan2(el.y2 - el.y1, el.x2 - el.x1);
+          const taille = 3;
+          const p1x = el.x2 - taille * Math.cos(angle - Math.PI / 7), p1y = el.y2 - taille * Math.sin(angle - Math.PI / 7);
+          const p2x = el.x2 - taille * Math.cos(angle + Math.PI / 7), p2y = el.y2 - taille * Math.sin(angle + Math.PI / 7);
+          doc.setFillColor(dr, dg, db);
+          doc.triangle(el.x2, el.y2, p1x, p1y, p2x, p2y, 'F');
+        }
+      } else if (el.type === 'image' && el.url) {
+        const info = await chargerImageEnDataUrl(el.url);
+        if (info && info.url) {
+          try { doc.addImage(info.url, 'JPEG', el.x, el.y, el.w, el.h, undefined, 'FAST'); }
+          catch (e) { try { doc.addImage(info.url, 'PNG', el.x, el.y, el.w, el.h, undefined, 'FAST'); } catch (e2) {} }
+        }
+      }
+    } catch (e) { /* un élément mal formé ne doit pas bloquer le reste du PDF */ }
+  }
+}
+
+
 async function genererPdfDevis({ numero, ticket, client, lignes, montantHT, montantTTC, mep }) {
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ unit: 'mm', format: 'a4' });
@@ -1000,6 +1055,7 @@ async function genererPdfDevis({ numero, ticket, client, lignes, montantHT, mont
     const ratio = logoInfo.ratio || (30 / 16);
     try { doc.addImage(logoInfo.url, 'PNG', mep.logoX != null ? mep.logoX : mL, mep.logoY != null ? mep.logoY : (y - 6), logoW, logoW / ratio, undefined, 'FAST'); } catch(e){}
   }
+  await dessinerElementsGraphiques(doc, mep.elements);
   doc.setFont('helvetica', 'bold'); doc.setFontSize(16);
   doc.setTextColor(20, 20, 20);
   doc.text('DEVIS', 210 - mR, y, { align: 'right' });

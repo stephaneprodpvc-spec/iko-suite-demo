@@ -212,8 +212,24 @@
   .a4-shape.selectionnee{outline:2px dashed var(--orange);outline-offset:2px;cursor:grabbing;}
   .a4-shape-handle{position:absolute;right:-7px;bottom:-7px;width:13px;height:13px;background:var(--orange);border-radius:3px;cursor:nwse-resize;display:none;touch-action:none;}
   .a4-shape.selectionnee .a4-shape-handle{display:block;}
-  .a4-shape-del{position:absolute;top:-11px;right:-11px;width:20px;height:20px;background:#FF453A;color:#fff;border-radius:50%;display:none;align-items:center;justify-content:center;font-size:12px;line-height:1;cursor:pointer;z-index:4;}
-  .a4-shape.selectionnee .a4-shape-del{display:flex;}
+  #a4Lines{position:absolute;inset:0;width:100%;height:100%;z-index:3;pointer-events:none;}
+  .a4-line-hit{pointer-events:stroke;cursor:pointer;}
+  .a4-line-hit.selectionnee{stroke-dasharray:4 3;}
+  .a4-line-handle{pointer-events:all;cursor:move;touch-action:none;}
+  .mep-props-bar{display:none;align-items:center;gap:10px;flex-wrap:wrap;background:var(--g1);border:1px solid var(--border);border-radius:10px;padding:8px 10px;margin-bottom:10px;font-size:11.5px;color:var(--texte-faint);}
+  .mep-props-bar.actif{display:flex;}
+  .mep-props-bar label{display:flex;align-items:center;gap:5px;white-space:nowrap;}
+  .mep-props-bar input[type=color]{width:26px;height:26px;padding:0;border:1px solid var(--border);border-radius:6px;background:none;}
+  .mep-props-bar input[type=number]{width:52px;padding:4px 6px;font-size:11.5px;}
+  .mep-props-btn{background:none;border:1px solid var(--border);color:var(--texte-faint);border-radius:6px;width:26px;height:26px;cursor:pointer;font-size:12px;}
+  .mep-props-btn.actif{border-color:var(--orange);color:var(--orange);}
+  .mep-calques-list{display:flex;flex-direction:column;gap:6px;}
+  .mep-calque-item{display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--border);border-radius:9px;background:var(--g1);font-size:12px;}
+  .mep-calque-item.selectionne{border-color:var(--orange);background:rgba(255,107,0,0.08);}
+  .mep-calque-nom{flex:1;color:var(--texte);cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .mep-calque-item button{background:none;border:none;color:var(--texte-faint);cursor:pointer;font-size:13px;width:24px;height:24px;border-radius:6px;}
+  .mep-calque-item button:hover{background:rgba(255,255,255,0.06);color:var(--texte);}
+  .mep-calque-item button.actif{color:var(--orange);}
   .a4-entete-droite{text-align:right;}
   .a4-devis-titre{font-size:15px;font-weight:700;letter-spacing:.04em;color:#111;}
   .a4-devis-num{font-size:7px;color:#666;margin-top:2px;}
@@ -601,22 +617,22 @@
           <div class="mep-toolrail">
             <button type="button" class="mep-tool-btn actif" id="mepToolSelect" title="Sélection">↖</button>
             <button type="button" class="mep-tool-btn" disabled title="Texte (bientôt)">T</button>
-            <button type="button" class="mep-tool-btn" disabled title="Image (bientôt)">▢</button>
+            <button type="button" class="mep-tool-btn" id="mepToolImage" title="Image">▢</button>
             <button type="button" class="mep-tool-btn" id="mepToolRect" title="Forme rectangle">▭</button>
             <button type="button" class="mep-tool-btn" id="mepToolCercle" title="Forme cercle">◯</button>
-            <button type="button" class="mep-tool-btn" disabled title="Trait / flèche (bientôt)">↗</button>
-            <button type="button" class="mep-tool-btn" disabled title="Calques (bientôt)">▤</button>
+            <button type="button" class="mep-tool-btn" id="mepToolLigne" title="Trait / flèche">↗</button>
+            <button type="button" class="mep-tool-btn" id="mepToolCalques" title="Calques">▤</button>
           </div>
           <div class="mep-main">
           <div class="mep-form-col">
-          <div class="mep-subtabs">
+          <div class="mep-subtabs" id="mepSubtabsRow">
             <div class="mep-subtab actif" data-mepsub="mepSubLogo">Logo</div>
             <div class="mep-subtab" data-mepsub="mepSubCouleurs">Couleurs &amp; marges</div>
             <div class="mep-subtab" data-mepsub="mepSubTexte">Texte</div>
             <div class="mep-subtab" data-mepsub="mepSubLegal">Légal &amp; assurance</div>
           </div>
           <div class="mep-content-scroll">
-          <div class="devis-mep-form">
+          <div class="devis-mep-form" id="mepFormNormal">
             <div class="mep-subpanel actif" id="mepSubLogo">
             <label>Logo</label>
             <div style="display:flex;gap:8px;">
@@ -707,14 +723,21 @@
               <div class="msg" id="devisMEPMsg"></div>
             </div>
           </div>
+          <div class="devis-mep-form" id="mepCalquesForm" style="display:none;">
+            <label>Calques — <span id="mepCalquesCompte">0</span> élément(s)</label>
+            <div class="devis-import-hint">Glisse un élément sur l'aperçu pour le sélectionner. ↑/↓ change l'ordre d'empilement, 👁 masque/affiche, 🔒 verrouille (empêche déplacement/suppression).</div>
+            <div class="mep-calques-list" id="mepCalquesList"></div>
+          </div>
           </div>
           </div>
 
           <div class="mep-apercu-col">
             <div class="devis-apercu-label">Aperçu — A4 portrait (210 × 297 mm)</div>
+            <div class="mep-props-bar" id="mepPropsBar"></div>
             <div class="a4-page" id="a4Page">
               <img id="a4Logo" class="a4-logo" alt="">
               <div id="a4Elements"></div>
+              <svg id="a4Lines" viewBox="0 0 210 297" preserveAspectRatio="none"></svg>
               <div class="a4-marge-guide" id="a4MargeGuide">
                 <div class="a4-entete">
                   <div class="a4-entete-droite" style="margin-left:auto;">
@@ -2333,68 +2356,150 @@ document.getElementById("mepLogoCentrerBtn").addEventListener("click", function(
   });
 })();
 
-/* ---- Outil Forme (rectangle / cercle) : création, sélection, déplacement, redimensionnement ---- */
+/* ---- Éditeur graphique : formes, traits/flèches, images, calques ---- */
 function genMepId(){ return "el" + Date.now().toString(36) + Math.random().toString(36).slice(2,6); }
+function trierParZ(){ return mepElements.slice().sort(function(a,b){ return (a.zIndex||0) - (b.zIndex||0); }); }
+function deplacerCalque(id, delta){
+  var tri = trierParZ();
+  var idx = tri.findIndex(function(e){ return e.id === id; });
+  var cible = idx + delta;
+  if (idx === -1 || cible < 0 || cible >= tri.length) return;
+  var zA = tri[idx].zIndex || 0, zB = tri[cible].zIndex || 0;
+  tri[idx].zIndex = zB; tri[cible].zIndex = zA;
+  renderMepElements();
+}
 
+var mepCalquesActif = false;
 function setOutilMep(nom){
   mepOutilActif = nom;
   var page = document.getElementById("a4Page");
-  page.style.cursor = (nom === "rect" || nom === "circle") ? "crosshair" : "";
-  Array.prototype.forEach.call(document.querySelectorAll("#mepToolSelect, #mepToolRect, #mepToolCercle"), function(b){ b.classList.remove("actif"); });
-  var map = { select: "mepToolSelect", rect: "mepToolRect", circle: "mepToolCercle" };
+  page.style.cursor = (nom === "rect" || nom === "circle" || nom === "line") ? "crosshair" : (nom === "image" ? "copy" : "");
+  Array.prototype.forEach.call(document.querySelectorAll("#mepToolSelect, #mepToolRect, #mepToolCercle, #mepToolLigne, #mepToolImage"), function(b){ b.classList.remove("actif"); });
+  var map = { select: "mepToolSelect", rect: "mepToolRect", circle: "mepToolCercle", line: "mepToolLigne", image: "mepToolImage" };
   var btn = document.getElementById(map[nom]);
   if (btn) btn.classList.add("actif");
 }
 document.getElementById("mepToolSelect").addEventListener("click", function(){ setOutilMep("select"); });
 document.getElementById("mepToolRect").addEventListener("click", function(){ setOutilMep("rect"); });
 document.getElementById("mepToolCercle").addEventListener("click", function(){ setOutilMep("circle"); });
+document.getElementById("mepToolLigne").addEventListener("click", function(){ setOutilMep("line"); });
+document.getElementById("mepToolImage").addEventListener("click", function(){ setOutilMep("image"); });
+
+document.getElementById("mepToolCalques").addEventListener("click", function(){
+  mepCalquesActif = !mepCalquesActif;
+  document.getElementById("mepToolCalques").classList.toggle("actif", mepCalquesActif);
+  document.getElementById("mepSubtabsRow").style.display = mepCalquesActif ? "none" : "";
+  document.getElementById("mepFormNormal").style.display = mepCalquesActif ? "none" : "";
+  document.getElementById("mepCalquesForm").style.display = mepCalquesActif ? "block" : "none";
+  setOutilMep("select");
+  renderMepElements();
+});
+Array.prototype.forEach.call(document.querySelectorAll(".mep-subtab"), function(st){
+  st.addEventListener("click", function(){
+    if (!mepCalquesActif) return;
+    mepCalquesActif = false;
+    document.getElementById("mepToolCalques").classList.remove("actif");
+    document.getElementById("mepSubtabsRow").style.display = "";
+    document.getElementById("mepFormNormal").style.display = "";
+    document.getElementById("mepCalquesForm").style.display = "none";
+  });
+});
 
 function renderMepElements(){
   var conteneur = document.getElementById("a4Elements");
+  var svg = document.getElementById("a4Lines");
   conteneur.innerHTML = "";
-  mepElements
-    .slice()
-    .sort(function(a,b){ return (a.zIndex||0) - (b.zIndex||0); })
-    .forEach(function(el){
-      if (el.visible === false) return;
-      var div = document.createElement("div");
-      div.className = "a4-shape tp-" + el.type + (el.id === mepSelectionId ? " selectionnee" : "");
-      div.style.left = (el.x / 210 * 100) + "%";
-      div.style.top = (el.y / 297 * 100) + "%";
-      div.style.width = (el.w / 210 * 100) + "%";
-      div.style.height = (el.h / 297 * 100) + "%";
-      div.style.borderWidth = (el.strokeWidth || 1) + "px";
-      div.style.borderColor = el.stroke || "#111111";
-      div.style.background = el.fill && el.fill !== "none" ? el.fill : "transparent";
-      div.dataset.id = el.id;
+  svg.innerHTML = '<defs><marker id="mepFlecheTete" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="context-stroke"></path></marker></defs>';
 
-      if (!el.locked){
-        var del = document.createElement("div");
-        del.className = "a4-shape-del"; del.innerHTML = "×"; del.title = "Supprimer";
-        del.addEventListener("pointerdown", function(e){ e.stopPropagation(); });
-        del.addEventListener("click", function(e){
-          e.stopPropagation();
-          mepElements = mepElements.filter(function(x){ return x.id !== el.id; });
-          mepSelectionId = null;
-          renderMepElements();
-        });
-        div.appendChild(del);
+  trierParZ().forEach(function(el){
+    if (el.visible === false) return;
+    if (el.type === "line") { renderLigneEl(svg, el); return; }
+    renderFormeEl(conteneur, el); // rect / circle / image
+  });
 
-        var handle = document.createElement("div");
-        handle.className = "a4-shape-handle"; handle.title = "Redimensionner";
-        div.appendChild(handle);
-        attacherRedimensionnement(handle, el);
-      }
+  renderPropsBar();
+  if (mepCalquesActif) renderCalquesList();
+}
 
-      attacherDeplacement(div, el);
-      conteneur.appendChild(div);
+function renderFormeEl(conteneur, el){
+  var div = document.createElement("div");
+  div.className = "a4-shape tp-" + el.type + (el.id === mepSelectionId ? " selectionnee" : "");
+  div.style.left = (el.x / 210 * 100) + "%";
+  div.style.top = (el.y / 297 * 100) + "%";
+  div.style.width = (el.w / 210 * 100) + "%";
+  div.style.height = (el.h / 297 * 100) + "%";
+  div.dataset.id = el.id;
+  if (el.type === "image"){
+    div.style.backgroundImage = el.url ? "url('" + el.url.replace(/'/g, "%27") + "')" : "none";
+    div.style.backgroundSize = "contain";
+    div.style.backgroundRepeat = "no-repeat";
+    div.style.backgroundPosition = "center";
+  } else {
+    div.style.borderWidth = (el.strokeWidth != null ? el.strokeWidth : 1) + "px";
+    div.style.borderColor = el.stroke || "#111111";
+    div.style.background = el.fill && el.fill !== "none" ? el.fill : "transparent";
+  }
+  if (!el.locked){
+    var handle = document.createElement("div");
+    handle.className = "a4-shape-handle"; handle.title = "Redimensionner";
+    div.appendChild(handle);
+    attacherRedimensionnement(handle, el);
+  }
+  attacherDeplacement(div, el);
+  conteneur.appendChild(div);
+}
+
+function renderLigneEl(svg, el){
+  var ns = "http://www.w3.org/2000/svg";
+  var line = document.createElementNS(ns, "line");
+  line.setAttribute("x1", el.x1); line.setAttribute("y1", el.y1);
+  line.setAttribute("x2", el.x2); line.setAttribute("y2", el.y2);
+  line.setAttribute("stroke", el.stroke || "#111111");
+  line.setAttribute("stroke-width", el.strokeWidth != null ? el.strokeWidth : 2);
+  line.setAttribute("stroke-linecap", "round");
+  line.setAttribute("class", "a4-line-hit" + (el.id === mepSelectionId ? " selectionnee" : ""));
+  if (el.arrowEnd) line.setAttribute("marker-end", "url(#mepFlecheTete)");
+  line.addEventListener("pointerdown", function(e){
+    e.stopPropagation();
+    mepSelectionId = el.id;
+    renderMepElements();
+  });
+  svg.appendChild(line);
+
+  if (el.id === mepSelectionId && !el.locked){
+    [["x1","y1"],["x2","y2"]].forEach(function(paire){
+      var c = document.createElementNS(ns, "circle");
+      c.setAttribute("cx", el[paire[0]]); c.setAttribute("cy", el[paire[1]]);
+      c.setAttribute("r", 2.4);
+      c.setAttribute("fill", "#FF6B00");
+      c.setAttribute("class", "a4-line-handle");
+      svg.appendChild(c);
+      attacherPoigneeLigne(c, el, paire[0], paire[1]);
     });
+  }
+}
+
+function attacherPoigneeLigne(circle, el, champX, champY){
+  var actif = false;
+  circle.addEventListener("pointerdown", function(e){ e.stopPropagation(); actif = true; circle.setPointerCapture(e.pointerId); });
+  circle.addEventListener("pointermove", function(e){
+    if (!actif) return;
+    e.stopPropagation();
+    var page = document.getElementById("a4Page");
+    var rect = page.getBoundingClientRect();
+    var xMm = ((e.clientX - rect.left) / rect.width) * 210;
+    var yMm = ((e.clientY - rect.top) / rect.height) * 297;
+    el[champX] = Math.max(0, Math.min(210, xMm));
+    el[champY] = Math.max(0, Math.min(297, yMm));
+    renderMepElements();
+  });
+  circle.addEventListener("pointerup", function(e){ e.stopPropagation(); actif = false; try{ circle.releasePointerCapture(e.pointerId); }catch(err){} });
 }
 
 function attacherDeplacement(div, el){
   var actif = false, decalX = 0, decalY = 0;
   div.addEventListener("pointerdown", function(e){
-    if (e.target !== div) return; // pas la poignée ni le bouton supprimer
+    if (e.target !== div) return; // pas la poignée
     mepSelectionId = el.id;
     renderMepElements();
     var page = document.getElementById("a4Page");
@@ -2439,16 +2544,120 @@ function attacherRedimensionnement(handle, el){
   handle.addEventListener("pointerup", function(e){ e.stopPropagation(); actif = false; try{ handle.releasePointerCapture(e.pointerId); }catch(err){} });
 }
 
-// Clic sur la page en mode Forme → création d'un nouvel élément à cet endroit
+function renderPropsBar(){
+  var bar = document.getElementById("mepPropsBar");
+  var el = mepElements.find(function(e){ return e.id === mepSelectionId; });
+  if (!el){ bar.classList.remove("actif"); bar.innerHTML = ""; return; }
+  bar.classList.add("actif");
+  var html = "";
+  if (el.type === "rect" || el.type === "circle"){
+    html += '<label>Trait <input type="color" id="propStroke" value="' + (el.stroke || "#111111") + '"></label>';
+    html += '<label>Épaisseur <input type="number" id="propStrokeW" min="0" max="10" value="' + (el.strokeWidth != null ? el.strokeWidth : 1) + '"></label>';
+    html += '<label>Fond <input type="color" id="propFill" value="' + (el.fill && el.fill !== "none" ? el.fill : "#ffffff") + '"></label>';
+    html += '<button type="button" class="mep-props-btn' + ((el.fill === "none" || !el.fill) ? " actif" : "") + '" id="propFillNone" title="Fond transparent">⌀</button>';
+  } else if (el.type === "line"){
+    html += '<label>Trait <input type="color" id="propStroke" value="' + (el.stroke || "#111111") + '"></label>';
+    html += '<label>Épaisseur <input type="number" id="propStrokeW" min="1" max="10" value="' + (el.strokeWidth != null ? el.strokeWidth : 2) + '"></label>';
+    html += '<button type="button" class="mep-props-btn' + (el.arrowEnd ? " actif" : "") + '" id="propFleche" title="Tête de flèche">➜</button>';
+  } else if (el.type === "image"){
+    html += '<label style="flex:1;min-width:180px;">URL <input type="url" id="propImgUrl" value="' + (el.url || "").replace(/"/g, "&quot;") + '" style="flex:1;"></label>';
+  }
+  html += '<button type="button" class="mep-props-btn" id="propMonter" title="Monter d\'un calque">↑</button>';
+  html += '<button type="button" class="mep-props-btn" id="propDescendre" title="Descendre d\'un calque">↓</button>';
+  html += '<button type="button" class="mep-props-btn' + (el.locked ? " actif" : "") + '" id="propVerrou" title="Verrouiller">🔒</button>';
+  html += '<button type="button" class="mep-props-btn" id="propSupprimer" title="Supprimer">🗑</button>';
+  bar.innerHTML = html;
+
+  var sc = document.getElementById("propStroke"); if (sc) sc.addEventListener("input", function(){ el.stroke = this.value; renderMepElements(); });
+  var sw = document.getElementById("propStrokeW"); if (sw) sw.addEventListener("input", function(){ el.strokeWidth = parseFloat(this.value) || 0; renderMepElements(); });
+  var fl = document.getElementById("propFill"); if (fl) fl.addEventListener("input", function(){ el.fill = this.value; renderMepElements(); });
+  var fn = document.getElementById("propFillNone"); if (fn) fn.addEventListener("click", function(){ el.fill = (el.fill === "none" || !el.fill) ? "#ffffff" : "none"; renderMepElements(); });
+  var fe = document.getElementById("propFleche"); if (fe) fe.addEventListener("click", function(){ el.arrowEnd = !el.arrowEnd; renderMepElements(); });
+  var iu = document.getElementById("propImgUrl"); if (iu) iu.addEventListener("change", function(){ el.url = this.value.trim(); renderMepElements(); });
+  document.getElementById("propMonter").addEventListener("click", function(){ deplacerCalque(el.id, 1); });
+  document.getElementById("propDescendre").addEventListener("click", function(){ deplacerCalque(el.id, -1); });
+  document.getElementById("propVerrou").addEventListener("click", function(){ el.locked = !el.locked; renderMepElements(); });
+  document.getElementById("propSupprimer").addEventListener("click", function(){
+    mepElements = mepElements.filter(function(x){ return x.id !== el.id; });
+    mepSelectionId = null;
+    renderMepElements();
+  });
+}
+
+function renderCalquesList(){
+  var list = document.getElementById("mepCalquesList");
+  var compte = document.getElementById("mepCalquesCompte");
+  compte.textContent = mepElements.length;
+  list.innerHTML = "";
+  var libelles = { rect: "Rectangle", circle: "Cercle", line: "Trait", image: "Image" };
+  trierParZ().slice().reverse().forEach(function(el){
+    var nom = (el.type === "line" && el.arrowEnd) ? "Flèche" : (libelles[el.type] || el.type);
+    var row = document.createElement("div");
+    row.className = "mep-calque-item" + (el.id === mepSelectionId ? " selectionne" : "");
+    row.innerHTML =
+      '<span class="mep-calque-nom">' + escHtml(nom) + '</span>' +
+      '<button type="button" data-act="oeil" title="Afficher/masquer">' + (el.visible === false ? "🚫" : "👁") + '</button>' +
+      '<button type="button" data-act="verrou" class="' + (el.locked ? "actif" : "") + '" title="Verrouiller">🔒</button>' +
+      '<button type="button" data-act="haut" title="Monter">↑</button>' +
+      '<button type="button" data-act="bas" title="Descendre">↓</button>' +
+      '<button type="button" data-act="suppr" title="Supprimer">🗑</button>';
+    row.querySelector(".mep-calque-nom").addEventListener("click", function(){ mepSelectionId = el.id; renderMepElements(); });
+    row.querySelector('[data-act="oeil"]').addEventListener("click", function(){ el.visible = el.visible === false; renderMepElements(); });
+    row.querySelector('[data-act="verrou"]').addEventListener("click", function(){ el.locked = !el.locked; renderMepElements(); });
+    row.querySelector('[data-act="haut"]').addEventListener("click", function(){ deplacerCalque(el.id, 1); });
+    row.querySelector('[data-act="bas"]').addEventListener("click", function(){ deplacerCalque(el.id, -1); });
+    row.querySelector('[data-act="suppr"]').addEventListener("click", function(){
+      mepElements = mepElements.filter(function(x){ return x.id !== el.id; });
+      if (mepSelectionId === el.id) mepSelectionId = null;
+      renderMepElements();
+    });
+    list.appendChild(row);
+  });
+}
+
+// Clic sur la page en mode Forme/Trait/Image → création d'un nouvel élément à cet endroit
 document.getElementById("a4Page").addEventListener("pointerdown", function(e){
-  if (mepOutilActif !== "rect" && mepOutilActif !== "circle") {
-    if (e.target.id === "a4Page" || e.target.id === "a4MargeGuide") { mepSelectionId = null; renderMepElements(); }
+  if (mepOutilActif === "select") {
+    if (e.target.id === "a4Page" || e.target.id === "a4MargeGuide" || e.target.id === "a4Lines") { mepSelectionId = null; renderMepElements(); }
     return;
   }
-  if (e.target.closest(".a4-shape")) return;
+  if (e.target.closest(".a4-shape") || e.target.closest("#a4Lines")) return;
   var rect = this.getBoundingClientRect();
   var xMm = ((e.clientX - rect.left) / rect.width) * 210;
   var yMm = ((e.clientY - rect.top) / rect.height) * 297;
+
+  if (mepOutilActif === "line"){
+    var nouvelleLigne = {
+      id: genMepId(), type: "line",
+      x1: Math.max(0, xMm - 15), y1: yMm, x2: Math.min(210, xMm + 15), y2: yMm,
+      stroke: "#111111", strokeWidth: 2, arrowEnd: true,
+      zIndex: mepElements.length, visible: true, locked: false
+    };
+    mepElements.push(nouvelleLigne);
+    mepSelectionId = nouvelleLigne.id;
+    renderMepElements();
+    setOutilMep("select");
+    return;
+  }
+
+  if (mepOutilActif === "image"){
+    var url = window.prompt("URL de l'image (photo produit, tampon, etc.) :", "https://");
+    setOutilMep("select");
+    if (!url || !url.trim()) return;
+    var w = 40, h = 40;
+    var nouvelleImage = {
+      id: genMepId(), type: "image", url: url.trim(),
+      x: Math.max(0, Math.min(210 - w, xMm - w / 2)),
+      y: Math.max(0, Math.min(297 - h, yMm - h / 2)),
+      w: w, h: h, zIndex: mepElements.length, visible: true, locked: false
+    };
+    mepElements.push(nouvelleImage);
+    mepSelectionId = nouvelleImage.id;
+    renderMepElements();
+    return;
+  }
+
+  // rect / circle
   var w = mepOutilActif === "circle" ? 30 : 40, h = 30;
   var nouveau = {
     id: genMepId(), type: mepOutilActif,
