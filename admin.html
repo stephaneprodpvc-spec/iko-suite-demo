@@ -216,8 +216,12 @@
   .a4-line-hit{pointer-events:stroke;cursor:pointer;}
   .a4-line-hit.selectionnee{stroke-dasharray:4 3;}
   .a4-line-handle{pointer-events:all;cursor:move;touch-action:none;}
-  .mep-props-bar{display:none;align-items:center;gap:10px;flex-wrap:wrap;background:var(--g1);border:1px solid var(--border);border-radius:10px;padding:8px 10px;margin-bottom:10px;font-size:11.5px;color:var(--texte-faint);}
-  .mep-props-bar.actif{display:flex;}
+  .mep-page-bar{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:8px;}
+  .mep-page-btn{min-width:26px;height:26px;padding:0 7px;border-radius:7px;border:1px solid var(--border);background:var(--g1);color:var(--texte-faint);font-size:11px;font-weight:700;cursor:pointer;}
+  .mep-page-btn.actif{background:rgba(255,107,0,0.14);border-color:rgba(255,107,0,0.4);color:var(--orange);}
+  .mep-page-add{width:26px;height:26px;border-radius:7px;border:1px dashed var(--border-strong);background:none;color:var(--texte-faint);cursor:pointer;font-size:13px;line-height:1;}
+  .mep-page-add:hover{color:var(--orange);border-color:var(--orange);}
+  .mep-props-bar{display:none;align-items:center;gap:10px;flex-wrap:wrap;background:var(--g1);border:1px solid var(--border);border-radius:10px;padding:8px 10px;margin-bottom:10px;font-size:11.5px;color:var(--texte-faint);}  .mep-props-bar.actif{display:flex;}
   .mep-props-bar label{display:flex;align-items:center;gap:5px;white-space:nowrap;}
   .mep-props-bar input[type=color]{width:26px;height:26px;padding:0;border:1px solid var(--border);border-radius:6px;background:none;}
   .mep-props-bar input[type=number]{width:52px;padding:4px 6px;font-size:11.5px;}
@@ -733,6 +737,7 @@
 
           <div class="mep-apercu-col">
             <div class="devis-apercu-label">Aperçu — A4 portrait (210 × 297 mm)</div>
+            <div class="mep-page-bar" id="mepPageBar"></div>
             <div class="mep-props-bar" id="mepPropsBar"></div>
             <div class="a4-page" id="a4Page">
               <img id="a4Logo" class="a4-logo" alt="">
@@ -1967,9 +1972,11 @@ document.getElementById("chatInput").addEventListener("keydown", function(e){
 var TBL_CATALOGUE = "Catalogue Produits";
 var TBL_MO = "Grille Main d'œuvre";
 var TBL_MEP = "Mise en page Devis";
-var mepElements = [];       // formes/traits/images superposés — {id,type,x,y,w,h,stroke,strokeWidth,fill,zIndex,visible,locked}
+var mepElements = [];       // formes/traits/images superposés — {id,type,x,y,w,h,stroke,strokeWidth,fill,zIndex,visible,locked,page}
 var mepSelectionId = null;
-var mepOutilActif = "select"; // "select" | "rect" | "circle"
+var mepOutilActif = "select"; // "select" | "rect" | "circle" | "line" | "image"
+var mepPageActive = 0;      // page courante affichée/éditée (0-indexée)
+var mepPageCountUI = 1;     // nb d'onglets page affichés (1 à 10)
 var TBL_DEVIS = "Devis";
 var devisClientId = null;
 var devisClientNom = "";
@@ -2251,6 +2258,9 @@ function remplirFormMEP(rec){
     if (Array.isArray(els)) mepElements = els;
   } catch(e){}
   mepSelectionId = null;
+  mepPageActive = 0;
+  mepPageCountUI = 1;
+  recalcMepPages();
   renderMepElements();
 
   majApercuA4();
@@ -2358,15 +2368,53 @@ document.getElementById("mepLogoCentrerBtn").addEventListener("click", function(
 
 /* ---- Éditeur graphique : formes, traits/flèches, images, calques ---- */
 function genMepId(){ return "el" + Date.now().toString(36) + Math.random().toString(36).slice(2,6); }
-function trierParZ(){ return mepElements.slice().sort(function(a,b){ return (a.zIndex||0) - (b.zIndex||0); }); }
+function trierParZ(page){
+  var arr = mepElements.slice();
+  if (page !== undefined) arr = arr.filter(function(e){ return (e.page || 0) === page; });
+  return arr.sort(function(a,b){ return (a.zIndex||0) - (b.zIndex||0); });
+}
 function deplacerCalque(id, delta){
-  var tri = trierParZ();
+  var el = mepElements.find(function(e){ return e.id === id; });
+  if (!el) return;
+  var tri = trierParZ(el.page || 0);
   var idx = tri.findIndex(function(e){ return e.id === id; });
   var cible = idx + delta;
   if (idx === -1 || cible < 0 || cible >= tri.length) return;
   var zA = tri[idx].zIndex || 0, zB = tri[cible].zIndex || 0;
   tri[idx].zIndex = zB; tri[cible].zIndex = zA;
   renderMepElements();
+}
+
+function recalcMepPages(){
+  var maxPage = 0;
+  mepElements.forEach(function(el){ if ((el.page || 0) > maxPage) maxPage = el.page || 0; });
+  mepPageCountUI = Math.max(mepPageCountUI, maxPage + 1, 1);
+  if (mepPageActive >= mepPageCountUI) mepPageActive = mepPageCountUI - 1;
+}
+
+function renderPageBar(){
+  var bar = document.getElementById("mepPageBar");
+  var html = "";
+  for (var i = 0; i < mepPageCountUI; i++){
+    html += '<button type="button" class="mep-page-btn' + (i === mepPageActive ? " actif" : "") + '" data-page="' + i + '" title="Page ' + (i+1) + (i===0 ? " (contenu principal du devis)" : " (annexe)") + '">' + (i+1) + '</button>';
+  }
+  if (mepPageCountUI < 10) html += '<button type="button" class="mep-page-add" id="mepPageAdd" title="Ajouter une page (max 10)">+</button>';
+  bar.innerHTML = html;
+  Array.prototype.forEach.call(bar.querySelectorAll(".mep-page-btn"), function(b){
+    b.addEventListener("click", function(){
+      mepPageActive = parseInt(this.getAttribute("data-page"), 10);
+      mepSelectionId = null;
+      renderMepElements();
+    });
+  });
+  var addBtn = document.getElementById("mepPageAdd");
+  if (addBtn) addBtn.addEventListener("click", function(){
+    if (mepPageCountUI >= 10) return;
+    mepPageCountUI++;
+    mepPageActive = mepPageCountUI - 1;
+    mepSelectionId = null;
+    renderMepElements();
+  });
 }
 
 var mepCalquesActif = false;
@@ -2411,12 +2459,13 @@ function renderMepElements(){
   conteneur.innerHTML = "";
   svg.innerHTML = '<defs><marker id="mepFlecheTete" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="context-stroke"></path></marker></defs>';
 
-  trierParZ().forEach(function(el){
+  trierParZ(mepPageActive).forEach(function(el){
     if (el.visible === false) return;
     if (el.type === "line") { renderLigneEl(svg, el); return; }
     renderFormeEl(conteneur, el); // rect / circle / image
   });
 
+  renderPageBar();
   renderPropsBar();
   if (mepCalquesActif) renderCalquesList();
 }
@@ -2587,10 +2636,11 @@ function renderPropsBar(){
 function renderCalquesList(){
   var list = document.getElementById("mepCalquesList");
   var compte = document.getElementById("mepCalquesCompte");
-  compte.textContent = mepElements.length;
+  var elementsPage = trierParZ(mepPageActive);
+  compte.textContent = elementsPage.length;
   list.innerHTML = "";
   var libelles = { rect: "Rectangle", circle: "Cercle", line: "Trait", image: "Image" };
-  trierParZ().slice().reverse().forEach(function(el){
+  elementsPage.slice().reverse().forEach(function(el){
     var nom = (el.type === "line" && el.arrowEnd) ? "Flèche" : (libelles[el.type] || el.type);
     var row = document.createElement("div");
     row.className = "mep-calque-item" + (el.id === mepSelectionId ? " selectionne" : "");
@@ -2631,7 +2681,7 @@ document.getElementById("a4Page").addEventListener("pointerdown", function(e){
       id: genMepId(), type: "line",
       x1: Math.max(0, xMm - 15), y1: yMm, x2: Math.min(210, xMm + 15), y2: yMm,
       stroke: "#111111", strokeWidth: 2, arrowEnd: true,
-      zIndex: mepElements.length, visible: true, locked: false
+      zIndex: trierParZ(mepPageActive).length, visible: true, locked: false, page: mepPageActive
     };
     mepElements.push(nouvelleLigne);
     mepSelectionId = nouvelleLigne.id;
@@ -2649,7 +2699,7 @@ document.getElementById("a4Page").addEventListener("pointerdown", function(e){
       id: genMepId(), type: "image", url: url.trim(),
       x: Math.max(0, Math.min(210 - w, xMm - w / 2)),
       y: Math.max(0, Math.min(297 - h, yMm - h / 2)),
-      w: w, h: h, zIndex: mepElements.length, visible: true, locked: false
+      w: w, h: h, zIndex: trierParZ(mepPageActive).length, visible: true, locked: false, page: mepPageActive
     };
     mepElements.push(nouvelleImage);
     mepSelectionId = nouvelleImage.id;
@@ -2664,7 +2714,7 @@ document.getElementById("a4Page").addEventListener("pointerdown", function(e){
     x: Math.max(0, Math.min(210 - w, xMm - w / 2)),
     y: Math.max(0, Math.min(297 - h, yMm - h / 2)),
     w: w, h: h, stroke: "#111111", strokeWidth: 1, fill: "none",
-    zIndex: mepElements.length, visible: true, locked: false
+    zIndex: trierParZ(mepPageActive).length, visible: true, locked: false, page: mepPageActive
   };
   mepElements.push(nouveau);
   mepSelectionId = nouveau.id;

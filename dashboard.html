@@ -1055,7 +1055,7 @@ async function genererPdfDevis({ numero, ticket, client, lignes, montantHT, mont
     const ratio = logoInfo.ratio || (30 / 16);
     try { doc.addImage(logoInfo.url, 'PNG', mep.logoX != null ? mep.logoX : mL, mep.logoY != null ? mep.logoY : (y - 6), logoW, logoW / ratio, undefined, 'FAST'); } catch(e){}
   }
-  await dessinerElementsGraphiques(doc, mep.elements);
+  await dessinerElementsGraphiques(doc, (mep.elements || []).filter(function(el){ return !(el.page > 0); }));
   doc.setFont('helvetica', 'bold'); doc.setFontSize(16);
   doc.setTextColor(20, 20, 20);
   doc.text('DEVIS', 210 - mR, y, { align: 'right' });
@@ -1135,6 +1135,18 @@ async function genererPdfDevis({ numero, ticket, client, lignes, montantHT, mont
     const xPied = pied.align === 'left' ? mL : pied.align === 'right' ? 210 - mR : 105;
     doc.text(pied.texte, xPied, 297 - mBas, { align: pied.align });
     doc.setFont('helvetica', 'normal');
+  }
+
+  // Pages annexes (Phase 3 configurateur) : schémas/photos placés sur page > 0 dans l'éditeur
+  const pagesAnnexes = {};
+  (mep.elements || []).forEach(function(el){
+    const p = el.page || 0;
+    if (p > 0) { (pagesAnnexes[p] = pagesAnnexes[p] || []).push(el); }
+  });
+  const numerosAnnexes = Object.keys(pagesAnnexes).map(Number).sort((a, b) => a - b);
+  for (const p of numerosAnnexes) {
+    doc.addPage();
+    await dessinerElementsGraphiques(doc, pagesAnnexes[p]);
   }
 
   return doc.output('blob');
