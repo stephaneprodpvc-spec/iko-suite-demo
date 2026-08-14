@@ -15,6 +15,7 @@
     --border: rgba(255,255,255,0.09); --border-strong: rgba(255,255,255,0.18); --orange:#FF6B00; --orange-dim: rgba(255,107,0,0.15);
     --teal:#2DD4BF; --teal-dim: rgba(45,212,191,0.14); --teal-glow: rgba(45,212,191,0.45);
     --corail:#FF6452; --corail-dim: rgba(255,100,82,0.14); --corail-glow: rgba(255,100,82,0.5);
+    --violet:#8B7FFF; --violet-dim: rgba(139,127,255,0.14); --violet-glow: rgba(139,127,255,0.5);
     --texte:#F5F5F7; --texte-dim:#98989D; --texte-faint:#636366;
     --radius:20px; --radius-sm:12px;
     --shadow: 0 20px 60px rgba(0,0,0,0.5);
@@ -72,16 +73,26 @@
   .grid > .card.actif{display:block;}
 
   .card{
+    --accent:var(--teal);
     background:var(--g2); border:1px solid var(--border); border-radius:var(--radius);
-    padding:20px; backdrop-filter:blur(24px) saturate(150%); -webkit-backdrop-filter:blur(24px) saturate(150%);
+    padding:20px 20px 20px; backdrop-filter:blur(24px) saturate(150%); -webkit-backdrop-filter:blur(24px) saturate(150%);
     box-shadow:0 1px 0 rgba(255,255,255,0.03) inset, 0 20px 50px -28px rgba(0,0,0,0.7);
     transition:box-shadow .25s var(--ease), border-color .25s var(--ease);
+    position:relative;
   }
-  .card:hover{border-color:rgba(45,212,191,0.28);box-shadow:0 1px 0 rgba(255,255,255,0.03) inset, 0 20px 50px -28px rgba(0,0,0,0.7), 0 0 0 1px rgba(45,212,191,0.08), 0 0 24px -6px var(--teal-glow);}
+  .card:before{content:"";position:absolute;top:0;left:16px;right:16px;height:2px;border-radius:0 0 2px 2px;
+    background:var(--accent);opacity:.55;box-shadow:0 0 8px color-mix(in srgb,var(--accent) 60%,transparent);}
+  #sec-claude{--accent:var(--violet);}
+  #sec-clients{--accent:var(--teal);}
+  #sec-apps{--accent:var(--orange);}
+  #sec-abonnements{--accent:var(--corail);}
+  #sec-securite{--accent:#EDEDEF;}
+  .card:hover{border-color:color-mix(in srgb,var(--accent) 28%,var(--border));box-shadow:0 1px 0 rgba(255,255,255,0.03) inset, 0 20px 50px -28px rgba(0,0,0,0.7), 0 0 0 1px color-mix(in srgb,var(--accent) 10%,transparent), 0 0 24px -6px color-mix(in srgb,var(--accent) 45%,transparent);}
+  .card:hover:before{opacity:1;}
   .rsia-logo{width:40px;height:40px;border-radius:11px;background:var(--noir);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:17px;color:var(--orange);letter-spacing:-2px;flex-shrink:0;}
   .rsia-logo span:last-child{display:inline-block;transform:scaleX(-1);}
   .card h2{font-family:var(--f-display);font-size:13px;color:var(--texte-dim);text-transform:uppercase;letter-spacing:.06em;font-weight:600;margin-bottom:16px;display:flex;align-items:center;gap:8px;padding-bottom:12px;border-bottom:1px solid var(--border);}
-  .card h2 .pulse{width:6px;height:6px;border-radius:50%;background:var(--orange);animation:pulse 2s ease-in-out infinite;}
+  .card h2 .pulse{width:6px;height:6px;border-radius:50%;background:var(--violet);box-shadow:0 0 6px var(--violet-glow);animation:pulse 2s ease-in-out infinite;}
   @keyframes pulse{0%,100%{opacity:1;}50%{opacity:.3;}}
 
   #chatMessages{display:flex;flex-direction:column;gap:10px;max-height:340px;overflow-y:auto;margin-bottom:14px;padding-right:2px;}
@@ -270,32 +281,42 @@
   #tbody-wrap{max-height:560px;overflow-y:auto;}
   ::-webkit-scrollbar{width:6px;} ::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.15);border-radius:3px;}
 
-  /* ---- Hero d'accueil : bandeau "panneau d'instruments" ---- */
-  .hero{position:relative;border-radius:var(--radius);padding:26px 30px 0;margin-bottom:20px;overflow:hidden;
-    background:var(--g2);
+  /* ---- Hero d'accueil : bandeau "salle de contrôle" ---- */
+  .hero{position:relative;border-radius:var(--radius);padding:28px 30px 0;margin-bottom:20px;overflow:hidden;
+    background:
+      radial-gradient(circle at 88% -20%, var(--violet-glow), transparent 55%),
+      radial-gradient(circle at 8% 120%, var(--teal-glow), transparent 50%),
+      var(--g2);
+    background-size:auto,auto,auto;
     border:1px solid var(--border);
     animation:heroIn .5s var(--ease) both;}
-  .hero:before{content:"";position:absolute;top:-60%;right:-10%;width:60%;height:220%;
-    background:radial-gradient(circle,var(--teal-glow),transparent 70%);opacity:.10;pointer-events:none;}
-  .hero-stat{position:relative;z-index:1;}
-  .hero-stat:before{content:"";position:absolute;left:30px;top:14px;width:6px;height:6px;border-radius:50%;
-    background:var(--teal);box-shadow:0 0 8px var(--teal-glow);}
-  .hero-stat:nth-child(3):before{background:var(--orange);box-shadow:0 0 8px rgba(255,107,0,.5);}
-  .hero-stat b,.hero-stat span{padding-left:16px;display:block;}
-  .hero-eyebrow{font-size:10.5px;color:var(--texte-faint);text-transform:uppercase;letter-spacing:.12em;font-weight:600;margin-bottom:10px;font-family:var(--f-mono);}
-  .hero h2{font-family:var(--f-display);font-size:25px;font-weight:600;letter-spacing:-0.02em;margin-bottom:6px;}
-  .hero p{color:var(--texte-dim);font-size:13px;max-width:520px;line-height:1.5;margin-bottom:24px;}
-  .hero-stats{display:flex;margin:0 -30px;border-top:1px solid var(--border);}
+  .hero:after{content:"";position:absolute;inset:0;background-image:
+      linear-gradient(rgba(255,255,255,0.025) 1px,transparent 1px),
+      linear-gradient(90deg,rgba(255,255,255,0.025) 1px,transparent 1px);
+    background-size:34px 34px;mask-image:radial-gradient(circle at 30% 0%,#000,transparent 75%);pointer-events:none;}
+  .hero-eyebrow{position:relative;z-index:1;font-size:10.5px;color:var(--texte-faint);text-transform:uppercase;letter-spacing:.12em;font-weight:600;margin-bottom:10px;font-family:var(--f-mono);}
+  .hero h2{position:relative;z-index:1;font-family:var(--f-display);font-size:25px;font-weight:600;letter-spacing:-0.02em;margin-bottom:6px;}
+  .hero p{position:relative;z-index:1;color:var(--texte-dim);font-size:13px;max-width:520px;line-height:1.5;margin-bottom:24px;}
+  .hero-stats{position:relative;z-index:1;display:flex;margin:0 -30px;border-top:1px solid var(--border);backdrop-filter:blur(2px);}
   .hero-stat{
+    --accent:var(--teal);
     flex:1;padding:16px 30px;position:relative;
-    display:flex;flex-direction:column;gap:5px;
+    display:flex;align-items:center;gap:14px;
   }
+  .hero-stat:nth-child(2){--accent:var(--violet);}
+  .hero-stat:nth-child(3){--accent:var(--orange);}
   .hero-stat + .hero-stat{border-left:1px solid var(--border);}
-  .hero-stat b{
-    font-family:var(--f-mono);font-size:24px;font-weight:600;font-variant-numeric:tabular-nums;
-    color:var(--teal);line-height:1;
+  .hero-stat .gauge{
+    width:38px;height:38px;border-radius:50%;flex-shrink:0;position:relative;
+    background:conic-gradient(var(--accent) calc(var(--pct,70)*1%),rgba(255,255,255,0.07) 0);
+    -webkit-mask:radial-gradient(circle,transparent 62%,#000 63%);mask:radial-gradient(circle,transparent 62%,#000 63%);
+    filter:drop-shadow(0 0 6px color-mix(in srgb,var(--accent) 55%,transparent));
   }
-  .hero-stat:nth-child(3) b{color:var(--orange);}
+  .hero-stat .txt{display:flex;flex-direction:column;gap:3px;}
+  .hero-stat b{
+    font-family:var(--f-mono);font-size:22px;font-weight:600;font-variant-numeric:tabular-nums;
+    color:var(--accent);line-height:1;
+  }
   .hero-stat span{font-size:10.5px;color:var(--texte-faint);text-transform:uppercase;letter-spacing:.07em;font-weight:600;}
 
   @keyframes heroIn{from{opacity:0;transform:translateY(-14px);}to{opacity:1;transform:translateY(0);}}
@@ -398,18 +419,26 @@
     padding:14px 10px 8px;font-family:var(--f-mono);
   }
   .ide-nav-item{
+    --accent:var(--texte);
     width:100%;height:40px;border-radius:9px;display:flex;flex-direction:row;align-items:center;gap:11px;
     padding:0 10px;cursor:pointer;color:var(--texte-dim);position:relative;flex-shrink:0;
-    transition:background .12s,color .12s;
+    transition:background .15s,color .15s;
   }
+  .ide-nav-item[data-cible="sec-claude"]{--accent:var(--violet);}
+  .ide-nav-item[data-cible="sec-clients"]{--accent:var(--teal);}
+  .ide-nav-item[data-cible="sec-apps"]{--accent:var(--orange);}
+  .ide-nav-item[data-cible="sec-abonnements"]{--accent:var(--corail);}
+  .ide-nav-item[data-cible="sec-securite"]{--accent:#EDEDEF;}
   .ide-nav-item:before{
     content:"";position:absolute;left:-12px;top:6px;bottom:6px;width:2.5px;border-radius:2px;
-    background:var(--orange);opacity:0;transition:opacity .15s var(--ease);
+    background:var(--accent);opacity:0;transition:opacity .18s var(--ease),box-shadow .18s var(--ease);
   }
   .ide-nav-item:hover{background:var(--g2);color:var(--texte);}
-  .ide-nav-item.actif{background:var(--orange-dim);color:var(--orange);}
-  .ide-nav-item.actif:before{opacity:1;}
-  .ide-nav-item .ico{font-size:15px;line-height:1;width:18px;text-align:center;flex-shrink:0;}
+  .ide-nav-item:hover .ico{opacity:1;color:var(--accent);}
+  .ide-nav-item.actif{background:linear-gradient(90deg,color-mix(in srgb,var(--accent) 14%,transparent),transparent);color:var(--texte);}
+  .ide-nav-item.actif:before{opacity:1;box-shadow:0 0 10px var(--accent);}
+  .ide-nav-item.actif .ico{opacity:1;color:var(--accent);filter:drop-shadow(0 0 6px var(--accent));}
+  .ide-nav-item .ico{font-size:16px;line-height:1;width:18px;text-align:center;flex-shrink:0;opacity:.55;color:var(--texte-dim);transition:opacity .15s,color .15s,filter .15s;}
   .ide-nav-item .lbl{font-size:13px;font-weight:600;letter-spacing:-0.005em;white-space:nowrap;}
   .workspace{flex:1;min-width:0;overflow:hidden;height:100vh;display:flex;flex-direction:column;}
   @media (max-width:860px){
@@ -474,9 +503,9 @@
     <h2>Bienvenue, Stéphane.</h2>
     <p>Pilote tes clients, leurs modules et leur identité depuis un seul endroit. Décris, configure, déploie.</p>
     <div class="hero-stats">
-      <div class="hero-stat"><b id="heroTotalClients">0</b><span>Clients</span></div>
-      <div class="hero-stat"><b id="heroActifs">0</b><span>Actifs</span></div>
-      <div class="hero-stat"><b id="heroModules">0</b><span>Modules déployés</span></div>
+      <div class="hero-stat" style="--pct:70"><div class="gauge"></div><div class="txt"><b id="heroTotalClients">0</b><span>Clients</span></div></div>
+      <div class="hero-stat" style="--pct:85"><div class="gauge"></div><div class="txt"><b id="heroActifs">0</b><span>Actifs</span></div></div>
+      <div class="hero-stat" style="--pct:55"><div class="gauge"></div><div class="txt"><b id="heroModules">0</b><span>Modules déployés</span></div></div>
     </div>
   </div>
 
@@ -924,6 +953,10 @@ function afficherStats(){
   animerCompteur(document.getElementById("heroTotalClients"), total);
   animerCompteur(document.getElementById("heroActifs"), actifs);
   animerCompteur(document.getElementById("heroModules"), totalModules);
+  var heroStats = document.querySelectorAll(".hero-stat");
+  if (heroStats[0]) heroStats[0].style.setProperty("--pct", 100);
+  if (heroStats[1]) heroStats[1].style.setProperty("--pct", total ? Math.round(actifs/total*100) : 0);
+  if (heroStats[2]) heroStats[2].style.setProperty("--pct", Math.min(100, Math.round(totalModules/Math.max(total*3,1)*100)));
 }
 
 /* ---- Effet 3D au survol : incline la carte selon la position du curseur ---- */
