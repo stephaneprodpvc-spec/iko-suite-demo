@@ -15,8 +15,8 @@
   :root {
     --noir: #111111;
     --noir-doux: #1C1C1C;
-    --orange: #FF6B00;
-    --orange-pale: #FFF1E6;
+    --orange: #22C55E;
+    --orange-pale: #E8FBF0;
     --gris: #6B7280;
     --gris-clair: #E8E8E8;
     --blanc: #FFFFFF;
@@ -61,7 +61,7 @@
     background: var(--orange);
     margin-left: auto;
     flex-shrink: 0;
-    box-shadow: 0 0 0 3px rgba(255,107,0,0.18);
+    box-shadow: 0 0 0 3px rgba(34,197,94,0.18);
   }
 
   /* Fil de conversation */
@@ -217,8 +217,8 @@
     animation: pulse 1.4s infinite;
   }
   @keyframes pulse {
-    0%, 100% { box-shadow: 0 0 0 0 rgba(255,107,0,0.45); }
-    50% { box-shadow: 0 0 0 8px rgba(255,107,0,0); }
+    0%, 100% { box-shadow: 0 0 0 0 rgba(34,197,94,0.45); }
+    50% { box-shadow: 0 0 0 8px rgba(34,197,94,0); }
   }
   @media (prefers-reduced-motion: reduce) {
     #micro.ecoute { animation: none; }
@@ -257,8 +257,8 @@
   }
   .amandine-sphere {
     width: 200px; height: 200px; border-radius: 50%;
-    background: radial-gradient(circle at 35% 30%, #FFFFFF, #FDEBF1 45%, #F5A9C5 78%, #FF6B00 135%);
-    box-shadow: 0 0 90px rgba(255,107,0,0.35);
+    background: radial-gradient(circle at 35% 30%, #FFFFFF, #FDEBF1 45%, #F5A9C5 78%, #22C55E 135%);
+    box-shadow: 0 0 90px rgba(34,197,94,0.35);
     animation: respireAmandine 3.2s ease-in-out infinite;
     cursor: pointer;
   }

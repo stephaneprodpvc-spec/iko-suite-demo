@@ -17,7 +17,7 @@
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body { font-family: 'Segoe UI', sans-serif; background: #F5F5F5; color: #374151; min-height: 100vh; }
-::-webkit-scrollbar { width: 4px; } ::-webkit-scrollbar-thumb { background: #FF6B00; border-radius: 2px; }
+::-webkit-scrollbar { width: 4px; } ::-webkit-scrollbar-thumb { background: #22C55E; border-radius: 2px; }
 .modal-overlay { position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.9);z-index:1000;display:flex;align-items:flex-end;justify-content:center;padding:0; }
 @media(min-width:600px){ .modal-overlay { align-items:center; padding:20px; } }
 .modal-box { background:#FFFFFF;border:1px solid rgba(218,178,57,0.4);border-radius:20px 20px 0 0;padding:24px;width:100%;max-width:520px;max-height:85vh;overflow-y:auto;box-shadow:0 -4px 30px rgba(0,0,0,0.12); }
@@ -122,7 +122,7 @@ async function chargerCatalogueDevisTech(clientNom) {
     produits: jProd.records || [],
     mo: jMo.records || [],
     mep: {
-      couleur: mepRec?.fields?.["Couleur primaire"] || "#FF6B00",
+      couleur: mepRec?.fields?.["Couleur primaire"] || "#22C55E",
       piedPage: mepRec?.fields?.["Texte pied de page"] || "",
       dureeValidite: mepRec?.fields?.["Durée validité devis (jours)"] || 30,
       logoUrl: (mepRec?.fields?.["Logo"]?.[0]?.url) || identite.logoUrl || "",
@@ -481,26 +481,26 @@ function appliquerComptesTechnicien(techniciens) {
 
 const C = {
   bg: "#F5F5F5", card: "#FFFFFF", card2: "#F3F4F6", border: "#E2E2E2",
-  or: "#FF6B00", orDim: "rgba(218,178,57,0.12)", orBord: "rgba(218,178,57,0.3)",
+  or: "#22C55E", orDim: "rgba(218,178,57,0.12)", orBord: "rgba(218,178,57,0.3)",
   text: "#374151", muted: "#5B6472", white: "#0D0D0D",
   rouge: "#DC2626", rougeDim: "rgba(220,38,38,0.12)",
   vert: "#16a34a", vertDim: "rgba(22,163,74,0.15)",
-  jaune: "#FF6B00", jauneDim: "rgba(217,119,6,0.12)",
+  jaune: "#22C55E", jauneDim: "rgba(217,119,6,0.12)",
 };
 
 // Branding dynamique par client (couleurs + logo), applique une fois le
 // contexte client charge (voir window.IKO_CLIENT_READY plus haut).
-let CONFIG_ENTREPRISE = { couleurAccent: "#FF6B00", logoUrl: "" };
+let CONFIG_ENTREPRISE = { couleurAccent: "#22C55E", logoUrl: "" };
 
 function hexVersRgba(hex, alpha) {
-  const h = (hex || "#FF6B00").replace('#', '');
+  const h = (hex || "#22C55E").replace('#', '');
   const r = parseInt(h.substring(0,2),16), g = parseInt(h.substring(2,4),16), b = parseInt(h.substring(4,6),16);
   return 'rgba(' + r + ',' + g + ',' + b + ',' + alpha + ')';
 }
 
 function appliquerConfigEntreprise(cfg) {
   if (!cfg) return;
-  CONFIG_ENTREPRISE.couleurAccent = cfg.couleurAccent || "#FF6B00";
+  CONFIG_ENTREPRISE.couleurAccent = cfg.couleurAccent || "#22C55E";
   CONFIG_ENTREPRISE.logoUrl = cfg.logoUrl || "";
   C.or = CONFIG_ENTREPRISE.couleurAccent;
   C.orDim = hexVersRgba(CONFIG_ENTREPRISE.couleurAccent, 0.12);
@@ -1028,7 +1028,7 @@ function ModalAction({ ticket, onClose, onDone }) {
                   </button>
                 </div>
                 {fraisDiagnosticApplicable && (
-                  <div style={{marginTop:"10px",background:"rgba(255,107,0,0.08)",border:"1px solid #FF6B00",borderRadius:"10px",padding:"10px 14px",fontSize:"12px",color:"#0D0D0D"}}>
+                  <div style={{marginTop:"10px",background:"rgba(34,197,94,0.08)",border:"1px solid #22C55E",borderRadius:"10px",padding:"10px 14px",fontSize:"12px",color:"#0D0D0D"}}>
                     💶 Client non garanti et non existant, sans matériel sur place : <strong>{montantDiagnostic.toFixed(2)} € HT</strong> de frais de déplacement/diagnostic à faire régler au client (CB, chèque ou virement). Ce montant sera automatiquement déduit du devis si le client l'accepte ensuite.
                   </div>
                 )}
@@ -1542,7 +1542,7 @@ function Technicien({ agence, onClose }) {
         .toolbar button, .toolbar a{font-family:'Segoe UI',Arial,sans-serif;font-size:13px;font-weight:700;padding:11px 20px;border-radius:10px;border:none;cursor:pointer;display:inline-flex;align-items:center;gap:8px;text-decoration:none;line-height:1;}
         .btn-close{background:#F3F4F6;color:#374151;border:1px solid #E2E2E2 !important;}
         .btn-print{background:#0D0D0D;color:#fff;box-shadow:0 2px 10px rgba(0,26,66,0.25);}
-        .btn-mail{background:#FF6B00;color:#111;box-shadow:0 2px 10px rgba(218,178,57,0.35);}
+        .btn-mail{background:#22C55E;color:#111;box-shadow:0 2px 10px rgba(218,178,57,0.35);}
         @media print { @page { size: landscape; margin: 12mm; } .toolbar{display:none;} }
       </style></head><body>
       <div class="toolbar">
@@ -1777,13 +1777,13 @@ function Technicien({ agence, onClose }) {
           {agence === "global" ? "Toutes agences" : agence}
         </div>
         <button onClick={() => setVueMode("liste")}
-          style={{position:"absolute",top:"14px",right:"14px",padding:"10px 16px",borderRadius:"20px",background:"#1a1a1a",border:"1px solid rgba(255,107,0,0.35)",color:"#fff",cursor:"pointer",fontSize:"12px",fontWeight:"700"}}>
+          style={{position:"absolute",top:"14px",right:"14px",padding:"10px 16px",borderRadius:"20px",background:"#1a1a1a",border:"1px solid rgba(34,197,94,0.35)",color:"#fff",cursor:"pointer",fontSize:"12px",fontWeight:"700"}}>
           📋 Mes tickets
         </button>
         <div style={{width:"220px",height:"220px",borderRadius:"50%",
           background:"radial-gradient(circle at 35% 30%, #4a4a4a, #0D0D0D 55%, #000000 100%)",
-          border:"2px solid #FF6B00",
-          boxShadow:"0 0 90px rgba(255,107,0,0.35)",
+          border:"2px solid #22C55E",
+          boxShadow:"0 0 90px rgba(34,197,94,0.35)",
           animation: maxEcoute ? "pulseMaxEcran 1s ease-in-out infinite" : "respireMax 3.2s ease-in-out infinite"}}/>
         <div style={{marginTop:"32px",color:"#b8b8b8",fontSize:"14px",maxWidth:"320px",textAlign:"center",minHeight:"40px",lineHeight:"1.5",padding:"0 16px"}}>
           {maxEcoute ? "Je vous écoute... (relâchez le micro pour terminer)" : maxEnCours ? "..." : maxDernier ? maxDernier : "Dites une commande à Max : \"Montre les urgents\", \"Ouvre l'itinéraire\"..."}
@@ -1795,9 +1795,9 @@ function Technicien({ agence, onClose }) {
             onChange={e => setMaxTexte(e.target.value)}
             onKeyDown={e => { if (e.key === "Enter" && maxTexte.trim()) { debloquerVoixIOS(); envoyerMax(maxTexte.trim()); setMaxTexte(""); } }}
             placeholder="Tapez ou dictez..."
-            style={{flex:1,minWidth:0,padding:"14px",borderRadius:"12px",background:"#1a1a1a",border:"1px solid rgba(255,107,0,0.3)",color:"#fff",fontSize:"14px"}}/>
+            style={{flex:1,minWidth:0,padding:"14px",borderRadius:"12px",background:"#1a1a1a",border:"1px solid rgba(34,197,94,0.3)",color:"#fff",fontSize:"14px"}}/>
           <button onClick={() => { if (maxTexte.trim()) { debloquerVoixIOS(); envoyerMax(maxTexte.trim()); setMaxTexte(""); } }}
-            style={{flexShrink:0,width:"48px",height:"48px",borderRadius:"12px",background:"#FF6B00",border:"none",color:"#111",fontWeight:"800",cursor:"pointer",fontSize:"18px"}}>
+            style={{flexShrink:0,width:"48px",height:"48px",borderRadius:"12px",background:"#22C55E",border:"none",color:"#111",fontWeight:"800",cursor:"pointer",fontSize:"18px"}}>
             →
           </button>
           <button
@@ -1805,7 +1805,7 @@ function Technicien({ agence, onClose }) {
             onPointerUp={arreterEcouteMax}
             onPointerLeave={arreterEcouteMax}
             onPointerCancel={arreterEcouteMax}
-            style={{flexShrink:0,width:"48px",height:"48px",borderRadius:"50%",background:maxEcoute?"#DC2626":"radial-gradient(circle at 35% 30%, #4a4a4a, #0D0D0D 55%, #000000 100%)",border:"2px solid #FF6B00",color:"#fff",cursor:"pointer",fontSize:"20px",boxShadow:"0 6px 24px rgba(255,107,0,0.35)",touchAction:"none",userSelect:"none"}}>
+            style={{flexShrink:0,width:"48px",height:"48px",borderRadius:"50%",background:maxEcoute?"#DC2626":"radial-gradient(circle at 35% 30%, #4a4a4a, #0D0D0D 55%, #000000 100%)",border:"2px solid #22C55E",color:"#fff",cursor:"pointer",fontSize:"20px",boxShadow:"0 6px 24px rgba(34,197,94,0.35)",touchAction:"none",userSelect:"none"}}>
             🎙️
           </button>
         </div>
@@ -1844,10 +1844,10 @@ function Technicien({ agence, onClose }) {
         <div style={{display:"flex",alignItems:"center",gap:"6px",marginTop:"10px",flexWrap:"wrap"}}>
           <button onClick={imprimerSemaine} title="Imprimer ma semaine" style={{background:C.orDim,border:"1px solid "+C.orBord,color:C.or,borderRadius:"8px",padding:"0 12px",height:"30px",fontSize:"11px",fontWeight:"700",cursor:"pointer",display:"flex",alignItems:"center",gap:"5px",whiteSpace:"nowrap",flexShrink:0}}>🖨️ Ma semaine</button>
             <button onClick={() => setItineraireOpen(true)} title="Itinéraire optimisé" style={{background:"#0D0D0D",border:"1px solid #0D0D0D",color:"#fff",borderRadius:"8px",padding:"0 12px",height:"30px",fontSize:"11px",fontWeight:"700",cursor:"pointer",display:"flex",alignItems:"center",gap:"5px",whiteSpace:"nowrap",flexShrink:0}}>🗺️ Itinéraire</button>
-            <button onClick={() => setOnglet("devis")} title="Devis en attente" style={{background:onglet==="devis"?"#FF6B00":"rgba(218,178,57,0.12)",border:"1px solid #FF6B00",color:onglet==="devis"?"#111":"#8a6d1f",borderRadius:"8px",padding:"0 12px",height:"30px",fontSize:"11px",fontWeight:"700",cursor:"pointer",display:"flex",alignItems:"center",gap:"5px",whiteSpace:"nowrap",flexShrink:0}}>
-              📋 Devis {nbDevisAttente > 0 && <span style={{background:onglet==="devis"?"#0D0D0D":"#FF6B00",color:"#fff",borderRadius:"10px",padding:"0 5px",fontSize:"10px"}}>{nbDevisAttente}</span>}
+            <button onClick={() => setOnglet("devis")} title="Devis en attente" style={{background:onglet==="devis"?"#22C55E":"rgba(218,178,57,0.12)",border:"1px solid #22C55E",color:onglet==="devis"?"#111":"#8a6d1f",borderRadius:"8px",padding:"0 12px",height:"30px",fontSize:"11px",fontWeight:"700",cursor:"pointer",display:"flex",alignItems:"center",gap:"5px",whiteSpace:"nowrap",flexShrink:0}}>
+              📋 Devis {nbDevisAttente > 0 && <span style={{background:onglet==="devis"?"#0D0D0D":"#22C55E",color:"#fff",borderRadius:"10px",padding:"0 5px",fontSize:"10px"}}>{nbDevisAttente}</span>}
             </button>
-            <button onClick={() => setNoteOpen(true)} title="Ma note client" style={{background:"rgba(217,119,6,0.12)",border:"1px solid #FF6B00",color:"#8a5a06",borderRadius:"8px",padding:"0 12px",height:"30px",fontSize:"11px",fontWeight:"700",cursor:"pointer",display:"flex",alignItems:"center",gap:"5px",whiteSpace:"nowrap",flexShrink:0}}>
+            <button onClick={() => setNoteOpen(true)} title="Ma note client" style={{background:"rgba(217,119,6,0.12)",border:"1px solid #22C55E",color:"#8a5a06",borderRadius:"8px",padding:"0 12px",height:"30px",fontSize:"11px",fontWeight:"700",cursor:"pointer",display:"flex",alignItems:"center",gap:"5px",whiteSpace:"nowrap",flexShrink:0}}>
               ⭐ {moyenneAgence ? moyenneAgence.toFixed(1) : "—"}
             </button>
             {noteOpen && (
@@ -1856,13 +1856,13 @@ function Technicien({ agence, onClose }) {
                   <div style={{fontSize:"14px",fontWeight:"900",color:C.white,marginBottom:"14px"}}>⭐ Note client — {agenceShort}</div>
                   {moyenneAgence ? (
                     <>
-                      <div style={{fontSize:"40px",fontWeight:"900",color:"#FF6B00",marginBottom:"6px"}}>{moyenneAgence.toFixed(1)} / 5</div>
+                      <div style={{fontSize:"40px",fontWeight:"900",color:"#22C55E",marginBottom:"6px"}}>{moyenneAgence.toFixed(1)} / 5</div>
                       <div style={{fontSize:"20px",marginBottom:"10px"}}>{"⭐".repeat(Math.round(moyenneAgence))}{"☆".repeat(5-Math.round(moyenneAgence))}</div>
                       <div style={{fontSize:"11px",color:C.muted,marginBottom:"18px"}}>Basé sur {notesAgence.length} avis client{notesAgence.length>1?"s":""}</div>
                       <div style={{display:"flex",flexDirection:"column",gap:"8px",maxHeight:"220px",overflowY:"auto",textAlign:"left"}}>
                         {notesAgence.filter(t => t.fields?.["Note Commentaire"]).slice(0,5).map(t => (
                           <div key={t.id} style={{background:C.card2,border:"1px solid "+C.border,borderRadius:"8px",padding:"8px 10px",fontSize:"11px"}}>
-                            <div style={{color:"#FF6B00",marginBottom:"3px"}}>{"⭐".repeat(t.fields.Note)}</div>
+                            <div style={{color:"#22C55E",marginBottom:"3px"}}>{"⭐".repeat(t.fields.Note)}</div>
                             <div style={{color:C.muted,fontStyle:"italic"}}>{t.fields["Note Commentaire"]}</div>
                           </div>
                         ))}
@@ -1929,7 +1929,7 @@ function Technicien({ agence, onClose }) {
             <button onClick={() => setMaxOuvert(false)} style={{width:"36px",height:"36px",borderRadius:"50%",background:C.card,border:"1px solid "+C.border,color:C.muted,cursor:"pointer",fontSize:"14px"}}>✕</button>
           )}
           <button onClick={() => setVueMode("vocal")} title="Écran vocal Max"
-            style={{width:"36px",height:"36px",borderRadius:"50%",background:C.card,border:"2px solid #FF6B00",color:"#FF6B00",cursor:"pointer",fontSize:"15px"}}>
+            style={{width:"36px",height:"36px",borderRadius:"50%",background:C.card,border:"2px solid #22C55E",color:"#22C55E",cursor:"pointer",fontSize:"15px"}}>
             🔮
           </button>
           <button
@@ -1937,7 +1937,7 @@ function Technicien({ agence, onClose }) {
             onPointerUp={arreterEcouteMax}
             onPointerLeave={arreterEcouteMax}
             onPointerCancel={arreterEcouteMax}
-            style={{width:"58px",height:"58px",borderRadius:"50%",background:"radial-gradient(circle at 35% 30%, #4a4a4a, #0D0D0D 55%, #000000 100%)",border:"2px solid #FF6B00",color:"#fff",cursor:"pointer",fontSize:"24px",boxShadow:"0 0 26px rgba(255,107,0,0.35)",animation:maxEcoute?"pulseMax 1.2s infinite":"none",touchAction:"none",userSelect:"none"}}>
+            style={{width:"58px",height:"58px",borderRadius:"50%",background:"radial-gradient(circle at 35% 30%, #4a4a4a, #0D0D0D 55%, #000000 100%)",border:"2px solid #22C55E",color:"#fff",cursor:"pointer",fontSize:"24px",boxShadow:"0 0 26px rgba(34,197,94,0.35)",animation:maxEcoute?"pulseMax 1.2s infinite":"none",touchAction:"none",userSelect:"none"}}>
             🎙️
           </button>
         </div>

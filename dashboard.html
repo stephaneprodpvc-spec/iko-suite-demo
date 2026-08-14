@@ -18,15 +18,15 @@
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body { font-family: 'Segoe UI', sans-serif; background: #F5F5F5; color: #374151; min-height: 100vh; }
-::-webkit-scrollbar { width: 6px; } ::-webkit-scrollbar-track { background: #E5E7EB; } ::-webkit-scrollbar-thumb { background: #FF6B00; border-radius: 3px; }
+::-webkit-scrollbar { width: 6px; } ::-webkit-scrollbar-track { background: #E5E7EB; } ::-webkit-scrollbar-thumb { background: #22C55E; border-radius: 3px; }
 .modal-overlay { position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.85);z-index:1000;display:flex;align-items:center;justify-content:center;padding:20px; }
 .modal-box { background:#FFFFFF;border:1px solid rgba(218,178,57,0.4);border-radius:16px;padding:28px;width:100%;max-width:520px;max-height:90vh;overflow-y:auto;box-shadow:0 10px 40px rgba(0,0,0,0.15); }
 input, select, textarea { background:#FFFFFF;border:1px solid #D1D5DB;color:#1F2937;border-radius:8px;padding:9px 12px;font-size:12px;width:100%;outline:none;font-family:'Segoe UI',sans-serif; }
 input:focus, select:focus, textarea:focus { border-color:rgba(218,178,57,0.5); }
 @keyframes alertBlink { 0%,100% { opacity:1; } 50% { opacity:0.55; } }
 .alert-blink { animation: alertBlink 1.1s ease-in-out infinite; }
-@keyframes ticketHighlightPulse { 0%,100% { box-shadow:0 0 0 0 rgba(255,107,0,0.55); } 50% { box-shadow:0 0 0 6px rgba(255,107,0,0); } }
-.ticket-highlight { animation: ticketHighlightPulse 1s ease-in-out 2; border-color:#FF6B00 !important; }
+@keyframes ticketHighlightPulse { 0%,100% { box-shadow:0 0 0 0 rgba(34,197,94,0.55); } 50% { box-shadow:0 0 0 6px rgba(34,197,94,0); } }
+.ticket-highlight { animation: ticketHighlightPulse 1s ease-in-out 2; border-color:#22C55E !important; }
 </style>
 </head>
 <body>
@@ -111,10 +111,10 @@ const CONFIG_RECORD_ID = "rec45X231n9dXnyaU";
 // Config entreprise (paramétrable par mode concepteur) : email technicien par
 // agence, couleur de marque, logo. Objet mute en place (comme AGENCES) pour
 // que toute l'app reflete les changements apres un forcerRender.
-let CONFIG_ENTREPRISE = { emailsTechnicien: {}, couleurAccent: "#FF6B00", logoUrl: "", techniciens: {} };
+let CONFIG_ENTREPRISE = { emailsTechnicien: {}, couleurAccent: "#22C55E", logoUrl: "", techniciens: {} };
 
 function hexVersRgba(hex, alpha) {
-  const h = (hex || "#FF6B00").replace('#','');
+  const h = (hex || "#22C55E").replace('#','');
   const r = parseInt(h.substring(0,2),16), g = parseInt(h.substring(2,4),16), b = parseInt(h.substring(4,6),16);
   return 'rgba(' + r + ',' + g + ',' + b + ',' + alpha + ')';
 }
@@ -122,7 +122,7 @@ function hexVersRgba(hex, alpha) {
 function appliquerConfigEntreprise(cfg) {
   if (!cfg) return;
   CONFIG_ENTREPRISE.emailsTechnicien = cfg.emailsTechnicien || {};
-  CONFIG_ENTREPRISE.couleurAccent = cfg.couleurAccent || "#FF6B00";
+  CONFIG_ENTREPRISE.couleurAccent = cfg.couleurAccent || "#22C55E";
   CONFIG_ENTREPRISE.logoUrl = cfg.logoUrl || "";
   CONFIG_ENTREPRISE.techniciens = cfg.techniciens || {};
   C.or = CONFIG_ENTREPRISE.couleurAccent;
@@ -161,12 +161,12 @@ const isUrgentProbleme = (produit, probleme) => (PROBLEMES[produit]||[]).some(p 
 
 const C = {
   bg: "#F5F5F5", card: "#FFFFFF", border: "#E2E2E2",
-  or: "#FF6B00", orDim: "rgba(218,178,57,0.12)", orBord: "rgba(218,178,57,0.3)",
+  or: "#22C55E", orDim: "rgba(218,178,57,0.12)", orBord: "rgba(218,178,57,0.3)",
   text: "#374151", muted: "#5B6472", white: "#0D0D0D",
   rouge: "#DC2626", rougeDim: "rgba(220,38,38,0.12)",
   vert: "#16a34a", vertDim: "rgba(22,163,74,0.12)",
   bleu: "#2563eb", bleuDim: "rgba(37,99,235,0.12)",
-  jaune: "#FF6B00", jauneDim: "rgba(217,119,6,0.12)",
+  jaune: "#22C55E", jauneDim: "rgba(217,119,6,0.12)",
 };
 
 // ---- TRI PAR DATE ----
@@ -279,7 +279,7 @@ function PhoneChatModal({ clientName, entries, texteReponse, onChangeTexte, onEn
         <div style={{background:"#ECE9E4",borderRadius:"32px",overflow:"hidden",height:"600px",display:"flex",flexDirection:"column"}}>
           <div onPointerDown={onDragStart} onPointerMove={onDragMove} onPointerUp={onDragEnd} onPointerCancel={onDragEnd}
             style={{background:"#0D0D0D",padding:"22px 16px 12px",display:"flex",alignItems:"center",gap:"10px",flexShrink:0,cursor:dragging?"grabbing":"grab",touchAction:"none",userSelect:"none"}}>
-            <div style={{width:"34px",height:"34px",borderRadius:"50%",background:"#FF6B00",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:"900",color:"#111",fontSize:"14px",flexShrink:0}}>
+            <div style={{width:"34px",height:"34px",borderRadius:"50%",background:"#22C55E",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:"900",color:"#111",fontSize:"14px",flexShrink:0}}>
               {(clientName||"?").trim().charAt(0).toUpperCase()}
             </div>
             <div style={{flex:1,minWidth:0}}>
@@ -434,7 +434,7 @@ function TicketRow({ t, onStatusChange, onAnnuler, onSupprimer, onSupprimerDefin
         <div style={{marginTop:"10px",paddingTop:"8px",borderTop:"1px solid "+C.border}}>
           <div style={{fontSize:"9px",fontWeight:"700",color:C.muted,letterSpacing:"1px",marginBottom:"6px"}}>📤 RENVOI TICKET</div>
           <div style={{display:"flex",gap:"8px"}}>
-            <button onClick={() => onRenvoyerMail(t.fields?.Name)} style={{flex:1,background:"#FF6B00",color:"#111",border:"none",borderRadius:"8px",padding:"8px 10px",fontWeight:"700",fontSize:"12px",cursor:"pointer"}}>
+            <button onClick={() => onRenvoyerMail(t.fields?.Name)} style={{flex:1,background:"#22C55E",color:"#111",border:"none",borderRadius:"8px",padding:"8px 10px",fontWeight:"700",fontSize:"12px",cursor:"pointer"}}>
               📧 Technicien
             </button>
             {pasDeContact ? (
@@ -443,14 +443,14 @@ function TicketRow({ t, onStatusChange, onAnnuler, onSupprimer, onSupprimerDefin
                 🚫 Client
               </button>
             ) : (
-              <button onClick={() => onRenvoyerMailClient(t.fields?.Name)} style={{flex:1,background:"#FF6B00",color:"#111",border:"none",borderRadius:"8px",padding:"8px 10px",fontWeight:"700",fontSize:"12px",cursor:"pointer"}}>
+              <button onClick={() => onRenvoyerMailClient(t.fields?.Name)} style={{flex:1,background:"#22C55E",color:"#111",border:"none",borderRadius:"8px",padding:"8px 10px",fontWeight:"700",fontSize:"12px",cursor:"pointer"}}>
                 📧 Client
               </button>
             )}
             {t.fields?.["Message client"] && (
               <button onClick={onToggleMessagePanel}
                 className={nonLu ? "alert-blink" : ""}
-                style={{flex:1,background:nonLu?"#DC2626":"#FF6B00",color:nonLu?"#fff":"#111",border:"none",borderRadius:"8px",padding:"8px 10px",fontWeight:"700",fontSize:"12px",cursor:"pointer"}}>
+                style={{flex:1,background:nonLu?"#DC2626":"#22C55E",color:nonLu?"#fff":"#111",border:"none",borderRadius:"8px",padding:"8px 10px",fontWeight:"700",fontSize:"12px",cursor:"pointer"}}>
                 💬 Message du client
               </button>
             )}
@@ -937,7 +937,7 @@ async function chargerCatalogueDevis(clientNom) {
     produits: jProd.records || [],
     mo: jMo.records || [],
     mep: {
-      couleur: mepRec?.fields?.["Couleur primaire"] || "#FF6B00",
+      couleur: mepRec?.fields?.["Couleur primaire"] || "#22C55E",
       piedPage: mepRec?.fields?.["Texte pied de page"] || "",
       dureeValidite: mepRec?.fields?.["Durée validité devis (jours)"] || 30,
       logoUrl: (mepRec?.fields?.["Logo"]?.[0]?.url) || identite.logoUrl || "",
@@ -1475,9 +1475,9 @@ function ModalGestionDevis({ tickets, onClose, onRefresh }) {
   const [chargementSignes, setChargementSignes] = React.useState(false);
 
   const STATUTS_DEVIS = [
-    { id: "a_faire", label: "À faire", statut: "Devis à faire", couleur: "#FF6B00" },
+    { id: "a_faire", label: "À faire", statut: "Devis à faire", couleur: "#22C55E" },
     { id: "envoye", label: "Envoyé", statut: "Devis envoyé", couleur: "#2563eb" },
-    { id: "suivi", label: "Suivi", statut: "Devis - Suivi", couleur: "#FF6B00" },
+    { id: "suivi", label: "Suivi", statut: "Devis - Suivi", couleur: "#22C55E" },
     { id: "fournisseur", label: "Attente fournisseur", statut: "Devis - Attente fournisseur", couleur: "#7c3aed" },
     { id: "refuse", label: "Refusé", statut: "Devis refusé", couleur: "#DC2626" },
     { id: "signe", label: "Signés", statut: null, couleur: "#16A34A" },
@@ -1598,14 +1598,14 @@ function ModalGestionDevis({ tickets, onClose, onRefresh }) {
               <div style={{display:"flex",gap:"8px",flexWrap:"wrap"}}>
                 {sousOnglet === "a_faire" && (
                   <button onClick={() => setTicketDevisActif(t)}
-                    style={{background:"#FF6B00",color:"#111",border:"none",borderRadius:"8px",padding:"8px 14px",fontSize:"12px",fontWeight:"900",cursor:"pointer"}}>
+                    style={{background:"#22C55E",color:"#111",border:"none",borderRadius:"8px",padding:"8px 14px",fontSize:"12px",fontWeight:"900",cursor:"pointer"}}>
                     💶 Établir le devis
                   </button>
                 )}
                 {sousOnglet === "envoye" && (
                   <>
                     <button disabled={changing===t.id} onClick={() => changerStatut(t.id, "Devis - Suivi")}
-                      style={{background:"rgba(217,119,6,0.12)",color:"#FF6B00",border:"1px solid rgba(217,119,6,0.4)",borderRadius:"8px",padding:"7px 12px",fontSize:"11px",fontWeight:"700",cursor:"pointer"}}>
+                      style={{background:"rgba(217,119,6,0.12)",color:"#22C55E",border:"1px solid rgba(217,119,6,0.4)",borderRadius:"8px",padding:"7px 12px",fontSize:"11px",fontWeight:"700",cursor:"pointer"}}>
                       → Marquer en suivi
                     </button>
                     <button disabled={changing===t.id} onClick={() => changerStatut(t.id, "Devis - Attente fournisseur")}
@@ -1763,7 +1763,7 @@ function ModalNotes({ tickets, onClose }) {
                   <span style={{fontSize:"11px",fontWeight:"900",color:C.or,fontFamily:"monospace"}}>{t.fields?.Name}</span>
                   <span style={{fontSize:"11px",color:C.muted,marginLeft:"10px"}}>{t.fields?.Agence}</span>
                 </div>
-                <div style={{color:"#FF6B00",fontSize:"14px"}}>{"⭐".repeat(t.fields.Note)}{"☆".repeat(5-t.fields.Note)}</div>
+                <div style={{color:"#22C55E",fontSize:"14px"}}>{"⭐".repeat(t.fields.Note)}{"☆".repeat(5-t.fields.Note)}</div>
               </div>
               <div style={{fontSize:"13px",fontWeight:"700",color:C.white,marginBottom:"4px"}}>{t.fields?.Client}</div>
               <div style={{fontSize:"11px",color:C.muted,marginBottom:"8px"}}>{t.fields?.Produit} — {t.fields?.Problème}</div>
@@ -1922,7 +1922,7 @@ function PlanningView({ agenceFilter, onOpenTicket }) {
   const densite = (n) => {
     if (n <= 0) return null;
     if (n === 1) return { bg: C.orDim, color: C.or };
-    if (n === 2) return { bg: "rgba(255,107,0,0.4)", color: "#111" };
+    if (n === 2) return { bg: "rgba(34,197,94,0.4)", color: "#111" };
     return { bg: C.or, color: "#111" };
   };
 
@@ -2007,7 +2007,7 @@ function PlanningView({ agenceFilter, onOpenTicket }) {
         <div style={{display:"flex",gap:"14px",marginTop:"14px",fontSize:"10px",color:C.muted,alignItems:"center"}}>
           <span>Densité :</span>
           <span style={{display:"flex",alignItems:"center",gap:"4px"}}><span style={{width:"10px",height:"10px",borderRadius:"3px",background:C.orDim,display:"inline-block"}}/>1 RDV</span>
-          <span style={{display:"flex",alignItems:"center",gap:"4px"}}><span style={{width:"10px",height:"10px",borderRadius:"3px",background:"rgba(255,107,0,0.4)",display:"inline-block"}}/>2 RDV</span>
+          <span style={{display:"flex",alignItems:"center",gap:"4px"}}><span style={{width:"10px",height:"10px",borderRadius:"3px",background:"rgba(34,197,94,0.4)",display:"inline-block"}}/>2 RDV</span>
           <span style={{display:"flex",alignItems:"center",gap:"4px"}}><span style={{width:"10px",height:"10px",borderRadius:"3px",background:C.or,display:"inline-block"}}/>3+ RDV</span>
         </div>
         </>
@@ -2087,7 +2087,7 @@ function PlanningView({ agenceFilter, onOpenTicket }) {
                     </div>
                     {ticket?.Name ? (
                       <button onClick={() => { onOpenTicket(ticket.Name); setJourSelectionne(null); }}
-                        style={{background:"#FF6B00",color:"#111",border:"none",borderRadius:"6px",padding:"6px 10px",fontSize:"11px",fontWeight:"700",cursor:"pointer"}}>
+                        style={{background:"#22C55E",color:"#111",border:"none",borderRadius:"6px",padding:"6px 10px",fontSize:"11px",fontWeight:"700",cursor:"pointer"}}>
                         Ouvrir
                       </button>
                     ) : (
@@ -2422,7 +2422,7 @@ function Dashboard({ agenceAccess, onClose }) {
         .toolbar button, .toolbar a{font-family:'Segoe UI',Arial,sans-serif;font-size:13px;font-weight:700;padding:11px 20px;border-radius:10px;border:none;cursor:pointer;display:inline-flex;align-items:center;gap:8px;text-decoration:none;line-height:1;}
         .btn-close{background:#F3F4F6;color:#374151;border:1px solid #E2E2E2 !important;}
         .btn-print{background:#0D0D0D;color:#fff;box-shadow:0 2px 10px rgba(0,26,66,0.25);}
-        .btn-mail{background:#FF6B00;color:#111;box-shadow:0 2px 10px rgba(218,178,57,0.35);}
+        .btn-mail{background:#22C55E;color:#111;box-shadow:0 2px 10px rgba(218,178,57,0.35);}
         @media print { @page { size: landscape; margin: 12mm; } .toolbar{display:none;} }
       </style></head><body>
       <div class="toolbar">
@@ -2793,8 +2793,8 @@ function Dashboard({ agenceAccess, onClose }) {
           {agenceFilter === "global" ? "Toutes agences" : agenceFilter}
         </div>
         <div style={{width:"220px",height:"220px",borderRadius:"50%",
-          background:"radial-gradient(circle at 35% 30%, #FFB067, #FF6B00 55%, #7a3200 100%)",
-          boxShadow:"0 0 90px rgba(255,107,0,0.45)",
+          background:"radial-gradient(circle at 35% 30%, #FFB067, #22C55E 55%, #7a3200 100%)",
+          boxShadow:"0 0 90px rgba(34,197,94,0.45)",
           animation: amandineEcoute ? "ikoPulseRapide 1s ease-in-out infinite" : "ikoRespire 3.2s ease-in-out infinite"}}/>
         <div style={{marginTop:"32px",color:"#b8b8b8",fontSize:"14px",maxWidth:"320px",textAlign:"center",minHeight:"40px",lineHeight:"1.5"}}>
           {amandineEcoute ? "Je vous écoute... (relâchez le micro pour terminer)" : amandineEnCours ? "..." : amandineDernier ? amandineDernier : "Dites une commande à IKO : \"Filtre sur Agence 2\", \"Combien de tickets urgents ?\"..."}
@@ -2806,9 +2806,9 @@ function Dashboard({ agenceAccess, onClose }) {
             onChange={e => setAmandineTexte(e.target.value)}
             onKeyDown={e => { if (e.key === "Enter" && amandineTexte.trim()) { debloquerVoixIOS(); envoyerAmandine(amandineTexte.trim()); setAmandineTexte(""); } }}
             placeholder="Tapez ou dictez (🎤 sur le clavier)"
-            style={{flex:1,padding:"12px 14px",borderRadius:"10px",background:"#1a1a1a",border:"1px solid rgba(255,107,0,0.3)",color:"#fff",fontSize:"14px"}}/>
+            style={{flex:1,padding:"12px 14px",borderRadius:"10px",background:"#1a1a1a",border:"1px solid rgba(34,197,94,0.3)",color:"#fff",fontSize:"14px"}}/>
           <button onClick={() => { if (amandineTexte.trim()) { debloquerVoixIOS(); envoyerAmandine(amandineTexte.trim()); setAmandineTexte(""); } }}
-            style={{padding:"12px 16px",borderRadius:"10px",background:"#FF6B00",border:"none",color:"#111",fontWeight:"800",cursor:"pointer"}}>
+            style={{padding:"12px 16px",borderRadius:"10px",background:"#22C55E",border:"none",color:"#111",fontWeight:"800",cursor:"pointer"}}>
             →
           </button>
         </div>
@@ -2819,13 +2819,13 @@ function Dashboard({ agenceAccess, onClose }) {
             onPointerUp={arreterEcouteAmandine}
             onPointerLeave={arreterEcouteAmandine}
             onPointerCancel={arreterEcouteAmandine}
-            style={{width:"64px",height:"64px",borderRadius:"50%",background:amandineEcoute?"#DC2626":"#FF6B00",border:"none",color:"#111",cursor:"pointer",fontSize:"26px",boxShadow:"0 6px 24px rgba(255,107,0,0.4)",touchAction:"none",userSelect:"none"}}>
+            style={{width:"64px",height:"64px",borderRadius:"50%",background:amandineEcoute?"#DC2626":"#22C55E",border:"none",color:"#111",cursor:"pointer",fontSize:"26px",boxShadow:"0 6px 24px rgba(34,197,94,0.4)",touchAction:"none",userSelect:"none"}}>
             🎙️
           </button>
         </div>
         <div style={{position:"fixed",bottom:"36px",right:"36px"}}>
           <button onClick={() => setVueMode("tableau")}
-            style={{padding:"16px 22px",borderRadius:"30px",background:"#1a1a1a",border:"1px solid rgba(255,107,0,0.35)",color:"#fff",cursor:"pointer",fontSize:"13px",fontWeight:"700"}}>
+            style={{padding:"16px 22px",borderRadius:"30px",background:"#1a1a1a",border:"1px solid rgba(34,197,94,0.35)",color:"#fff",cursor:"pointer",fontSize:"13px",fontWeight:"700"}}>
             📊 Voir le tableau
           </button>
         </div>
@@ -3079,7 +3079,7 @@ function Dashboard({ agenceAccess, onClose }) {
             onPointerUp={arreterEcouteAmandine}
             onPointerLeave={arreterEcouteAmandine}
             onPointerCancel={arreterEcouteAmandine}
-            style={{width:"58px",height:"58px",borderRadius:"50%",background:amandineEcoute?C.rouge:"radial-gradient(circle at 35% 30%, #FFB067, #FF6B00 55%, #7a3200 100%)",border:"none",color:"#111",cursor:"pointer",fontSize:"24px",boxShadow:"0 0 26px rgba(255,107,0,0.4)",animation:amandineEcoute?"pulse 1.2s infinite":"none",touchAction:"none",userSelect:"none"}}>
+            style={{width:"58px",height:"58px",borderRadius:"50%",background:amandineEcoute?C.rouge:"radial-gradient(circle at 35% 30%, #FFB067, #22C55E 55%, #7a3200 100%)",border:"none",color:"#111",cursor:"pointer",fontSize:"24px",boxShadow:"0 0 26px rgba(34,197,94,0.4)",animation:amandineEcoute?"pulse 1.2s infinite":"none",touchAction:"none",userSelect:"none"}}>
             🎙️
           </button>
         </div>
