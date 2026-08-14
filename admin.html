@@ -206,6 +206,14 @@
   .a4-entete{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;}
   .a4-logo{position:absolute;object-fit:contain;z-index:2;}
   .a4-logo:not([src]),.a4-logo[src=""]{display:none;}
+  .a4-shape{position:absolute;box-sizing:border-box;touch-action:none;cursor:grab;z-index:3;}
+  .a4-shape.tp-rect{border-style:solid;}
+  .a4-shape.tp-circle{border-style:solid;border-radius:50%;}
+  .a4-shape.selectionnee{outline:2px dashed var(--orange);outline-offset:2px;cursor:grabbing;}
+  .a4-shape-handle{position:absolute;right:-7px;bottom:-7px;width:13px;height:13px;background:var(--orange);border-radius:3px;cursor:nwse-resize;display:none;touch-action:none;}
+  .a4-shape.selectionnee .a4-shape-handle{display:block;}
+  .a4-shape-del{position:absolute;top:-11px;right:-11px;width:20px;height:20px;background:#FF453A;color:#fff;border-radius:50%;display:none;align-items:center;justify-content:center;font-size:12px;line-height:1;cursor:pointer;z-index:4;}
+  .a4-shape.selectionnee .a4-shape-del{display:flex;}
   .a4-entete-droite{text-align:right;}
   .a4-devis-titre{font-size:15px;font-weight:700;letter-spacing:.04em;color:#111;}
   .a4-devis-num{font-size:7px;color:#666;margin-top:2px;}
@@ -591,10 +599,11 @@
         </div>
         <div class="mep-body">
           <div class="mep-toolrail">
-            <button type="button" class="mep-tool-btn actif" title="Sélection">↖</button>
+            <button type="button" class="mep-tool-btn actif" id="mepToolSelect" title="Sélection">↖</button>
             <button type="button" class="mep-tool-btn" disabled title="Texte (bientôt)">T</button>
             <button type="button" class="mep-tool-btn" disabled title="Image (bientôt)">▢</button>
-            <button type="button" class="mep-tool-btn" disabled title="Forme (bientôt)">◇</button>
+            <button type="button" class="mep-tool-btn" id="mepToolRect" title="Forme rectangle">▭</button>
+            <button type="button" class="mep-tool-btn" id="mepToolCercle" title="Forme cercle">◯</button>
             <button type="button" class="mep-tool-btn" disabled title="Trait / flèche (bientôt)">↗</button>
             <button type="button" class="mep-tool-btn" disabled title="Calques (bientôt)">▤</button>
           </div>
@@ -705,6 +714,7 @@
             <div class="devis-apercu-label">Aperçu — A4 portrait (210 × 297 mm)</div>
             <div class="a4-page" id="a4Page">
               <img id="a4Logo" class="a4-logo" alt="">
+              <div id="a4Elements"></div>
               <div class="a4-marge-guide" id="a4MargeGuide">
                 <div class="a4-entete">
                   <div class="a4-entete-droite" style="margin-left:auto;">
@@ -1934,6 +1944,9 @@ document.getElementById("chatInput").addEventListener("keydown", function(e){
 var TBL_CATALOGUE = "Catalogue Produits";
 var TBL_MO = "Grille Main d'œuvre";
 var TBL_MEP = "Mise en page Devis";
+var mepElements = [];       // formes/traits/images superposés — {id,type,x,y,w,h,stroke,strokeWidth,fill,zIndex,visible,locked}
+var mepSelectionId = null;
+var mepOutilActif = "select"; // "select" | "rect" | "circle"
 var TBL_DEVIS = "Devis";
 var devisClientId = null;
 var devisClientNom = "";
@@ -2208,6 +2221,15 @@ function remplirFormMEP(rec){
   document.getElementById("mepAssureur").value = assurance.assureur || "";
   document.getElementById("mepNumPolice").value = assurance.numPolice || "";
   document.getElementById("mepZoneCouverture").value = assurance.zone || "";
+
+  mepElements = [];
+  try {
+    var els = JSON.parse(f["Éléments graphiques (JSON)"] || "[]");
+    if (Array.isArray(els)) mepElements = els;
+  } catch(e){}
+  mepSelectionId = null;
+  renderMepElements();
+
   majApercuA4();
 }
 
@@ -2311,6 +2333,136 @@ document.getElementById("mepLogoCentrerBtn").addEventListener("click", function(
   });
 })();
 
+/* ---- Outil Forme (rectangle / cercle) : création, sélection, déplacement, redimensionnement ---- */
+function genMepId(){ return "el" + Date.now().toString(36) + Math.random().toString(36).slice(2,6); }
+
+function setOutilMep(nom){
+  mepOutilActif = nom;
+  var page = document.getElementById("a4Page");
+  page.style.cursor = (nom === "rect" || nom === "circle") ? "crosshair" : "";
+  Array.prototype.forEach.call(document.querySelectorAll("#mepToolSelect, #mepToolRect, #mepToolCercle"), function(b){ b.classList.remove("actif"); });
+  var map = { select: "mepToolSelect", rect: "mepToolRect", circle: "mepToolCercle" };
+  var btn = document.getElementById(map[nom]);
+  if (btn) btn.classList.add("actif");
+}
+document.getElementById("mepToolSelect").addEventListener("click", function(){ setOutilMep("select"); });
+document.getElementById("mepToolRect").addEventListener("click", function(){ setOutilMep("rect"); });
+document.getElementById("mepToolCercle").addEventListener("click", function(){ setOutilMep("circle"); });
+
+function renderMepElements(){
+  var conteneur = document.getElementById("a4Elements");
+  conteneur.innerHTML = "";
+  mepElements
+    .slice()
+    .sort(function(a,b){ return (a.zIndex||0) - (b.zIndex||0); })
+    .forEach(function(el){
+      if (el.visible === false) return;
+      var div = document.createElement("div");
+      div.className = "a4-shape tp-" + el.type + (el.id === mepSelectionId ? " selectionnee" : "");
+      div.style.left = (el.x / 210 * 100) + "%";
+      div.style.top = (el.y / 297 * 100) + "%";
+      div.style.width = (el.w / 210 * 100) + "%";
+      div.style.height = (el.h / 297 * 100) + "%";
+      div.style.borderWidth = (el.strokeWidth || 1) + "px";
+      div.style.borderColor = el.stroke || "#111111";
+      div.style.background = el.fill && el.fill !== "none" ? el.fill : "transparent";
+      div.dataset.id = el.id;
+
+      if (!el.locked){
+        var del = document.createElement("div");
+        del.className = "a4-shape-del"; del.innerHTML = "×"; del.title = "Supprimer";
+        del.addEventListener("pointerdown", function(e){ e.stopPropagation(); });
+        del.addEventListener("click", function(e){
+          e.stopPropagation();
+          mepElements = mepElements.filter(function(x){ return x.id !== el.id; });
+          mepSelectionId = null;
+          renderMepElements();
+        });
+        div.appendChild(del);
+
+        var handle = document.createElement("div");
+        handle.className = "a4-shape-handle"; handle.title = "Redimensionner";
+        div.appendChild(handle);
+        attacherRedimensionnement(handle, el);
+      }
+
+      attacherDeplacement(div, el);
+      conteneur.appendChild(div);
+    });
+}
+
+function attacherDeplacement(div, el){
+  var actif = false, decalX = 0, decalY = 0;
+  div.addEventListener("pointerdown", function(e){
+    if (e.target !== div) return; // pas la poignée ni le bouton supprimer
+    mepSelectionId = el.id;
+    renderMepElements();
+    var page = document.getElementById("a4Page");
+    var rect = page.getBoundingClientRect();
+    var xMm = ((e.clientX - rect.left) / rect.width) * 210;
+    var yMm = ((e.clientY - rect.top) / rect.height) * 297;
+    decalX = xMm - el.x; decalY = yMm - el.y;
+    actif = true;
+    div.setPointerCapture(e.pointerId);
+  });
+  div.addEventListener("pointermove", function(e){
+    if (!actif) return;
+    var page = document.getElementById("a4Page");
+    var rect = page.getBoundingClientRect();
+    var xMm = ((e.clientX - rect.left) / rect.width) * 210;
+    var yMm = ((e.clientY - rect.top) / rect.height) * 297;
+    el.x = Math.max(0, Math.min(210 - el.w, xMm - decalX));
+    el.y = Math.max(0, Math.min(297 - el.h, yMm - decalY));
+    renderMepElements();
+  });
+  div.addEventListener("pointerup", function(e){ actif = false; try{ div.releasePointerCapture(e.pointerId); }catch(err){} });
+}
+
+function attacherRedimensionnement(handle, el){
+  var actif = false;
+  handle.addEventListener("pointerdown", function(e){
+    e.stopPropagation();
+    actif = true;
+    handle.setPointerCapture(e.pointerId);
+  });
+  handle.addEventListener("pointermove", function(e){
+    if (!actif) return;
+    e.stopPropagation();
+    var page = document.getElementById("a4Page");
+    var rect = page.getBoundingClientRect();
+    var xMm = ((e.clientX - rect.left) / rect.width) * 210;
+    var yMm = ((e.clientY - rect.top) / rect.height) * 297;
+    el.w = Math.max(5, Math.min(210 - el.x, xMm - el.x));
+    el.h = Math.max(5, Math.min(297 - el.y, yMm - el.y));
+    renderMepElements();
+  });
+  handle.addEventListener("pointerup", function(e){ e.stopPropagation(); actif = false; try{ handle.releasePointerCapture(e.pointerId); }catch(err){} });
+}
+
+// Clic sur la page en mode Forme → création d'un nouvel élément à cet endroit
+document.getElementById("a4Page").addEventListener("pointerdown", function(e){
+  if (mepOutilActif !== "rect" && mepOutilActif !== "circle") {
+    if (e.target.id === "a4Page" || e.target.id === "a4MargeGuide") { mepSelectionId = null; renderMepElements(); }
+    return;
+  }
+  if (e.target.closest(".a4-shape")) return;
+  var rect = this.getBoundingClientRect();
+  var xMm = ((e.clientX - rect.left) / rect.width) * 210;
+  var yMm = ((e.clientY - rect.top) / rect.height) * 297;
+  var w = mepOutilActif === "circle" ? 30 : 40, h = 30;
+  var nouveau = {
+    id: genMepId(), type: mepOutilActif,
+    x: Math.max(0, Math.min(210 - w, xMm - w / 2)),
+    y: Math.max(0, Math.min(297 - h, yMm - h / 2)),
+    w: w, h: h, stroke: "#111111", strokeWidth: 1, fill: "none",
+    zIndex: mepElements.length, visible: true, locked: false
+  };
+  mepElements.push(nouveau);
+  mepSelectionId = nouveau.id;
+  renderMepElements();
+  setOutilMep("select");
+});
+
 document.getElementById("mepLogoUploadBtn").addEventListener("click", function(){
   document.getElementById("mepLogoFile").click();
 });
@@ -2396,7 +2548,8 @@ document.getElementById("mepSaveBtn").addEventListener("click", function(){
       assureur: document.getElementById("mepAssureur").value,
       numPolice: document.getElementById("mepNumPolice").value,
       zone: document.getElementById("mepZoneCouverture").value
-    })
+    }),
+    "Éléments graphiques (JSON)": JSON.stringify(mepElements)
   };
   msg.style.color = ""; msg.textContent = "Enregistrement…";
   var requete = devisMEPRecordId
