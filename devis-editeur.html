@@ -200,7 +200,8 @@
     <div class="mep-page-bar" id="mepPageBar" style="display:flex;gap:6px;flex:none;"></div>
     <div class="options-sep"></div>
     <div class="mep-props-bar" id="mepPropsBar"></div>
-    <div class="options-hint" id="optionsHint">Sélectionne un outil à gauche, puis clique sur la page pour créer un élément.</div>
+    <div class="options-hint" id="optionsHint">Sélectionne un outil à gauche, puis clique sur la page pour créer un élément. Double-tap sur un texte pour l'éditer.</div>
+    <div class="options-hint" id="optionsHintTexte" style="display:none;">Clique sur la page pour créer un bloc texte, puis double-tap dessus pour taper ton texte.</div>
   </div>
 
   <div class="toolpalette">
@@ -714,6 +715,7 @@ function setOutilMep(nom){
   var btn = document.getElementById(map[nom]);
   if (btn) btn.classList.add("actif");
   document.getElementById("optionsHint").style.display = (nom === "select") ? "" : "none";
+  document.getElementById("optionsHintTexte").style.display = (nom === "texte") ? "" : "none";
 }
 document.getElementById("mepToolSelect").addEventListener("click", function(){ setOutilMep("select"); });
 document.getElementById("mepToolRect").addEventListener("click", function(){ setOutilMep("rect"); });
@@ -1022,8 +1024,6 @@ document.getElementById("a4Page").addEventListener("pointerdown", function(e){
     mepSelectionId = nouveauTexte.id;
     renderMepElements();
     setOutilMep("select");
-    var nouveauDiv = document.querySelector('.a4-shape[data-id="' + nouveauTexte.id + '"]');
-    if (nouveauDiv) { nouveauDiv.dispatchEvent(new Event("dblclick", { bubbles: true })); }
     return;
   }
 
