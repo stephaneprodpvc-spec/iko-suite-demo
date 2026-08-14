@@ -159,6 +159,35 @@ export default async function handler(req, res) {
           }
 
           const agence = ticketJson.fields?.Agence;
+
+          // Déclenche la route Make "Devis signé — confirmation client"
+          // (scénario 6852711, route id 110) : elle existe déjà côté Make
+          // mais rien ne l'appelait jusqu'ici, donc l'email de confirmation
+          // au client n'était jamais envoyé après signature. Non bloquant :
+          // un échec ici ne doit jamais remettre en cause la validation du
+          // devis déjà actée dans Airtable.
+          try {
+            const emailClient = ticketJson.fields?.Email;
+            if (emailClient) {
+              const origin = 'https://' + (req.headers.host || 'iko-suite-demo.vercel.app');
+              const montantTTC = Number(devisRecord.fields?.["Montant TTC"]) || 0;
+              await fetch('https://hook.eu1.make.com/n3lwi92wldkf22jcemmjfem334p4mv6a', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  marque: 'iko', action: 'devis_signe',
+                  ticket: devisRecord.fields?.["N° devis"] || '',
+                  nom: devisRecord.fields?.["Nom client"] || '',
+                  "e-mail": emailClient,
+                  montant: montantTTC.toFixed(2) + ' €',
+                  lien: origin + '/devis.html?devisId=' + devisRecord.id
+                })
+              });
+            }
+          } catch (makeErr) {
+            console.error('Erreur envoi confirmation Make (non bloquant)', makeErr);
+          }
+
           if (agence) {
             const planFilter = encodeURIComponent('AND({Agence}="' + agence + '",{Statut}="Libre")');
             const planUrl = 'https://api.airtable.com/v0/' + baseId + '/Planning?filterByFormula=' + planFilter + '&sort[0][field]=Date&sort[0][direction]=asc&maxRecords=1';
