@@ -486,15 +486,15 @@ function remplirFormMEP(rec){
 
   mepElements = [];
   try { var els = JSON.parse(f["Éléments graphiques (JSON)"] || "[]"); if (Array.isArray(els)) mepElements = els; } catch(e){}
-  if (!devisMEPRecordId && mepElements.length === 0){
-    mepElements = [
-      { id: genMepId(), type: "texte", contenu: "N° DEV-2026-0001", x: 140, y: 16, w: 55, h: 8,
-        fontSize: 8, fontFamily: "Helvetica", color: "#666666", bold: false, italic: false, underline: false, align: "right",
-        zIndex: 0, visible: true, locked: false, page: 0 },
-      { id: genMepId(), type: "texte", contenu: "CLIENT\nNom du client\nAdresse, Code postal Ville", x: 18, y: 46, w: 110, h: 26,
-        fontSize: 8, fontFamily: "Helvetica", color: "#222222", bold: false, italic: false, underline: false, align: "left",
-        zIndex: 1, visible: true, locked: false, page: 0 }
-    ];
+  if (!mepElements.some(function(e){ return e.role === "numero_devis"; })){
+    mepElements.push({ id: genMepId(), type: "texte", role: "numero_devis", contenu: "N° DEV-2026-0001", x: 140, y: 16, w: 55, h: 8,
+      fontSize: 8, fontFamily: "Helvetica", color: "#666666", bold: false, italic: false, underline: false, align: "right",
+      zIndex: mepElements.length, visible: true, locked: false, page: 0 });
+  }
+  if (!mepElements.some(function(e){ return e.role === "bloc_client"; })){
+    mepElements.push({ id: genMepId(), type: "texte", role: "bloc_client", contenu: "CLIENT\nNom du client\nAdresse, Code postal Ville", x: 18, y: 46, w: 110, h: 26,
+      fontSize: 8, fontFamily: "Helvetica", color: "#222222", bold: false, italic: false, underline: false, align: "left",
+      zIndex: mepElements.length, visible: true, locked: false, page: 0 });
   }
   mepSelectionId = null;
   mepPageActive = 0;
@@ -769,7 +769,7 @@ function renderLigneEl(svg, el){
   line.setAttribute("stroke-linecap", "round");
   line.setAttribute("class", "a4-line-hit" + (el.id === mepSelectionId ? " selectionnee" : ""));
   if (el.arrowEnd) line.setAttribute("marker-end", "url(#mepFlecheTete)");
-  line.addEventListener("pointerdown", function(e){ e.stopPropagation(); mepSelectionId = el.id; renderMepElements(); });
+  line.addEventListener("pointerdown", function(e){ if (mepOutilActif !== "select") return; e.stopPropagation(); if (mepSelectionId !== el.id){ mepSelectionId = el.id; renderMepElements(); } });
   svg.appendChild(line);
 
   if (el.id === mepSelectionId && !el.locked){
@@ -804,9 +804,9 @@ function attacherDeplacement(div, el){
   var actif = false, decalX = 0, decalY = 0;
   div.addEventListener("pointerdown", function(e){
     if (e.target !== div) return;
+    if (mepOutilActif !== "select") return;
     if (div.isContentEditable) return;
-    mepSelectionId = el.id;
-    renderMepElements();
+    if (mepSelectionId !== el.id){ mepSelectionId = el.id; renderMepElements(); }
     var page = document.getElementById("a4Page");
     var rect = page.getBoundingClientRect();
     var xMm = ((e.clientX - rect.left) / rect.width) * 210;
@@ -944,7 +944,6 @@ document.getElementById("a4Page").addEventListener("pointerdown", function(e){
     if (e.target.id === "a4Page" || e.target.id === "a4MargeGuide" || e.target.id === "a4Lines") { mepSelectionId = null; renderMepElements(); }
     return;
   }
-  if (e.target.closest(".a4-shape") || e.target.closest("#a4Lines")) return;
   var rect = this.getBoundingClientRect();
   var xMm = ((e.clientX - rect.left) / rect.width) * 210;
   var yMm = ((e.clientY - rect.top) / rect.height) * 297;
