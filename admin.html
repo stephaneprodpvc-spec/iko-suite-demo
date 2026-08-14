@@ -63,8 +63,11 @@
   .menu-item .ico{width:15px;text-align:center;color:var(--texte-dim);font-size:13px;}
   .menu-sep{height:1px;background:var(--border);margin:5px 4px;}
 
-  main{padding:32px;max-width:1280px;margin:0 auto;}
-  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;align-items:start;}
+  main{padding:32px;max-width:1280px;margin:0 auto;flex:1;min-height:0;display:flex;flex-direction:column;width:100%;overflow:hidden;}
+  .hero{flex:none;}
+  .grid{flex:1;min-height:0;position:relative;}
+  .grid > .card{display:none;height:100%;overflow-y:auto;}
+  .grid > .card.actif{display:block;}
 
   .card{
     background:var(--g2); border:1px solid var(--border); border-radius:var(--radius);
@@ -397,7 +400,7 @@
   .ide-nav-item.actif:before{opacity:1;}
   .ide-nav-item .ico{font-size:15px;line-height:1;width:18px;text-align:center;flex-shrink:0;}
   .ide-nav-item .lbl{font-size:13px;font-weight:600;letter-spacing:-0.005em;white-space:nowrap;}
-  .workspace{flex:1;min-width:0;overflow-y:auto;height:100vh;}
+  .workspace{flex:1;min-width:0;overflow:hidden;height:100vh;display:flex;flex-direction:column;}
   @media (max-width:860px){
     .ide-sidebar{width:60px;padding:14px 6px;align-items:center;}
     .ide-sidebar .ide-logo{margin:0 0 6px;}
@@ -468,7 +471,7 @@
 
   <div class="grid">
 
-    <div class="card tilt-3d" id="sec-claude">
+    <div class="card tilt-3d actif" id="sec-claude">
       <h2><span class="pulse"></span>Claude</h2>
       <label class="voice-toggle">
         <span>Conversation vocale automatique</span>
@@ -1904,7 +1907,7 @@ Array.prototype.forEach.call(document.querySelectorAll(".devis-tab"), function(t
 var ouvrirEditeurMepBtnEl = document.getElementById("ouvrirEditeurMepBtn");
 if (ouvrirEditeurMepBtnEl) ouvrirEditeurMepBtnEl.addEventListener("click", function(){
   if (!devisClientId) return;
-  window.open("devis-editeur.html?client=" + encodeURIComponent(devisClientId), "_blank");
+  location.href = "devis-editeur.html?client=" + encodeURIComponent(devisClientId);
 });
 
 function filtreFormuleClient(){
@@ -2112,30 +2115,17 @@ function afficherDevisListe(){
   var items = document.querySelectorAll(".ide-nav-item");
   var workspace = document.querySelector(".workspace");
   if (!items.length || !workspace) return;
+  var cartes = document.querySelectorAll(".grid > .card");
   items.forEach(function(item){
     item.addEventListener("click", function(){
       var cible = document.getElementById(item.getAttribute("data-cible"));
       if (!cible) return;
       items.forEach(function(x){ x.classList.remove("actif"); });
+      cartes.forEach(function(c){ c.classList.remove("actif"); });
       item.classList.add("actif");
-      cible.scrollIntoView({ behavior: "smooth", block: "start" });
+      cible.classList.add("actif");
     });
   });
-  // Met a jour l'item actif au scroll (observe quelle section est visible)
-  if (window.IntersectionObserver) {
-    var sections = Array.prototype.map.call(items, function(item){
-      return document.getElementById(item.getAttribute("data-cible"));
-    }).filter(Boolean);
-    var observer = new IntersectionObserver(function(entries){
-      entries.forEach(function(entry){
-        if (!entry.isIntersecting) return;
-        items.forEach(function(x){ x.classList.remove("actif"); });
-        var match = document.querySelector('.ide-nav-item[data-cible="' + entry.target.id + '"]');
-        if (match) match.classList.add("actif");
-      });
-    }, { root: workspace, threshold: 0.35 });
-    sections.forEach(function(s){ observer.observe(s); });
-  }
 })();
 </script>
 </body>
