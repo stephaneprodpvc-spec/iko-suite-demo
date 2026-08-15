@@ -878,6 +878,8 @@ document.getElementById("lockForm").addEventListener("submit", function(e){
 });
 if (sessionStorage.getItem("iko_admin_ok") === "1"){
   document.getElementById("lock").style.display = "none";
+  chargerClients();
+  chargerConfigVerif();
   setTimeout(chargerAbonnements, 0);
 }
 
