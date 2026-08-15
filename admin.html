@@ -827,6 +827,7 @@ var TABLE = "Clients";
 var editingId = null;
 var clients = [];
 var chatHistorique = [];
+var actionEnAttente = null;
 
 var MDP = "ikopilote2026";
 var voixAmorcee = false;
@@ -1703,6 +1704,30 @@ document.getElementById("chatForm").addEventListener("submit", function(e){
   var texte = input.value.trim();
   if (!texte) return;
   input.value = "";
+
+  if (actionEnAttente){
+    var a = actionEnAttente;
+    actionEnAttente = null;
+    if (estConfirmationVocale(texte)){
+      ajouterBulle(texte, "user");
+      executerActionEnAttente(a);
+      return;
+    }
+    if (estAnnulationVocale(texte)){
+      ajouterBulle(texte, "user");
+      var msgAnnule = "D'accord, annulé.";
+      chatHistorique.push({ role: "assistant", texte: msgAnnule });
+      ajouterBulle(msgAnnule, "assistant");
+      var derniereZone = document.querySelectorAll("#chatMessages .propose-actions");
+      if (derniereZone.length) derniereZone[derniereZone.length - 1].remove();
+      parlerClaude(msgAnnule);
+      return;
+    }
+    // Ni confirmation ni annulation explicite : on abandonne l'action en
+    // attente (deja mise a null ci-dessus) et on traite normalement ce
+    // nouveau message.
+  }
+
   document.getElementById("chatSend").disabled = true;
 
   ajouterBulle(texte, "user");
@@ -1734,12 +1759,14 @@ document.getElementById("chatForm").addEventListener("submit", function(e){
         actions.className = "propose-actions";
         var btnApply = document.createElement("button");
         btnApply.className = "btn-apply"; btnApply.type = "button"; btnApply.textContent = "Appliquer au formulaire";
-        btnApply.addEventListener("click", function(){ appliquerProposition(p); });
+        btnApply.addEventListener("click", function(){ actionEnAttente = null; appliquerProposition(p); });
         var btnDismiss = document.createElement("button");
         btnDismiss.className = "btn-dismiss"; btnDismiss.type = "button"; btnDismiss.textContent = "Ignorer";
-        btnDismiss.addEventListener("click", function(){ actions.remove(); });
+        btnDismiss.addEventListener("click", function(){ actionEnAttente = null; actions.remove(); });
         actions.appendChild(btnApply); actions.appendChild(btnDismiss);
         bulle.appendChild(actions);
+        actionEnAttente = { type: "proposition", data: p };
+        parlerClaude(p.message + " Dis \"confirme\" pour créer, ou \"annule\".");
         return;
       }
       if (data.type === "devis" && data.devis){
@@ -1750,12 +1777,14 @@ document.getElementById("chatForm").addEventListener("submit", function(e){
         actionsD.className = "propose-actions";
         var btnVoir = document.createElement("button");
         btnVoir.className = "btn-apply"; btnVoir.type = "button"; btnVoir.textContent = "Aperçu et impression";
-        btnVoir.addEventListener("click", function(){ genererDevisImprimable(d); });
+        btnVoir.addEventListener("click", function(){ actionEnAttente = null; genererDevisImprimable(d); });
         var btnIgnorerD = document.createElement("button");
         btnIgnorerD.className = "btn-dismiss"; btnIgnorerD.type = "button"; btnIgnorerD.textContent = "Ignorer";
-        btnIgnorerD.addEventListener("click", function(){ actionsD.remove(); });
+        btnIgnorerD.addEventListener("click", function(){ actionEnAttente = null; actionsD.remove(); });
         actionsD.appendChild(btnVoir); actionsD.appendChild(btnIgnorerD);
         bulleD.appendChild(actionsD);
+        actionEnAttente = { type: "devis", data: d };
+        parlerClaude(d.message + " Dis \"confirme\" pour ouvrir l'aperçu, ou \"annule\".");
         return;
       }
       if (data.type === "modification" && data.modification){
@@ -1766,12 +1795,14 @@ document.getElementById("chatForm").addEventListener("submit", function(e){
         actionsM.className = "propose-actions";
         var btnApplyM = document.createElement("button");
         btnApplyM.className = "btn-apply"; btnApplyM.type = "button"; btnApplyM.textContent = "Appliquer au formulaire";
-        btnApplyM.addEventListener("click", function(){ appliquerModification(m); });
+        btnApplyM.addEventListener("click", function(){ actionEnAttente = null; appliquerModification(m); });
         var btnDismissM = document.createElement("button");
         btnDismissM.className = "btn-dismiss"; btnDismissM.type = "button"; btnDismissM.textContent = "Ignorer";
-        btnDismissM.addEventListener("click", function(){ actionsM.remove(); });
+        btnDismissM.addEventListener("click", function(){ actionEnAttente = null; actionsM.remove(); });
         actionsM.appendChild(btnApplyM); actionsM.appendChild(btnDismissM);
         bulleM.appendChild(actionsM);
+        actionEnAttente = { type: "modification", data: m };
+        parlerClaude(m.message + " Dis \"confirme\" pour enregistrer, ou \"annule\".");
         return;
       }
       var texte = data.reponse || "…";
@@ -1841,6 +1872,7 @@ function appliquerProposition(p){
   document.getElementById("formMsg").className = "msg ok";
   document.getElementById("formMsg").textContent = "Formulaire pré-rempli — vérifie puis crée le client.";
   document.querySelector(".card:nth-child(3)").scrollIntoView({ behavior: "smooth", block: "center" });
+  return true;
 }
 
 function appliquerModification(m){
@@ -1851,7 +1883,7 @@ function appliquerModification(m){
   if (!cible){
     document.getElementById("formMsg").className = "msg err";
     document.getElementById("formMsg").textContent = "Client \"" + (m.nom_client || "") + "\" introuvable — aucune modification appliquée.";
-    return;
+    return false;
   }
   chargerDansFormulaire(cible.id);
   if (m.metier) document.getElementById("fMetier").value = m.metier;
@@ -1864,6 +1896,58 @@ function appliquerModification(m){
   document.getElementById("formMsg").className = "msg ok";
   document.getElementById("formMsg").textContent = "Formulaire pré-rempli avec les modifications — vérifie puis clique \"Enregistrer les modifications\".";
   document.querySelector(".card:nth-child(3)").scrollIntoView({ behavior: "smooth", block: "center" });
+  return true;
+}
+
+// --- Confirmation vocale des actions proposees par l'IA -----------------
+// Permet un pilotage 100% vocal : apres une proposition (creation,
+// modification, devis), l'IA parle sa proposition puis ecoute. Si la
+// reponse orale est une confirmation, l'action est executee directement
+// (remplissage ET enregistrement) sans aucun tap. Sinon, elle est
+// abandonnee (annulation explicite ou nouvelle demande).
+function estConfirmationVocale(t){
+  var s = (t || "").trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  return /^(oui|confirme|confirmee|valide|vas[- ]?y|ok|d'accord|daccord|fais[- ]?le|c'est bon|cest bon)\b/.test(s);
+}
+function estAnnulationVocale(t){
+  var s = (t || "").trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  return /^(non|annule|ignore|stop|laisse tomber)\b/.test(s);
+}
+
+function executerActionEnAttente(a){
+  if (a.type === "proposition"){
+    appliquerProposition(a.data);
+    setTimeout(function(){
+      document.getElementById("clientForm").dispatchEvent(new Event("submit", { cancelable: true }));
+      var msg = "Client créé.";
+      chatHistorique.push({ role: "assistant", texte: msg });
+      ajouterBulle(msg, "assistant");
+      parlerClaude(msg);
+    }, 0);
+    return;
+  }
+  if (a.type === "modification"){
+    var ok = appliquerModification(a.data);
+    setTimeout(function(){
+      if (!ok){
+        var msgErr = document.getElementById("formMsg").textContent || "Client introuvable, rien n'a été modifié.";
+        chatHistorique.push({ role: "assistant", texte: msgErr });
+        ajouterBulle(msgErr, "assistant");
+        parlerClaude(msgErr);
+        return;
+      }
+      document.getElementById("clientForm").dispatchEvent(new Event("submit", { cancelable: true }));
+      var msg = "Modifications enregistrées.";
+      chatHistorique.push({ role: "assistant", texte: msg });
+      ajouterBulle(msg, "assistant");
+      parlerClaude(msg);
+    }, 0);
+    return;
+  }
+  if (a.type === "devis"){
+    genererDevisImprimable(a.data);
+    return;
+  }
 }
 
 document.getElementById("chatMic").addEventListener("click", lancerEcouteClaude);
