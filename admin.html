@@ -853,8 +853,9 @@
       <h2 style="margin:0;">Aperçu du devis — format A4 portrait</h2>
       <button type="button" id="devisApercuFermerBtn" style="background:none;border:none;color:var(--texte-faint);font-size:22px;cursor:pointer;line-height:1;padding:4px 8px;">✕</button>
     </div>
-    <div style="background:#0a0a0a;border-radius:12px;padding:24px;display:flex;justify-content:center;overflow-x:auto;">
-      <div id="devisApercuContenu" style="background:#fff;border-radius:2px;overflow:hidden;width:210mm;min-height:297mm;flex-shrink:0;box-shadow:0 10px 40px rgba(0,0,0,0.5);"></div>
+    <div style="background:#0a0a0a;border-radius:12px;padding:24px;display:flex;flex-direction:column;align-items:center;gap:24px;overflow-x:auto;">
+      <div id="devisApercuPage1" style="background:#fff;border-radius:2px;overflow:hidden;width:210mm;min-height:297mm;box-sizing:border-box;flex-shrink:0;box-shadow:0 10px 40px rgba(0,0,0,0.5);"></div>
+      <div id="devisApercuPage2" style="background:#fff;border-radius:2px;overflow:hidden;width:210mm;min-height:297mm;box-sizing:border-box;flex-shrink:0;box-shadow:0 10px 40px rgba(0,0,0,0.5);"></div>
     </div>
     <div class="actions" style="margin-top:16px;">
       <button type="button" class="secondary" id="devisApercuImprimerBtn" style="flex:1;">🖨️ Imprimer</button>
@@ -2520,8 +2521,7 @@ function construireDevisCommercialHTML(mods, infoDestinataire){
     "</table></div>" +
     "<div style='font-size:11px;color:#555;border-top:1px solid #eee;padding-top:14px;line-height:1.6;'>Devis valable 30 jours. Abonnement mensuel facturé à partir de la mise en production. Voir conditions générales de vente en page 2.</div>" +
     "<div style='margin-top:40px;font-size:10px;color:#999;text-align:center;'>RSIA Conseil — devis généré via le poste de pilotage Iko Suite — page 1/2</div>" +
-    "</div>" +
-    construireCGVHTML();
+    "</div>";
 }
 
 // Page 2 du devis : Conditions Generales de Vente, identiques et fixes sur
@@ -2562,9 +2562,11 @@ function ouvrirApercuAvecInfo(mods, infoDestinataire){
   apercuInfo = { nom: infoDestinataire.nom, email: infoDestinataire.email };
   apercuModsActuels = mods;
   apercuInfoComplete = infoDestinataire;
-  var html = construireDevisCommercialHTML(mods, infoDestinataire);
-  document.getElementById("devisApercuContenu").innerHTML = html;
-  document.getElementById("printDevis").innerHTML = html;
+  var htmlPage1 = construireDevisCommercialHTML(mods, infoDestinataire);
+  var htmlPage2 = construireCGVHTML();
+  document.getElementById("devisApercuPage1").innerHTML = htmlPage1;
+  document.getElementById("devisApercuPage2").innerHTML = htmlPage2;
+  document.getElementById("printDevis").innerHTML = htmlPage1 + htmlPage2;
   document.getElementById("devisApercuOverlay").style.display = "flex";
 }
 
