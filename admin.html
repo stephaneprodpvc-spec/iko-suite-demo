@@ -2514,8 +2514,53 @@ function construireDevisCommercialHTML(mods, infoDestinataire){
       "<tr style='font-weight:800;font-size:15px;border-top:2px solid #111;'><td style='padding:6px;'>Total mise en place TTC</td><td style='text-align:right;padding:6px;'>" + formatEuro(ttcMep) + "</td></tr>" +
       "<tr><td style='padding:6px;padding-top:14px;'>Abonnement mensuel total HT</td><td style='text-align:right;padding:6px;padding-top:14px;'>" + formatEuro(totalAbo) + " / mois</td></tr>" +
     "</table></div>" +
-    "<div style='font-size:11px;color:#555;border-top:1px solid #eee;padding-top:14px;line-height:1.6;'>Devis valable 30 jours. Abonnement mensuel facturé à partir de la mise en production. Résiliable selon conditions contractuelles RSIA Conseil.</div>" +
-    "<div style='margin-top:40px;font-size:10px;color:#999;text-align:center;'>RSIA Conseil — devis généré via le poste de pilotage Iko Suite</div>" +
+    "<div style='font-size:11px;color:#555;border-top:1px solid #eee;padding-top:14px;line-height:1.6;'>Devis valable 30 jours. Abonnement mensuel facturé à partir de la mise en production. Voir conditions générales de vente en page 2.</div>" +
+    "<div style='margin-top:40px;font-size:10px;color:#999;text-align:center;'>RSIA Conseil — devis généré via le poste de pilotage Iko Suite — page 1/2</div>" +
+    "</div>" +
+    construireCGVHTML();
+}
+
+// Page 2 du devis : Conditions Generales de Vente, identiques et fixes sur
+// TOUS les devis commerciaux RSIA (obligation legale francaise de joindre
+// des CGV a tout devis professionnel). page-break-before:always force le
+// saut de page a l'impression. Contenu generique — a faire valider par un
+// professionnel du droit avant usage commercial reel, je ne suis pas juriste.
+function construireCGVHTML(){
+  return "<div style='page-break-before:always;color:#111;background:#fff;font-family:-apple-system,\"Segoe UI\",sans-serif;padding:24px;font-size:10.5px;line-height:1.55;'>" +
+    "<h2 style='font-size:14px;margin:0 0 16px;border-bottom:2px solid #FF6B00;padding-bottom:10px;'>Conditions Générales de Vente — RSIA Conseil</h2>" +
+
+    "<p style='font-weight:700;margin:12px 0 4px;'>Article 1 — Objet</p>" +
+    "<p style='margin:0 0 8px;'>Les présentes conditions générales de vente (CGV) régissent la fourniture par RSIA Conseil de la solution logicielle « Iko Suite » (ci-après « la Solution »), comprenant selon les modules souscrits : Dashboard de pilotage, Interface technicien, Assistant SAV, Métreur. Toute commande implique l'acceptation sans réserve des présentes CGV, qui prévalent sur tout document du client.</p>" +
+
+    "<p style='font-weight:700;margin:12px 0 4px;'>Article 2 — Devis et commande</p>" +
+    "<p style='margin:0 0 8px;'>Le devis est valable 30 jours à compter de sa date d'émission. La commande est réputée ferme à réception de l'accord du client (écrit, oral confirmé ou par voie électronique) et donne lieu à la mise en production de la Solution par RSIA Conseil.</p>" +
+
+    "<p style='font-weight:700;margin:12px 0 4px;'>Article 3 — Prix et modalités de paiement</p>" +
+    "<p style='margin:0 0 8px;'>Les prix sont exprimés en euros hors taxes (HT), TVA en vigueur en sus. Les frais de mise en place sont facturés à la mise en production et payables à réception de facture. L'abonnement mensuel est facturé mensuellement d'avance à compter de la date de mise en production, par prélèvement ou virement selon accord entre les parties. Tout retard de paiement pourra entraîner la suspension de l'accès à la Solution après mise en demeure restée infructueuse.</p>" +
+
+    "<p style='font-weight:700;margin:12px 0 4px;'>Article 4 — Durée et résiliation</p>" +
+    "<p style='margin:0 0 8px;'>L'abonnement est conclu pour une durée initiale d'un mois, renouvelable tacitement par périodes mensuelles. Chaque partie peut résilier à tout moment moyennant un préavis écrit de 30 jours. La résiliation n'ouvre droit à aucun remboursement des frais de mise en place déjà réglés.</p>" +
+
+    "<p style='font-weight:700;margin:12px 0 4px;'>Article 5 — Obligations du client</p>" +
+    "<p style='margin:0 0 8px;'>Le client s'engage à fournir les informations nécessaires au paramétrage de la Solution, à utiliser la Solution conformément à sa destination, et à préserver la confidentialité de ses identifiants d'accès. Le client reste seul responsable des données qu'il saisit dans la Solution.</p>" +
+
+    "<p style='font-weight:700;margin:12px 0 4px;'>Article 6 — Disponibilité et responsabilité</p>" +
+    "<p style='margin:0 0 8px;'>RSIA Conseil met en œuvre les moyens raisonnables pour assurer la disponibilité et le bon fonctionnement de la Solution, sans garantie de disponibilité continue absolue (maintenance, cas de force majeure, dysfonctionnement des prestataires tiers d'hébergement ou de communication). La responsabilité de RSIA Conseil, tous préjudices confondus, est limitée au montant des sommes effectivement versées par le client au titre des 12 derniers mois. RSIA Conseil ne saurait être tenue responsable des dommages indirects (perte d'exploitation, de données, de clientèle).</p>" +
+
+    "<p style='font-weight:700;margin:12px 0 4px;'>Article 7 — Propriété intellectuelle</p>" +
+    "<p style='margin:0 0 8px;'>La Solution, son code source, son architecture et sa documentation demeurent la propriété exclusive de RSIA Conseil. Le client bénéficie d'un droit d'usage non exclusif et non cessible pour la durée de l'abonnement. Les données saisies par le client dans la Solution restent sa propriété.</p>" +
+
+    "<p style='font-weight:700;margin:12px 0 4px;'>Article 8 — Protection des données personnelles</p>" +
+    "<p style='margin:0 0 8px;'>RSIA Conseil traite les données à caractère personnel conformément au Règlement Général sur la Protection des Données (RGPD). Les données sont hébergées auprès de prestataires tiers (hébergement web, base de données) et ne sont utilisées que pour les besoins du fonctionnement de la Solution. Le client dispose d'un droit d'accès, de rectification et de suppression de ses données, exerçable auprès de RSIA Conseil.</p>" +
+
+    "<p style='font-weight:700;margin:12px 0 4px;'>Article 9 — Force majeure</p>" +
+    "<p style='margin:0 0 8px;'>Aucune des parties ne pourra être tenue responsable d'un manquement à ses obligations résultant d'un cas de force majeure au sens de l'article 1218 du Code civil.</p>" +
+
+    "<p style='font-weight:700;margin:12px 0 4px;'>Article 10 — Litiges et juridiction compétente</p>" +
+    "<p style='margin:0 0 8px;'>Les présentes CGV sont soumises au droit français. En cas de litige, les parties rechercheront une solution amiable avant toute action judiciaire. À défaut d'accord amiable, les tribunaux compétents du ressort du siège social de RSIA Conseil seront seuls compétents.</p>" +
+
+    "<p style='margin-top:20px;font-size:9.5px;color:#888;border-top:1px solid #eee;padding-top:10px;'>Document générique — à faire valider par un professionnel du droit ou un expert-comptable avant toute utilisation commerciale réelle.</p>" +
+    "<div style='margin-top:24px;font-size:10px;color:#999;text-align:center;'>RSIA Conseil — page 2/2</div>" +
     "</div>";
 }
 
