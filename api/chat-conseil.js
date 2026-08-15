@@ -3,6 +3,8 @@
 // La clé ANTHROPIC_API_KEY reste ici (côté serveur) : elle n'est jamais
 // envoyée au navigateur du visiteur.
 
+import { verifierOrigine, verifierDebit } from "./_securite.js";
+
 const MODELE = "claude-haiku-4-5-20251001"; // le plus économique, largement suffisant ici
 const MAX_MESSAGES = 30;        // garde-fou : longueur max d'une conversation
 const MAX_CHARS_MESSAGE = 2000; // garde-fou : taille max d'un message
@@ -55,6 +57,13 @@ avec un conseiller (à domicile ou en agence) pour un devis gratuit.`;
 export default async function handler(req, res) {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Méthode non autorisée" });
+  }
+
+  if (!verifierOrigine(req)) {
+    return res.status(403).json({ error: "Origine non autorisée." });
+  }
+  if (!verifierDebit(req)) {
+    return res.status(429).json({ error: "Trop de requêtes, réessayez dans une minute." });
   }
 
   const cle = process.env.ANTHROPIC_API_KEY;
