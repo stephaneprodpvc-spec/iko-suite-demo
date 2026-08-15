@@ -144,6 +144,19 @@ QUATRIEME MODE : modifier_client
 - Ne renseigne QUE les champs que Stephane a explicitement demande de
   changer, laisse les autres absents de la reponse.
 - Le champ "message" resume clairement ce qui va etre modifie.
+
+CINQUIEME MODE : modifier_agence
+5. Si Stephane demande de modifier l'adresse, le code postal ou la ville
+   d'une AGENCE (pas du client lui-meme) : appelle l'outil modifier_agence.
+- La liste "agences" fournie en contexte ne contient que les agences du
+  client actuellement ouvert dans le formulaire. Si elle est vide ou si
+  aucun nom d'agence ne correspond clairement, reponds en texte libre pour
+  demander a Stephane d'ouvrir le bon client ou de preciser l'agence.
+- Identifie l'agence par correspondance EXACTE avec un nom present dans la
+  liste "agences". Si plusieurs agences ont un nom proche, demande de
+  preciser.
+- Champs modifiables : adresse, code_postal, ville. Ne renseigne que ceux
+  demandes.
 `;
 
 
@@ -226,6 +239,21 @@ const TOOLS = [
       required: ["nom_client", "message"],
     },
   },
+  {
+    name: "modifier_agence",
+    description: "Propose la modification de l'adresse/code postal/ville d'une agence DEJA EXISTANTE, identifiee par son nom exact dans la liste de contexte 'agences' du client actuellement ouvert.",
+    input_schema: {
+      type: "object",
+      properties: {
+        nom_agence: { type: "string", description: "Nom EXACT de l'agence a modifier, tel qu'il apparait dans la liste de contexte 'agences'." },
+        adresse: { type: "string", description: "Nouvelle adresse (rue, numero), uniquement si demande." },
+        code_postal: { type: "string", description: "Nouveau code postal, uniquement si demande." },
+        ville: { type: "string", description: "Nouvelle ville, uniquement si demande." },
+        message: { type: "string", description: "Une phrase courte resumant la modification proposee." },
+      },
+      required: ["nom_agence", "message"],
+    },
+  },
 ];
 
 export default async function handler(req, res) {
@@ -250,12 +278,15 @@ export default async function handler(req, res) {
     }
     const historique = Array.isArray(body.historique) ? body.historique.slice(-10) : [];
     const clients = Array.isArray(body.clients) ? body.clients.slice(0, MAX_CLIENTS_CONTEXTE) : [];
+    const agences = Array.isArray(body.agences) ? body.agences.slice(0, 10) : [];
 
     const messagesAnthropic = historique.map(h => ({
       role: h.role === "user" ? "user" : "assistant",
       content: String(h.texte || "").slice(0, 800),
     }));
-    const contexte = "Clients actuels dans la base (JSON) :\n" + JSON.stringify(clients) + "\n\nMessage de Stephane : \"" + message + "\"";
+    const contexte = "Clients actuels dans la base (JSON) :\n" + JSON.stringify(clients) +
+      "\n\nAgences du client actuellement ouvert dans le formulaire (JSON, vide si aucun client ouvert) :\n" + JSON.stringify(agences) +
+      "\n\nMessage de Stephane : \"" + message + "\"";
     messagesAnthropic.push({ role: "user", content: contexte });
 
     const reponse = await fetch("https://api.anthropic.com/v1/messages", {
@@ -287,6 +318,7 @@ export default async function handler(req, res) {
     const appelClient = blocs.find(b => b.type === "tool_use" && b.name === "proposer_client");
     const appelDevis = blocs.find(b => b.type === "tool_use" && b.name === "generer_devis");
     const appelModif = blocs.find(b => b.type === "tool_use" && b.name === "modifier_client");
+    const appelModifAgence = blocs.find(b => b.type === "tool_use" && b.name === "modifier_agence");
 
     if (appelClient) {
       appelClient.input.message = retirerEmojis(appelClient.input.message);
@@ -301,6 +333,11 @@ export default async function handler(req, res) {
     if (appelModif) {
       appelModif.input.message = retirerEmojis(appelModif.input.message);
       return res.status(200).json({ type: "modification", modification: appelModif.input });
+    }
+
+    if (appelModifAgence) {
+      appelModifAgence.input.message = retirerEmojis(appelModifAgence.input.message);
+      return res.status(200).json({ type: "modification_agence", modification_agence: appelModifAgence.input });
     }
 
     const texteBrut = blocs.filter(b => b.type === "text").map(b => b.text || "").join(" ").trim();

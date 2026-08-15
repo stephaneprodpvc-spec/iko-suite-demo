@@ -837,6 +837,7 @@
 var TABLE = "Clients";
 var editingId = null;
 var clients = [];
+var agencesActuelles = [];
 var chatHistorique = [];
 var actionEnAttente = null;
 
@@ -1358,6 +1359,7 @@ function afficherAgences(recordsBruts){
   var enTrop = recordsBruts.length - records.length;
   document.getElementById("agencesCount").textContent = "(" + records.length + ")";
   document.getElementById("ajouterAgenceBtn").style.display = records.length >= max ? "none" : "block";
+  agencesActuelles = records;
 
   if (!records.length) {
     el.innerHTML = "<div style='font-size:12px;color:var(--texte-faint);'>Aucune agence configurée pour ce client.</div>";
@@ -1373,6 +1375,11 @@ function afficherAgences(recordsBruts){
       "<input type='text' value='" + escHtml(f["Nom agence"]) + "' placeholder=\"Nom de l'agence\" data-id='" + rec.id + "' data-champ='Nom agence' style='width:100%;padding:8px 10px;border-radius:8px;border:1px solid var(--border);background:rgba(255,255,255,0.04);color:var(--texte);font-size:13px;outline:none;'>" +
       "<input type='email' value='" + escHtml(f["Email agence"]) + "' placeholder='Email agence' data-id='" + rec.id + "' data-champ='Email agence' style='width:100%;padding:8px 10px;border-radius:8px;border:1px solid var(--border);background:rgba(255,255,255,0.04);color:var(--texte);font-size:12px;outline:none;'>" +
       "<input type='email' value='" + escHtml(f["Email technicien SAV"]) + "' placeholder='Email technicien SAV' data-id='" + rec.id + "' data-champ='Email technicien SAV' style='width:100%;padding:8px 10px;border-radius:8px;border:1px solid var(--border);background:rgba(255,255,255,0.04);color:var(--texte);font-size:12px;outline:none;'>" +
+      "<input type='text' value='" + escHtml(f["Adresse"]) + "' placeholder='Adresse' data-id='" + rec.id + "' data-champ='Adresse' style='width:100%;padding:8px 10px;border-radius:8px;border:1px solid var(--border);background:rgba(255,255,255,0.04);color:var(--texte);font-size:12px;outline:none;'>" +
+      "<div style='display:flex;gap:6px;'>" +
+        "<input type='text' value='" + escHtml(f["Code postal"]) + "' placeholder='Code postal' data-id='" + rec.id + "' data-champ='Code postal' style='width:90px;padding:8px 10px;border-radius:8px;border:1px solid var(--border);background:rgba(255,255,255,0.04);color:var(--texte);font-size:12px;outline:none;'>" +
+        "<input type='text' value='" + escHtml(f["Ville"]) + "' placeholder='Ville' data-id='" + rec.id + "' data-champ='Ville' style='flex:1;padding:8px 10px;border-radius:8px;border:1px solid var(--border);background:rgba(255,255,255,0.04);color:var(--texte);font-size:12px;outline:none;'>" +
+      "</div>" +
       "<div style='display:flex;align-items:center;gap:10px;'>" +
         "<label style='font-size:11px;color:var(--texte-dim);display:flex;align-items:center;gap:4px;'><input type='checkbox' data-id='" + rec.id + "' data-champ='Actif' " + actif + "> Actif</label>" +
         "<button type='button' class='ag-del' data-id='" + rec.id + "' style='margin-left:auto;background:none;border:none;color:#FF453A;cursor:pointer;font-size:12px;'>Supprimer</button>" +
@@ -1757,11 +1764,15 @@ document.getElementById("chatForm").addEventListener("submit", function(e){
     var f = c.fields || {};
     return { id: c.id, nom: f["Nom client"], metier: f["Métier"], modules: f["Modules actifs"], statut: f["Statut client"] };
   });
+  var agencesContexte = editingId ? agencesActuelles.map(function(a){
+    var f = a.fields || {};
+    return { nom: f["Nom agence"], adresse: f["Adresse"], code_postal: f["Code postal"], ville: f["Ville"] };
+  }) : [];
 
   fetch("/api/chat-admin", {
     method: "POST",
     headers: {"Content-Type":"application/json"},
-    body: JSON.stringify({ message: texte, historique: chatHistorique.slice(0,-1), clients: clientsContexte })
+    body: JSON.stringify({ message: texte, historique: chatHistorique.slice(0,-1), clients: clientsContexte, agences: agencesContexte })
   })
     .then(function(r){ return r.json(); })
     .then(function(data){
@@ -1822,6 +1833,24 @@ document.getElementById("chatForm").addEventListener("submit", function(e){
         bulleM.appendChild(actionsM);
         actionEnAttente = { type: "modification", data: m };
         parlerClaude(m.message + " Dis \"confirme\" pour enregistrer, ou \"annule\".");
+        return;
+      }
+      if (data.type === "modification_agence" && data.modification_agence){
+        var ma = data.modification_agence;
+        chatHistorique.push({ role: "assistant", texte: ma.message });
+        var bulleMA = ajouterBulle(ma.message, "assistant");
+        var actionsMA = document.createElement("div");
+        actionsMA.className = "propose-actions";
+        var btnApplyMA = document.createElement("button");
+        btnApplyMA.className = "btn-apply"; btnApplyMA.type = "button"; btnApplyMA.textContent = "Enregistrer";
+        btnApplyMA.addEventListener("click", function(){ actionEnAttente = null; appliquerModificationAgence(ma); });
+        var btnDismissMA = document.createElement("button");
+        btnDismissMA.className = "btn-dismiss"; btnDismissMA.type = "button"; btnDismissMA.textContent = "Ignorer";
+        btnDismissMA.addEventListener("click", function(){ actionEnAttente = null; actionsMA.remove(); });
+        actionsMA.appendChild(btnApplyMA); actionsMA.appendChild(btnDismissMA);
+        bulleMA.appendChild(actionsMA);
+        actionEnAttente = { type: "modification_agence", data: ma };
+        parlerClaude(ma.message + " Dis \"confirme\" pour enregistrer, ou \"annule\".");
         return;
       }
       var texte = data.reponse || "…";
@@ -1926,6 +1955,31 @@ function appliquerModification(m){
   return true;
 }
 
+// Ecriture directe sur le record Agence (Adresse/Code postal/Ville) : pas
+// de formulaire dedie pour les agences, contrairement au client. Champ non
+// destructif -> execution directe apres confirmation vocale, comme les
+// autres actions directes (statut, message lu...).
+function appliquerModificationAgence(ma){
+  var nomCible = (ma.nom_agence || "").trim().toLowerCase();
+  var cible = agencesActuelles.find(function(a){
+    return ((a.fields || {})["Nom agence"] || "").trim().toLowerCase() === nomCible;
+  });
+  if (!cible){
+    document.getElementById("formMsg").className = "msg err";
+    document.getElementById("formMsg").textContent = "Agence \"" + (ma.nom_agence || "") + "\" introuvable — aucune modification appliquée.";
+    return false;
+  }
+  var fields = {};
+  if (ma.adresse) fields["Adresse"] = ma.adresse;
+  if (ma.code_postal) fields["Code postal"] = ma.code_postal;
+  if (ma.ville) fields["Ville"] = ma.ville;
+  if (!Object.keys(fields).length) return false;
+  fetch("/api/airtable/" + encodeURIComponent(AGENCES_TABLE) + "/" + cible.id, {
+    method: "PATCH", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ fields: fields })
+  }).then(function(){ if (editingId) chargerAgencesClient(editingId); });
+  return true;
+}
+
 // --- Confirmation vocale des actions proposees par l'IA -----------------
 // Permet un pilotage 100% vocal : apres une proposition (creation,
 // modification, devis), l'IA parle sa proposition puis ecoute. Si la
@@ -1951,6 +2005,14 @@ function executerActionEnAttente(a){
       ajouterBulle(msg, "assistant");
       parlerClaude(msg);
     }, 0);
+    return;
+  }
+  if (a.type === "modification_agence"){
+    var okMA = appliquerModificationAgence(a.data);
+    var msgMA = okMA ? "Agence mise à jour." : (document.getElementById("formMsg").textContent || "Agence introuvable, rien n'a été modifié.");
+    chatHistorique.push({ role: "assistant", texte: msgMA });
+    ajouterBulle(msgMA, "assistant");
+    parlerClaude(msgMA);
     return;
   }
   if (a.type === "modification"){
