@@ -288,8 +288,8 @@
       radial-gradient(circle at 8% 120%, var(--teal-glow), transparent 50%),
       var(--g2);
     background-size:auto,auto,auto;
-    border:1px solid var(--border);
-    animation:heroIn .5s var(--ease) both;}
+    border:1px solid var(--border);}
+  .hero.cachee{display:none;}
   .hero:after{content:"";position:absolute;inset:0;background-image:
       linear-gradient(rgba(255,255,255,0.025) 1px,transparent 1px),
       linear-gradient(90deg,rgba(255,255,255,0.025) 1px,transparent 1px);
@@ -319,12 +319,23 @@
   }
   .hero-stat span{font-size:10.5px;color:var(--texte-faint);text-transform:uppercase;letter-spacing:.07em;font-weight:600;}
 
-  @keyframes heroIn{from{opacity:0;transform:translateY(-14px);}to{opacity:1;transform:translateY(0);}}
-  @keyframes cardIn{from{opacity:0;transform:translateY(22px);}to{opacity:1;transform:translateY(0);}}
-  .grid > .card{animation:cardIn .55s cubic-bezier(.25,.8,.25,1) both;}
-  .grid > .card:nth-child(1){animation-delay:.05s;}
-  .grid > .card:nth-child(2){animation-delay:.15s;}
-  .grid > .card:nth-child(3){animation-delay:.25s;}
+  /* ---- Widget orbite : abonnements du projet ---- */
+  .orbit-wrap{position:relative;width:min(480px,100%);aspect-ratio:1;margin:10px auto 4px;}
+  .orbit-ring{position:absolute;inset:6%;border:1px dashed var(--border-strong);border-radius:50%;}
+  .orbit-center{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:19%;aspect-ratio:1;border-radius:50%;
+    background:linear-gradient(135deg,var(--vert),#0e8f43);display:flex;align-items:center;justify-content:center;
+    font-family:var(--f-display);font-weight:700;color:#0A0A0A;font-size:15px;letter-spacing:-.02em;
+    box-shadow:0 0 0 1px var(--border),0 0 26px var(--vert-glow);}
+  .orbit-item{position:absolute;top:0;left:0;transform:translate(-50%,-50%);display:flex;flex-direction:column;align-items:center;gap:8px;
+    text-decoration:none;width:78px;}
+  .orbit-item .ic{width:52px;height:52px;border-radius:50%;background:var(--g2);border:1px solid var(--border-strong);
+    display:flex;align-items:center;justify-content:center;font-size:19px;color:var(--texte);transition:transform .15s,border-color .15s,box-shadow .15s;}
+  .orbit-item:hover .ic{transform:scale(1.08);border-color:var(--accent);box-shadow:0 0 18px color-mix(in srgb,var(--accent) 45%,transparent);}
+  .orbit-item .lbl{font-size:11px;font-weight:600;color:var(--texte-dim);text-align:center;line-height:1.2;}
+  .orbit-item:hover .lbl{color:var(--texte);}
+  @media (max-width:640px){.orbit-wrap{width:min(300px,92%);}.orbit-item{width:56px;}.orbit-item .ic{width:38px;height:38px;font-size:14px;}.orbit-item .lbl{font-size:9px;}}
+
+
 
   .card.tilt-3d{transform-style:preserve-3d;transition:transform .12s ease-out, box-shadow .3s;will-change:transform;}
   #statsBar{font-size:12px;color:var(--texte-dim);background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:11px;padding:10px 12px;margin-bottom:12px;line-height:1.6;}
@@ -502,7 +513,7 @@
 
 <main>
 
-  <div class="hero">
+  <div class="hero" id="heroBanniere">
     <div class="hero-eyebrow">RSIA Conseil — Iko Suite</div>
     <h2>Bienvenue, Stéphane.</h2>
     <p>Pilote tes clients, leurs modules et leur identité depuis un seul endroit. Décris, configure, déploie.</p>
@@ -605,17 +616,21 @@
 
     <div class="card" id="sec-abonnements">
       <h2>🔑 Abonnements du projet</h2>
-      <div id="usageElevenLabsBadge" style="font-size:12px;color:var(--texte-faint);margin-bottom:12px;">Chargement du quota ElevenLabs…</div>
-      <div id="abonnementsListe" style="display:flex;flex-direction:column;gap:8px;"></div>
+      <div id="usageElevenLabsBadge" style="font-size:12px;color:var(--texte-faint);margin-bottom:12px;text-align:center;">Chargement du quota ElevenLabs…</div>
+      <div class="orbit-wrap" id="abonnementsListe">
+        <div class="orbit-ring"></div>
+        <div class="orbit-center">RSIA</div>
+      </div>
     </div>
 
     <div class="card" id="sec-bareme">
       <h2>💶 Barème commercial RSIA</h2>
       <div style="font-size:12px;color:var(--texte-faint);margin-bottom:12px;">Tarif par module, utilisé automatiquement pour chiffrer chaque devis commercial (prospect → production). Enregistrement automatique à chaque champ quitté.</div>
       <table class="devis-table">
-        <thead><tr><th>Module</th><th class="num">Mise en place HT</th><th class="num">Abonnement mensuel HT</th></tr></thead>
+        <thead><tr><th>Module</th><th class="num">Mise en place HT</th><th class="num">Abonnement mensuel HT</th><th></th></tr></thead>
         <tbody id="baremeListe"></tbody>
       </table>
+      <button type="button" class="secondary" id="baremeAjouterBtn" style="margin-top:12px;">＋ Ajouter un module</button>
       <div class="msg" id="baremeMsg"></div>
     </div>
 
@@ -992,23 +1007,26 @@ function initiales(nom){
 }
 
 var ABONNEMENTS_PROJET = [
-  { nom: "Airtable", detail: "Base de données", url: "https://airtable.com/workspaces" },
-  { nom: "Vercel", detail: "Hébergement + déploiement", url: "https://vercel.com/akial" },
-  { nom: "GitHub", detail: "Code source (repo iko-suite-demo)", url: "https://github.com/stephaneprodpvc-spec/iko-suite-demo" },
-  { nom: "ElevenLabs", detail: "Voix (synthèse vocale)", url: "https://elevenlabs.io/app/subscription" },
-  { nom: "OpenAI", detail: "Transcription vocale (Whisper)", url: "https://platform.openai.com/settings/organization/billing" },
-  { nom: "Anthropic (Claude)", detail: "Intelligence des assistants", url: "https://console.anthropic.com/settings/billing" },
-  { nom: "Make", detail: "Automatisations / webhooks", url: "https://www.make.com/en/login" }
+  { nom: "Airtable", detail: "Base de données", url: "https://airtable.com/workspaces", ic: "▤", accent: "var(--teal)" },
+  { nom: "Vercel", detail: "Hébergement + déploiement", url: "https://vercel.com/akial", ic: "▲", accent: "var(--texte)" },
+  { nom: "GitHub", detail: "Code source (repo iko-suite-demo)", url: "https://github.com/stephaneprodpvc-spec/iko-suite-demo", ic: "◒", accent: "var(--texte)" },
+  { nom: "ElevenLabs", detail: "Voix (synthèse vocale)", url: "https://elevenlabs.io/app/subscription", ic: "🎙️", accent: "var(--corail)" },
+  { nom: "OpenAI", detail: "Transcription vocale (Whisper)", url: "https://platform.openai.com/settings/organization/billing", ic: "✦", accent: "var(--texte)" },
+  { nom: "Anthropic (Claude)", detail: "Intelligence des assistants", url: "https://console.anthropic.com/settings/billing", ic: "◆", accent: "var(--violet)" },
+  { nom: "Make", detail: "Automatisations / webhooks", url: "https://www.make.com/en/login", ic: "⚙", accent: "var(--vert)" }
 ];
 
 function chargerAbonnements(){
-  var liste = document.getElementById("abonnementsListe");
-  if (liste){
-    liste.innerHTML = ABONNEMENTS_PROJET.map(function(a){
-      return "<a href='" + a.url + "' target='_blank' rel='noopener noreferrer' style='display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border-radius:10px;border:1px solid var(--border);text-decoration:none;color:var(--texte);'>" +
-        "<span><b style='font-size:12.5px;'>" + a.nom + "</b><br><span style='font-size:11px;color:var(--texte-faint);'>" + a.detail + "</span></span>" +
-        "<span style='color:var(--texte-faint);'>↗</span></a>";
+  var wrap = document.getElementById("abonnementsListe");
+  if (wrap){
+    var n = ABONNEMENTS_PROJET.length, rayon = 38;
+    var items = ABONNEMENTS_PROJET.map(function(a, i){
+      var angle = (-90 + (360 / n) * i) * Math.PI / 180;
+      var x = 50 + Math.cos(angle) * rayon, y = 50 + Math.sin(angle) * rayon;
+      return "<a class='orbit-item' href='" + a.url + "' target='_blank' rel='noopener noreferrer' title='" + a.detail + "' style='left:" + x + "%;top:" + y + "%;--accent:" + a.accent + ";'>" +
+        "<span class='ic'>" + a.ic + "</span><span class='lbl'>" + a.nom + "</span></a>";
     }).join("");
+    wrap.innerHTML = "<div class='orbit-ring'></div><div class='orbit-center'>RSIA</div>" + items;
   }
   var badge = document.getElementById("usageElevenLabsBadge");
   if (!badge) return;
@@ -2376,7 +2394,10 @@ function chargerBaremeRSIA(){
     .then(function(r){ return r.json(); })
     .then(function(data){
       try { baremeRSIA = JSON.parse((data.fields || {})["Tarifs RSIA JSON"] || "{}"); } catch(e){ baremeRSIA = {}; }
-      BAREME_MODULES.forEach(function(m){ if (!baremeRSIA[m]) baremeRSIA[m] = { misePlace: 0, abonnement: 0 }; });
+      if (!Object.keys(baremeRSIA).length){
+        BAREME_MODULES.forEach(function(m){ baremeRSIA[m] = { misePlace: 0, abonnement: 0 }; });
+      }
+      BAREME_MODULES = Object.keys(baremeRSIA);
       try { devisProspectListe = JSON.parse((data.fields || {})["Devis Prospect JSON"] || "[]"); } catch(e){ devisProspectListe = []; }
       afficherBaremeUI();
       afficherDevisProspectUI();
@@ -2398,6 +2419,7 @@ function afficherBaremeUI(){
       "<td>" + m + "</td>" +
       "<td class='num'><input type='number' min='0' step='0.01' value='" + v.misePlace + "' data-mod='" + m + "' data-champ='misePlace'></td>" +
       "<td class='num'><input type='number' min='0' step='0.01' value='" + v.abonnement + "' data-mod='" + m + "' data-champ='abonnement'></td>" +
+      "<td style='text-align:center;'><button type='button' class='bareme-del' data-mod-del='" + m + "' title='Supprimer ce module' style='background:none;border:none;color:var(--texte-faint);cursor:pointer;font-size:15px;line-height:1;'>✕</button></td>" +
       "</tr>";
   }).join("");
   Array.prototype.forEach.call(el.querySelectorAll("input[data-mod]"), function(input){
@@ -2408,6 +2430,27 @@ function afficherBaremeUI(){
       enregistrerBaremeRSIA();
     });
   });
+  Array.prototype.forEach.call(el.querySelectorAll("button[data-mod-del]"), function(btn){
+    btn.addEventListener("click", function(){ supprimerModuleBareme(this.getAttribute("data-mod-del")); });
+  });
+}
+
+function ajouterModuleBareme(){
+  var nom = (prompt("Nom du nouveau module ?") || "").trim();
+  if (!nom) return;
+  if (baremeRSIA[nom]){ alert("Ce module existe déjà dans le barème."); return; }
+  baremeRSIA[nom] = { misePlace: 0, abonnement: 0 };
+  BAREME_MODULES = Object.keys(baremeRSIA);
+  afficherBaremeUI();
+  enregistrerBaremeRSIA();
+}
+
+function supprimerModuleBareme(nom){
+  if (!confirm("Supprimer le module \"" + nom + "\" du barème ? Il disparaîtra aussi des futurs devis. Irréversible.")) return;
+  delete baremeRSIA[nom];
+  BAREME_MODULES = Object.keys(baremeRSIA);
+  afficherBaremeUI();
+  enregistrerBaremeRSIA();
 }
 
 function enregistrerBaremeRSIA(){
@@ -3195,12 +3238,16 @@ function afficherDevisListe(){
 }
 // ==================== /Devis & Facturation ====================
 
+var baremeAjouterBtnEl = document.getElementById("baremeAjouterBtn");
+if (baremeAjouterBtnEl) baremeAjouterBtnEl.addEventListener("click", ajouterModuleBareme);
+
 // --- Navigation sidebar (rail IDE) ---
 (function(){
   var items = document.querySelectorAll(".ide-nav-item");
   var workspace = document.querySelector(".workspace");
   if (!items.length || !workspace) return;
   var cartes = document.querySelectorAll(".grid > .card");
+  var hero = document.getElementById("heroBanniere");
   items.forEach(function(item){
     item.addEventListener("click", function(){
       var cible = document.getElementById(item.getAttribute("data-cible"));
@@ -3209,6 +3256,7 @@ function afficherDevisListe(){
       cartes.forEach(function(c){ c.classList.remove("actif"); });
       item.classList.add("actif");
       cible.classList.add("actif");
+      if (hero) hero.classList.toggle("cachee", item.getAttribute("data-cible") !== "sec-claude");
     });
   });
 })();
