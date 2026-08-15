@@ -10,33 +10,8 @@ import { verifierOrigine, verifierDebit, reponseBloquee } from "./_securite.js";
 // client (voir admin.html).
 
 const MODELE = "claude-sonnet-4-6";
-const MODELE_GEMINI = "gemini-2.5-flash";
 const MAX_CHARS_MESSAGE = 1500;
 const MAX_CLIENTS_CONTEXTE = 100;
-
-// Convertit un schema JSON style Anthropic (type en minuscules) vers le
-// format attendu par Gemini (type en MAJUSCULES), recursivement sur
-// properties/items. Les autres cles (enum, description, required) sont
-// compatibles telles quelles.
-function versSchemaGemini(schema){
-  if (!schema || typeof schema !== "object") return schema;
-  const out = { ...schema };
-  if (typeof out.type === "string") out.type = out.type.toUpperCase();
-  if (out.properties){
-    const props = {};
-    for (const k in out.properties) props[k] = versSchemaGemini(out.properties[k]);
-    out.properties = props;
-  }
-  if (out.items) out.items = versSchemaGemini(out.items);
-  return out;
-}
-function toolsPourGemini(tools){
-  return tools.map(t => ({
-    name: t.name,
-    description: t.description,
-    parameters: versSchemaGemini(t.input_schema),
-  }));
-}
 
 // Supprime emojis/pictogrammes d'un texte (filet de securite en plus de la
 // consigne donnee a Claude dans le system prompt).
@@ -318,44 +293,7 @@ const TOOLS = [
   },
 ];
 
-// Les deux fonctions ci-dessous renvoient le meme format normalise :
-// { texte: string, appelOutil: { name, input } | null }
-// pour que le reste du handler ne depende d'aucun des deux formats d'API.
-
-async function appellerGemini(cle, messagesHistorique, contexte){
-  const contents = messagesHistorique.map(h => ({
-    role: h.role === "user" ? "user" : "model",
-    parts: [{ text: String(h.texte || "").slice(0, 800) }],
-  }));
-  contents.push({ role: "user", parts: [{ text: contexte }] });
-
-  const url = "https://generativelanguage.googleapis.com/v1beta/models/" + MODELE_GEMINI + ":generateContent?key=" + cle;
-  const reponse = await fetch(url, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({
-      systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
-      contents: contents,
-      tools: [{ functionDeclarations: toolsPourGemini(TOOLS) }],
-      toolConfig: { functionCallingConfig: { mode: "AUTO" } },
-      generationConfig: { temperature: 0.5, maxOutputTokens: 700 },
-    }),
-  });
-  if (!reponse.ok){
-    const detail = await reponse.text();
-    throw new Error("Gemini HTTP " + reponse.status + " : " + detail.slice(0, 300));
-  }
-  const data = await reponse.json();
-  const parts = (data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts) || [];
-  const partOutil = parts.find(p => p.functionCall);
-  if (partOutil){
-    return { texte: "", appelOutil: { name: partOutil.functionCall.name, input: partOutil.functionCall.args || {} } };
-  }
-  const texte = parts.filter(p => typeof p.text === "string").map(p => p.text).join(" ").trim();
-  if (!texte) throw new Error("Gemini : reponse vide ou format inattendu");
-  return { texte: texte, appelOutil: null };
-}
-
+// Renvoie un format normalise { texte: string, appelOutil: { name, input } | null }.
 async function appellerClaude(cle, messagesHistorique, contexte){
   const messagesAnthropic = messagesHistorique.map(h => ({
     role: h.role === "user" ? "user" : "assistant",
@@ -402,10 +340,9 @@ export default async function handler(req, res) {
   if (!verifierOrigine(req)) return reponseBloquee(res, "origine");
   if (!verifierDebit(req)) return reponseBloquee(res, "debit");
 
-  const cleGemini = process.env.GEMINI_API_KEY;
   const cleClaude = process.env.ANTHROPIC_API_KEY;
-  if (!cleGemini && !cleClaude) {
-    console.error("Ni GEMINI_API_KEY ni ANTHROPIC_API_KEY ne sont configurees");
+  if (!cleClaude) {
+    console.error("ANTHROPIC_API_KEY absente des variables d'environnement");
     return res.status(500).json({ erreur: "Configuration serveur incomplete" });
   }
 
@@ -423,28 +360,13 @@ export default async function handler(req, res) {
       "\n\nAgences du client actuellement ouvert dans le formulaire (JSON, vide si aucun client ouvert) :\n" + JSON.stringify(agences) +
       "\n\nMessage de Stephane : \"" + message + "\"";
 
-    // Gemini en priorite (gratuit) si une cle est configuree, avec repli
-    // automatique et silencieux sur Claude en cas d'echec (reseau, format
-    // de reponse inattendu, quota depasse...). Stephane ne voit jamais
-    // l'echec cote client : au pire une reponse legerement plus lente.
-    let resultat = null;
-    let sourceUtilisee = null;
-    if (cleGemini) {
-      try {
-        resultat = await appellerGemini(cleGemini, historique, contexte);
-        sourceUtilisee = "gemini";
-      } catch (e) {
-        console.warn("chat-admin: Gemini indisponible, repli sur Claude —", e.message);
-      }
-    }
-    if (!resultat) {
-      if (!cleClaude) {
-        return res.status(502).json({ erreur: "L'assistant est momentanément indisponible." });
-      }
+    let resultat;
+    try {
       resultat = await appellerClaude(cleClaude, historique, contexte);
-      sourceUtilisee = "claude";
+    } catch (e) {
+      console.error("chat-admin: erreur Claude —", e.message);
+      return res.status(502).json({ erreur: "Claude est momentanément indisponible." });
     }
-    console.log("chat-admin: reponse via", sourceUtilisee);
 
     if (resultat.appelOutil) {
       const { name, input } = resultat.appelOutil;
@@ -455,8 +377,7 @@ export default async function handler(req, res) {
       if (name === "modifier_client") return res.status(200).json({ type: "modification", modification: input });
       if (name === "modifier_agence") return res.status(200).json({ type: "modification_agence", modification_agence: input });
       if (name === "creer_agence") return res.status(200).json({ type: "creation_agence", creation_agence: input });
-      // Outil inconnu (ne devrait pas arriver) : on retombe en texte libre.
-      console.warn("chat-admin: outil inconnu retourne par", sourceUtilisee, ":", name);
+      console.warn("chat-admin: outil inconnu retourne par Claude :", name);
     }
 
     return res.status(200).json({ type: "message", reponse: retirerEmojis(resultat.texte) || "…" });
