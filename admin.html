@@ -142,7 +142,7 @@
 
   label{display:block;font-size:12px;color:var(--texte-dim);margin:16px 0 7px;font-weight:500;}
   label:first-of-type{margin-top:0;}
-  input[type=text],input[type=url],select{
+  input[type=text],input[type=url],input[type=tel],input[type=email],input[type=number],select{
     width:100%;padding:12px 14px;border-radius:13px;border:1px solid var(--border);
     background:rgba(255,255,255,0.04);color:var(--texte);font-size:13.5px;outline:none;
     transition:border-color .2s; font-family:inherit;
@@ -426,6 +426,7 @@
   }
   .ide-nav-item[data-cible="sec-claude"]{--accent:var(--violet);}
   .ide-nav-item[data-cible="sec-clients"]{--accent:var(--teal);}
+  .ide-nav-item[data-cible="sec-devis-prospect"]{--accent:var(--violet);}
   .ide-nav-item[data-cible="sec-apps"]{--accent:var(--vert);}
   .ide-nav-item[data-cible="sec-abonnements"]{--accent:var(--corail);}
   .ide-nav-item[data-cible="sec-bareme"]{--accent:#F5A623;}
@@ -472,6 +473,7 @@
   <div class="ide-sidebar-eyebrow">Systèmes</div>
   <div class="ide-nav-item actif" data-cible="sec-claude"><span class="ico">◆</span><span class="lbl">Claude</span></div>
   <div class="ide-nav-item" data-cible="sec-clients"><span class="ico">▤</span><span class="lbl">Clients</span></div>
+  <div class="ide-nav-item" data-cible="sec-devis-prospect"><span class="ico">📄</span><span class="lbl">Devis prospect</span></div>
   <div class="ide-nav-item" data-cible="sec-apps"><span class="ico">▦</span><span class="lbl">Applications</span></div>
   <div class="ide-nav-item" data-cible="sec-abonnements"><span class="ico">◈</span><span class="lbl">Abonnements</span></div>
   <div class="ide-nav-item" data-cible="sec-bareme"><span class="ico">💶</span><span class="lbl">Barème RSIA</span></div>
@@ -537,6 +539,39 @@
         <button type="button" class="btn-export" id="exportCsvBtn">Exporter en CSV (Excel)</button>
       </div>
       <div id="tbody-wrap"><div id="empty">Chargement…</div></div>
+    </div>
+
+    <div class="card" id="sec-devis-prospect">
+      <h2>📄 Devis prospect — vendre Iko Suite</h2>
+      <div class="hint" style="font-size:12px;color:var(--texte-faint);margin-bottom:16px;">Pas besoin de créer un client pour faire un devis : remplis juste les infos ci-dessous. Le client n'est créé (en Production) qu'une fois qu'il a accepté, tout en bas.</div>
+
+      <label>Nom du prospect / entreprise</label>
+      <input type="text" id="dpNom" placeholder="Ex : Menuiserie Dupont">
+
+      <label>Adresse</label>
+      <input type="text" id="dpAdresse" placeholder="12 rue des Artisans">
+      <div class="row-inline">
+        <div style="flex:1;"><label>Code postal</label><input type="text" id="dpCodePostal" placeholder="10000"></div>
+        <div style="flex:2;"><label>Ville</label><input type="text" id="dpVille" placeholder="Troyes"></div>
+      </div>
+      <label>Téléphone</label>
+      <input type="tel" id="dpTelephone" placeholder="06 12 34 56 78">
+      <label>Email de contact</label>
+      <input type="email" id="dpEmail" placeholder="contact@client.fr">
+
+      <label style="margin-top:14px;">Modules proposés</label>
+      <div id="dpModules" style="display:flex;flex-direction:column;gap:8px;margin:8px 0 14px;"></div>
+
+      <div style="display:flex;justify-content:space-between;font-size:13px;padding:10px 12px;border:1px solid var(--border);border-radius:10px;margin-bottom:14px;">
+        <span>Total HT : mise en place <b id="dpTotalMep">0,00 €</b> + abonnement <b id="dpTotalAbo">0,00 €</b>/mois</span>
+      </div>
+
+      <button type="button" class="secondary" id="dpApercuBtn" style="width:100%;">👁 Aperçu du devis (PDF)</button>
+
+      <div style="border-top:1px solid var(--border);margin:20px 0 14px;"></div>
+      <div style="font-size:12px;color:var(--texte-faint);margin-bottom:10px;">Une fois le prospect d'accord :</div>
+      <button type="button" class="primary" id="dpAccepteBtn" style="width:100%;">✅ Client a accepté → créer en Production</button>
+      <div class="msg" id="dpMsg"></div>
     </div>
 
     <div class="card" id="sec-apps">
@@ -2329,6 +2364,7 @@ function chargerBaremeRSIA(){
       try { baremeRSIA = JSON.parse((data.fields || {})["Tarifs RSIA JSON"] || "{}"); } catch(e){ baremeRSIA = {}; }
       BAREME_MODULES.forEach(function(m){ if (!baremeRSIA[m]) baremeRSIA[m] = { misePlace: 0, abonnement: 0 }; });
       afficherBaremeUI();
+      afficherDevisProspectUI();
       if (devisClientId) afficherDevisCommercialUI();
     })
     .catch(function(){
@@ -2365,60 +2401,70 @@ function enregistrerBaremeRSIA(){
     body: JSON.stringify({ fields: { "Tarifs RSIA JSON": JSON.stringify(baremeRSIA) } })
   })
     .then(function(r){ if (!r.ok) throw new Error("HTTP " + r.status); })
-    .then(function(){ if (msg){ msg.className = "msg ok"; msg.textContent = "Barème enregistré."; } if (devisClientId) afficherDevisCommercialUI(); })
+    .then(function(){ if (msg){ msg.className = "msg ok"; msg.textContent = "Barème enregistré."; } afficherDevisProspectUI(); if (devisClientId) afficherDevisCommercialUI(); })
     .catch(function(){ if (msg){ msg.className = "msg err"; msg.textContent = "Erreur d'enregistrement."; } });
 }
 
-// ==================== Devis commercial (fiche client, prospect → production) =====
-function afficherDevisCommercialUI(){
-  var el = document.getElementById("devisCommercialModules");
+// ==================== Devis commercial (fiche client OU prospect autonome) =====
+// Fonctions generiques reutilisees par les deux points d'entree :
+// - la section "Devis commercial RSIA" dans la fiche d'un client deja cree
+// - le module autonome "Devis prospect" (sidebar), sans creer de client au prealable
+function rendreModulesDevis(containerId, attrNom){
+  var el = document.getElementById(containerId);
   if (!el) return;
   el.innerHTML = BAREME_MODULES.map(function(m){
     var v = baremeRSIA[m] || { misePlace: 0, abonnement: 0 };
     return "<label style='display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 12px;border:1px solid var(--border);border-radius:10px;cursor:pointer;'>" +
-      "<span style='display:flex;align-items:center;gap:8px;'><input type='checkbox' data-dc-mod='" + m + "'> " + m + "</span>" +
+      "<span style='display:flex;align-items:center;gap:8px;'><input type='checkbox' data-" + attrNom + "='" + m + "'> " + m + "</span>" +
       "<span style='font-size:11.5px;color:var(--texte-faint);'>" + formatEuro(v.misePlace) + " mise en place + " + formatEuro(v.abonnement) + "/mois</span>" +
     "</label>";
   }).join("");
-  Array.prototype.forEach.call(el.querySelectorAll("input[data-dc-mod]"), function(cb){
-    cb.addEventListener("change", recalculerTotalDevisCommercial);
-  });
-  recalculerTotalDevisCommercial();
 }
-
-function modulesCommerciauxCoches(){
-  return Array.prototype.filter.call(document.querySelectorAll("#devisCommercialModules input[data-dc-mod]"), function(cb){ return cb.checked; })
-    .map(function(cb){ return cb.getAttribute("data-dc-mod"); });
+function modulesCochesDans(containerId, attrNom){
+  return Array.prototype.filter.call(document.querySelectorAll("#" + containerId + " input[data-" + attrNom + "]"), function(cb){ return cb.checked; })
+    .map(function(cb){ return cb.getAttribute("data-" + attrNom); });
 }
-
-function recalculerTotalDevisCommercial(){
-  var mods = modulesCommerciauxCoches();
+function recalculerTotaux(mods, totalMepElId, totalAboElId){
   var totalMep = 0, totalAbo = 0;
   mods.forEach(function(m){
     var v = baremeRSIA[m] || { misePlace: 0, abonnement: 0 };
     totalMep += v.misePlace; totalAbo += v.abonnement;
   });
-  document.getElementById("dcTotalMep").textContent = formatEuro(totalMep);
-  document.getElementById("dcTotalAbo").textContent = formatEuro(totalAbo);
+  document.getElementById(totalMepElId).textContent = formatEuro(totalMep);
+  document.getElementById(totalAboElId).textContent = formatEuro(totalAbo);
 }
+
+function afficherDevisCommercialUI(){
+  rendreModulesDevis("devisCommercialModules", "dc-mod");
+  Array.prototype.forEach.call(document.querySelectorAll("#devisCommercialModules input[data-dc-mod]"), function(cb){
+    cb.addEventListener("change", function(){ recalculerTotaux(modulesCommerciauxCoches(), "dcTotalMep", "dcTotalAbo"); });
+  });
+  recalculerTotaux(modulesCommerciauxCoches(), "dcTotalMep", "dcTotalAbo");
+}
+function modulesCommerciauxCoches(){ return modulesCochesDans("devisCommercialModules", "dc-mod"); }
+
+function afficherDevisProspectUI(){
+  rendreModulesDevis("dpModules", "dp-mod");
+  Array.prototype.forEach.call(document.querySelectorAll("#dpModules input[data-dp-mod]"), function(cb){
+    cb.addEventListener("change", function(){ recalculerTotaux(modulesProspectCoches(), "dpTotalMep", "dpTotalAbo"); });
+  });
+  recalculerTotaux(modulesProspectCoches(), "dpTotalMep", "dpTotalAbo");
+}
+function modulesProspectCoches(){ return modulesCochesDans("dpModules", "dp-mod"); }
 
 // Devis imprimable aux couleurs RSIA Conseil (noir/orange), distinct du devis
 // SAV (vert Iko) genere par genererDevisImprimable(). Entierement en styles
 // inline pour ne pas dependre/interferer avec les classes .dv-* existantes.
 var devisCommercialNumero = null;
+var apercuInfo = {}; // { nom, email } du destinataire actuellement en apercu — alimente l'envoi par email
 
-// Construit le HTML complet du devis commercial (coordonnees client incluses),
-// reutilise a l'identique pour l'apercu ecran et pour l'impression PDF.
-function construireDevisCommercialHTML(mods){
-  var clientRec = clients.find(function(c){ return c.id === devisClientId; });
-  var fc = (clientRec && clientRec.fields) || {};
-  var adresseLigne = [fc["Adresse"], [fc["Code postal"], fc["Ville"]].filter(Boolean).join(" ")].filter(Boolean).join(", ");
-  var telephone = fc["Téléphone "] || "";
-  var emailContact = ((fc["Emails contact"] || "").split("\n")[0] || "").trim();
+// Construit le HTML complet du devis commercial (coordonnees destinataire
+// incluses), reutilise a l'identique pour l'apercu ecran et pour l'impression.
+function construireDevisCommercialHTML(mods, infoDestinataire){
   var coordHtml = [
-    adresseLigne ? adresseLigne : null,
-    telephone ? "Tél. " + telephone : null,
-    emailContact ? emailContact : null,
+    infoDestinataire.adresseLigne || null,
+    infoDestinataire.telephone ? "Tél. " + infoDestinataire.telephone : null,
+    infoDestinataire.email ? infoDestinataire.email : null,
   ].filter(Boolean).join("<br>");
 
   var dateStr = new Date().toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" });
@@ -2443,7 +2489,7 @@ function construireDevisCommercialHTML(mods){
       "</div>" +
       "<div style='font-size:11px;color:#666;text-align:right;line-height:1.5;'>Devis n° " + devisCommercialNumero + "<br>Émis le " + dateStr + "</div>" +
     "</div>" +
-    "<div style='font-size:13px;margin-bottom:24px;line-height:1.6;'><b>Destinataire :</b><br>" + escHtml(devisClientNom || "") + (coordHtml ? "<br>" + coordHtml : "") + "</div>" +
+    "<div style='font-size:13px;margin-bottom:24px;line-height:1.6;'><b>Destinataire :</b><br>" + escHtml(infoDestinataire.nom || "") + (coordHtml ? "<br>" + coordHtml : "") + "</div>" +
     "<div style='font-size:13px;font-weight:700;margin-bottom:14px;'>Proposition Iko Suite — modules sélectionnés</div>" +
     "<table style='width:100%;border-collapse:collapse;margin-bottom:20px;font-size:12.5px;'>" +
       "<thead><tr><th style='text-align:left;font-size:10.5px;text-transform:uppercase;color:#666;border-bottom:1px solid #ccc;padding:8px 6px;'>Ligne</th><th style='text-align:right;font-size:10.5px;text-transform:uppercase;color:#666;border-bottom:1px solid #ccc;padding:8px 6px;'>Montant HT</th></tr></thead>" +
@@ -2460,6 +2506,15 @@ function construireDevisCommercialHTML(mods){
     "</div>";
 }
 
+function ouvrirApercuAvecInfo(mods, infoDestinataire){
+  devisCommercialNumero = "DEV-RSIA-" + new Date().getFullYear() + "-" + Math.floor(1000 + Math.random() * 9000);
+  apercuInfo = { nom: infoDestinataire.nom, email: infoDestinataire.email };
+  var html = construireDevisCommercialHTML(mods, infoDestinataire);
+  document.getElementById("devisApercuContenu").innerHTML = html;
+  document.getElementById("printDevis").innerHTML = html;
+  document.getElementById("devisApercuOverlay").style.display = "flex";
+}
+
 function ouvrirApercuDevisCommercial(){
   var mods = modulesCommerciauxCoches();
   var msg = document.getElementById("devisCommercialMsg");
@@ -2468,12 +2523,33 @@ function ouvrirApercuDevisCommercial(){
     return;
   }
   msg.className = ""; msg.textContent = "";
-  devisCommercialNumero = "DEV-RSIA-" + new Date().getFullYear() + "-" + Math.floor(1000 + Math.random() * 9000);
-  var html = construireDevisCommercialHTML(mods);
-  document.getElementById("devisApercuContenu").innerHTML = html;
-  document.getElementById("printDevis").innerHTML = html;
-  document.getElementById("devisApercuOverlay").style.display = "flex";
+  var clientRec = clients.find(function(c){ return c.id === devisClientId; });
+  var fc = (clientRec && clientRec.fields) || {};
+  ouvrirApercuAvecInfo(mods, {
+    nom: devisClientNom,
+    adresseLigne: [fc["Adresse"], [fc["Code postal"], fc["Ville"]].filter(Boolean).join(" ")].filter(Boolean).join(", "),
+    telephone: fc["Téléphone "] || "",
+    email: ((fc["Emails contact"] || "").split("\n")[0] || "").trim(),
+  });
 }
+
+function ouvrirApercuDevisProspect(){
+  var mods = modulesProspectCoches();
+  var msg = document.getElementById("dpMsg");
+  var nom = document.getElementById("dpNom").value.trim();
+  if (!nom){ msg.className = "msg err"; msg.textContent = "Indique le nom du prospect."; return; }
+  if (!mods.length){ msg.className = "msg err"; msg.textContent = "Sélectionne au moins un module."; return; }
+  msg.className = ""; msg.textContent = "";
+  var cp = document.getElementById("dpCodePostal").value.trim();
+  var ville = document.getElementById("dpVille").value.trim();
+  ouvrirApercuAvecInfo(mods, {
+    nom: nom,
+    adresseLigne: [document.getElementById("dpAdresse").value.trim(), [cp, ville].filter(Boolean).join(" ")].filter(Boolean).join(", "),
+    telephone: document.getElementById("dpTelephone").value.trim(),
+    email: document.getElementById("dpEmail").value.trim(),
+  });
+}
+
 function fermerApercuDevisCommercial(){
   document.getElementById("devisApercuOverlay").style.display = "none";
 }
@@ -2481,12 +2557,9 @@ function imprimerDevisCommercial(){
   window.print();
 }
 function envoyerDevisCommercialEmail(){
-  var clientRec = clients.find(function(c){ return c.id === devisClientId; });
-  var fc = (clientRec && clientRec.fields) || {};
-  var emailContact = ((fc["Emails contact"] || "").split("\n")[0] || "").trim();
-  var sujet = "Devis Iko Suite — " + (devisClientNom || "");
+  var sujet = "Devis Iko Suite — " + (apercuInfo.nom || "");
   var corps = "Bonjour,\n\nVeuillez trouver ci-joint notre proposition Iko Suite (" + (devisCommercialNumero || "") + ").\n\nN'hésitez pas à revenir vers nous pour toute question.\n\nCordialement,\nRSIA Conseil";
-  var lien = "mailto:" + encodeURIComponent(emailContact) + "?subject=" + encodeURIComponent(sujet) + "&body=" + encodeURIComponent(corps);
+  var lien = "mailto:" + encodeURIComponent(apercuInfo.email || "") + "?subject=" + encodeURIComponent(sujet) + "&body=" + encodeURIComponent(corps);
   window.location.href = lien;
 }
 
@@ -2515,6 +2588,61 @@ document.getElementById("dcAccepteBtn").addEventListener("click", function(){
       document.getElementById("fStatutCommercial").value = "Production";
       msg.className = "msg ok"; msg.textContent = "Client passé en Production.";
       chargerClients();
+    })
+    .catch(function(err){
+      msg.className = "msg err"; msg.textContent = "Erreur : " + err.message;
+    });
+});
+
+// ==================== Module autonome "Devis prospect" (sidebar) =====
+// Ne necessite AUCUN client cree au prealable : apercu/impression marchent
+// juste avec le nom + les modules coches. La creation reelle du client
+// (en Production) ne se fait qu'au moment ou le prospect accepte.
+document.getElementById("dpApercuBtn").addEventListener("click", ouvrirApercuDevisProspect);
+
+document.getElementById("dpAccepteBtn").addEventListener("click", function(){
+  var msg = document.getElementById("dpMsg");
+  var nom = document.getElementById("dpNom").value.trim();
+  var mods = modulesProspectCoches();
+  if (!nom){ msg.className = "msg err"; msg.textContent = "Indique le nom du prospect."; return; }
+  if (!mods.length){ msg.className = "msg err"; msg.textContent = "Sélectionne au moins un module."; return; }
+  if (!confirm("Confirmer : \"" + nom + "\" a accepté le devis et devient client en Production ?")) return;
+  msg.className = "msg"; msg.textContent = "Création du client…";
+  var emails = document.getElementById("dpEmail").value.trim();
+  var fields = {
+    "Nom client": nom,
+    "Slug": slugifier(nom),
+    "Métier": "Autre",
+    "Couleur principale": "#22C55E",
+    "Couleur secondaire": "#111111",
+    "Modules actifs": mods,
+    "Statut client": "Actif",
+    "Statut commercial": "Production",
+    "Accès bloqué": false,
+    "Emails contact": emails,
+    "Téléphone ": document.getElementById("dpTelephone").value.trim(),
+    "Adresse": document.getElementById("dpAdresse").value.trim(),
+    "Code postal": document.getElementById("dpCodePostal").value.trim(),
+    "Ville": document.getElementById("dpVille").value.trim(),
+    "Nombre agences": 1
+  };
+  fetch("/api/airtable/" + encodeURIComponent(TABLE), {
+    method: "POST", headers: {"Content-Type":"application/json"},
+    body: JSON.stringify({ records: [{ fields: fields }] })
+  })
+    .then(function(r){ if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
+    .then(function(data){
+      msg.className = "msg ok"; msg.textContent = "Client créé en Production.";
+      var nouveauRec = data.records && data.records[0];
+      ["dpNom","dpAdresse","dpCodePostal","dpVille","dpTelephone","dpEmail"].forEach(function(id){ document.getElementById(id).value = ""; });
+      Array.prototype.forEach.call(document.querySelectorAll("#dpModules input[data-dp-mod]"), function(cb){ cb.checked = false; });
+      recalculerTotaux([], "dpTotalMep", "dpTotalAbo");
+      chargerClients();
+      if (nouveauRec){
+        clients.push(nouveauRec);
+        chargerDansFormulaire(nouveauRec.id);
+        ouvrirFicheModal();
+      }
     })
     .catch(function(err){
       msg.className = "msg err"; msg.textContent = "Erreur : " + err.message;
