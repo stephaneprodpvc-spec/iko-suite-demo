@@ -2001,8 +2001,25 @@ function Login({ onLogin }) {
   );
 }
 
+function BlocageAcces() {
+  return (
+    <div style={{minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',flexDirection:'column',gap:'14px',padding:'24px',textAlign:'center',background:'#0A0A0A',color:'#F5F5F5',fontFamily:'-apple-system,BlinkMacSystemFont,"SF Pro Display","SF Pro Text","Segoe UI",sans-serif'}}>
+      <div style={{fontSize:'40px'}}>🔒</div>
+      <div style={{fontSize:'18px',fontWeight:700}}>Accès suspendu</div>
+      <div style={{fontSize:'14px',opacity:0.75,maxWidth:'380px'}}>L'accès à cet espace est temporairement suspendu. Merci de contacter votre interlocuteur RSIA Conseil pour régulariser la situation.</div>
+    </div>
+  );
+}
+
 function App() {
   const [agence, setAgence] = React.useState(null);
+  const [bloque, setBloque] = React.useState(false);
+  React.useEffect(() => {
+    window.IKO_CLIENT_READY.then(() => {
+      if (window.IKO_CLIENT_INFO && window.IKO_CLIENT_INFO["Accès bloqué"] === true) setBloque(true);
+    });
+  }, []);
+  if (bloque) return <BlocageAcces/>;
   return agence ? <Technicien agence={agence} onClose={() => setAgence(null)}/> : <Login onLogin={setAgence}/>;
 }
 

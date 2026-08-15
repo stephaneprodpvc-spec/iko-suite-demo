@@ -301,6 +301,7 @@ async function resoudreClient(slug) {
       tradeId: (metierId && TRADES[metierId]) ? metierId : null,
       questionnaire: questionnaire,
       agences: agences,
+      bloque: rec.fields && rec.fields["Accès bloqué"] === true,
     };
   } catch (e) {
     console.error("resoudreClient erreur:", e);
@@ -529,6 +530,9 @@ try {
   await synchroniserAgences();
   const clientSlug = (req.body || {}).client_slug || null;
   const contexteClient = await resoudreClient(clientSlug);
+  if (contexteClient && contexteClient.bloque) {
+    return res.status(200).json({ reponse: "Ce service est temporairement suspendu. Merci de contacter votre interlocuteur pour régulariser la situation." });
+  }
   const clientIdActuel = contexteClient ? contexteClient.id : null;
   const tradeIdActuel = (contexteClient && contexteClient.tradeId) || TRADE_ID;
   const vocabActuel = loadTradeVocab(tradeIdActuel);

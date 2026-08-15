@@ -353,6 +353,7 @@ window.IKO_CLIENT_READY = (async function () {
   // entre deux appels, c'est nous qui lui redonnons le contexte.
   const historique = [];
   let enAttente = false;
+  let bloque = false;
 
   const SUGGESTIONS = [
   "Signaler une panne",
@@ -395,7 +396,7 @@ window.IKO_CLIENT_READY = (async function () {
 
   async function envoyer(texteForce) {
     const texte = (texteForce || saisie.value).trim();
-    if (!texte || enAttente) return;
+    if (!texte || enAttente || bloque) return;
 
     enAttente = true;
     boutonEnvoyer.disabled = true;
@@ -632,10 +633,28 @@ window.IKO_CLIENT_READY = (async function () {
     });
   }
 
-  // Démarrage
-  ajouterBulle(ACCUEIL, 'conseiller');
-  historique.push({ role: 'assistant', texte: ACCUEIL });
-  afficherSuggestions(true);
+  function afficherBlocageAcces() {
+    bloque = true;
+    if (saisie) saisie.disabled = true;
+    if (boutonEnvoyer) boutonEnvoyer.disabled = true;
+    var micro = document.getElementById('micro');
+    if (micro) micro.style.display = 'none';
+    afficherSuggestions(false);
+    ajouterBulle("Ce service est temporairement suspendu. Merci de contacter votre interlocuteur pour régulariser la situation.", 'erreur');
+  }
+
+  // Démarrage : on attend la resolution du contexte client pour verifier
+  // l'acces avant d'afficher l'accueil (si aucun ?client= n'est present,
+  // IKO_CLIENT_READY se resout a null immediatement : comportement inchange).
+  window.IKO_CLIENT_READY.then(function () {
+    if (window.IKO_CLIENT_INFO && window.IKO_CLIENT_INFO["Accès bloqué"] === true) {
+      afficherBlocageAcces();
+      return;
+    }
+    ajouterBulle(ACCUEIL, 'conseiller');
+    historique.push({ role: 'assistant', texte: ACCUEIL });
+    afficherSuggestions(true);
+  });
 
   // ---- Sphère persistante : le clic lance juste le micro, sans changer
   // de vue. Seul le bouton dédié ouvre/ferme la conversation écrite. ----
