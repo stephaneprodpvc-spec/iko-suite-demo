@@ -2499,7 +2499,7 @@ function construireDevisCommercialHTML(mods, infoDestinataire){
   var tvaMep = totalMep * 0.20;
   var ttcMep = totalMep + tvaMep;
 
-  return "<div style='color:#111;background:#fff;font-family:-apple-system,\"Segoe UI\",sans-serif;padding:24px;'>" +
+  return "<div style='position:relative;height:297mm;box-sizing:border-box;color:#111;background:#fff;font-family:-apple-system,\"Segoe UI\",sans-serif;padding:24px;'>" +
     "<div style='display:flex;align-items:center;justify-content:space-between;border-bottom:3px solid #FF6B00;padding-bottom:18px;margin-bottom:24px;'>" +
       "<div style='display:flex;align-items:center;gap:14px;'>" +
         "<div style='width:52px;height:52px;border-radius:13px;background:#111;color:#FF6B00;font-weight:800;font-size:22px;display:flex;align-items:center;justify-content:center;letter-spacing:-2px;'><span>R</span><span style='display:inline-block;transform:scaleX(-1);'>R</span></div>" +
@@ -2519,8 +2519,10 @@ function construireDevisCommercialHTML(mods, infoDestinataire){
       "<tr style='font-weight:800;font-size:15px;border-top:2px solid #111;'><td style='padding:6px;'>Total mise en place TTC</td><td style='text-align:right;padding:6px;'>" + formatEuro(ttcMep) + "</td></tr>" +
       "<tr><td style='padding:6px;padding-top:14px;'>Abonnement mensuel total HT</td><td style='text-align:right;padding:6px;padding-top:14px;'>" + formatEuro(totalAbo) + " / mois</td></tr>" +
     "</table></div>" +
-    "<div style='font-size:11px;color:#555;border-top:1px solid #eee;padding-top:14px;line-height:1.6;'>Devis valable 30 jours. Abonnement mensuel facturé à partir de la mise en production. Voir conditions générales de vente en page 2.</div>" +
-    "<div style='margin-top:40px;font-size:10px;color:#999;text-align:center;'>RSIA Conseil — devis généré via le poste de pilotage Iko Suite — page 1/2</div>" +
+    "<div style='position:absolute;left:24px;right:24px;bottom:24px;'>" +
+      "<div style='font-size:11px;color:#555;border-top:1px solid #eee;padding-top:14px;line-height:1.6;'>Devis valable 30 jours. Abonnement mensuel facturé à partir de la mise en production. Voir conditions générales de vente en page 2.</div>" +
+      "<div style='margin-top:12px;font-size:10px;color:#999;text-align:center;'>RSIA Conseil — devis généré via le poste de pilotage Iko Suite — page 1/2</div>" +
+    "</div>" +
     "</div>";
 }
 
