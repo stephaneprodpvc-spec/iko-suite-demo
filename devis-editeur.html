@@ -899,7 +899,8 @@ function attacherDeplacement(div, el){
     var yMm = ((e.clientY - rect.top) / rect.height) * 297;
     el.x = Math.max(0, Math.min(210 - el.w, xMm - decalX));
     el.y = Math.max(0, Math.min(297 - el.h, yMm - decalY));
-    renderMepElements();
+    div.style.left = (el.x / 210 * 100) + "%";
+    div.style.top = (el.y / 297 * 100) + "%";
   });
   div.addEventListener("pointerup", function(e){ actif = false; try{ div.releasePointerCapture(e.pointerId); }catch(err){} });
 }
@@ -916,7 +917,9 @@ function attacherRedimensionnement(handle, el){
     var yMm = ((e.clientY - rect.top) / rect.height) * 297;
     el.w = Math.max(5, Math.min(210 - el.x, xMm - el.x));
     el.h = Math.max(5, Math.min(297 - el.y, yMm - el.y));
-    renderMepElements();
+    var div = handle.parentElement;
+    div.style.width = (el.w / 210 * 100) + "%";
+    div.style.height = (el.h / 297 * 100) + "%";
   });
   handle.addEventListener("pointerup", function(e){ e.stopPropagation(); actif = false; try{ handle.releasePointerCapture(e.pointerId); }catch(err){} });
 }
