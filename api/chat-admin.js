@@ -155,8 +155,22 @@ CINQUIEME MODE : modifier_agence
 - Identifie l'agence par correspondance EXACTE avec un nom present dans la
   liste "agences". Si plusieurs agences ont un nom proche, demande de
   preciser.
-- Champs modifiables : adresse, code_postal, ville. Ne renseigne que ceux
-  demandes.
+- Champs modifiables : adresse, code_postal, ville, telephone. Ne renseigne
+  que ceux demandes.
+
+SIXIEME MODE : creer_agence
+6. Si Stephane demande de CREER/AJOUTER une nouvelle agence pour le client
+   actuellement ouvert (meme sans nom precis, ex: "cree une autre agence a
+   telle adresse") : appelle l'outil creer_agence. Ne confonds pas avec
+   modifier_agence, qui ne s'applique qu'a une agence DEJA presente dans la
+   liste "agences".
+- Si la liste "agences" contient deja 10 agences, ne propose pas la
+  creation : reponds en texte libre pour signaler que le plafond de 10
+  agences est atteint.
+- nom_agence est optionnel : si Stephane n'en donne pas, laisse-le vide
+  (un nom par defaut "Agence N" sera genere cote application).
+- Renseigne adresse/code_postal/ville/telephone uniquement s'ils sont
+  mentionnes.
 `;
 
 
@@ -241,7 +255,7 @@ const TOOLS = [
   },
   {
     name: "modifier_agence",
-    description: "Propose la modification de l'adresse/code postal/ville d'une agence DEJA EXISTANTE, identifiee par son nom exact dans la liste de contexte 'agences' du client actuellement ouvert.",
+    description: "Propose la modification de l'adresse/code postal/ville/telephone d'une agence DEJA EXISTANTE, identifiee par son nom exact dans la liste de contexte 'agences' du client actuellement ouvert.",
     input_schema: {
       type: "object",
       properties: {
@@ -249,9 +263,26 @@ const TOOLS = [
         adresse: { type: "string", description: "Nouvelle adresse (rue, numero), uniquement si demande." },
         code_postal: { type: "string", description: "Nouveau code postal, uniquement si demande." },
         ville: { type: "string", description: "Nouvelle ville, uniquement si demande." },
+        telephone: { type: "string", description: "Nouveau numero de telephone, uniquement si demande." },
         message: { type: "string", description: "Une phrase courte resumant la modification proposee." },
       },
       required: ["nom_agence", "message"],
+    },
+  },
+  {
+    name: "creer_agence",
+    description: "Propose la creation d'une NOUVELLE agence pour le client actuellement ouvert dans le formulaire (different de modifier_agence, qui cible une agence deja existante).",
+    input_schema: {
+      type: "object",
+      properties: {
+        nom_agence: { type: "string", description: "Nom de la nouvelle agence, si precise. Laisse vide sinon." },
+        adresse: { type: "string", description: "Adresse (rue, numero), si mentionnee." },
+        code_postal: { type: "string", description: "Code postal, si mentionne." },
+        ville: { type: "string", description: "Ville, si mentionnee." },
+        telephone: { type: "string", description: "Numero de telephone, si mentionne." },
+        message: { type: "string", description: "Une phrase courte resumant la creation proposee." },
+      },
+      required: ["message"],
     },
   },
 ];
@@ -319,6 +350,7 @@ export default async function handler(req, res) {
     const appelDevis = blocs.find(b => b.type === "tool_use" && b.name === "generer_devis");
     const appelModif = blocs.find(b => b.type === "tool_use" && b.name === "modifier_client");
     const appelModifAgence = blocs.find(b => b.type === "tool_use" && b.name === "modifier_agence");
+    const appelCreerAgence = blocs.find(b => b.type === "tool_use" && b.name === "creer_agence");
 
     if (appelClient) {
       appelClient.input.message = retirerEmojis(appelClient.input.message);
@@ -338,6 +370,11 @@ export default async function handler(req, res) {
     if (appelModifAgence) {
       appelModifAgence.input.message = retirerEmojis(appelModifAgence.input.message);
       return res.status(200).json({ type: "modification_agence", modification_agence: appelModifAgence.input });
+    }
+
+    if (appelCreerAgence) {
+      appelCreerAgence.input.message = retirerEmojis(appelCreerAgence.input.message);
+      return res.status(200).json({ type: "creation_agence", creation_agence: appelCreerAgence.input });
     }
 
     const texteBrut = blocs.filter(b => b.type === "text").map(b => b.text || "").join(" ").trim();

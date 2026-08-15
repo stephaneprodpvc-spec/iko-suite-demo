@@ -1380,6 +1380,7 @@ function afficherAgences(recordsBruts){
         "<input type='text' value='" + escHtml(f["Code postal"]) + "' placeholder='Code postal' data-id='" + rec.id + "' data-champ='Code postal' style='width:90px;padding:8px 10px;border-radius:8px;border:1px solid var(--border);background:rgba(255,255,255,0.04);color:var(--texte);font-size:12px;outline:none;'>" +
         "<input type='text' value='" + escHtml(f["Ville"]) + "' placeholder='Ville' data-id='" + rec.id + "' data-champ='Ville' style='flex:1;padding:8px 10px;border-radius:8px;border:1px solid var(--border);background:rgba(255,255,255,0.04);color:var(--texte);font-size:12px;outline:none;'>" +
       "</div>" +
+      "<input type='text' value='" + escHtml(f["Téléphone"]) + "' placeholder='Téléphone' data-id='" + rec.id + "' data-champ='Téléphone' style='width:100%;padding:8px 10px;border-radius:8px;border:1px solid var(--border);background:rgba(255,255,255,0.04);color:var(--texte);font-size:12px;outline:none;'>" +
       "<div style='display:flex;align-items:center;gap:10px;'>" +
         "<label style='font-size:11px;color:var(--texte-dim);display:flex;align-items:center;gap:4px;'><input type='checkbox' data-id='" + rec.id + "' data-champ='Actif' " + actif + "> Actif</label>" +
         "<button type='button' class='ag-del' data-id='" + rec.id + "' style='margin-left:auto;background:none;border:none;color:#FF453A;cursor:pointer;font-size:12px;'>Supprimer</button>" +
@@ -1766,7 +1767,7 @@ document.getElementById("chatForm").addEventListener("submit", function(e){
   });
   var agencesContexte = editingId ? agencesActuelles.map(function(a){
     var f = a.fields || {};
-    return { nom: f["Nom agence"], adresse: f["Adresse"], code_postal: f["Code postal"], ville: f["Ville"] };
+    return { nom: f["Nom agence"], adresse: f["Adresse"], code_postal: f["Code postal"], ville: f["Ville"], telephone: f["Téléphone"] };
   }) : [];
 
   fetch("/api/chat-admin", {
@@ -1851,6 +1852,24 @@ document.getElementById("chatForm").addEventListener("submit", function(e){
         bulleMA.appendChild(actionsMA);
         actionEnAttente = { type: "modification_agence", data: ma };
         parlerClaude(ma.message + " Dis \"confirme\" pour enregistrer, ou \"annule\".");
+        return;
+      }
+      if (data.type === "creation_agence" && data.creation_agence){
+        var ca = data.creation_agence;
+        chatHistorique.push({ role: "assistant", texte: ca.message });
+        var bulleCA = ajouterBulle(ca.message, "assistant");
+        var actionsCA = document.createElement("div");
+        actionsCA.className = "propose-actions";
+        var btnApplyCA = document.createElement("button");
+        btnApplyCA.className = "btn-apply"; btnApplyCA.type = "button"; btnApplyCA.textContent = "Créer l'agence";
+        btnApplyCA.addEventListener("click", function(){ actionEnAttente = null; creerAgenceVoice(ca); });
+        var btnDismissCA = document.createElement("button");
+        btnDismissCA.className = "btn-dismiss"; btnDismissCA.type = "button"; btnDismissCA.textContent = "Ignorer";
+        btnDismissCA.addEventListener("click", function(){ actionEnAttente = null; actionsCA.remove(); });
+        actionsCA.appendChild(btnApplyCA); actionsCA.appendChild(btnDismissCA);
+        bulleCA.appendChild(actionsCA);
+        actionEnAttente = { type: "creation_agence", data: ca };
+        parlerClaude(ca.message + " Dis \"confirme\" pour créer, ou \"annule\".");
         return;
       }
       var texte = data.reponse || "…";
@@ -1955,6 +1974,47 @@ function appliquerModification(m){
   return true;
 }
 
+// Creation directe d'une agence via commande vocale. Bump automatiquement
+// "Nombre agences" sur le client si la nouvelle agence depasse le plafond
+// actuellement affiche, sans jamais depasser 10 (regle produit). Retourne
+// une Promise<boolean> pour permettre au flux vocal de parler le resultat
+// une fois l'ecriture Airtable terminee.
+function creerAgenceVoice(ca){
+  if (!editingId){
+    document.getElementById("formMsg").className = "msg err";
+    document.getElementById("formMsg").textContent = "Aucun client ouvert — impossible de créer une agence.";
+    return Promise.resolve(false);
+  }
+  if (agencesActuelles.length >= 10){
+    document.getElementById("formMsg").className = "msg err";
+    document.getElementById("formMsg").textContent = "Plafond de 10 agences atteint pour ce client.";
+    return Promise.resolve(false);
+  }
+  var nom = (ca.nom_agence || "").trim() || ("Agence " + (agencesActuelles.length + 1));
+  var fields = { "Client": [editingId], "Nom agence": nom, "Actif": true };
+  if (ca.adresse) fields["Adresse"] = ca.adresse;
+  if (ca.code_postal) fields["Code postal"] = ca.code_postal;
+  if (ca.ville) fields["Ville"] = ca.ville;
+  if (ca.telephone) fields["Téléphone"] = ca.telephone;
+
+  var nbActuel = Math.max(1, Math.min(10, parseInt(document.getElementById("fNbAgences").value, 10) || 1));
+  var nbCible = Math.min(10, Math.max(nbActuel, agencesActuelles.length + 1));
+
+  return fetch("/api/airtable/" + encodeURIComponent(AGENCES_TABLE), {
+    method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ fields: fields })
+  }).then(function(r){ return r.json(); })
+    .then(function(){
+      if (nbCible > nbActuel){
+        document.getElementById("fNbAgences").value = nbCible;
+        return fetch("/api/airtable/" + encodeURIComponent(TABLE) + "/" + editingId, {
+          method: "PATCH", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ fields: { "Nombre agences": nbCible } })
+        });
+      }
+    })
+    .then(function(){ chargerAgencesClient(editingId); return true; })
+    .catch(function(){ return false; });
+}
+
 // Ecriture directe sur le record Agence (Adresse/Code postal/Ville) : pas
 // de formulaire dedie pour les agences, contrairement au client. Champ non
 // destructif -> execution directe apres confirmation vocale, comme les
@@ -1973,6 +2033,7 @@ function appliquerModificationAgence(ma){
   if (ma.adresse) fields["Adresse"] = ma.adresse;
   if (ma.code_postal) fields["Code postal"] = ma.code_postal;
   if (ma.ville) fields["Ville"] = ma.ville;
+  if (ma.telephone) fields["Téléphone"] = ma.telephone;
   if (!Object.keys(fields).length) return false;
   fetch("/api/airtable/" + encodeURIComponent(AGENCES_TABLE) + "/" + cible.id, {
     method: "PATCH", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ fields: fields })
@@ -2005,6 +2066,15 @@ function executerActionEnAttente(a){
       ajouterBulle(msg, "assistant");
       parlerClaude(msg);
     }, 0);
+    return;
+  }
+  if (a.type === "creation_agence"){
+    creerAgenceVoice(a.data).then(function(ok){
+      var msgCA = ok ? "Agence créée." : (document.getElementById("formMsg").textContent || "Impossible de créer l'agence.");
+      chatHistorique.push({ role: "assistant", texte: msgCA });
+      ajouterBulle(msgCA, "assistant");
+      parlerClaude(msgCA);
+    });
     return;
   }
   if (a.type === "modification_agence"){
