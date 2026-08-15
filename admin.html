@@ -1711,7 +1711,7 @@ document.getElementById("chatForm").addEventListener("submit", function(e){
 
   var clientsContexte = clients.map(function(c){
     var f = c.fields || {};
-    return { nom: f["Nom client"], metier: f["Métier"], modules: f["Modules actifs"], statut: f["Statut client"] };
+    return { id: c.id, nom: f["Nom client"], metier: f["Métier"], modules: f["Modules actifs"], statut: f["Statut client"] };
   });
 
   fetch("/api/chat-admin", {
@@ -1756,6 +1756,22 @@ document.getElementById("chatForm").addEventListener("submit", function(e){
         btnIgnorerD.addEventListener("click", function(){ actionsD.remove(); });
         actionsD.appendChild(btnVoir); actionsD.appendChild(btnIgnorerD);
         bulleD.appendChild(actionsD);
+        return;
+      }
+      if (data.type === "modification" && data.modification){
+        var m = data.modification;
+        chatHistorique.push({ role: "assistant", texte: m.message });
+        var bulleM = ajouterBulle(m.message, "assistant");
+        var actionsM = document.createElement("div");
+        actionsM.className = "propose-actions";
+        var btnApplyM = document.createElement("button");
+        btnApplyM.className = "btn-apply"; btnApplyM.type = "button"; btnApplyM.textContent = "Appliquer au formulaire";
+        btnApplyM.addEventListener("click", function(){ appliquerModification(m); });
+        var btnDismissM = document.createElement("button");
+        btnDismissM.className = "btn-dismiss"; btnDismissM.type = "button"; btnDismissM.textContent = "Ignorer";
+        btnDismissM.addEventListener("click", function(){ actionsM.remove(); });
+        actionsM.appendChild(btnApplyM); actionsM.appendChild(btnDismissM);
+        bulleM.appendChild(actionsM);
         return;
       }
       var texte = data.reponse || "…";
@@ -1824,6 +1840,29 @@ function appliquerProposition(p){
   setModulesActifs(p.modules);
   document.getElementById("formMsg").className = "msg ok";
   document.getElementById("formMsg").textContent = "Formulaire pré-rempli — vérifie puis crée le client.";
+  document.querySelector(".card:nth-child(3)").scrollIntoView({ behavior: "smooth", block: "center" });
+}
+
+function appliquerModification(m){
+  var nomCible = (m.nom_client || "").trim().toLowerCase();
+  var cible = clients.find(function(c){
+    return ((c.fields || {})["Nom client"] || "").trim().toLowerCase() === nomCible;
+  });
+  if (!cible){
+    document.getElementById("formMsg").className = "msg err";
+    document.getElementById("formMsg").textContent = "Client \"" + (m.nom_client || "") + "\" introuvable — aucune modification appliquée.";
+    return;
+  }
+  chargerDansFormulaire(cible.id);
+  if (m.metier) document.getElementById("fMetier").value = m.metier;
+  if (m.couleur_principale) document.getElementById("fC1").value = m.couleur_principale;
+  if (m.couleur_secondaire) document.getElementById("fC2").value = m.couleur_secondaire;
+  if (m.statut) document.getElementById("fStatut").value = m.statut;
+  if (m.nombre_agences != null) document.getElementById("fNbAgences").value = m.nombre_agences;
+  if (m.montant_diagnostic_ht != null) document.getElementById("fMontantDiag").value = m.montant_diagnostic_ht;
+  if (Array.isArray(m.modules)) setModulesActifs(m.modules);
+  document.getElementById("formMsg").className = "msg ok";
+  document.getElementById("formMsg").textContent = "Formulaire pré-rempli avec les modifications — vérifie puis clique \"Enregistrer les modifications\".";
   document.querySelector(".card:nth-child(3)").scrollIntoView({ behavior: "smooth", block: "center" });
 }
 

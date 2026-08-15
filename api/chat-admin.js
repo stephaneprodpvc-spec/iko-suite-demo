@@ -128,7 +128,26 @@ REGLES POUR proposer_client
 - Couleurs uniquement si mentionnees, sinon garde les couleurs Iko par
   defaut (#FF6B00 / #111111).
 - Le champ "message" est une phrase courte confirmant ce que tu proposes.
+
+QUATRIEME MODE : modifier_client
+4. Si Stephane demande de modifier un client DEJA EXISTANT (change de
+   statut, ajuste ses couleurs, active/desactive un module, change son
+   nombre d'agences ou le montant du diagnostic) : appelle l'outil
+   modifier_client.
+- Identifie le client par correspondance EXACTE avec un nom present dans
+  la liste "clients" fournie en contexte. Si aucun nom ne correspond
+  clairement ou si plusieurs clients ont un nom proche, NE PAS deviner :
+  reponds en texte libre pour demander a Stephane de preciser lequel.
+- Les seuls champs modifiables sont : metier, modules, couleur_principale,
+  couleur_secondaire, statut ("Actif" ou "Pause"), nombre_agences,
+  montant_diagnostic_ht. Ne propose JAMAIS de modifier un champ hors de
+  cette liste (ex: telephone, adresse -- ces champs n'existent pas
+  encore dans le formulaire, dis-le a Stephane en texte libre si demande).
+- Ne renseigne QUE les champs que Stephane a explicitement demande de
+  changer, laisse les autres absents de la reponse.
+- Le champ "message" resume clairement ce qui va etre modifie.
 `;
+
 
 const TOOLS = [
   {
@@ -176,6 +195,29 @@ const TOOLS = [
         message: { type: "string", description: "Une phrase courte confirmant le devis genere, signalant si des prix sont a completer." },
       },
       required: ["client_nom", "objet", "lignes", "conditions", "message"],
+    },
+  },
+  {
+    name: "modifier_client",
+    description: "Propose la modification de champs precis d'un client DEJA EXISTANT, identifie par son nom exact dans la liste de contexte.",
+    input_schema: {
+      type: "object",
+      properties: {
+        nom_client: { type: "string", description: "Nom EXACT du client a modifier, tel qu'il apparait dans la liste de contexte." },
+        metier: { type: "string", enum: METIERS_VALIDES, description: "Nouveau metier, uniquement si demande." },
+        modules: {
+          type: "array",
+          items: { type: "string", enum: MODULES_VALIDES },
+          description: "Nouvelle liste complete des modules actifs, uniquement si demande.",
+        },
+        couleur_principale: { type: "string", description: "Code hex, uniquement si demande." },
+        couleur_secondaire: { type: "string", description: "Code hex, uniquement si demande." },
+        statut: { type: "string", enum: ["Actif", "Pause"], description: "Nouveau statut, uniquement si demande." },
+        nombre_agences: { type: "number", description: "Nouveau nombre d'agences, uniquement si demande." },
+        montant_diagnostic_ht: { type: "number", description: "Nouveau montant du diagnostic HT en euros, uniquement si demande." },
+        message: { type: "string", description: "Une phrase courte resumant la modification proposee." },
+      },
+      required: ["nom_client", "message"],
     },
   },
 ];
@@ -238,6 +280,7 @@ export default async function handler(req, res) {
     const blocs = Array.isArray(data.content) ? data.content : [];
     const appelClient = blocs.find(b => b.type === "tool_use" && b.name === "proposer_client");
     const appelDevis = blocs.find(b => b.type === "tool_use" && b.name === "generer_devis");
+    const appelModif = blocs.find(b => b.type === "tool_use" && b.name === "modifier_client");
 
     if (appelClient) {
       appelClient.input.message = retirerEmojis(appelClient.input.message);
@@ -247,6 +290,11 @@ export default async function handler(req, res) {
     if (appelDevis) {
       appelDevis.input.message = retirerEmojis(appelDevis.input.message);
       return res.status(200).json({ type: "devis", devis: appelDevis.input });
+    }
+
+    if (appelModif) {
+      appelModif.input.message = retirerEmojis(appelModif.input.message);
+      return res.status(200).json({ type: "modification", modification: appelModif.input });
     }
 
     const texteBrut = blocs.filter(b => b.type === "text").map(b => b.text || "").join(" ").trim();
