@@ -105,6 +105,7 @@
   .a4-marge-guide{position:absolute;inset:7% 6%;display:flex;flex-direction:column;border:1px dashed rgba(0,0,0,0.14);padding:3%;box-sizing:border-box;}
   .a4-entete{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;}
   #a4EnteteDroite{position:absolute;cursor:grab;touch-action:none;z-index:4;}
+  #a4Identite{position:absolute;cursor:grab;touch-action:none;z-index:4;}
   #a4TableauWrap{position:absolute;cursor:grab;touch-action:none;z-index:4;}
   #a4Totaux.a4-totaux{position:absolute;cursor:grab;touch-action:none;z-index:4;margin-top:0;}
   .a4-logo{position:absolute;object-fit:contain;z-index:2;cursor:grab;touch-action:none;}
@@ -228,6 +229,7 @@
       <div class="a4-entete-droite" id="a4EnteteDroite" style="text-align:right;">
         <div class="a4-devis-titre" id="a4DevisTitre">DEVIS</div>
       </div>
+      <div class="a4-identite" id="a4Identite">Raison sociale — Forme juridique<br>Adresse entreprise</div>
       <div id="a4TableauWrap">
         <table class="a4-table-apercu">
           <thead><tr><th>Désignation</th><th>Qté</th><th>PU HT</th><th>Total HT</th></tr></thead>
@@ -239,7 +241,6 @@
       </div>
       <div class="a4-totaux" id="a4Totaux">Total HT — · TVA — · <b>Total TTC —</b></div>
       <div class="a4-marge-guide" id="a4MargeGuide">
-        <div class="a4-identite" id="a4Identite">Raison sociale — Forme juridique<br>Adresse entreprise</div>
         <div class="a4-mentions" id="a4Mentions">SIRET — · RCS — · TVA intracom. —<br>Assurance décennale : — · Validité devis : 30 jours</div>
         <div class="a4-pied" id="a4Pied">Texte de pied de page</div>
       </div>
@@ -474,6 +475,9 @@ function remplirFormMEP(rec){
   posBlocs.titre.x = identite.titreX != null ? identite.titreX : 138;
   posBlocs.titre.y = identite.titreY != null ? identite.titreY : 18;
   posBlocs.titre.w = identite.titreW != null ? identite.titreW : 54;
+  posBlocs.identite.x = identite.identiteX != null ? identite.identiteX : 18;
+  posBlocs.identite.y = identite.identiteY != null ? identite.identiteY : 34;
+  posBlocs.identite.w = identite.identiteW != null ? identite.identiteW : 90;
   posBlocs.tableau.x = identite.tableauX != null ? identite.tableauX : 18;
   posBlocs.tableau.y = identite.tableauY != null ? identite.tableauY : 95;
   posBlocs.tableau.w = identite.tableauW != null ? identite.tableauW : 174;
@@ -580,10 +584,10 @@ document.getElementById("mepLogoCentrerBtn").addEventListener("click", function(
   majApercuA4();
 });
 
-var posBlocs = { titre:{x:138,y:18,w:54}, tableau:{x:18,y:95,w:174}, totaux:{x:18,y:140,w:174} };
+var posBlocs = { titre:{x:138,y:18,w:54}, identite:{x:18,y:34,w:90}, tableau:{x:18,y:95,w:174}, totaux:{x:18,y:140,w:174} };
 function appliquerPositionsBlocs(){
-  ["titre","tableau","totaux"].forEach(function(cle){
-    var id = cle === "titre" ? "a4EnteteDroite" : (cle === "tableau" ? "a4TableauWrap" : "a4Totaux");
+  ["titre","identite","tableau","totaux"].forEach(function(cle){
+    var id = cle === "titre" ? "a4EnteteDroite" : (cle === "identite" ? "a4Identite" : (cle === "tableau" ? "a4TableauWrap" : "a4Totaux"));
     var el = document.getElementById(id);
     if (!el) return;
     var p = posBlocs[cle];
@@ -618,6 +622,7 @@ function rendreBlocDeplacable(elId, cle){
   el.addEventListener("pointerup", function(e){ actif = false; el.style.cursor = "grab"; try { el.releasePointerCapture(e.pointerId); } catch(err){} });
 }
 rendreBlocDeplacable("a4EnteteDroite", "titre");
+rendreBlocDeplacable("a4Identite", "identite");
 rendreBlocDeplacable("a4TableauWrap", "tableau");
 rendreBlocDeplacable("a4Totaux", "totaux");
 
@@ -1160,6 +1165,7 @@ document.getElementById("mepSaveBtn").addEventListener("click", function(){
       logoY: parseFloat(document.getElementById("mepLogoY").value) || 14,
       logoW: parseFloat(document.getElementById("mepLogoW").value) || 30,
       titreX: posBlocs.titre.x, titreY: posBlocs.titre.y, titreW: posBlocs.titre.w,
+      identiteX: posBlocs.identite.x, identiteY: posBlocs.identite.y, identiteW: posBlocs.identite.w,
       tableauX: posBlocs.tableau.x, tableauY: posBlocs.tableau.y, tableauW: posBlocs.tableau.w,
       totauxX: posBlocs.totaux.x, totauxY: posBlocs.totaux.y, totauxW: posBlocs.totaux.w,
       raisonSociale: document.getElementById("mepRaisonSociale").value,
