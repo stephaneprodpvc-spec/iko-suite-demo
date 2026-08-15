@@ -59,6 +59,14 @@ function App() {
       const json = await r.json();
       if (!json.records || json.records.length === 0) { setStatutPage("introuvable"); return; }
       const t = json.records[0];
+      const compteClientIdAvis = (t.fields?.["Compte client"] || [])[0];
+      if (compteClientIdAvis) {
+        try {
+          const respClient = await fetch('/api/airtable/Clients/' + compteClientIdAvis);
+          const dataClient = await respClient.json();
+          if (dataClient?.fields?.["Accès bloqué"] === true) { setStatutPage("bloque"); return; }
+        } catch (e) {}
+      }
       setTicket(t);
       if (typeof t.fields?.Note === "number") { setStatutPage("deja_note"); }
       else { setStatutPage("attente"); }
@@ -97,6 +105,14 @@ function App() {
             <div style={{fontSize:"36px",marginBottom:"10px"}}>🔍</div>
             <div style={{fontSize:"15px",fontWeight:"700",color:F.marine,marginBottom:"6px"}}>Lien invalide</div>
             <div style={{fontSize:"13px",color:"#64748B"}}>Ce lien de notation n'est plus valide ou a expiré.</div>
+          </div>
+        )}
+
+        {statutPage === "bloque" && (
+          <div style={{background:F.blanc,borderRadius:"14px",padding:"28px",textAlign:"center",border:"1px solid "+F.grisBord}}>
+            <div style={{fontSize:"36px",marginBottom:"10px"}}>🔒</div>
+            <div style={{fontSize:"15px",fontWeight:"700",color:F.marine,marginBottom:"6px"}}>Service temporairement suspendu</div>
+            <div style={{fontSize:"13px",color:"#64748B"}}>Merci de contacter votre interlocuteur pour régulariser la situation.</div>
           </div>
         )}
 

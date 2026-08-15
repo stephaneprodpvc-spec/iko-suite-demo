@@ -209,6 +209,14 @@ function DevisItemiseView({ devisId }) {
         </div>
       )}
 
+      {statutPage === "bloque" && (
+        <div style={{background:F.blanc,borderRadius:"14px",padding:"28px",textAlign:"center",border:"1px solid "+F.grisBord}}>
+          <div style={{fontSize:"36px",marginBottom:"10px"}}>🔒</div>
+          <div style={{fontSize:"15px",fontWeight:"700",color:F.marine,marginBottom:"6px"}}>Service temporairement suspendu</div>
+          <div style={{fontSize:"13px",color:"#64748B"}}>Merci de contacter votre interlocuteur pour régulariser la situation.</div>
+        </div>
+      )}
+
       {statutPage === "attente" && devis && (
         <div style={{background:F.blanc,borderRadius:"14px",padding:"24px",border:"1px solid "+F.grisBord}}>
           <div style={{fontSize:"11px",color:F.or,fontWeight:"700",fontFamily:"monospace",marginBottom:"6px"}}>{devis.fields["N° devis"]}</div>
@@ -321,6 +329,14 @@ function App() {
       const json = await r.json();
       if (!json.records || json.records.length === 0) { setStatutPage("introuvable"); return; }
       const t = json.records[0];
+      const compteClientIdDevis = (t.fields?.["Compte client"] || [])[0];
+      if (compteClientIdDevis) {
+        try {
+          const respClient = await fetch('/api/airtable/Clients/' + compteClientIdDevis);
+          const dataClient = await respClient.json();
+          if (dataClient?.fields?.["Accès bloqué"] === true) { setStatutPage("bloque"); return; }
+        } catch (e) {}
+      }
       setTicket(t);
       const statut = t.fields?.Statut;
       if (statut === "Devis refusé") { setResultat('refuse'); setStatutPage("termine"); }
@@ -397,6 +413,14 @@ function App() {
             <div style={{fontSize:"36px",marginBottom:"10px"}}>🔍</div>
             <div style={{fontSize:"15px",fontWeight:"700",color:F.marine,marginBottom:"6px"}}>Devis introuvable</div>
             <div style={{fontSize:"13px",color:"#64748B"}}>Le lien est invalide ou a expiré. Contactez votre agence pour plus d'informations.</div>
+          </div>
+        )}
+
+        {statutPage === "bloque" && (
+          <div style={{background:F.blanc,borderRadius:"14px",padding:"28px",textAlign:"center",border:"1px solid "+F.grisBord}}>
+            <div style={{fontSize:"36px",marginBottom:"10px"}}>🔒</div>
+            <div style={{fontSize:"15px",fontWeight:"700",color:F.marine,marginBottom:"6px"}}>Service temporairement suspendu</div>
+            <div style={{fontSize:"13px",color:"#64748B"}}>Merci de contacter votre interlocuteur pour régulariser la situation.</div>
           </div>
         )}
 

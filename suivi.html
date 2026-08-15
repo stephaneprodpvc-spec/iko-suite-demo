@@ -336,7 +336,20 @@ function App() {
         if (found.fields?.Statut === 'Annulé') {
           setErreur("Cette demande a été annulée. Merci d'effectuer une nouvelle demande SAV pour obtenir un nouveau numéro de suivi.");
         } else {
-          setTicket(found);
+          const compteClientIdSuivi = (found.fields?.["Compte client"] || [])[0];
+          let bloque = false;
+          if (compteClientIdSuivi) {
+            try {
+              const respClient = await fetch('/api/airtable/Clients/' + compteClientIdSuivi);
+              const dataClient = await respClient.json();
+              bloque = dataClient?.fields?.["Accès bloqué"] === true;
+            } catch (e) {}
+          }
+          if (bloque) {
+            setErreur("Ce service est temporairement suspendu. Merci de contacter votre interlocuteur pour régulariser la situation.");
+          } else {
+            setTicket(found);
+          }
         }
       } else {
         setErreur("Aucune demande trouvée avec ce numéro. Vérifiez le numéro reçu par e-mail (ex : SAV-2026-1234).");
