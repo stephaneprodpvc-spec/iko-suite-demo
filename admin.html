@@ -857,10 +857,11 @@
       <div id="devisApercuContenu" style="background:#fff;border-radius:2px;overflow:hidden;width:210mm;min-height:297mm;flex-shrink:0;box-shadow:0 10px 40px rgba(0,0,0,0.5);"></div>
     </div>
     <div class="actions" style="margin-top:16px;">
-      <button type="button" class="secondary" id="devisApercuImprimerBtn" style="flex:1;">🖨️ Imprimer / Enregistrer en PDF</button>
+      <button type="button" class="secondary" id="devisApercuImprimerBtn" style="flex:1;">🖨️ Imprimer</button>
+      <button type="button" class="secondary" id="devisApercuTelechargerBtn" style="flex:1;">💾 Enregistrer sous (PDF)</button>
       <button type="button" class="primary" id="devisApercuEnvoyerBtn" style="flex:1;">✉️ Envoyer par email</button>
     </div>
-    <div class="hint" style="font-size:11px;color:var(--texte-faint);margin-top:8px;">« Envoyer » ouvre ta messagerie avec le message pré-rempli. Le PDF ne se joint pas automatiquement : imprime d'abord en PDF (bouton de gauche, choisir « Enregistrer en PDF » dans la boîte d'impression), puis joins le fichier dans l'email avant d'envoyer.</div>
+    <div class="hint" style="font-size:11px;color:var(--texte-faint);margin-top:8px;">« Enregistrer sous » télécharge directement le PDF (2 pages : devis + CGV) sur ton appareil. « Envoyer » ouvre ta messagerie avec le message pré-rempli — le PDF ne se joint pas automatiquement (limite technique des navigateurs) : télécharge-le d'abord avec le bouton du milieu, puis joins-le à la main dans l'email.</div>
   </div>
 </div>
 
@@ -919,6 +920,7 @@
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://unpkg.com/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
 <script>
 (function(){
   var APP_SECRET = "97960bb3f41d75c71ba3e831a7acb90ab324549734e27d6a";
@@ -2470,6 +2472,8 @@ function modulesProspectCoches(){ return modulesCochesDans("dpModules", "dp-mod"
 // inline pour ne pas dependre/interferer avec les classes .dv-* existantes.
 var devisCommercialNumero = null;
 var apercuInfo = {}; // { nom, email } du destinataire actuellement en apercu — alimente l'envoi par email
+var apercuModsActuels = []; // modules du devis actuellement en apercu — alimente l'export PDF direct
+var apercuInfoComplete = {}; // destinataire complet (avec adresse/telephone) — alimente l'export PDF direct
 
 // Construit le HTML complet du devis commercial (coordonnees destinataire
 // incluses), reutilise a l'identique pour l'apercu ecran et pour l'impression.
@@ -2525,40 +2529,29 @@ function construireDevisCommercialHTML(mods, infoDestinataire){
 // des CGV a tout devis professionnel). page-break-before:always force le
 // saut de page a l'impression. Contenu generique — a faire valider par un
 // professionnel du droit avant usage commercial reel, je ne suis pas juriste.
+// Tableau partage entre la version HTML (impression navigateur) et la
+// version PDF telechargeable (jsPDF), pour ne jamais desynchroniser le texte.
+var CGV_ARTICLES = [
+  { titre: "Article 1 — Objet", texte: "Les présentes conditions générales de vente (CGV) régissent la fourniture par RSIA Conseil de la solution logicielle « Iko Suite » (ci-après « la Solution »), comprenant selon les modules souscrits : Dashboard de pilotage, Interface technicien, Assistant SAV, Métreur. Toute commande implique l'acceptation sans réserve des présentes CGV, qui prévalent sur tout document du client." },
+  { titre: "Article 2 — Devis et commande", texte: "Le devis est valable 30 jours à compter de sa date d'émission. La commande est réputée ferme à réception de l'accord du client (écrit, oral confirmé ou par voie électronique) et donne lieu à la mise en production de la Solution par RSIA Conseil." },
+  { titre: "Article 3 — Prix et modalités de paiement", texte: "Les prix sont exprimés en euros hors taxes (HT), TVA en vigueur en sus. Les frais de mise en place sont facturés à la mise en production et payables à réception de facture. L'abonnement mensuel est facturé mensuellement d'avance à compter de la date de mise en production, par prélèvement ou virement selon accord entre les parties. Tout retard de paiement pourra entraîner la suspension de l'accès à la Solution après mise en demeure restée infructueuse." },
+  { titre: "Article 4 — Durée et résiliation", texte: "L'abonnement est conclu pour une durée initiale d'un mois, renouvelable tacitement par périodes mensuelles. Chaque partie peut résilier à tout moment moyennant un préavis écrit de 30 jours. La résiliation n'ouvre droit à aucun remboursement des frais de mise en place déjà réglés." },
+  { titre: "Article 5 — Obligations du client", texte: "Le client s'engage à fournir les informations nécessaires au paramétrage de la Solution, à utiliser la Solution conformément à sa destination, et à préserver la confidentialité de ses identifiants d'accès. Le client reste seul responsable des données qu'il saisit dans la Solution." },
+  { titre: "Article 6 — Disponibilité et responsabilité", texte: "RSIA Conseil met en œuvre les moyens raisonnables pour assurer la disponibilité et le bon fonctionnement de la Solution, sans garantie de disponibilité continue absolue (maintenance, cas de force majeure, dysfonctionnement des prestataires tiers d'hébergement ou de communication). La responsabilité de RSIA Conseil, tous préjudices confondus, est limitée au montant des sommes effectivement versées par le client au titre des 12 derniers mois. RSIA Conseil ne saurait être tenue responsable des dommages indirects (perte d'exploitation, de données, de clientèle)." },
+  { titre: "Article 7 — Propriété intellectuelle", texte: "La Solution, son code source, son architecture et sa documentation demeurent la propriété exclusive de RSIA Conseil. Le client bénéficie d'un droit d'usage non exclusif et non cessible pour la durée de l'abonnement. Les données saisies par le client dans la Solution restent sa propriété." },
+  { titre: "Article 8 — Protection des données personnelles", texte: "RSIA Conseil traite les données à caractère personnel conformément au Règlement Général sur la Protection des Données (RGPD). Les données sont hébergées auprès de prestataires tiers (hébergement web, base de données) et ne sont utilisées que pour les besoins du fonctionnement de la Solution. Le client dispose d'un droit d'accès, de rectification et de suppression de ses données, exerçable auprès de RSIA Conseil." },
+  { titre: "Article 9 — Force majeure", texte: "Aucune des parties ne pourra être tenue responsable d'un manquement à ses obligations résultant d'un cas de force majeure au sens de l'article 1218 du Code civil." },
+  { titre: "Article 10 — Litiges et juridiction compétente", texte: "Les présentes CGV sont soumises au droit français. En cas de litige, les parties rechercheront une solution amiable avant toute action judiciaire. À défaut d'accord amiable, les tribunaux compétents du ressort du siège social de RSIA Conseil seront seuls compétents." },
+];
+
 function construireCGVHTML(){
+  var articlesHtml = CGV_ARTICLES.map(function(a){
+    return "<p style='font-weight:700;margin:12px 0 4px;'>" + a.titre + "</p>" +
+           "<p style='margin:0 0 8px;'>" + a.texte + "</p>";
+  }).join("");
   return "<div style='page-break-before:always;color:#111;background:#fff;font-family:-apple-system,\"Segoe UI\",sans-serif;padding:24px;font-size:10.5px;line-height:1.55;'>" +
     "<h2 style='font-size:14px;margin:0 0 16px;border-bottom:2px solid #FF6B00;padding-bottom:10px;'>Conditions Générales de Vente — RSIA Conseil</h2>" +
-
-    "<p style='font-weight:700;margin:12px 0 4px;'>Article 1 — Objet</p>" +
-    "<p style='margin:0 0 8px;'>Les présentes conditions générales de vente (CGV) régissent la fourniture par RSIA Conseil de la solution logicielle « Iko Suite » (ci-après « la Solution »), comprenant selon les modules souscrits : Dashboard de pilotage, Interface technicien, Assistant SAV, Métreur. Toute commande implique l'acceptation sans réserve des présentes CGV, qui prévalent sur tout document du client.</p>" +
-
-    "<p style='font-weight:700;margin:12px 0 4px;'>Article 2 — Devis et commande</p>" +
-    "<p style='margin:0 0 8px;'>Le devis est valable 30 jours à compter de sa date d'émission. La commande est réputée ferme à réception de l'accord du client (écrit, oral confirmé ou par voie électronique) et donne lieu à la mise en production de la Solution par RSIA Conseil.</p>" +
-
-    "<p style='font-weight:700;margin:12px 0 4px;'>Article 3 — Prix et modalités de paiement</p>" +
-    "<p style='margin:0 0 8px;'>Les prix sont exprimés en euros hors taxes (HT), TVA en vigueur en sus. Les frais de mise en place sont facturés à la mise en production et payables à réception de facture. L'abonnement mensuel est facturé mensuellement d'avance à compter de la date de mise en production, par prélèvement ou virement selon accord entre les parties. Tout retard de paiement pourra entraîner la suspension de l'accès à la Solution après mise en demeure restée infructueuse.</p>" +
-
-    "<p style='font-weight:700;margin:12px 0 4px;'>Article 4 — Durée et résiliation</p>" +
-    "<p style='margin:0 0 8px;'>L'abonnement est conclu pour une durée initiale d'un mois, renouvelable tacitement par périodes mensuelles. Chaque partie peut résilier à tout moment moyennant un préavis écrit de 30 jours. La résiliation n'ouvre droit à aucun remboursement des frais de mise en place déjà réglés.</p>" +
-
-    "<p style='font-weight:700;margin:12px 0 4px;'>Article 5 — Obligations du client</p>" +
-    "<p style='margin:0 0 8px;'>Le client s'engage à fournir les informations nécessaires au paramétrage de la Solution, à utiliser la Solution conformément à sa destination, et à préserver la confidentialité de ses identifiants d'accès. Le client reste seul responsable des données qu'il saisit dans la Solution.</p>" +
-
-    "<p style='font-weight:700;margin:12px 0 4px;'>Article 6 — Disponibilité et responsabilité</p>" +
-    "<p style='margin:0 0 8px;'>RSIA Conseil met en œuvre les moyens raisonnables pour assurer la disponibilité et le bon fonctionnement de la Solution, sans garantie de disponibilité continue absolue (maintenance, cas de force majeure, dysfonctionnement des prestataires tiers d'hébergement ou de communication). La responsabilité de RSIA Conseil, tous préjudices confondus, est limitée au montant des sommes effectivement versées par le client au titre des 12 derniers mois. RSIA Conseil ne saurait être tenue responsable des dommages indirects (perte d'exploitation, de données, de clientèle).</p>" +
-
-    "<p style='font-weight:700;margin:12px 0 4px;'>Article 7 — Propriété intellectuelle</p>" +
-    "<p style='margin:0 0 8px;'>La Solution, son code source, son architecture et sa documentation demeurent la propriété exclusive de RSIA Conseil. Le client bénéficie d'un droit d'usage non exclusif et non cessible pour la durée de l'abonnement. Les données saisies par le client dans la Solution restent sa propriété.</p>" +
-
-    "<p style='font-weight:700;margin:12px 0 4px;'>Article 8 — Protection des données personnelles</p>" +
-    "<p style='margin:0 0 8px;'>RSIA Conseil traite les données à caractère personnel conformément au Règlement Général sur la Protection des Données (RGPD). Les données sont hébergées auprès de prestataires tiers (hébergement web, base de données) et ne sont utilisées que pour les besoins du fonctionnement de la Solution. Le client dispose d'un droit d'accès, de rectification et de suppression de ses données, exerçable auprès de RSIA Conseil.</p>" +
-
-    "<p style='font-weight:700;margin:12px 0 4px;'>Article 9 — Force majeure</p>" +
-    "<p style='margin:0 0 8px;'>Aucune des parties ne pourra être tenue responsable d'un manquement à ses obligations résultant d'un cas de force majeure au sens de l'article 1218 du Code civil.</p>" +
-
-    "<p style='font-weight:700;margin:12px 0 4px;'>Article 10 — Litiges et juridiction compétente</p>" +
-    "<p style='margin:0 0 8px;'>Les présentes CGV sont soumises au droit français. En cas de litige, les parties rechercheront une solution amiable avant toute action judiciaire. À défaut d'accord amiable, les tribunaux compétents du ressort du siège social de RSIA Conseil seront seuls compétents.</p>" +
-
+    articlesHtml +
     "<p style='margin-top:20px;font-size:9.5px;color:#888;border-top:1px solid #eee;padding-top:10px;'>Document générique — à faire valider par un professionnel du droit ou un expert-comptable avant toute utilisation commerciale réelle.</p>" +
     "<div style='margin-top:24px;font-size:10px;color:#999;text-align:center;'>RSIA Conseil — page 2/2</div>" +
     "</div>";
@@ -2567,6 +2560,8 @@ function construireCGVHTML(){
 function ouvrirApercuAvecInfo(mods, infoDestinataire){
   devisCommercialNumero = "DEV-RSIA-" + new Date().getFullYear() + "-" + Math.floor(1000 + Math.random() * 9000);
   apercuInfo = { nom: infoDestinataire.nom, email: infoDestinataire.email };
+  apercuModsActuels = mods;
+  apercuInfoComplete = infoDestinataire;
   var html = construireDevisCommercialHTML(mods, infoDestinataire);
   document.getElementById("devisApercuContenu").innerHTML = html;
   document.getElementById("printDevis").innerHTML = html;
@@ -2717,10 +2712,132 @@ function envoyerDevisCommercialEmail(){
   window.location.href = lien;
 }
 
+// Genere un vrai fichier PDF telechargeable (jsPDF, meme bibliotheque que
+// dashboard.html/technicien.html) — evite de passer par la boite de dialogue
+// d'impression du navigateur pour obtenir un fichier. Page 1 = devis,
+// page 2+ = CGV (texte partage avec construireCGVHTML, saut de page manuel
+// car jsPDF ne gere pas le flux automatique comme le HTML/CSS).
+function construireDevisCommercialPDF(mods, infoDestinataire){
+  var jsPDFCtor = window.jspdf && window.jspdf.jsPDF;
+  if (!jsPDFCtor) return null;
+  var doc = new jsPDFCtor({ unit: "mm", format: "a4" });
+  var mL = 18, mR = 18, mHaut = 20, mBas = 20;
+  var largeurUtile = 210 - mL - mR;
+  var y = mHaut;
+
+  doc.setFillColor(17, 17, 17); doc.rect(mL, y - 9, 12, 12, "F");
+  doc.setFont("helvetica", "bold"); doc.setFontSize(10); doc.setTextColor(255, 107, 0);
+  doc.text("R", mL + 2, y - 1);
+  doc.text("R", mL + 6.5, y - 1);
+  doc.setFont("helvetica", "bold"); doc.setFontSize(15); doc.setTextColor(20, 20, 20);
+  doc.text("RSIA Conseil", mL + 15, y - 3.5);
+  doc.setFont("helvetica", "normal"); doc.setFontSize(7.5); doc.setTextColor(100, 100, 100);
+  doc.text("Iko Suite — solution SAV, technicien & pilotage pour PME du bâtiment", mL + 15, y + 0.5);
+
+  doc.setFontSize(9); doc.setTextColor(100, 100, 100);
+  doc.text("Devis n° " + devisCommercialNumero, 210 - mR, y - 3.5, { align: "right" });
+  var dateStr = new Date().toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" });
+  doc.text("Émis le " + dateStr, 210 - mR, y + 0.5, { align: "right" });
+  y += 9;
+  doc.setDrawColor(255, 107, 0); doc.setLineWidth(0.8);
+  doc.line(mL, y, 210 - mR, y); y += 10;
+
+  doc.setFont("helvetica", "bold"); doc.setFontSize(9); doc.setTextColor(20, 20, 20);
+  doc.text("Destinataire :", mL, y); y += 5;
+  doc.setFont("helvetica", "normal"); doc.setFontSize(9);
+  var coordLignes = [infoDestinataire.nom || ""];
+  if (infoDestinataire.adresseLigne) coordLignes.push(infoDestinataire.adresseLigne);
+  if (infoDestinataire.telephone) coordLignes.push("Tél. " + infoDestinataire.telephone);
+  if (infoDestinataire.email) coordLignes.push(infoDestinataire.email);
+  doc.text(coordLignes, mL, y);
+  y += coordLignes.length * 4.5 + 6;
+
+  doc.setFont("helvetica", "bold"); doc.setFontSize(8); doc.setTextColor(255, 255, 255);
+  doc.setFillColor(17, 17, 17); doc.rect(mL, y, largeurUtile, 7, "F");
+  doc.text("LIGNE", mL + 2, y + 4.8);
+  doc.text("MONTANT HT", 210 - mR - 2, y + 4.8, { align: "right" });
+  y += 7;
+
+  doc.setFont("helvetica", "normal"); doc.setTextColor(30, 30, 30);
+  var totalMep = 0, totalAbo = 0, ligneIdx = 0;
+  mods.forEach(function(m){
+    var v = baremeRSIA[m] || { misePlace: 0, abonnement: 0 };
+    totalMep += v.misePlace; totalAbo += v.abonnement;
+    [
+      ["Module " + m + " — mise en place", formatEuro(v.misePlace)],
+      ["Module " + m + " — abonnement mensuel", formatEuro(v.abonnement) + " / mois"],
+    ].forEach(function(ligne){
+      if (ligneIdx % 2 === 1){ doc.setFillColor(248, 248, 248); doc.rect(mL, y, largeurUtile, 6, "F"); }
+      doc.setFontSize(8.5);
+      doc.text(ligne[0], mL + 2, y + 4.2);
+      doc.text(ligne[1], 210 - mR - 2, y + 4.2, { align: "right" });
+      y += 6; ligneIdx++;
+    });
+  });
+  y += 4;
+  doc.setDrawColor(220, 220, 220); doc.line(mL, y, 210 - mR, y); y += 7;
+
+  var tvaMep = totalMep * 0.20, ttcMep = totalMep + tvaMep;
+  doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.setTextColor(80, 80, 80);
+  doc.text("Total mise en place HT : " + formatEuro(totalMep), 210 - mR, y, { align: "right" }); y += 5.5;
+  doc.text("TVA (20%) : " + formatEuro(tvaMep), 210 - mR, y, { align: "right" }); y += 5.5;
+  doc.setFont("helvetica", "bold"); doc.setFontSize(11); doc.setTextColor(20, 20, 20);
+  doc.text("Total mise en place TTC : " + formatEuro(ttcMep), 210 - mR, y, { align: "right" }); y += 8;
+  doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.setTextColor(80, 80, 80);
+  doc.text("Abonnement mensuel total HT : " + formatEuro(totalAbo) + " / mois", 210 - mR, y, { align: "right" }); y += 14;
+
+  doc.setFontSize(8); doc.setTextColor(90, 90, 90);
+  doc.text(doc.splitTextToSize("Devis valable 30 jours. Abonnement mensuel facturé à partir de la mise en production. Voir conditions générales de vente en page 2.", largeurUtile), mL, y);
+
+  doc.setFontSize(7); doc.setTextColor(150, 150, 150);
+  doc.text("RSIA Conseil — devis généré via le poste de pilotage Iko Suite — page 1/2", 105, 297 - 10, { align: "center" });
+
+  // Page 2+ : CGV. jsPDF ne fait pas de flux automatique -> saut de page manuel
+  doc.addPage();
+  var y2 = mHaut;
+  var yLimite2 = 297 - mBas - 8;
+  doc.setFont("helvetica", "bold"); doc.setFontSize(13); doc.setTextColor(20, 20, 20);
+  doc.text("Conditions Générales de Vente — RSIA Conseil", mL, y2);
+  y2 += 3;
+  doc.setDrawColor(255, 107, 0); doc.setLineWidth(0.8);
+  doc.line(mL, y2, 210 - mR, y2); y2 += 8;
+
+  CGV_ARTICLES.forEach(function(art){
+    if (y2 > yLimite2){ doc.addPage(); y2 = mHaut; }
+    doc.setFont("helvetica", "bold"); doc.setFontSize(8.5); doc.setTextColor(20, 20, 20);
+    doc.text(art.titre, mL, y2); y2 += 4.2;
+    doc.setFont("helvetica", "normal"); doc.setFontSize(7.8); doc.setTextColor(60, 60, 60);
+    var lignesArt = doc.splitTextToSize(art.texte, largeurUtile);
+    lignesArt.forEach(function(l){
+      if (y2 > yLimite2){ doc.addPage(); y2 = mHaut; }
+      doc.text(l, mL, y2); y2 += 3.6;
+    });
+    y2 += 3;
+  });
+
+  if (y2 > yLimite2 - 10){ doc.addPage(); y2 = mHaut; }
+  doc.setFont("helvetica", "normal"); doc.setFontSize(6.5); doc.setTextColor(140, 140, 140);
+  doc.text(doc.splitTextToSize("Document générique — à faire valider par un professionnel du droit ou un expert-comptable avant toute utilisation commerciale réelle.", largeurUtile), mL, y2 + 4);
+
+  return doc;
+}
+
+function telechargerDevisCommercialPDF(){
+  if (!apercuModsActuels.length){ return; }
+  var doc = construireDevisCommercialPDF(apercuModsActuels, apercuInfoComplete);
+  if (!doc){
+    alert("Le générateur PDF n'a pas pu se charger (connexion internet nécessaire au premier chargement de la page). Utilise le bouton Imprimer en attendant.");
+    return;
+  }
+  var nomFichier = "devis-" + (devisCommercialNumero || "iko-suite") + "-" + slugifier(apercuInfoComplete.nom || "prospect") + ".pdf";
+  doc.save(nomFichier);
+}
+
 document.getElementById("dcGenererBtn").addEventListener("click", ouvrirApercuDevisCommercial);
 document.getElementById("devisApercuFermerBtn").addEventListener("click", fermerApercuDevisCommercial);
 document.getElementById("devisApercuOverlay").addEventListener("click", function(e){ if (e.target.id === "devisApercuOverlay") fermerApercuDevisCommercial(); });
 document.getElementById("devisApercuImprimerBtn").addEventListener("click", imprimerDevisCommercial);
+document.getElementById("devisApercuTelechargerBtn").addEventListener("click", telechargerDevisCommercialPDF);
 document.getElementById("devisApercuEnvoyerBtn").addEventListener("click", envoyerDevisCommercialEmail);
 
 document.getElementById("dcAccepteBtn").addEventListener("click", function(){
