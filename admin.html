@@ -332,6 +332,11 @@
   .jauge-grand-legende{display:flex;justify-content:center;gap:14px;flex-wrap:wrap;margin-top:8px;}
   .jauge-grand-legende .puce{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--texte-dim);}
   .jauge-grand-legende .puce i{width:10px;height:10px;border-radius:3px;display:inline-block;flex:none;box-shadow:0 0 8px currentColor;}
+  .jauge-objectifs-annuels{display:flex;justify-content:center;gap:8px;flex-wrap:wrap;margin-top:12px;}
+  .jauge-objectif-an{padding:6px 10px;border-radius:10px;background:rgba(255,255,255,0.03);border:1px solid var(--border);text-align:center;min-width:70px;}
+  .jauge-objectif-an.total{border-color:rgba(34,197,94,0.4);background:rgba(34,197,94,0.08);}
+  .jauge-objectif-an b{display:block;font-family:var(--f-mono);font-size:12.5px;font-weight:700;color:var(--texte);}
+  .jauge-objectif-an span{font-size:9px;color:var(--texte-faint);text-transform:uppercase;letter-spacing:.04em;font-weight:600;}
   @media (max-width:900px){.jauge-bloc{min-width:100%;}}
 
   /* ---- Bloc statistiques Clients restylé (mêmes couleurs que les jauges) ---- */
@@ -623,6 +628,7 @@
             <div class="jauge-grand-valeur"><b id="jaugeCATexte">0 €</b><span>CA validé (objectif 5 ans)</span></div>
           </div>
           <div class="jauge-grand-legende" id="jaugeCALegende"></div>
+          <div class="jauge-objectifs-annuels" id="jaugeCAAnnuel"></div>
         </div>
       </div>
 
@@ -1327,7 +1333,27 @@ function afficherCompteursClients(){
       formatTick: function(v){ return (v/1000000).toFixed(v % 1000000 === 0 ? 0 : 1).replace(".0","") + "M"; }
     });
     rendreLegendeJauge("jaugeCALegende", ZONES_JAUGE_CA);
+    rendreObjectifsAnnuelsCA();
   }
+}
+
+function formatEuroCompact(n){
+  n = n || 0;
+  if (n >= 1000000) return (n/1000000).toFixed(n % 1000000 === 0 ? 0 : 1).replace(".0","") + " M€";
+  if (n >= 1000) return Math.round(n/1000) + " k€";
+  return formatEuro(n);
+}
+
+function rendreObjectifsAnnuelsCA(){
+  var el = document.getElementById("jaugeCAAnnuel");
+  if (!el) return;
+  var html = "";
+  for (var an = 1; an <= 5; an++){
+    var cible = CA_OBJECTIF_MAX * an / 5;
+    var estTotal = an === 5;
+    html += "<div class='jauge-objectif-an" + (estTotal ? " total" : "") + "'><b>" + formatEuroCompact(cible) + "</b><span>" + (estTotal ? "Total 5 ans" : "Année " + an) + "</span></div>";
+  }
+  el.innerHTML = html;
 }
 
 function afficherStats(){
