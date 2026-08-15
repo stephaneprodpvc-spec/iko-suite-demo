@@ -139,8 +139,13 @@ QUATRIEME MODE : modifier_client
   clairement ou si plusieurs clients ont un nom proche, NE PAS deviner :
   reponds en texte libre pour demander a Stephane de preciser lequel.
 - Les champs modifiables sont : metier, modules, couleur_principale,
-  couleur_secondaire, statut ("Actif" ou "Pause"), nombre_agences,
-  montant_diagnostic_ht, telephone, adresse, code_postal, ville.
+  couleur_secondaire, statut ("Actif" ou "Pause"), acces_bloque (booleen),
+  nombre_agences, montant_diagnostic_ht, telephone, adresse, code_postal,
+  ville.
+- "Bloquer le client X" ou "X n'a pas paye" => acces_bloque: true.
+  "Debloquer le client X" ou "X a paye/regularise" => acces_bloque: false.
+  Ne renseigne acces_bloque QUE si Stephane le demande explicitement, ne le
+  deduis jamais d'un changement de statut ou d'une autre demande.
 - Ne renseigne QUE les champs que Stephane a explicitement demande de
   changer, laisse les autres absents de la reponse.
 - Le champ "message" resume clairement ce qui va etre modifie.
@@ -242,6 +247,7 @@ const TOOLS = [
         couleur_principale: { type: "string", description: "Code hex, uniquement si demande." },
         couleur_secondaire: { type: "string", description: "Code hex, uniquement si demande." },
         statut: { type: "string", enum: ["Actif", "Pause"], description: "Nouveau statut, uniquement si demande." },
+        acces_bloque: { type: "boolean", description: "true pour bloquer l'acces du client aux modules (impaye), false pour debloquer. Uniquement si Stephane demande explicitement de bloquer/debloquer un client." },
         nombre_agences: { type: "number", description: "Nouveau nombre d'agences, uniquement si demande." },
         montant_diagnostic_ht: { type: "number", description: "Nouveau montant du diagnostic HT en euros, uniquement si demande." },
         telephone: { type: "string", description: "Nouveau numero de telephone, uniquement si demande." },
