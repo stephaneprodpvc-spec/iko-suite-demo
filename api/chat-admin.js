@@ -9,7 +9,9 @@ import { verifierOrigine, verifierDebit, reponseBloquee } from "./_securite.js";
 // reelle d'un client reste toujours un clic explicite de Stephane cote
 // client (voir admin.html).
 
-const MODELE = "claude-sonnet-4-6";
+// TEST (15/08) : moteur bascule sur Gemini (gratuit) au lieu de Claude.
+// Pour revenir a Claude : git revert de ce commit, rien d'autre a toucher.
+const MODELE_GEMINI = "gemini-2.5-flash";
 const MAX_CHARS_MESSAGE = 1500;
 const MAX_CLIENTS_CONTEXTE = 100;
 
@@ -188,9 +190,9 @@ export default async function handler(req, res) {
   if (!verifierOrigine(req)) return reponseBloquee(res, "origine");
   if (!verifierDebit(req)) return reponseBloquee(res, "debit");
 
-  const cle = process.env.ANTHROPIC_API_KEY;
+  const cle = process.env.GEMINI_API_KEY;
   if (!cle) {
-    console.error("ANTHROPIC_API_KEY absente des variables d'environnement");
+    console.error("GEMINI_API_KEY absente des variables d'environnement");
     return res.status(500).json({ erreur: "Configuration serveur incomplete" });
   }
 
@@ -203,53 +205,67 @@ export default async function handler(req, res) {
     const historique = Array.isArray(body.historique) ? body.historique.slice(-10) : [];
     const clients = Array.isArray(body.clients) ? body.clients.slice(0, MAX_CLIENTS_CONTEXTE) : [];
 
-    const messagesAnthropic = historique.map(h => ({
-      role: h.role === "user" ? "user" : "assistant",
-      content: String(h.texte || "").slice(0, 800),
+    // Gemini utilise "user"/"model" (pas "assistant"), et pas de role
+    // "system" dans contents : le system prompt part a part.
+    const contentsGemini = historique.map(h => ({
+      role: h.role === "user" ? "user" : "model",
+      parts: [{ text: String(h.texte || "").slice(0, 800) }],
     }));
     const contexte = "Clients actuels dans la base (JSON) :\n" + JSON.stringify(clients) + "\n\nMessage de Stephane : \"" + message + "\"";
-    messagesAnthropic.push({ role: "user", content: contexte });
+    contentsGemini.push({ role: "user", parts: [{ text: contexte }] });
 
-    const reponse = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        "x-api-key": cle,
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify({
-        model: MODELE,
-        max_tokens: 700,
-        temperature: 0.5,
-        system: [{ type: "text", text: SYSTEM_PROMPT, cache_control: { type: "ephemeral" } }],
-        tools: TOOLS,
-        tool_choice: { type: "auto" },
-        messages: messagesAnthropic,
-      }),
-    });
+    // Meme schema de tools que Claude (input_schema), adapte au format
+    // Gemini (functionDeclarations avec "parameters").
+    const toolsGemini = [{
+      functionDeclarations: TOOLS.map(t => ({
+        name: t.name,
+        description: t.description,
+        parameters: t.input_schema,
+      })),
+    }];
+
+    const reponse = await fetch(
+      "https://generativelanguage.googleapis.com/v1beta/models/" + MODELE_GEMINI + ":generateContent",
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-goog-api-key": cle,
+        },
+        body: JSON.stringify({
+          system_instruction: { parts: [{ text: SYSTEM_PROMPT }] },
+          contents: contentsGemini,
+          tools: toolsGemini,
+          tool_config: { function_calling_config: { mode: "AUTO" } },
+          generationConfig: { temperature: 0.5, maxOutputTokens: 700 },
+        }),
+      }
+    );
 
     if (!reponse.ok) {
       const detail = await reponse.text();
-      console.error("Erreur API Anthropic:", reponse.status, detail);
-      return res.status(502).json({ erreur: "Claude est momentanément indisponible." });
+      console.error("Erreur API Gemini:", reponse.status, detail);
+      return res.status(502).json({ erreur: "L'assistant est momentanément indisponible." });
     }
 
     const data = await reponse.json();
-    const blocs = Array.isArray(data.content) ? data.content : [];
-    const appelClient = blocs.find(b => b.type === "tool_use" && b.name === "proposer_client");
-    const appelDevis = blocs.find(b => b.type === "tool_use" && b.name === "generer_devis");
+    const parts = data?.candidates?.[0]?.content?.parts || [];
+    const appelClient = parts.find(p => p.functionCall && p.functionCall.name === "proposer_client");
+    const appelDevis = parts.find(p => p.functionCall && p.functionCall.name === "generer_devis");
 
     if (appelClient) {
-      appelClient.input.message = retirerEmojis(appelClient.input.message);
-      return res.status(200).json({ type: "proposition", proposition: appelClient.input });
+      const input = appelClient.functionCall.args || {};
+      input.message = retirerEmojis(input.message);
+      return res.status(200).json({ type: "proposition", proposition: input });
     }
 
     if (appelDevis) {
-      appelDevis.input.message = retirerEmojis(appelDevis.input.message);
-      return res.status(200).json({ type: "devis", devis: appelDevis.input });
+      const input = appelDevis.functionCall.args || {};
+      input.message = retirerEmojis(input.message);
+      return res.status(200).json({ type: "devis", devis: input });
     }
 
-    const texteBrut = blocs.filter(b => b.type === "text").map(b => b.text || "").join(" ").trim();
+    const texteBrut = parts.filter(p => typeof p.text === "string").map(p => p.text).join(" ").trim();
     return res.status(200).json({ type: "message", reponse: retirerEmojis(texteBrut) || "…" });
   } catch (e) {
     console.error("Erreur chat-admin:", e);
