@@ -743,6 +743,11 @@ document.getElementById("mepToolCalques").addEventListener("click", function(){
   renderMepElements();
 });
 
+function commitEditionTexteEnCours(){
+  var enEdition = document.querySelector('#a4Elements [contenteditable="true"]');
+  if (enEdition) enEdition.blur();
+}
+
 function renderMepElements(){
   var conteneur = document.getElementById("a4Elements");
   var svg = document.getElementById("a4Lines");
@@ -785,6 +790,7 @@ function renderFormeEl(conteneur, el){
     div.textContent = el.contenu || "";
     if (!el.locked){
       var entrerEdition = function(){
+        commitEditionTexteEnCours();
         div.contentEditable = "true";
         div.focus();
         var range = document.createRange(); range.selectNodeContents(div);
@@ -869,7 +875,14 @@ function attacherDeplacement(div, el){
     if (e.target !== div) return;
     if (mepOutilActif !== "select") return;
     if (div.isContentEditable) return;
-    if (mepSelectionId !== el.id){ mepSelectionId = el.id; renderMepElements(); }
+    if (mepSelectionId !== el.id){
+      var prevSel = document.querySelector(".selectionnee");
+      if (prevSel) prevSel.classList.remove("selectionnee");
+      mepSelectionId = el.id;
+      div.classList.add("selectionnee");
+      renderPropsBar();
+      renderCalquesList();
+    }
     var page = document.getElementById("a4Page");
     var rect = page.getBoundingClientRect();
     var xMm = ((e.clientX - rect.left) / rect.width) * 210;
@@ -1003,6 +1016,7 @@ function renderCalquesList(){
 }
 
 document.getElementById("a4Page").addEventListener("pointerdown", function(e){
+  commitEditionTexteEnCours();
   if (mepOutilActif === "select") {
     if (e.target.id === "a4Page" || e.target.id === "a4MargeGuide" || e.target.id === "a4Lines") { mepSelectionId = null; renderMepElements(); }
     return;
