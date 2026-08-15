@@ -829,15 +829,23 @@ var clients = [];
 var chatHistorique = [];
 
 var MDP = "ikopilote2026";
-document.getElementById("lockForm").addEventListener("submit", function(e){
-  e.preventDefault();
-  // Amorce la synthese vocale iOS : un premier speak() doit etre declenche
-  // de maniere synchrone par un vrai geste utilisateur (ce clic), sinon
-  // Safari bloque silencieusement tous les appels speak() suivants qui
-  // arrivent apres un fetch/async (voir bug remonte par Stephane).
+var voixAmorcee = false;
+// Amorce la synthese vocale iOS : un premier speak() doit etre declenche
+// de maniere synchrone par un vrai geste utilisateur, sinon Safari bloque
+// silencieusement tous les appels speak() suivants qui arrivent apres un
+// fetch/async. Appelee au deverrouillage ET au premier envoi de message
+// chat (cas session deja deverrouillee via sessionStorage, ecran de mdp
+// jamais affiche donc amorcage jamais declenche autrement).
+function amorceVoix(){
+  if (voixAmorcee) return;
+  voixAmorcee = true;
   if ("speechSynthesis" in window){
     try { window.speechSynthesis.speak(new SpeechSynthesisUtterance("")); } catch(e){}
   }
+}
+document.getElementById("lockForm").addEventListener("submit", function(e){
+  e.preventDefault();
+  amorceVoix();
   var val = document.getElementById("pw").value;
   if (val === MDP){
     sessionStorage.setItem("iko_admin_ok", "1");
@@ -1690,6 +1698,7 @@ function ajouterBulle(texte, role, extra){
 
 document.getElementById("chatForm").addEventListener("submit", function(e){
   e.preventDefault();
+  amorceVoix();
   var input = document.getElementById("chatInput");
   var texte = input.value.trim();
   if (!texte) return;
