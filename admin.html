@@ -854,8 +854,8 @@
       <button type="button" id="devisApercuFermerBtn" style="background:none;border:none;color:var(--texte-faint);font-size:22px;cursor:pointer;line-height:1;padding:4px 8px;">✕</button>
     </div>
     <div style="background:#0a0a0a;border-radius:12px;padding:24px;display:flex;flex-direction:column;align-items:center;gap:24px;overflow-x:auto;">
-      <div id="devisApercuPage1" style="background:#fff;border-radius:2px;overflow:hidden;width:210mm;min-height:297mm;box-sizing:border-box;flex-shrink:0;box-shadow:0 10px 40px rgba(0,0,0,0.5);"></div>
-      <div id="devisApercuPage2" style="background:#fff;border-radius:2px;overflow:hidden;width:210mm;min-height:297mm;box-sizing:border-box;flex-shrink:0;box-shadow:0 10px 40px rgba(0,0,0,0.5);"></div>
+      <div id="devisApercuPage1" style="background:#fff;border-radius:2px;width:210mm;min-height:297mm;box-sizing:border-box;flex-shrink:0;box-shadow:0 10px 40px rgba(0,0,0,0.5);"></div>
+      <div id="devisApercuPage2" style="background:#fff;border-radius:2px;width:210mm;min-height:297mm;box-sizing:border-box;flex-shrink:0;box-shadow:0 10px 40px rgba(0,0,0,0.5);"></div>
     </div>
     <div class="actions" style="margin-top:16px;">
       <button type="button" class="secondary" id="devisApercuImprimerBtn" style="flex:1;">🖨️ Imprimer</button>
@@ -2430,15 +2430,33 @@ function rendreModulesDevis(containerId, attrNom){
   if (!el) return;
   el.innerHTML = BAREME_MODULES.map(function(m){
     var v = baremeRSIA[m] || { misePlace: 0, abonnement: 0 };
-    return "<label style='display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 12px;border:1px solid var(--border);border-radius:10px;cursor:pointer;'>" +
-      "<span style='display:flex;align-items:center;gap:8px;'><input type='checkbox' data-" + attrNom + "='" + m + "'> " + m + "</span>" +
-      "<span style='font-size:11.5px;color:var(--texte-faint);'>" + formatEuro(v.misePlace) + " mise en place + " + formatEuro(v.abonnement) + "/mois</span>" +
-    "</label>";
+    return "<div style='border:1px solid var(--border);border-radius:10px;overflow:hidden;'>" +
+      "<label style='display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 12px;cursor:pointer;margin:0;'>" +
+        "<span style='display:flex;align-items:center;gap:8px;'><input type='checkbox' data-" + attrNom + "='" + m + "'> " + m + "</span>" +
+        "<span style='font-size:11.5px;color:var(--texte-faint);'>" + formatEuro(v.misePlace) + " mise en place + " + formatEuro(v.abonnement) + "/mois</span>" +
+      "</label>" +
+      "<textarea data-" + attrNom + "-desc='" + m + "' placeholder='Détail du module " + m + " pour ce devis (optionnel) — affiché sur le devis' style='display:none;width:100%;box-sizing:border-box;border:none;border-top:1px solid var(--border);background:rgba(255,255,255,0.02);color:var(--texte);font-size:12px;padding:9px 12px;font-family:inherit;resize:vertical;min-height:50px;outline:none;'></textarea>" +
+    "</div>";
   }).join("");
+  Array.prototype.forEach.call(el.querySelectorAll("input[data-" + attrNom + "]"), function(cb){
+    cb.addEventListener("change", function(){
+      var m = this.getAttribute("data-" + attrNom);
+      var ta = el.querySelector("textarea[data-" + attrNom + "-desc='" + m + "']");
+      if (ta) ta.style.display = this.checked ? "block" : "none";
+    });
+  });
 }
 function modulesCochesDans(containerId, attrNom){
   return Array.prototype.filter.call(document.querySelectorAll("#" + containerId + " input[data-" + attrNom + "]"), function(cb){ return cb.checked; })
     .map(function(cb){ return cb.getAttribute("data-" + attrNom); });
+}
+function descriptionsModulesDans(containerId, attrNom, mods){
+  var out = {};
+  mods.forEach(function(m){
+    var ta = document.querySelector("#" + containerId + " textarea[data-" + attrNom + "-desc='" + m + "']");
+    if (ta && ta.value.trim()) out[m] = ta.value.trim();
+  });
+  return out;
 }
 function recalculerTotaux(mods, totalMepElId, totalAboElId){
   var totalMep = 0, totalAbo = 0;
@@ -2458,6 +2476,7 @@ function afficherDevisCommercialUI(){
   recalculerTotaux(modulesCommerciauxCoches(), "dcTotalMep", "dcTotalAbo");
 }
 function modulesCommerciauxCoches(){ return modulesCochesDans("devisCommercialModules", "dc-mod"); }
+function descriptionsCommercialesCoches(mods){ return descriptionsModulesDans("devisCommercialModules", "dc-mod", mods); }
 
 function afficherDevisProspectUI(){
   rendreModulesDevis("dpModules", "dp-mod");
@@ -2467,6 +2486,7 @@ function afficherDevisProspectUI(){
   recalculerTotaux(modulesProspectCoches(), "dpTotalMep", "dpTotalAbo");
 }
 function modulesProspectCoches(){ return modulesCochesDans("dpModules", "dp-mod"); }
+function descriptionsProspectCoches(mods){ return descriptionsModulesDans("dpModules", "dp-mod", mods); }
 
 // Devis imprimable aux couleurs RSIA Conseil (noir/orange), distinct du devis
 // SAV (vert Iko) genere par genererDevisImprimable(). Entierement en styles
@@ -2475,10 +2495,12 @@ var devisCommercialNumero = null;
 var apercuInfo = {}; // { nom, email } du destinataire actuellement en apercu — alimente l'envoi par email
 var apercuModsActuels = []; // modules du devis actuellement en apercu — alimente l'export PDF direct
 var apercuInfoComplete = {}; // destinataire complet (avec adresse/telephone) — alimente l'export PDF direct
+var apercuDescriptionsActuelles = {}; // texte libre par module — alimente l'export PDF direct
 
 // Construit le HTML complet du devis commercial (coordonnees destinataire
 // incluses), reutilise a l'identique pour l'apercu ecran et pour l'impression.
-function construireDevisCommercialHTML(mods, infoDestinataire){
+function construireDevisCommercialHTML(mods, infoDestinataire, descriptions){
+  descriptions = descriptions || {};
   var coordHtml = [
     infoDestinataire.adresseLigne || null,
     infoDestinataire.telephone ? "Tél. " + infoDestinataire.telephone : null,
@@ -2490,16 +2512,18 @@ function construireDevisCommercialHTML(mods, infoDestinataire){
   var lignesHtml = mods.map(function(m){
     var v = baremeRSIA[m] || { misePlace: 0, abonnement: 0 };
     totalMep += v.misePlace; totalAbo += v.abonnement;
+    var desc = descriptions[m];
+    var descRow = desc ? ("<tr><td colspan='2' style='padding:2px 6px 10px;font-size:11px;color:#666;font-style:italic;'>" + escHtml(desc).replace(/\n/g, "<br>") + "</td></tr>") : "";
     return "<tr>" +
       "<td>Module " + m + " — mise en place</td><td style='text-align:right;'>" + formatEuro(v.misePlace) + "</td>" +
       "</tr><tr>" +
       "<td>Module " + m + " — abonnement mensuel</td><td style='text-align:right;'>" + formatEuro(v.abonnement) + " / mois</td>" +
-      "</tr>";
+      "</tr>" + descRow;
   }).join("");
   var tvaMep = totalMep * 0.20;
   var ttcMep = totalMep + tvaMep;
 
-  return "<div style='position:relative;height:297mm;box-sizing:border-box;color:#111;background:#fff;font-family:-apple-system,\"Segoe UI\",sans-serif;padding:24px;'>" +
+  return "<div style='position:relative;min-height:297mm;box-sizing:border-box;color:#111;background:#fff;font-family:-apple-system,\"Segoe UI\",sans-serif;padding:24px;padding-bottom:110px;'>" +
     "<div style='display:flex;align-items:center;justify-content:space-between;border-bottom:3px solid #FF6B00;padding-bottom:18px;margin-bottom:24px;'>" +
       "<div style='display:flex;align-items:center;gap:14px;'>" +
         "<div style='width:52px;height:52px;border-radius:13px;background:#111;color:#FF6B00;font-weight:800;font-size:22px;display:flex;align-items:center;justify-content:center;letter-spacing:-2px;'><span>R</span><span style='display:inline-block;transform:scaleX(-1);'>R</span></div>" +
@@ -2559,12 +2583,13 @@ function construireCGVHTML(){
     "</div>";
 }
 
-function ouvrirApercuAvecInfo(mods, infoDestinataire){
+function ouvrirApercuAvecInfo(mods, infoDestinataire, descriptions){
   devisCommercialNumero = "DEV-RSIA-" + new Date().getFullYear() + "-" + Math.floor(1000 + Math.random() * 9000);
   apercuInfo = { nom: infoDestinataire.nom, email: infoDestinataire.email };
   apercuModsActuels = mods;
   apercuInfoComplete = infoDestinataire;
-  var htmlPage1 = construireDevisCommercialHTML(mods, infoDestinataire);
+  apercuDescriptionsActuelles = descriptions || {};
+  var htmlPage1 = construireDevisCommercialHTML(mods, infoDestinataire, descriptions);
   var htmlPage2 = construireCGVHTML();
   document.getElementById("devisApercuPage1").innerHTML = htmlPage1;
   document.getElementById("devisApercuPage2").innerHTML = htmlPage2;
@@ -2587,7 +2612,7 @@ function ouvrirApercuDevisCommercial(){
     adresseLigne: [fc["Adresse"], [fc["Code postal"], fc["Ville"]].filter(Boolean).join(" ")].filter(Boolean).join(", "),
     telephone: fc["Téléphone "] || "",
     email: ((fc["Emails contact"] || "").split("\n")[0] || "").trim(),
-  });
+  }, descriptionsCommercialesCoches(mods));
 }
 
 function ouvrirApercuDevisProspect(){
@@ -2602,13 +2627,14 @@ function ouvrirApercuDevisProspect(){
   var adresse = document.getElementById("dpAdresse").value.trim();
   var telephone = document.getElementById("dpTelephone").value.trim();
   var email = document.getElementById("dpEmail").value.trim();
+  var descriptions = descriptionsProspectCoches(mods);
 
   ouvrirApercuAvecInfo(mods, {
     nom: nom,
     adresseLigne: [adresse, [cp, ville].filter(Boolean).join(" ")].filter(Boolean).join(", "),
     telephone: telephone,
     email: email,
-  });
+  }, descriptions);
 
   var totalMep = 0, totalAbo = 0;
   mods.forEach(function(m){ var v = baremeRSIA[m] || { misePlace: 0, abonnement: 0 }; totalMep += v.misePlace; totalAbo += v.abonnement; });
@@ -2618,7 +2644,7 @@ function ouvrirApercuDevisProspect(){
     numero: devisCommercialNumero,
     date: new Date().toISOString(),
     nom: nom, adresse: adresse, codePostal: cp, ville: ville, telephone: telephone, email: email,
-    modules: mods, totalMep: totalMep, totalAbo: totalAbo,
+    modules: mods, descriptions: descriptions, totalMep: totalMep, totalAbo: totalAbo,
   };
   if (dpEditingId){
     var idx = devisProspectListe.findIndex(function(d){ return d.id === dpEditingId; });
@@ -2684,8 +2710,16 @@ function chargerDevisProspectDansFormulaire(id){
   document.getElementById("dpVille").value = d.ville || "";
   document.getElementById("dpTelephone").value = d.telephone || "";
   document.getElementById("dpEmail").value = d.email || "";
+  var descriptions = d.descriptions || {};
   Array.prototype.forEach.call(document.querySelectorAll("#dpModules input[data-dp-mod]"), function(cb){
-    cb.checked = (d.modules || []).indexOf(cb.getAttribute("data-dp-mod")) !== -1;
+    var m = cb.getAttribute("data-dp-mod");
+    var coche = (d.modules || []).indexOf(m) !== -1;
+    cb.checked = coche;
+    var ta = document.querySelector("#dpModules textarea[data-dp-mod-desc='" + m + "']");
+    if (ta){
+      ta.value = descriptions[m] || "";
+      ta.style.display = coche ? "block" : "none";
+    }
   });
   recalculerTotaux(modulesProspectCoches(), "dpTotalMep", "dpTotalAbo");
   var msg = document.getElementById("dpMsg");
@@ -2698,6 +2732,7 @@ function reinitialiserFormulaireDevisProspect(){
   dpEditingId = null;
   ["dpNom","dpAdresse","dpCodePostal","dpVille","dpTelephone","dpEmail"].forEach(function(id){ document.getElementById(id).value = ""; });
   Array.prototype.forEach.call(document.querySelectorAll("#dpModules input[data-dp-mod]"), function(cb){ cb.checked = false; });
+  Array.prototype.forEach.call(document.querySelectorAll("#dpModules textarea[data-dp-mod-desc]"), function(ta){ ta.value = ""; ta.style.display = "none"; });
   recalculerTotaux([], "dpTotalMep", "dpTotalAbo");
   document.getElementById("dpMsg").textContent = "";
 }
@@ -2721,12 +2756,14 @@ function envoyerDevisCommercialEmail(){
 // d'impression du navigateur pour obtenir un fichier. Page 1 = devis,
 // page 2+ = CGV (texte partage avec construireCGVHTML, saut de page manuel
 // car jsPDF ne gere pas le flux automatique comme le HTML/CSS).
-function construireDevisCommercialPDF(mods, infoDestinataire){
+function construireDevisCommercialPDF(mods, infoDestinataire, descriptions){
+  descriptions = descriptions || {};
   var jsPDFCtor = window.jspdf && window.jspdf.jsPDF;
   if (!jsPDFCtor) return null;
   var doc = new jsPDFCtor({ unit: "mm", format: "a4" });
   var mL = 18, mR = 18, mHaut = 20, mBas = 20;
   var largeurUtile = 210 - mL - mR;
+  var yLimite1 = 297 - mBas - 15;
   var y = mHaut;
 
   doc.setFillColor(17, 17, 17); doc.rect(mL, y - 9, 12, 12, "F");
@@ -2771,16 +2808,29 @@ function construireDevisCommercialPDF(mods, infoDestinataire){
       ["Module " + m + " — mise en place", formatEuro(v.misePlace)],
       ["Module " + m + " — abonnement mensuel", formatEuro(v.abonnement) + " / mois"],
     ].forEach(function(ligne){
+      if (y > yLimite1){ doc.addPage(); y = mHaut; ligneIdx = 0; }
       if (ligneIdx % 2 === 1){ doc.setFillColor(248, 248, 248); doc.rect(mL, y, largeurUtile, 6, "F"); }
-      doc.setFontSize(8.5);
+      doc.setFont("helvetica", "normal"); doc.setFontSize(8.5); doc.setTextColor(30, 30, 30);
       doc.text(ligne[0], mL + 2, y + 4.2);
       doc.text(ligne[1], 210 - mR - 2, y + 4.2, { align: "right" });
       y += 6; ligneIdx++;
     });
+    var desc = descriptions[m];
+    if (desc){
+      doc.setFont("helvetica", "italic"); doc.setFontSize(7.5); doc.setTextColor(110, 110, 110);
+      var descLignes = doc.splitTextToSize(desc, largeurUtile - 4);
+      descLignes.forEach(function(l){
+        if (y > yLimite1){ doc.addPage(); y = mHaut; ligneIdx = 0; }
+        doc.text(l, mL + 4, y + 3.6);
+        y += 4;
+      });
+      y += 2;
+    }
   });
   y += 4;
   doc.setDrawColor(220, 220, 220); doc.line(mL, y, 210 - mR, y); y += 7;
 
+  if (y > yLimite1 - 10){ doc.addPage(); y = mHaut; }
   var tvaMep = totalMep * 0.20, ttcMep = totalMep + tvaMep;
   doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.setTextColor(80, 80, 80);
   doc.text("Total mise en place HT : " + formatEuro(totalMep), 210 - mR, y, { align: "right" }); y += 5.5;
@@ -2790,7 +2840,8 @@ function construireDevisCommercialPDF(mods, infoDestinataire){
   doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.setTextColor(80, 80, 80);
   doc.text("Abonnement mensuel total HT : " + formatEuro(totalAbo) + " / mois", 210 - mR, y, { align: "right" }); y += 14;
 
-  doc.setFontSize(8); doc.setTextColor(90, 90, 90);
+  if (y > yLimite1){ doc.addPage(); y = mHaut; }
+  doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.setTextColor(90, 90, 90);
   doc.text(doc.splitTextToSize("Devis valable 30 jours. Abonnement mensuel facturé à partir de la mise en production. Voir conditions générales de vente en page 2.", largeurUtile), mL, y);
 
   doc.setFontSize(7); doc.setTextColor(150, 150, 150);
@@ -2828,7 +2879,7 @@ function construireDevisCommercialPDF(mods, infoDestinataire){
 
 function telechargerDevisCommercialPDF(){
   if (!apercuModsActuels.length){ return; }
-  var doc = construireDevisCommercialPDF(apercuModsActuels, apercuInfoComplete);
+  var doc = construireDevisCommercialPDF(apercuModsActuels, apercuInfoComplete, apercuDescriptionsActuelles);
   if (!doc){
     alert("Le générateur PDF n'a pas pu se charger (connexion internet nécessaire au premier chargement de la page). Utilise le bouton Imprimer en attendant.");
     return;
