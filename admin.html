@@ -319,16 +319,18 @@
   }
   .hero-stat span{font-size:10.5px;color:var(--texte-faint);text-transform:uppercase;letter-spacing:.07em;font-weight:600;}
 
-  /* ---- Compteurs section Clients : jauge Clients (0-1000) + CA validé ---- */
-  .compteurs-clients{display:flex;gap:14px;margin:14px 0 16px;flex-wrap:wrap;}
-  .compteur-carte{flex:1;min-width:210px;display:flex;align-items:center;gap:14px;padding:14px 16px;border:1px solid var(--border);border-radius:14px;background:var(--g2);}
-  .compteur-gauge{--accent:var(--teal);width:46px;height:46px;border-radius:50%;flex-shrink:0;position:relative;
-    background:conic-gradient(var(--accent) calc(var(--pct,0)*1%),rgba(255,255,255,0.07) 0);
-    -webkit-mask:radial-gradient(circle,transparent 62%,#000 63%);mask:radial-gradient(circle,transparent 62%,#000 63%);
-    filter:drop-shadow(0 0 6px color-mix(in srgb,var(--accent) 55%,transparent));}
-  .compteur-txt{display:flex;flex-direction:column;gap:3px;min-width:0;}
-  .compteur-txt b{font-family:var(--f-mono);font-size:19px;font-weight:600;color:var(--texte);line-height:1.1;white-space:nowrap;}
-  .compteur-txt span{font-size:10.5px;color:var(--texte-faint);text-transform:uppercase;letter-spacing:.06em;font-weight:600;}
+  /* ---- Jauges "compteur de vitesse" grand format : Clients + CA validé ---- */
+  .jauges-clients{margin:18px 0 22px;display:flex;flex-direction:column;gap:30px;}
+  .jauge-grand-wrap{position:relative;width:100%;max-width:640px;margin:0 auto;aspect-ratio:400/216;}
+  .jauge-grand-svg{width:100%;height:100%;display:block;filter:drop-shadow(0 16px 34px rgba(0,0,0,0.6));}
+  .jauge-grand-valeur{position:absolute;left:50%;bottom:2%;transform:translateX(-50%);z-index:2;
+    background:linear-gradient(180deg,var(--g3),var(--g2));border:1px solid var(--border-strong);border-radius:16px;
+    padding:8px 22px;text-align:center;box-shadow:0 10px 24px rgba(0,0,0,0.55),0 0 0 1px rgba(255,255,255,0.05) inset;}
+  .jauge-grand-valeur b{display:block;font-family:var(--f-mono);font-size:clamp(20px,4.6vw,30px);font-weight:700;color:var(--texte);line-height:1.15;white-space:nowrap;}
+  .jauge-grand-valeur span{font-size:10px;color:var(--texte-faint);text-transform:uppercase;letter-spacing:.06em;font-weight:600;}
+  .jauge-grand-legende{display:flex;justify-content:center;gap:16px;flex-wrap:wrap;margin-top:8px;}
+  .jauge-grand-legende .puce{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--texte-dim);}
+  .jauge-grand-legende .puce i{width:10px;height:10px;border-radius:3px;display:inline-block;flex:none;box-shadow:0 0 8px currentColor;}
 
   /* ---- Widget orbite : abonnements du projet ---- */
   .orbit-wrap{position:relative;width:min(520px,100%);aspect-ratio:1;margin:14px auto 4px;perspective:1200px;}
@@ -579,15 +581,18 @@
       <h2>Clients</h2>
       <div id="statsBar">Chargement des statistiques…</div>
 
-      <div class="compteurs-clients">
-        <div class="compteur-carte">
-          <div class="compteur-gauge" id="compteurClientsGauge" style="--accent:var(--teal);--pct:0;"></div>
-          <div class="compteur-txt"><b id="compteurClientsValeur">0</b><span>Clients (objectif 1000)</span></div>
+      <div class="jauges-clients">
+        <div class="jauge-grand-wrap">
+          <div id="jaugeClientsSVG"></div>
+          <div class="jauge-grand-valeur"><b id="jaugeClientsTexte">0</b><span>Clients (objectif 1000)</span></div>
         </div>
-        <div class="compteur-carte">
-          <div class="compteur-gauge" id="compteurCAGauge" style="--accent:var(--vert);--pct:100;"></div>
-          <div class="compteur-txt"><b id="compteurCAValeur">0,00 €</b><span>Chiffre d'affaires validé</span></div>
+        <div class="jauge-grand-legende" id="jaugeClientsLegende"></div>
+
+        <div class="jauge-grand-wrap">
+          <div id="jaugeCASVG"></div>
+          <div class="jauge-grand-valeur"><b id="jaugeCATexte">0 €</b><span>Chiffre d'affaires validé</span></div>
         </div>
+        <div class="jauge-grand-legende" id="jaugeCALegende"></div>
       </div>
 
       <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;">
@@ -1141,17 +1146,116 @@ function animerCompteur(el, valeurFinale){
   requestAnimationFrame(step);
 }
 
-function afficherCompteursClients(){
-  var elVal = document.getElementById("compteurClientsValeur");
-  var elGauge = document.getElementById("compteurClientsGauge");
-  if (elVal && elGauge){
-    var total = clients.length;
-    elVal.textContent = total;
-    elGauge.style.setProperty("--pct", Math.min(100, Math.round(total / 1000 * 100)));
+function polaireJauge(cx, cy, r, phiDeg){
+  var rad = phiDeg * Math.PI / 180;
+  return { x: cx + r * Math.sin(rad), y: cy - r * Math.cos(rad) };
+}
+
+function bandeJauge(cx, cy, rOut, rIn, phiA, phiB, gradId){
+  var p1 = polaireJauge(cx, cy, rOut, phiA), p2 = polaireJauge(cx, cy, rOut, phiB),
+      p3 = polaireJauge(cx, cy, rIn, phiB), p4 = polaireJauge(cx, cy, rIn, phiA);
+  var large = Math.abs(phiB - phiA) > 180 ? 1 : 0;
+  return "<path d='M " + p1.x.toFixed(2) + " " + p1.y.toFixed(2) +
+    " A " + rOut + " " + rOut + " 0 " + large + " 1 " + p2.x.toFixed(2) + " " + p2.y.toFixed(2) +
+    " L " + p3.x.toFixed(2) + " " + p3.y.toFixed(2) +
+    " A " + rIn + " " + rIn + " 0 " + large + " 0 " + p4.x.toFixed(2) + " " + p4.y.toFixed(2) +
+    " Z' fill='url(#" + gradId + ")'/>";
+}
+
+function construireJaugeSpeedoSVG(opts){
+  // opts: { idGrad, min, max, valeur, zones:[{jusqua, couleur, label}], formatTick(v) }
+  var cx = 200, cy = 188, rOut = 168, rIn = 130, rTick = 172, rLabel = 190, rNeedle = 158;
+  var min = opts.min, max = opts.max;
+  var phiVal = function(v){ return -90 + (Math.min(Math.max(v, min), max) - min) / (max - min) * 180; };
+
+  var defs = "<defs>";
+  var bandes = "";
+  var bornes = [min].concat(opts.zones.map(function(z){ return z.jusqua; }));
+  opts.zones.forEach(function(z, i){
+    var gradId = opts.idGrad + "_z" + i;
+    defs += "<linearGradient id='" + gradId + "' x1='0' y1='0' x2='0' y2='1'>" +
+      "<stop offset='0%' stop-color='" + z.couleur + "' stop-opacity='1'/>" +
+      "<stop offset='100%' stop-color='" + z.couleur + "' stop-opacity='0.6'/>" +
+    "</linearGradient>";
+    bandes += bandeJauge(cx, cy, rOut, rIn, phiVal(bornes[i]), phiVal(bornes[i + 1]), gradId);
+  });
+  defs += "<radialGradient id='" + opts.idGrad + "_hub' cx='35%' cy='30%' r='75%'>" +
+    "<stop offset='0%' stop-color='#fdfdfd'/><stop offset='45%' stop-color='#c6c6cc'/><stop offset='100%' stop-color='#4a4a52'/>" +
+  "</radialGradient>";
+  defs += "<linearGradient id='" + opts.idGrad + "_needle' x1='0' y1='0' x2='1' y2='0'>" +
+    "<stop offset='0%' stop-color='#f2f2f4'/><stop offset='100%' stop-color='#86868f'/>" +
+  "</linearGradient>";
+  defs += "</defs>";
+
+  var graduations = "";
+  var nbTicks = 10;
+  for (var i = 0; i <= nbTicks; i++){
+    var v = min + (max - min) * i / nbTicks;
+    var pOut = polaireJauge(cx, cy, rOut + 2, phiVal(v));
+    var pTick = polaireJauge(cx, cy, rTick, phiVal(v));
+    graduations += "<line x1='" + pOut.x.toFixed(1) + "' y1='" + pOut.y.toFixed(1) + "' x2='" + pTick.x.toFixed(1) + "' y2='" + pTick.y.toFixed(1) + "' stroke='rgba(255,255,255,0.28)' stroke-width='1.5'/>";
+    if (i % 2 === 0){
+      var pLabel = polaireJauge(cx, cy, rLabel, phiVal(v));
+      graduations += "<text x='" + pLabel.x.toFixed(1) + "' y='" + pLabel.y.toFixed(1) + "' fill='#8b8b93' font-size='11' font-family='" + "IBM Plex Mono, monospace" + "' text-anchor='middle' dominant-baseline='middle'>" + opts.formatTick(v) + "</text>";
+    }
   }
-  var elCA = document.getElementById("compteurCAValeur");
-  if (elCA){
-    elCA.textContent = formatEuro((caValide.totalMep || 0) + (caValide.totalAbo || 0));
+
+  var phiV = phiVal(opts.valeur);
+  var pointe = polaireJauge(cx, cy, rNeedle, phiV);
+  var baseG = polaireJauge(cx, cy, 8, phiV + 90);
+  var baseD = polaireJauge(cx, cy, 8, phiV - 90);
+  var aiguille = "<polygon points='" + baseG.x.toFixed(1) + "," + baseG.y.toFixed(1) + " " + pointe.x.toFixed(1) + "," + pointe.y.toFixed(1) + " " + baseD.x.toFixed(1) + "," + baseD.y.toFixed(1) + "' fill='url(#" + opts.idGrad + "_needle)' stroke='rgba(0,0,0,0.35)' stroke-width='0.5'/>";
+  var moyeu = "<circle cx='" + cx + "' cy='" + cy + "' r='15' fill='url(#" + opts.idGrad + "_hub)' stroke='rgba(0,0,0,0.4)' stroke-width='1'/>";
+
+  return "<svg class='jauge-grand-svg' viewBox='0 0 400 216' xmlns='http://www.w3.org/2000/svg'>" +
+    defs + bandes + graduations + aiguille + moyeu + "</svg>";
+}
+
+function rendreLegendeJauge(id, zones){
+  var el = document.getElementById(id);
+  if (!el) return;
+  el.innerHTML = zones.map(function(z){
+    return "<span class='puce' style='color:" + z.couleur + ";'><i style='background:" + z.couleur + ";'></i>" + z.label + "</span>";
+  }).join("");
+}
+
+var ZONES_JAUGE_CLIENTS = [
+  { jusqua: 250, couleur: "#FF6452", label: "Démarrage" },
+  { jusqua: 500, couleur: "#F5A623", label: "En croissance" },
+  { jusqua: 750, couleur: "#2DD4BF", label: "Bonne dynamique" },
+  { jusqua: 1000, couleur: "#22C55E", label: "Objectif" }
+];
+var CA_OBJECTIF_MAX = 50000; // cible indicative, ajustable ici si Stéphane veut un autre palier
+var ZONES_JAUGE_CA = [
+  { jusqua: 12500, couleur: "#FF6452", label: "Démarrage" },
+  { jusqua: 25000, couleur: "#F5A623", label: "En croissance" },
+  { jusqua: 37500, couleur: "#2DD4BF", label: "Bonne dynamique" },
+  { jusqua: 50000, couleur: "#22C55E", label: "Objectif" }
+];
+
+function afficherCompteursClients(){
+  var total = clients.length;
+  var elTexteClients = document.getElementById("jaugeClientsTexte");
+  var elSvgClients = document.getElementById("jaugeClientsSVG");
+  if (elTexteClients) elTexteClients.textContent = total + " / 1000";
+  if (elSvgClients){
+    elSvgClients.innerHTML = construireJaugeSpeedoSVG({
+      idGrad: "jc", min: 0, max: 1000, valeur: total, zones: ZONES_JAUGE_CLIENTS,
+      formatTick: function(v){ return v; }
+    });
+    rendreLegendeJauge("jaugeClientsLegende", ZONES_JAUGE_CLIENTS);
+  }
+
+  var ca = (caValide.totalMep || 0) + (caValide.totalAbo || 0);
+  var elTexteCA = document.getElementById("jaugeCATexte");
+  var elSvgCA = document.getElementById("jaugeCASVG");
+  if (elTexteCA) elTexteCA.textContent = formatEuro(ca);
+  if (elSvgCA){
+    elSvgCA.innerHTML = construireJaugeSpeedoSVG({
+      idGrad: "jca", min: 0, max: CA_OBJECTIF_MAX, valeur: ca, zones: ZONES_JAUGE_CA,
+      formatTick: function(v){ return Math.round(v / 1000) + "k"; }
+    });
+    rendreLegendeJauge("jaugeCALegende", ZONES_JAUGE_CA);
   }
 }
 
