@@ -346,7 +346,7 @@
   .stats-pills{display:flex;flex-wrap:wrap;gap:6px;}
   .stats-pill{font-size:11px;font-weight:700;padding:5px 11px;border-radius:20px;color:#0A0A0A;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,0.35);}
 
-  /* ---- Widget orbite : abonnements du projet (style "sphères sombres + halo ambre") ---- */
+  /* ---- Widget orbite : abonnements du projet (style "sphères sombres + halo ambre", figé + flottement doux) ---- */
   .orbit-wrap{position:relative;width:min(520px,100%);aspect-ratio:1;margin:14px auto 4px;perspective:1200px;}
   .orbit-wrap:before, .orbit-wrap:after{content:"";position:absolute;border-radius:50%;filter:blur(46px);pointer-events:none;z-index:0;}
   .orbit-wrap:before{width:90px;height:90px;background:#ff9d3d;opacity:.35;top:-2%;left:32%;}
@@ -360,17 +360,19 @@
     box-shadow:0 0 0 1.5px rgba(255,159,64,0.55),0 0 34px rgba(255,140,40,0.5),0 0 70px rgba(255,120,30,0.22);
     animation:orbitPouls 3s ease-in-out infinite;}
   @keyframes orbitPouls{0%,100%{box-shadow:0 0 0 1.5px rgba(255,159,64,0.55),0 0 34px rgba(255,140,40,0.5),0 0 70px rgba(255,120,30,0.22);transform:translate(-50%,-50%) scale(1);}50%{box-shadow:0 0 0 1.5px rgba(255,180,90,0.75),0 0 50px rgba(255,140,40,0.65),0 0 100px rgba(255,120,30,0.32);transform:translate(-50%,-50%) scale(1.04);}}
-  .orbit-spin{position:absolute;inset:0;animation:orbitTourne 80s linear infinite;transform-style:preserve-3d;z-index:1;}
-  .orbit-wrap:hover .orbit-spin, .orbit-wrap:hover .orbit-item .ic-inner, .orbit-wrap:hover .orbit-spark{animation-play-state:paused;}
-  @keyframes orbitTourne{from{transform:rotate(0deg);}to{transform:rotate(360deg);}}
+  /* Position fixe (comme la référence) : pas de rotation globale, seulement un flottement doux par bulle */
+  .orbit-spin{position:absolute;inset:0;transform-style:preserve-3d;z-index:1;}
   .orbit-spark{position:absolute;top:6%;left:50%;width:6px;height:6px;border-radius:50%;background:#ffd9ad;
-    box-shadow:0 0 10px 3px rgba(255,217,173,0.85),0 0 22px 8px rgba(255,140,40,0.4);animation:orbitTourne 80s linear infinite;}
-  .orbit-spark.s2{animation-duration:80s;transform:rotate(150deg);}
-  .orbit-spark.s3{animation-duration:80s;transform:rotate(265deg);}
+    box-shadow:0 0 10px 3px rgba(255,217,173,0.85),0 0 22px 8px rgba(255,140,40,0.4);
+    animation:orbitScintille 2.6s ease-in-out infinite;}
+  .orbit-spark.s2{transform:rotate(150deg);animation-delay:.8s;}
+  .orbit-spark.s3{transform:rotate(265deg);animation-delay:1.6s;}
+  @keyframes orbitScintille{0%,100%{opacity:.35;}50%{opacity:1;}}
   .orbit-item{position:absolute;top:0;left:0;transform:translate(-50%,-50%);display:flex;flex-direction:column;align-items:center;gap:9px;
     text-decoration:none;width:84px;}
-  .orbit-item .ic-inner{display:flex;flex-direction:column;align-items:center;gap:9px;animation:orbitContre 80s linear infinite;}
-  @keyframes orbitContre{from{transform:rotate(0deg);}to{transform:rotate(-360deg);}}
+  .orbit-item .ic-inner{display:flex;flex-direction:column;align-items:center;gap:9px;
+    animation:orbitFlotte 4.5s ease-in-out infinite;}
+  @keyframes orbitFlotte{0%,100%{transform:translateY(0);}50%{transform:translateY(-6px);}}
   .orbit-item .ic{width:60px;height:60px;border-radius:50%;position:relative;
     background:radial-gradient(circle at 32% 26%,#2c2c30,#0b0b0d 72%);
     border:1px solid rgba(255,159,64,0.4);
@@ -378,12 +380,14 @@
     display:flex;align-items:center;justify-content:center;font-size:22px;color:#eee;
     transition:transform .3s var(--ease),box-shadow .3s,border-color .3s;}
   .orbit-item .ic img{width:30px;height:30px;object-fit:contain;}
+  .orbit-item:hover .ic-inner{animation-play-state:paused;}
   .orbit-item:hover .ic{transform:scale(1.2) rotateY(16deg) rotateX(-10deg);border-color:rgba(255,185,100,0.85);
     box-shadow:0 14px 30px rgba(0,0,0,0.6),0 0 30px rgba(255,140,40,0.55);}
   .orbit-item .lbl{font-size:11.5px;font-weight:700;color:var(--texte-dim);text-align:center;line-height:1.2;transition:color .2s;
     text-shadow:0 0 12px rgba(0,0,0,0.6);}
   .orbit-item:hover .lbl{color:var(--texte);}
   @media (max-width:640px){.orbit-wrap{width:min(320px,92%);}.orbit-item{width:60px;}.orbit-item .ic{width:44px;height:44px;font-size:16px;}.orbit-item .ic img{width:22px;height:22px;}.orbit-item .lbl{font-size:9px;}}
+
 
 
 
@@ -1119,8 +1123,9 @@ function chargerAbonnements(){
       var angle = (-90 + (360 / n) * i) * Math.PI / 180;
       var x = 50 + Math.cos(angle) * rayon, y = 50 + Math.sin(angle) * rayon;
       var src = "https://cdn.simpleicons.org/" + a.logo + (a.clair ? "/ffffff" : "");
+      var delai = (i * 0.35).toFixed(2) + "s";
       return "<a class='orbit-item' href='" + a.url + "' target='_blank' rel='noopener noreferrer' title='" + a.detail + "' style='left:" + x + "%;top:" + y + "%;'>" +
-        "<span class='ic-inner'>" +
+        "<span class='ic-inner' style='animation-delay:" + delai + ";'>" +
           "<span class='ic'><img src='" + src + "' alt='' loading='lazy' onerror=\"this.style.display='none';this.nextElementSibling.style.display='inline';\"><span style='display:none;'>" + a.ic + "</span></span>" +
           "<span class='lbl'>" + a.nom + "</span>" +
         "</span></a>";
