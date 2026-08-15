@@ -619,6 +619,17 @@
         <textarea id="fEmails" rows="2" placeholder="contact@client.fr&#10;sav@client.fr" style="width:100%;padding:12px 14px;border-radius:13px;border:1px solid var(--border);background:rgba(255,255,255,0.04);color:var(--texte);font-size:13.5px;outline:none;font-family:inherit;resize:vertical;"></textarea>
         <div class="hint" style="font-size:11px;color:var(--texte-faint);margin-top:5px;">Un email par ligne.</div>
 
+        <label>Téléphone</label>
+        <input type="tel" id="fTelephone" placeholder="06 12 34 56 78">
+
+        <label>Adresse</label>
+        <input type="text" id="fAdresse" placeholder="12 rue des Artisans">
+
+        <div class="row-inline">
+          <div style="flex:1;"><label>Code postal</label><input type="text" id="fCodePostal" placeholder="10000"></div>
+          <div style="flex:2;"><label>Ville</label><input type="text" id="fVille" placeholder="Troyes"></div>
+        </div>
+
         <label>Couleurs</label>
         <div class="row-inline">
           <div><input type="color" id="fC1" value="#22C55E"><div class="lbl">Principale</div></div>
@@ -1274,6 +1285,10 @@ function chargerDansFormulaire(id){
   document.getElementById("fMetier").value = f["Métier"] || "Menuiserie";
   document.getElementById("fLogo").value = (f["Logo"] && f["Logo"][0] && f["Logo"][0].url) || "";
   document.getElementById("fEmails").value = f["Emails contact"] || "";
+  document.getElementById("fTelephone").value = f["Téléphone "] || "";
+  document.getElementById("fAdresse").value = f["Adresse"] || "";
+  document.getElementById("fCodePostal").value = f["Code postal"] || "";
+  document.getElementById("fVille").value = f["Ville"] || "";
   document.getElementById("fC1").value = f["Couleur principale"] || "#22C55E";
   document.getElementById("fC2").value = f["Couleur secondaire"] || "#111111";
   document.getElementById("fStatut").value = f["Statut client"] || "Actif";
@@ -1661,6 +1676,10 @@ document.getElementById("clientForm").addEventListener("submit", function(e){
     "Modules actifs": getModulesActifs(),
     "Statut client": document.getElementById("fStatut").value,
     "Emails contact": document.getElementById("fEmails").value.trim(),
+    "Téléphone ": document.getElementById("fTelephone").value.trim(),
+    "Adresse": document.getElementById("fAdresse").value.trim(),
+    "Code postal": document.getElementById("fCodePostal").value.trim(),
+    "Ville": document.getElementById("fVille").value.trim(),
     "Nombre agences": Math.max(1, Math.min(10, parseInt(document.getElementById("fNbAgences").value, 10) || 1)),
     "Montant diagnostic HT": document.getElementById("fMontantDiag").value.trim() === "" ? null : Math.max(0, parseFloat(document.getElementById("fMontantDiag").value) || 0)
   };
@@ -1868,6 +1887,10 @@ function appliquerProposition(p){
   if (p.metier) document.getElementById("fMetier").value = p.metier;
   if (p.couleur_principale) document.getElementById("fC1").value = p.couleur_principale;
   if (p.couleur_secondaire) document.getElementById("fC2").value = p.couleur_secondaire;
+  if (p.telephone) document.getElementById("fTelephone").value = p.telephone;
+  if (p.adresse) document.getElementById("fAdresse").value = p.adresse;
+  if (p.code_postal) document.getElementById("fCodePostal").value = p.code_postal;
+  if (p.ville) document.getElementById("fVille").value = p.ville;
   setModulesActifs(p.modules);
   document.getElementById("formMsg").className = "msg ok";
   document.getElementById("formMsg").textContent = "Formulaire pré-rempli — vérifie puis crée le client.";
@@ -1890,6 +1913,10 @@ function appliquerModification(m){
   if (m.couleur_principale) document.getElementById("fC1").value = m.couleur_principale;
   if (m.couleur_secondaire) document.getElementById("fC2").value = m.couleur_secondaire;
   if (m.statut) document.getElementById("fStatut").value = m.statut;
+  if (m.telephone) document.getElementById("fTelephone").value = m.telephone;
+  if (m.adresse) document.getElementById("fAdresse").value = m.adresse;
+  if (m.code_postal) document.getElementById("fCodePostal").value = m.code_postal;
+  if (m.ville) document.getElementById("fVille").value = m.ville;
   if (m.nombre_agences != null) document.getElementById("fNbAgences").value = m.nombre_agences;
   if (m.montant_diagnostic_ht != null) document.getElementById("fMontantDiag").value = m.montant_diagnostic_ht;
   if (Array.isArray(m.modules)) setModulesActifs(m.modules);

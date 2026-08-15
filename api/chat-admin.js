@@ -138,11 +138,9 @@ QUATRIEME MODE : modifier_client
   la liste "clients" fournie en contexte. Si aucun nom ne correspond
   clairement ou si plusieurs clients ont un nom proche, NE PAS deviner :
   reponds en texte libre pour demander a Stephane de preciser lequel.
-- Les seuls champs modifiables sont : metier, modules, couleur_principale,
+- Les champs modifiables sont : metier, modules, couleur_principale,
   couleur_secondaire, statut ("Actif" ou "Pause"), nombre_agences,
-  montant_diagnostic_ht. Ne propose JAMAIS de modifier un champ hors de
-  cette liste (ex: telephone, adresse -- ces champs n'existent pas
-  encore dans le formulaire, dis-le a Stephane en texte libre si demande).
+  montant_diagnostic_ht, telephone, adresse, code_postal, ville.
 - Ne renseigne QUE les champs que Stephane a explicitement demande de
   changer, laisse les autres absents de la reponse.
 - Le champ "message" resume clairement ce qui va etre modifie.
@@ -165,6 +163,10 @@ const TOOLS = [
         },
         couleur_principale: { type: "string", description: "Code hex, ex: #FF6B00" },
         couleur_secondaire: { type: "string", description: "Code hex, ex: #111111" },
+        telephone: { type: "string", description: "Numero de telephone du client, si mentionne." },
+        adresse: { type: "string", description: "Adresse (rue, numero) du client, si mentionnee." },
+        code_postal: { type: "string", description: "Code postal, si mentionne." },
+        ville: { type: "string", description: "Ville, si mentionnee." },
         message: { type: "string", description: "Une phrase courte confirmant la proposition." },
       },
       required: ["nom", "slug", "metier", "modules", "couleur_principale", "couleur_secondaire", "message"],
@@ -215,6 +217,10 @@ const TOOLS = [
         statut: { type: "string", enum: ["Actif", "Pause"], description: "Nouveau statut, uniquement si demande." },
         nombre_agences: { type: "number", description: "Nouveau nombre d'agences, uniquement si demande." },
         montant_diagnostic_ht: { type: "number", description: "Nouveau montant du diagnostic HT en euros, uniquement si demande." },
+        telephone: { type: "string", description: "Nouveau numero de telephone, uniquement si demande." },
+        adresse: { type: "string", description: "Nouvelle adresse (rue, numero), uniquement si demande." },
+        code_postal: { type: "string", description: "Nouveau code postal, uniquement si demande." },
+        ville: { type: "string", description: "Nouvelle ville, uniquement si demande." },
         message: { type: "string", description: "Une phrase courte resumant la modification proposee." },
       },
       required: ["nom_client", "message"],
