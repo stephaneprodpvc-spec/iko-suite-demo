@@ -565,6 +565,16 @@
       <div id="abonnementsListe" style="display:flex;flex-direction:column;gap:8px;"></div>
     </div>
 
+    <div class="card" id="sec-bareme">
+      <h2>💶 Barème commercial RSIA</h2>
+      <div style="font-size:12px;color:var(--texte-faint);margin-bottom:12px;">Tarif par module, utilisé automatiquement pour chiffrer chaque devis commercial (prospect → production). Enregistrement automatique à chaque champ quitté.</div>
+      <table class="devis-table">
+        <thead><tr><th>Module</th><th class="num">Mise en place HT</th><th class="num">Abonnement mensuel HT</th></tr></thead>
+        <tbody id="baremeListe"></tbody>
+      </table>
+      <div class="msg" id="baremeMsg"></div>
+    </div>
+
     <div class="card" id="sec-securite">
       <h2>Vérifications sécurité & fonctionnement</h2>
       <div class="verif-row">
@@ -687,6 +697,12 @@
           <option>Pause</option>
         </select>
 
+        <label>Statut commercial</label>
+        <select id="fStatutCommercial">
+          <option>Prospection</option>
+          <option>Production</option>
+        </select>
+
         <label style="display:flex;align-items:center;gap:8px;margin-top:10px;">
           <input type="checkbox" id="fAccesBloque" style="width:auto;">
           <span style="color:#FF453A;">Accès bloqué (client sans accès aux modules — impayé)</span>
@@ -759,7 +775,23 @@
         <div class="msg" id="devisListeMsg"></div>
       </div>
     </div>
+
+      <div id="devisCommercialWrap" style="display:none;">
+        <div style="border-top:1px solid var(--border);margin:24px 0 20px;"></div>
+        <h2>💼 Devis commercial RSIA — abonnement Iko Suite</h2>
+        <div style="font-size:12px;color:var(--texte-faint);margin-bottom:14px;">Sélectionne les modules à proposer. Le prix vient du barème RSIA (réglable dans la carte « Barème commercial RSIA »).</div>
+        <div id="devisCommercialModules" style="display:flex;flex-direction:column;gap:8px;margin-bottom:14px;"></div>
+        <div style="display:flex;justify-content:space-between;font-size:13px;padding:10px 12px;border:1px solid var(--border);border-radius:10px;margin-bottom:14px;">
+          <span>Total HT : mise en place <b id="dcTotalMep">0,00 €</b> + abonnement <b id="dcTotalAbo">0,00 €</b>/mois</span>
+        </div>
+        <div class="actions" style="margin-top:0;">
+          <button type="button" class="secondary" id="dcGenererBtn" style="flex:1;">Générer le devis (PDF)</button>
+          <button type="button" class="primary" id="dcAccepteBtn" style="flex:1;">Client a accepté → passer en Production</button>
+        </div>
+        <div class="msg" id="devisCommercialMsg"></div>
+      </div>
     </div>
+
     </div>
 
   </div>
@@ -870,6 +902,7 @@ document.getElementById("lockForm").addEventListener("submit", function(e){
     document.getElementById("lock").style.display = "none";
     chargerClients();
     chargerConfigVerif();
+    chargerBaremeRSIA();
     chargerAbonnements();
     if (document.getElementById("modeVocal").checked) lancerEcouteClaude();
   } else {
@@ -880,6 +913,7 @@ if (sessionStorage.getItem("iko_admin_ok") === "1"){
   document.getElementById("lock").style.display = "none";
   chargerClients();
   chargerConfigVerif();
+  chargerBaremeRSIA();
   setTimeout(chargerAbonnements, 0);
 }
 
@@ -1300,6 +1334,7 @@ function chargerDansFormulaire(id){
   document.getElementById("fC1").value = f["Couleur principale"] || "#22C55E";
   document.getElementById("fC2").value = f["Couleur secondaire"] || "#111111";
   document.getElementById("fStatut").value = f["Statut client"] || "Actif";
+  document.getElementById("fStatutCommercial").value = f["Statut commercial"] || "Prospection";
   document.getElementById("fAccesBloque").checked = f["Accès bloqué"] === true;
   document.getElementById("fNbAgences").value = f["Nombre agences"] || 1;
   document.getElementById("fMontantDiag").value = f["Montant diagnostic HT"] != null ? f["Montant diagnostic HT"] : "";
@@ -1691,6 +1726,7 @@ document.getElementById("clientForm").addEventListener("submit", function(e){
     "Couleur secondaire": document.getElementById("fC2").value,
     "Modules actifs": getModulesActifs(),
     "Statut client": document.getElementById("fStatut").value,
+    "Statut commercial": document.getElementById("fStatutCommercial").value,
     "Accès bloqué": document.getElementById("fAccesBloque").checked,
     "Emails contact": document.getElementById("fEmails").value.trim(),
     "Téléphone ": document.getElementById("fTelephone").value.trim(),
@@ -2235,13 +2271,187 @@ function ouvrirDevisPourClient(id, fieldsClient){
   chargerCatalogue();
   chargerMO();
   chargerDevisListe();
+  document.getElementById("devisCommercialWrap").style.display = "block";
+  afficherDevisCommercialUI();
 }
 
 function fermerDevis(){
   devisClientId = null;
   document.getElementById("devisWrap").style.display = "none";
   document.getElementById("ficheMepBtn").style.display = "none";
+  document.getElementById("devisCommercialWrap").style.display = "none";
 }
+
+// ==================== Barème commercial RSIA (Prospection → Production) =====
+// Stocke le tarif par module en JSON sur l'enregistrement CONFIG de Planning
+// (meme enregistrement que les autres reglages globaux du projet), plutot que
+// dans une nouvelle table : l'API Airtable ne permet pas de creer une table
+// dans une base existante.
+var BAREME_MODULES = ["Dashboard", "Technicien", "SAV", "Métreur"];
+var baremeRSIA = {};
+
+function formatEuro(n){
+  return (n || 0).toLocaleString("fr-FR", { style: "currency", currency: "EUR" });
+}
+
+function chargerBaremeRSIA(){
+  fetch("/api/airtable/" + encodeURIComponent(VERIF_CONFIG_TABLE) + "/" + VERIF_CONFIG_RECORD)
+    .then(function(r){ return r.json(); })
+    .then(function(data){
+      try { baremeRSIA = JSON.parse((data.fields || {})["Tarifs RSIA JSON"] || "{}"); } catch(e){ baremeRSIA = {}; }
+      BAREME_MODULES.forEach(function(m){ if (!baremeRSIA[m]) baremeRSIA[m] = { misePlace: 0, abonnement: 0 }; });
+      afficherBaremeUI();
+      if (devisClientId) afficherDevisCommercialUI();
+    })
+    .catch(function(){
+      var el = document.getElementById("baremeMsg");
+      if (el){ el.className = "msg err"; el.textContent = "Erreur de chargement du barème."; }
+    });
+}
+
+function afficherBaremeUI(){
+  var el = document.getElementById("baremeListe");
+  if (!el) return;
+  el.innerHTML = BAREME_MODULES.map(function(m){
+    var v = baremeRSIA[m] || { misePlace: 0, abonnement: 0 };
+    return "<tr>" +
+      "<td>" + m + "</td>" +
+      "<td class='num'><input type='number' min='0' step='0.01' value='" + v.misePlace + "' data-mod='" + m + "' data-champ='misePlace'></td>" +
+      "<td class='num'><input type='number' min='0' step='0.01' value='" + v.abonnement + "' data-mod='" + m + "' data-champ='abonnement'></td>" +
+      "</tr>";
+  }).join("");
+  Array.prototype.forEach.call(el.querySelectorAll("input[data-mod]"), function(input){
+    input.addEventListener("blur", function(){
+      var m = this.getAttribute("data-mod"), champ = this.getAttribute("data-champ");
+      if (!baremeRSIA[m]) baremeRSIA[m] = { misePlace: 0, abonnement: 0 };
+      baremeRSIA[m][champ] = parseFloat(this.value) || 0;
+      enregistrerBaremeRSIA();
+    });
+  });
+}
+
+function enregistrerBaremeRSIA(){
+  var msg = document.getElementById("baremeMsg");
+  fetch("/api/airtable/" + encodeURIComponent(VERIF_CONFIG_TABLE) + "/" + VERIF_CONFIG_RECORD, {
+    method: "PATCH", headers: {"Content-Type":"application/json"},
+    body: JSON.stringify({ fields: { "Tarifs RSIA JSON": JSON.stringify(baremeRSIA) } })
+  })
+    .then(function(r){ if (!r.ok) throw new Error("HTTP " + r.status); })
+    .then(function(){ if (msg){ msg.className = "msg ok"; msg.textContent = "Barème enregistré."; } if (devisClientId) afficherDevisCommercialUI(); })
+    .catch(function(){ if (msg){ msg.className = "msg err"; msg.textContent = "Erreur d'enregistrement."; } });
+}
+
+// ==================== Devis commercial (fiche client, prospect → production) =====
+function afficherDevisCommercialUI(){
+  var el = document.getElementById("devisCommercialModules");
+  if (!el) return;
+  el.innerHTML = BAREME_MODULES.map(function(m){
+    var v = baremeRSIA[m] || { misePlace: 0, abonnement: 0 };
+    return "<label style='display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 12px;border:1px solid var(--border);border-radius:10px;cursor:pointer;'>" +
+      "<span style='display:flex;align-items:center;gap:8px;'><input type='checkbox' data-dc-mod='" + m + "'> " + m + "</span>" +
+      "<span style='font-size:11.5px;color:var(--texte-faint);'>" + formatEuro(v.misePlace) + " mise en place + " + formatEuro(v.abonnement) + "/mois</span>" +
+    "</label>";
+  }).join("");
+  Array.prototype.forEach.call(el.querySelectorAll("input[data-dc-mod]"), function(cb){
+    cb.addEventListener("change", recalculerTotalDevisCommercial);
+  });
+  recalculerTotalDevisCommercial();
+}
+
+function modulesCommerciauxCoches(){
+  return Array.prototype.filter.call(document.querySelectorAll("#devisCommercialModules input[data-dc-mod]"), function(cb){ return cb.checked; })
+    .map(function(cb){ return cb.getAttribute("data-dc-mod"); });
+}
+
+function recalculerTotalDevisCommercial(){
+  var mods = modulesCommerciauxCoches();
+  var totalMep = 0, totalAbo = 0;
+  mods.forEach(function(m){
+    var v = baremeRSIA[m] || { misePlace: 0, abonnement: 0 };
+    totalMep += v.misePlace; totalAbo += v.abonnement;
+  });
+  document.getElementById("dcTotalMep").textContent = formatEuro(totalMep);
+  document.getElementById("dcTotalAbo").textContent = formatEuro(totalAbo);
+}
+
+// Devis imprimable aux couleurs RSIA Conseil (noir/orange), distinct du devis
+// SAV (vert Iko) genere par genererDevisImprimable(). Entierement en styles
+// inline pour ne pas dependre/interferer avec les classes .dv-* existantes.
+function genererDevisCommercialImprimable(){
+  var mods = modulesCommerciauxCoches();
+  if (!mods.length){
+    var msg = document.getElementById("devisCommercialMsg");
+    msg.className = "msg err"; msg.textContent = "Sélectionne au moins un module.";
+    return;
+  }
+  var num = "DEV-RSIA-" + new Date().getFullYear() + "-" + Math.floor(1000 + Math.random() * 9000);
+  var dateStr = new Date().toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" });
+  var totalMep = 0, totalAbo = 0;
+  var lignesHtml = mods.map(function(m){
+    var v = baremeRSIA[m] || { misePlace: 0, abonnement: 0 };
+    totalMep += v.misePlace; totalAbo += v.abonnement;
+    return "<tr>" +
+      "<td>Module " + m + " — mise en place</td><td style='text-align:right;'>" + formatEuro(v.misePlace) + "</td>" +
+      "</tr><tr>" +
+      "<td>Module " + m + " — abonnement mensuel</td><td style='text-align:right;'>" + formatEuro(v.abonnement) + " / mois</td>" +
+      "</tr>";
+  }).join("");
+  var tvaMep = totalMep * 0.20;
+  var ttcMep = totalMep + tvaMep;
+
+  document.getElementById("printDevis").innerHTML =
+    "<div style='color:#111;background:#fff;font-family:-apple-system,\"Segoe UI\",sans-serif;padding:8px;'>" +
+    "<div style='display:flex;align-items:center;justify-content:space-between;border-bottom:3px solid #FF6B00;padding-bottom:18px;margin-bottom:24px;'>" +
+      "<div style='display:flex;align-items:center;gap:14px;'>" +
+        "<div style='width:52px;height:52px;border-radius:13px;background:#111;color:#FF6B00;font-weight:800;font-size:22px;display:flex;align-items:center;justify-content:center;letter-spacing:-2px;'><span>R</span><span style='display:inline-block;transform:scaleX(-1);'>R</span></div>" +
+        "<div><h1 style='font-size:20px;margin:0 0 4px;'>RSIA Conseil</h1><div style='font-size:11px;color:#666;'>Iko Suite — solution SAV, technicien &amp; pilotage pour PME du bâtiment</div></div>" +
+      "</div>" +
+      "<div style='font-size:11px;color:#666;text-align:right;line-height:1.5;'>Devis n° " + num + "<br>Émis le " + dateStr + "</div>" +
+    "</div>" +
+    "<div style='font-size:13px;margin-bottom:24px;line-height:1.6;'><b>Destinataire :</b><br>" + (devisClientNom || "") + "</div>" +
+    "<div style='font-size:13px;font-weight:700;margin-bottom:14px;'>Proposition Iko Suite — modules sélectionnés</div>" +
+    "<table style='width:100%;border-collapse:collapse;margin-bottom:20px;font-size:12.5px;'>" +
+      "<thead><tr><th style='text-align:left;font-size:10.5px;text-transform:uppercase;color:#666;border-bottom:1px solid #ccc;padding:8px 6px;'>Ligne</th><th style='text-align:right;font-size:10.5px;text-transform:uppercase;color:#666;border-bottom:1px solid #ccc;padding:8px 6px;'>Montant HT</th></tr></thead>" +
+      "<tbody>" + lignesHtml + "</tbody>" +
+    "</table>" +
+    "<div style='display:flex;justify-content:flex-end;margin-bottom:28px;'><table style='width:280px;'>" +
+      "<tr><td style='padding:6px;'>Total mise en place HT</td><td style='text-align:right;padding:6px;'>" + formatEuro(totalMep) + "</td></tr>" +
+      "<tr><td style='padding:6px;'>TVA (20%) sur mise en place</td><td style='text-align:right;padding:6px;'>" + formatEuro(tvaMep) + "</td></tr>" +
+      "<tr style='font-weight:800;font-size:15px;border-top:2px solid #111;'><td style='padding:6px;'>Total mise en place TTC</td><td style='text-align:right;padding:6px;'>" + formatEuro(ttcMep) + "</td></tr>" +
+      "<tr><td style='padding:6px;padding-top:14px;'>Abonnement mensuel total HT</td><td style='text-align:right;padding:6px;padding-top:14px;'>" + formatEuro(totalAbo) + " / mois</td></tr>" +
+    "</table></div>" +
+    "<div style='font-size:11px;color:#555;border-top:1px solid #eee;padding-top:14px;line-height:1.6;'>Devis valable 30 jours. Abonnement mensuel facturé à partir de la mise en production. Résiliable selon conditions contractuelles RSIA Conseil.</div>" +
+    "<div style='margin-top:40px;font-size:10px;color:#999;text-align:center;'>RSIA Conseil — devis généré via le poste de pilotage Iko Suite</div>" +
+    "</div>";
+  window.print();
+}
+
+document.getElementById("dcGenererBtn").addEventListener("click", genererDevisCommercialImprimable);
+
+document.getElementById("dcAccepteBtn").addEventListener("click", function(){
+  if (!devisClientId) return;
+  var mods = modulesCommerciauxCoches();
+  var msg = document.getElementById("devisCommercialMsg");
+  if (!mods.length){
+    msg.className = "msg err"; msg.textContent = "Sélectionne au moins un module avant de valider.";
+    return;
+  }
+  if (!confirm("Confirmer : le client \"" + devisClientNom + "\" a accepté le devis et passe en Production ?")) return;
+  msg.className = "msg"; msg.textContent = "Enregistrement…";
+  fetch("/api/airtable/" + encodeURIComponent(TABLE) + "/" + devisClientId, {
+    method: "PATCH", headers: {"Content-Type":"application/json"},
+    body: JSON.stringify({ fields: { "Statut commercial": "Production" } })
+  })
+    .then(function(r){ if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
+    .then(function(){
+      document.getElementById("fStatutCommercial").value = "Production";
+      msg.className = "msg ok"; msg.textContent = "Client passé en Production.";
+      chargerClients();
+    })
+    .catch(function(err){
+      msg.className = "msg err"; msg.textContent = "Erreur : " + err.message;
+    });
+});
 
 Array.prototype.forEach.call(document.querySelectorAll(".devis-tab"), function(tab){
   tab.addEventListener("click", function(){
