@@ -10,8 +10,33 @@ import { verifierOrigine, verifierDebit, reponseBloquee } from "./_securite.js";
 // client (voir admin.html).
 
 const MODELE = "claude-sonnet-4-6";
+const MODELE_GEMINI = "gemini-2.5-flash";
 const MAX_CHARS_MESSAGE = 1500;
 const MAX_CLIENTS_CONTEXTE = 100;
+
+// Convertit un schema JSON style Anthropic (type en minuscules) vers le
+// format attendu par Gemini (type en MAJUSCULES), recursivement sur
+// properties/items. Les autres cles (enum, description, required) sont
+// compatibles telles quelles.
+function versSchemaGemini(schema){
+  if (!schema || typeof schema !== "object") return schema;
+  const out = { ...schema };
+  if (typeof out.type === "string") out.type = out.type.toUpperCase();
+  if (out.properties){
+    const props = {};
+    for (const k in out.properties) props[k] = versSchemaGemini(out.properties[k]);
+    out.properties = props;
+  }
+  if (out.items) out.items = versSchemaGemini(out.items);
+  return out;
+}
+function toolsPourGemini(tools){
+  return tools.map(t => ({
+    name: t.name,
+    description: t.description,
+    parameters: versSchemaGemini(t.input_schema),
+  }));
+}
 
 // Supprime emojis/pictogrammes d'un texte (filet de securite en plus de la
 // consigne donnee a Claude dans le system prompt).
@@ -293,6 +318,82 @@ const TOOLS = [
   },
 ];
 
+// Les deux fonctions ci-dessous renvoient le meme format normalise :
+// { texte: string, appelOutil: { name, input } | null }
+// pour que le reste du handler ne depende d'aucun des deux formats d'API.
+
+async function appellerGemini(cle, messagesHistorique, contexte){
+  const contents = messagesHistorique.map(h => ({
+    role: h.role === "user" ? "user" : "model",
+    parts: [{ text: String(h.texte || "").slice(0, 800) }],
+  }));
+  contents.push({ role: "user", parts: [{ text: contexte }] });
+
+  const url = "https://generativelanguage.googleapis.com/v1beta/models/" + MODELE_GEMINI + ":generateContent?key=" + cle;
+  const reponse = await fetch(url, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
+      contents: contents,
+      tools: [{ functionDeclarations: toolsPourGemini(TOOLS) }],
+      toolConfig: { functionCallingConfig: { mode: "AUTO" } },
+      generationConfig: { temperature: 0.5, maxOutputTokens: 700 },
+    }),
+  });
+  if (!reponse.ok){
+    const detail = await reponse.text();
+    throw new Error("Gemini HTTP " + reponse.status + " : " + detail.slice(0, 300));
+  }
+  const data = await reponse.json();
+  const parts = (data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts) || [];
+  const partOutil = parts.find(p => p.functionCall);
+  if (partOutil){
+    return { texte: "", appelOutil: { name: partOutil.functionCall.name, input: partOutil.functionCall.args || {} } };
+  }
+  const texte = parts.filter(p => typeof p.text === "string").map(p => p.text).join(" ").trim();
+  if (!texte) throw new Error("Gemini : reponse vide ou format inattendu");
+  return { texte: texte, appelOutil: null };
+}
+
+async function appellerClaude(cle, messagesHistorique, contexte){
+  const messagesAnthropic = messagesHistorique.map(h => ({
+    role: h.role === "user" ? "user" : "assistant",
+    content: String(h.texte || "").slice(0, 800),
+  }));
+  messagesAnthropic.push({ role: "user", content: contexte });
+
+  const reponse = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-api-key": cle,
+      "anthropic-version": "2023-06-01",
+    },
+    body: JSON.stringify({
+      model: MODELE,
+      max_tokens: 700,
+      temperature: 0.5,
+      system: [{ type: "text", text: SYSTEM_PROMPT, cache_control: { type: "ephemeral" } }],
+      tools: TOOLS,
+      tool_choice: { type: "auto" },
+      messages: messagesAnthropic,
+    }),
+  });
+  if (!reponse.ok){
+    const detail = await reponse.text();
+    throw new Error("Claude HTTP " + reponse.status + " : " + detail.slice(0, 300));
+  }
+  const data = await reponse.json();
+  const blocs = Array.isArray(data.content) ? data.content : [];
+  const blocOutil = blocs.find(b => b.type === "tool_use");
+  if (blocOutil){
+    return { texte: "", appelOutil: { name: blocOutil.name, input: blocOutil.input } };
+  }
+  const texte = blocs.filter(b => b.type === "text").map(b => b.text || "").join(" ").trim();
+  return { texte: texte || "…", appelOutil: null };
+}
+
 export default async function handler(req, res) {
   if (req.method !== "POST") {
     return res.status(405).json({ erreur: "Methode non autorisee" });
@@ -301,9 +402,10 @@ export default async function handler(req, res) {
   if (!verifierOrigine(req)) return reponseBloquee(res, "origine");
   if (!verifierDebit(req)) return reponseBloquee(res, "debit");
 
-  const cle = process.env.ANTHROPIC_API_KEY;
-  if (!cle) {
-    console.error("ANTHROPIC_API_KEY absente des variables d'environnement");
+  const cleGemini = process.env.GEMINI_API_KEY;
+  const cleClaude = process.env.ANTHROPIC_API_KEY;
+  if (!cleGemini && !cleClaude) {
+    console.error("Ni GEMINI_API_KEY ni ANTHROPIC_API_KEY ne sont configurees");
     return res.status(500).json({ erreur: "Configuration serveur incomplete" });
   }
 
@@ -317,74 +419,47 @@ export default async function handler(req, res) {
     const clients = Array.isArray(body.clients) ? body.clients.slice(0, MAX_CLIENTS_CONTEXTE) : [];
     const agences = Array.isArray(body.agences) ? body.agences.slice(0, 10) : [];
 
-    const messagesAnthropic = historique.map(h => ({
-      role: h.role === "user" ? "user" : "assistant",
-      content: String(h.texte || "").slice(0, 800),
-    }));
     const contexte = "Clients actuels dans la base (JSON) :\n" + JSON.stringify(clients) +
       "\n\nAgences du client actuellement ouvert dans le formulaire (JSON, vide si aucun client ouvert) :\n" + JSON.stringify(agences) +
       "\n\nMessage de Stephane : \"" + message + "\"";
-    messagesAnthropic.push({ role: "user", content: contexte });
 
-    const reponse = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        "x-api-key": cle,
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify({
-        model: MODELE,
-        max_tokens: 700,
-        temperature: 0.5,
-        system: [{ type: "text", text: SYSTEM_PROMPT, cache_control: { type: "ephemeral" } }],
-        tools: TOOLS,
-        tool_choice: { type: "auto" },
-        messages: messagesAnthropic,
-      }),
-    });
+    // Gemini en priorite (gratuit) si une cle est configuree, avec repli
+    // automatique et silencieux sur Claude en cas d'echec (reseau, format
+    // de reponse inattendu, quota depasse...). Stephane ne voit jamais
+    // l'echec cote client : au pire une reponse legerement plus lente.
+    let resultat = null;
+    let sourceUtilisee = null;
+    if (cleGemini) {
+      try {
+        resultat = await appellerGemini(cleGemini, historique, contexte);
+        sourceUtilisee = "gemini";
+      } catch (e) {
+        console.warn("chat-admin: Gemini indisponible, repli sur Claude —", e.message);
+      }
+    }
+    if (!resultat) {
+      if (!cleClaude) {
+        return res.status(502).json({ erreur: "L'assistant est momentanément indisponible." });
+      }
+      resultat = await appellerClaude(cleClaude, historique, contexte);
+      sourceUtilisee = "claude";
+    }
+    console.log("chat-admin: reponse via", sourceUtilisee);
 
-    if (!reponse.ok) {
-      const detail = await reponse.text();
-      console.error("Erreur API Anthropic:", reponse.status, detail);
-      return res.status(502).json({ erreur: "Claude est momentanément indisponible." });
+    if (resultat.appelOutil) {
+      const { name, input } = resultat.appelOutil;
+      if (input && typeof input.message === "string") input.message = retirerEmojis(input.message);
+
+      if (name === "proposer_client") return res.status(200).json({ type: "proposition", proposition: input });
+      if (name === "generer_devis") return res.status(200).json({ type: "devis", devis: input });
+      if (name === "modifier_client") return res.status(200).json({ type: "modification", modification: input });
+      if (name === "modifier_agence") return res.status(200).json({ type: "modification_agence", modification_agence: input });
+      if (name === "creer_agence") return res.status(200).json({ type: "creation_agence", creation_agence: input });
+      // Outil inconnu (ne devrait pas arriver) : on retombe en texte libre.
+      console.warn("chat-admin: outil inconnu retourne par", sourceUtilisee, ":", name);
     }
 
-    const data = await reponse.json();
-    const blocs = Array.isArray(data.content) ? data.content : [];
-    const appelClient = blocs.find(b => b.type === "tool_use" && b.name === "proposer_client");
-    const appelDevis = blocs.find(b => b.type === "tool_use" && b.name === "generer_devis");
-    const appelModif = blocs.find(b => b.type === "tool_use" && b.name === "modifier_client");
-    const appelModifAgence = blocs.find(b => b.type === "tool_use" && b.name === "modifier_agence");
-    const appelCreerAgence = blocs.find(b => b.type === "tool_use" && b.name === "creer_agence");
-
-    if (appelClient) {
-      appelClient.input.message = retirerEmojis(appelClient.input.message);
-      return res.status(200).json({ type: "proposition", proposition: appelClient.input });
-    }
-
-    if (appelDevis) {
-      appelDevis.input.message = retirerEmojis(appelDevis.input.message);
-      return res.status(200).json({ type: "devis", devis: appelDevis.input });
-    }
-
-    if (appelModif) {
-      appelModif.input.message = retirerEmojis(appelModif.input.message);
-      return res.status(200).json({ type: "modification", modification: appelModif.input });
-    }
-
-    if (appelModifAgence) {
-      appelModifAgence.input.message = retirerEmojis(appelModifAgence.input.message);
-      return res.status(200).json({ type: "modification_agence", modification_agence: appelModifAgence.input });
-    }
-
-    if (appelCreerAgence) {
-      appelCreerAgence.input.message = retirerEmojis(appelCreerAgence.input.message);
-      return res.status(200).json({ type: "creation_agence", creation_agence: appelCreerAgence.input });
-    }
-
-    const texteBrut = blocs.filter(b => b.type === "text").map(b => b.text || "").join(" ").trim();
-    return res.status(200).json({ type: "message", reponse: retirerEmojis(texteBrut) || "…" });
+    return res.status(200).json({ type: "message", reponse: retirerEmojis(resultat.texte) || "…" });
   } catch (e) {
     console.error("Erreur chat-admin:", e);
     return res.status(500).json({ erreur: "Une erreur est survenue." });
