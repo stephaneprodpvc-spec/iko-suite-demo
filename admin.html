@@ -319,33 +319,54 @@
   }
   .hero-stat span{font-size:10.5px;color:var(--texte-faint);text-transform:uppercase;letter-spacing:.07em;font-weight:600;}
 
+  /* ---- Compteurs section Clients : jauge Clients (0-1000) + CA validé ---- */
+  .compteurs-clients{display:flex;gap:14px;margin:14px 0 16px;flex-wrap:wrap;}
+  .compteur-carte{flex:1;min-width:210px;display:flex;align-items:center;gap:14px;padding:14px 16px;border:1px solid var(--border);border-radius:14px;background:var(--g2);}
+  .compteur-gauge{--accent:var(--teal);width:46px;height:46px;border-radius:50%;flex-shrink:0;position:relative;
+    background:conic-gradient(var(--accent) calc(var(--pct,0)*1%),rgba(255,255,255,0.07) 0);
+    -webkit-mask:radial-gradient(circle,transparent 62%,#000 63%);mask:radial-gradient(circle,transparent 62%,#000 63%);
+    filter:drop-shadow(0 0 6px color-mix(in srgb,var(--accent) 55%,transparent));}
+  .compteur-txt{display:flex;flex-direction:column;gap:3px;min-width:0;}
+  .compteur-txt b{font-family:var(--f-mono);font-size:19px;font-weight:600;color:var(--texte);line-height:1.1;white-space:nowrap;}
+  .compteur-txt span{font-size:10.5px;color:var(--texte-faint);text-transform:uppercase;letter-spacing:.06em;font-weight:600;}
+
   /* ---- Widget orbite : abonnements du projet ---- */
-  .orbit-wrap{position:relative;width:min(480px,100%);aspect-ratio:1;margin:10px auto 4px;perspective:1000px;}
-  .orbit-ring{position:absolute;inset:6%;border:1px dashed var(--border-strong);border-radius:50%;}
-  .orbit-center{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:19%;aspect-ratio:1;border-radius:50%;z-index:2;
+  .orbit-wrap{position:relative;width:min(520px,100%);aspect-ratio:1;margin:14px auto 4px;perspective:1200px;}
+  .orbit-ring{position:absolute;inset:6%;border-radius:50%;
+    border:1px dashed color-mix(in srgb,var(--vert) 35%,var(--border-strong));
+    box-shadow:0 0 40px rgba(34,197,94,0.08) inset;}
+  .orbit-ring:after{content:"";position:absolute;inset:-14%;border-radius:50%;border:1px dashed rgba(255,255,255,0.05);}
+  .orbit-center{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:20%;aspect-ratio:1;border-radius:50%;z-index:2;
     background:linear-gradient(135deg,var(--vert),#0e8f43);display:flex;align-items:center;justify-content:center;
-    font-family:var(--f-display);font-weight:700;color:#0A0A0A;font-size:15px;letter-spacing:-.02em;
-    box-shadow:0 0 0 1px var(--border),0 0 26px var(--vert-glow);
-    animation:orbitPouls 3.2s ease-in-out infinite;}
-  @keyframes orbitPouls{0%,100%{box-shadow:0 0 0 1px var(--border),0 0 26px var(--vert-glow);}50%{box-shadow:0 0 0 1px var(--border),0 0 40px var(--vert-glow);}}
-  .orbit-spin{position:absolute;inset:0;animation:orbitTourne 90s linear infinite;transform-style:preserve-3d;}
-  .orbit-wrap:hover .orbit-spin, .orbit-wrap:hover .orbit-item .ic-inner{animation-play-state:paused;}
+    font-family:var(--f-display);font-weight:700;color:#0A0A0A;font-size:16px;letter-spacing:-.02em;
+    box-shadow:0 0 0 1px var(--border),0 0 30px var(--vert-glow),0 0 70px rgba(34,197,94,0.25);
+    animation:orbitPouls 3s ease-in-out infinite;}
+  @keyframes orbitPouls{0%,100%{box-shadow:0 0 0 1px var(--border),0 0 30px var(--vert-glow),0 0 70px rgba(34,197,94,0.25);transform:translate(-50%,-50%) scale(1);}50%{box-shadow:0 0 0 1px var(--border),0 0 46px var(--vert-glow),0 0 100px rgba(34,197,94,0.35);transform:translate(-50%,-50%) scale(1.04);}}
+  .orbit-spin{position:absolute;inset:0;animation:orbitTourne 80s linear infinite;transform-style:preserve-3d;}
+  .orbit-wrap:hover .orbit-spin, .orbit-wrap:hover .orbit-item .ic-inner, .orbit-wrap:hover .orbit-spark{animation-play-state:paused;}
   @keyframes orbitTourne{from{transform:rotate(0deg);}to{transform:rotate(360deg);}}
-  .orbit-item{position:absolute;top:0;left:0;transform:translate(-50%,-50%);display:flex;flex-direction:column;align-items:center;gap:8px;
-    text-decoration:none;width:78px;}
-  .orbit-item .ic-inner{display:flex;flex-direction:column;align-items:center;gap:8px;animation:orbitContre 90s linear infinite;}
+  .orbit-spark{position:absolute;top:6%;left:50%;width:7px;height:7px;border-radius:50%;background:#fff;
+    box-shadow:0 0 10px 3px rgba(255,255,255,0.85),0 0 22px 8px var(--vert-glow);animation:orbitTourne 80s linear infinite;}
+  .orbit-spark.s2{animation-duration:80s;transform:rotate(150deg);background:#fff;box-shadow:0 0 10px 3px rgba(255,255,255,0.7),0 0 20px 8px var(--violet-glow);}
+  .orbit-spark.s3{animation-duration:80s;transform:rotate(265deg);background:#fff;box-shadow:0 0 10px 3px rgba(255,255,255,0.7),0 0 20px 8px var(--teal-glow);}
+  .orbit-item{position:absolute;top:0;left:0;transform:translate(-50%,-50%);display:flex;flex-direction:column;align-items:center;gap:9px;
+    text-decoration:none;width:84px;}
+  .orbit-item .ic-inner{display:flex;flex-direction:column;align-items:center;gap:9px;animation:orbitContre 80s linear infinite;}
   @keyframes orbitContre{from{transform:rotate(0deg);}to{transform:rotate(-360deg);}}
-  .orbit-item .ic{width:52px;height:52px;border-radius:50%;position:relative;
-    background:radial-gradient(circle at 32% 28%,color-mix(in srgb,var(--accent) 22%,var(--g2)),var(--g2) 70%);
-    border:1px solid var(--border-strong);box-shadow:0 0 0 1px rgba(255,255,255,0.02) inset,0 6px 16px rgba(0,0,0,0.4);
-    display:flex;align-items:center;justify-content:center;font-size:19px;color:var(--texte);
-    transition:transform .25s var(--ease),border-color .2s,box-shadow .25s;}
-  .orbit-item .ic img{width:26px;height:26px;object-fit:contain;filter:drop-shadow(0 0 4px rgba(0,0,0,0.4));}
-  .orbit-item:hover .ic{transform:scale(1.15) rotateY(14deg) rotateX(-8deg);border-color:var(--accent);
-    box-shadow:0 0 0 1px rgba(255,255,255,0.04) inset,0 0 24px color-mix(in srgb,var(--accent) 55%,transparent);}
-  .orbit-item .lbl{font-size:11px;font-weight:600;color:var(--texte-dim);text-align:center;line-height:1.2;transition:color .2s;}
+  .orbit-item .ic{width:60px;height:60px;border-radius:50%;position:relative;
+    background:radial-gradient(circle at 32% 26%,#ffffff,#e4e4e7 75%);
+    border:1px solid rgba(255,255,255,0.5);
+    box-shadow:0 0 0 5px color-mix(in srgb,var(--accent) 16%,transparent),0 10px 22px rgba(0,0,0,0.5),0 0 22px color-mix(in srgb,var(--accent) 35%,transparent);
+    display:flex;align-items:center;justify-content:center;font-size:22px;color:#111;
+    transition:transform .3s var(--ease),box-shadow .3s;}
+  .orbit-item .ic img{width:30px;height:30px;object-fit:contain;}
+  .orbit-item:hover .ic{transform:scale(1.2) rotateY(16deg) rotateX(-10deg);
+    box-shadow:0 0 0 7px color-mix(in srgb,var(--accent) 30%,transparent),0 14px 30px rgba(0,0,0,0.55),0 0 36px color-mix(in srgb,var(--accent) 65%,transparent);}
+  .orbit-item .lbl{font-size:11.5px;font-weight:700;color:var(--texte-dim);text-align:center;line-height:1.2;transition:color .2s;
+    text-shadow:0 0 12px rgba(0,0,0,0.6);}
   .orbit-item:hover .lbl{color:var(--texte);}
-  @media (max-width:640px){.orbit-wrap{width:min(300px,92%);}.orbit-item{width:56px;}.orbit-item .ic{width:38px;height:38px;font-size:14px;}.orbit-item .ic img{width:20px;height:20px;}.orbit-item .lbl{font-size:9px;}}
+  @media (max-width:640px){.orbit-wrap{width:min(320px,92%);}.orbit-item{width:60px;}.orbit-item .ic{width:44px;height:44px;font-size:16px;}.orbit-item .ic img{width:22px;height:22px;}.orbit-item .lbl{font-size:9px;}}
+
 
 
 
@@ -557,26 +578,44 @@
     <div class="card tilt-3d" id="sec-clients">
       <h2>Clients</h2>
       <div id="statsBar">Chargement des statistiques…</div>
-      <div style="display:flex;gap:8px;margin-bottom:10px;">
+
+      <div class="compteurs-clients">
+        <div class="compteur-carte">
+          <div class="compteur-gauge" id="compteurClientsGauge" style="--accent:var(--teal);--pct:0;"></div>
+          <div class="compteur-txt"><b id="compteurClientsValeur">0</b><span>Clients (objectif 1000)</span></div>
+        </div>
+        <div class="compteur-carte">
+          <div class="compteur-gauge" id="compteurCAGauge" style="--accent:var(--vert);--pct:100;"></div>
+          <div class="compteur-txt"><b id="compteurCAValeur">0,00 €</b><span>Chiffre d'affaires validé</span></div>
+        </div>
+      </div>
+
+      <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;">
         <button type="button" class="primary" id="nouveauClientBtn" style="flex:none;padding:10px 18px;">+ Nouveau client</button>
+        <button type="button" class="secondary" id="clientsListeToggleBtn" style="flex:none;padding:10px 18px;">📋 Voir la liste des clients</button>
         <button type="button" class="btn-export" id="exportCsvBtn">Exporter en CSV (Excel)</button>
       </div>
-      <div id="tbody-wrap"><div id="empty">Chargement…</div></div>
+    </div>
+
+    <div class="devis-modal-overlay" id="clientsListeModal" style="display:none;z-index:2050;">
+      <div class="devis-modal-box" style="max-width:920px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+          <h2 style="margin:0;">Liste des clients</h2>
+          <button type="button" id="clientsListeFermerBtn" style="background:none;border:none;color:var(--texte-faint);font-size:22px;cursor:pointer;line-height:1;padding:4px 8px;">✕</button>
+        </div>
+        <div id="tbody-wrap"><div id="empty">Chargement…</div></div>
+      </div>
     </div>
 
     <div class="card" id="sec-devis-prospect">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
         <h2 style="margin:0;">📄 Devis prospect — vendre Iko Suite</h2>
         <div style="display:flex;gap:8px;flex:none;">
-          <button type="button" class="secondary" id="dpListeToggleBtn" style="flex:none;padding:8px 14px;font-size:12px;">📋 Devis créés <span id="dpListeCount"></span></button>
+          <button type="button" class="secondary" id="dpListeToggleBtn" style="flex:none;padding:8px 14px;font-size:12px;">📋 Devis créés</button>
           <button type="button" class="secondary" id="dpNouveauBtn" style="flex:none;padding:8px 14px;font-size:12px;">+ Nouveau devis</button>
         </div>
       </div>
       <div class="hint" style="font-size:12px;color:var(--texte-faint);margin:10px 0 16px;">Pas besoin de créer un client pour faire un devis : remplis juste les infos ci-dessous. Le client n'est créé (en Production) qu'une fois qu'il a accepté, tout en bas.</div>
-
-      <div id="dpListeWrap" style="display:none;margin-bottom:20px;padding-bottom:16px;border-bottom:1px solid var(--border);">
-        <div id="dpListe" style="display:flex;flex-direction:column;gap:8px;"></div>
-      </div>
 
       <label>Nom du prospect / entreprise</label>
       <input type="text" id="dpNom" placeholder="Ex : Menuiserie Dupont">
@@ -881,6 +920,18 @@
 <div id="printFiche"></div>
 <div id="printDevis"></div>
 
+<div class="devis-modal-overlay" id="dpListeModal" style="display:none;z-index:2050;">
+  <div class="devis-modal-box" style="max-width:760px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;gap:10px;">
+      <h2 style="margin:0;">📋 Devis créés <span id="dpListeCount" style="color:var(--texte-faint);font-weight:400;"></span></h2>
+      <button type="button" id="dpListeFermerBtn" style="background:none;border:none;color:var(--texte-faint);font-size:22px;cursor:pointer;line-height:1;padding:4px 8px;flex:none;">✕</button>
+    </div>
+    <input type="search" id="dpListeRecherche" placeholder="🔎 Recherche intelligente — nom, n° de devis, ville, téléphone, email…" style="width:100%;padding:12px 14px;border-radius:12px;border:1px solid var(--border);background:rgba(255,255,255,0.04);color:var(--texte);font-size:13.5px;outline:none;font-family:inherit;margin-bottom:6px;">
+    <div id="dpListeRechercheInfo" style="font-size:11px;color:var(--texte-faint);margin-bottom:12px;"></div>
+    <div id="dpListe" style="display:flex;flex-direction:column;gap:8px;"></div>
+  </div>
+</div>
+
 <div class="devis-modal-overlay" id="devisApercuOverlay" style="display:none;z-index:2100;">
   <div class="devis-modal-box" style="max-width:900px;background:#1a1a1a;">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
@@ -1026,13 +1077,13 @@ function initiales(nom){
 }
 
 var ABONNEMENTS_PROJET = [
-  { nom: "Airtable", detail: "Base de données", url: "https://airtable.com/workspaces", ic: "▤", logo: "airtable", accent: "var(--teal)" },
-  { nom: "Vercel", detail: "Hébergement + déploiement", url: "https://vercel.com/akial", ic: "▲", logo: "vercel", accent: "var(--texte)" },
-  { nom: "GitHub", detail: "Code source (repo iko-suite-demo)", url: "https://github.com/stephaneprodpvc-spec/iko-suite-demo", ic: "◒", logo: "github", accent: "var(--texte)" },
-  { nom: "ElevenLabs", detail: "Voix (synthèse vocale)", url: "https://elevenlabs.io/app/subscription", ic: "🎙️", logo: "elevenlabs", accent: "var(--corail)" },
-  { nom: "OpenAI", detail: "Transcription vocale (Whisper)", url: "https://platform.openai.com/settings/organization/billing", ic: "✦", logo: "openai", accent: "var(--texte)" },
-  { nom: "Anthropic (Claude)", detail: "Intelligence des assistants", url: "https://console.anthropic.com/settings/billing", ic: "◆", logo: "anthropic", accent: "var(--violet)" },
-  { nom: "Make", detail: "Automatisations / webhooks", url: "https://www.make.com/en/login", ic: "⚙", logo: "make", accent: "var(--vert)" }
+  { nom: "Airtable", detail: "Base de données", url: "https://airtable.com/workspaces", ic: "▤", logo: "airtable", accent: "#FCB400" },
+  { nom: "Vercel", detail: "Hébergement + déploiement", url: "https://vercel.com/akial", ic: "▲", logo: "vercel", accent: "#666666" },
+  { nom: "GitHub", detail: "Code source (repo iko-suite-demo)", url: "https://github.com/stephaneprodpvc-spec/iko-suite-demo", ic: "◒", logo: "github", accent: "#8B7FFF" },
+  { nom: "ElevenLabs", detail: "Voix (synthèse vocale)", url: "https://elevenlabs.io/app/subscription", ic: "🎙️", logo: "elevenlabs", accent: "#FF6452" },
+  { nom: "OpenAI", detail: "Transcription vocale (Whisper)", url: "https://platform.openai.com/settings/organization/billing", ic: "✦", logo: "openai", accent: "#10A37F" },
+  { nom: "Anthropic (Claude)", detail: "Intelligence des assistants", url: "https://console.anthropic.com/settings/billing", ic: "◆", logo: "anthropic", accent: "#D97757" },
+  { nom: "Make", detail: "Automatisations / webhooks", url: "https://www.make.com/en/login", ic: "⚙", logo: "make", accent: "#6D00CC" }
 ];
 
 function chargerAbonnements(){
@@ -1044,11 +1095,12 @@ function chargerAbonnements(){
       var x = 50 + Math.cos(angle) * rayon, y = 50 + Math.sin(angle) * rayon;
       return "<a class='orbit-item' href='" + a.url + "' target='_blank' rel='noopener noreferrer' title='" + a.detail + "' style='left:" + x + "%;top:" + y + "%;--accent:" + a.accent + ";'>" +
         "<span class='ic-inner'>" +
-          "<span class='ic'><img src='https://cdn.simpleicons.org/" + a.logo + "/ffffff' alt='' loading='lazy' onerror=\"this.style.display='none';this.nextElementSibling.style.display='inline';\"><span style='display:none;'>" + a.ic + "</span></span>" +
+          "<span class='ic'><img src='https://cdn.simpleicons.org/" + a.logo + "' alt='' loading='lazy' onerror=\"this.style.display='none';this.nextElementSibling.style.display='inline';\"><span style='display:none;'>" + a.ic + "</span></span>" +
           "<span class='lbl'>" + a.nom + "</span>" +
         "</span></a>";
     }).join("");
-    wrap.innerHTML = "<div class='orbit-center'>RSIA</div><div class='orbit-spin'><div class='orbit-ring'></div>" + items + "</div>";
+    var etincelles = "<span class='orbit-spark'></span><span class='orbit-spark s2'></span><span class='orbit-spark s3'></span>";
+    wrap.innerHTML = "<div class='orbit-center'>RSIA</div><div class='orbit-spin'><div class='orbit-ring'></div>" + etincelles + items + "</div>";
   }
   var badge = document.getElementById("usageElevenLabsBadge");
   if (!badge) return;
@@ -1089,6 +1141,20 @@ function animerCompteur(el, valeurFinale){
   requestAnimationFrame(step);
 }
 
+function afficherCompteursClients(){
+  var elVal = document.getElementById("compteurClientsValeur");
+  var elGauge = document.getElementById("compteurClientsGauge");
+  if (elVal && elGauge){
+    var total = clients.length;
+    elVal.textContent = total;
+    elGauge.style.setProperty("--pct", Math.min(100, Math.round(total / 1000 * 100)));
+  }
+  var elCA = document.getElementById("compteurCAValeur");
+  if (elCA){
+    elCA.textContent = formatEuro((caValide.totalMep || 0) + (caValide.totalAbo || 0));
+  }
+}
+
 function afficherStats(){
   var el = document.getElementById("statsBar");
   if (!el) return;
@@ -1097,6 +1163,7 @@ function afficherStats(){
     animerCompteur(document.getElementById("heroTotalClients"), 0);
     animerCompteur(document.getElementById("heroActifs"), 0);
     animerCompteur(document.getElementById("heroModules"), 0);
+    afficherCompteursClients();
     return;
   }
   var total = clients.length;
@@ -1115,6 +1182,7 @@ function afficherStats(){
   var metierTxt = Object.keys(parMetier).map(function(k){ return k + " (" + parMetier[k] + ")"; }).join(" · ");
   var moduleTxt = Object.keys(parModule).map(function(k){ return k + " (" + parModule[k] + ")"; }).join(" · ");
   el.innerHTML = "<b>" + total + "</b> client(s) · <b>" + actifs + "</b> actif(s)<br>Métiers : " + metierTxt + "<br>Modules : " + (moduleTxt || "—");
+  afficherCompteursClients();
 
   animerCompteur(document.getElementById("heroTotalClients"), total);
   animerCompteur(document.getElementById("heroActifs"), actifs);
@@ -1192,6 +1260,15 @@ function fermerFicheModal(){
 document.getElementById("nouveauClientBtn").addEventListener("click", function(){
   reinitialiserFormulaire();
   ouvrirFicheModal();
+});
+document.getElementById("clientsListeToggleBtn").addEventListener("click", function(){
+  document.getElementById("clientsListeModal").style.display = "flex";
+});
+document.getElementById("clientsListeFermerBtn").addEventListener("click", function(){
+  document.getElementById("clientsListeModal").style.display = "none";
+});
+document.getElementById("clientsListeModal").addEventListener("click", function(e){
+  if (e.target.id === "clientsListeModal") document.getElementById("clientsListeModal").style.display = "none";
 });
 document.getElementById("ficheFermerBtn").addEventListener("click", fermerFicheModal);
 document.getElementById("fiche-client-modal").addEventListener("click", function(e){
@@ -2406,9 +2483,17 @@ var BAREME_MODULES = ["Dashboard", "Technicien", "SAV", "Métreur"];
 var baremeRSIA = {};
 var devisProspectListe = [];
 var dpEditingId = null; // id du devis en cours de modification dans le formulaire, null = nouveau
+var caValide = { totalMep: 0, totalAbo: 0, nombre: 0 };
 
 function formatEuro(n){
   return (n || 0).toLocaleString("fr-FR", { style: "currency", currency: "EUR" });
+}
+
+function enregistrerCAValide(){
+  fetch("/api/airtable/" + encodeURIComponent(VERIF_CONFIG_TABLE) + "/" + VERIF_CONFIG_RECORD, {
+    method: "PATCH", headers: {"Content-Type":"application/json"},
+    body: JSON.stringify({ fields: { "CA Valide JSON": JSON.stringify(caValide) } })
+  }).catch(function(){});
 }
 
 function chargerBaremeRSIA(){
@@ -2421,6 +2506,11 @@ function chargerBaremeRSIA(){
       }
       BAREME_MODULES = Object.keys(baremeRSIA);
       try { devisProspectListe = JSON.parse((data.fields || {})["Devis Prospect JSON"] || "[]"); } catch(e){ devisProspectListe = []; }
+      try { caValide = JSON.parse((data.fields || {})["CA Valide JSON"] || "{}"); } catch(e){ caValide = {}; }
+      if (typeof caValide.totalMep !== "number") caValide.totalMep = 0;
+      if (typeof caValide.totalAbo !== "number") caValide.totalAbo = 0;
+      if (typeof caValide.nombre !== "number") caValide.nombre = 0;
+      afficherCompteursClients();
       afficherBaremeUI();
       afficherDevisProspectUI();
       afficherListeDevisProspect();
@@ -2742,16 +2832,38 @@ function enregistrerListeDevisProspect(){
   }).then(function(){ afficherListeDevisProspect(); }).catch(function(){});
 }
 
+function normaliserTexte(s){
+  return (s || "").toString().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+}
+
+function filtrerDevisProspect(terme){
+  var t = normaliserTexte(terme).trim();
+  if (!t) return devisProspectListe;
+  return devisProspectListe.filter(function(d){
+    var champs = [d.nom, d.numero, d.ville, d.adresse, d.codePostal, d.telephone, d.email, (d.modules || []).join(" ")];
+    return champs.some(function(c){ return normaliserTexte(c).indexOf(t) !== -1; });
+  });
+}
+
 function afficherListeDevisProspect(){
   var el = document.getElementById("dpListe");
   var compteur = document.getElementById("dpListeCount");
   if (!el) return;
-  compteur.textContent = devisProspectListe.length ? "(" + devisProspectListe.length + ")" : "";
+  if (compteur) compteur.textContent = devisProspectListe.length ? "(" + devisProspectListe.length + ")" : "";
+  var recherche = document.getElementById("dpListeRecherche");
+  var terme = recherche ? recherche.value : "";
+  var liste = filtrerDevisProspect(terme);
+  var info = document.getElementById("dpListeRechercheInfo");
+  if (info) info.textContent = terme.trim() ? liste.length + " résultat(s) sur " + devisProspectListe.length : "";
   if (!devisProspectListe.length){
     el.innerHTML = "<div style='font-size:12px;color:var(--texte-faint);'>Aucun devis enregistré pour l'instant.</div>";
     return;
   }
-  el.innerHTML = devisProspectListe.map(function(d){
+  if (!liste.length){
+    el.innerHTML = "<div style='font-size:12px;color:var(--texte-faint);'>Aucun devis ne correspond à cette recherche.</div>";
+    return;
+  }
+  el.innerHTML = liste.map(function(d){
     var dateStr = new Date(d.date).toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric" });
     return "<div style='display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--border);border-radius:10px;'>" +
       "<div style='min-width:0;'>" +
@@ -2765,7 +2877,10 @@ function afficherListeDevisProspect(){
     "</div>";
   }).join("");
   Array.prototype.forEach.call(el.querySelectorAll(".dp-modifier"), function(btn){
-    btn.addEventListener("click", function(){ chargerDevisProspectDansFormulaire(btn.getAttribute("data-id")); });
+    btn.addEventListener("click", function(){
+      chargerDevisProspectDansFormulaire(btn.getAttribute("data-id"));
+      document.getElementById("dpListeModal").style.display = "none";
+    });
   });
   Array.prototype.forEach.call(el.querySelectorAll(".dp-supprimer"), function(btn){
     btn.addEventListener("click", function(){
@@ -3020,10 +3135,19 @@ document.getElementById("dpImprimerBtn").addEventListener("click", function(){
 });
 
 document.getElementById("dpListeToggleBtn").addEventListener("click", function(){
-  var wrap = document.getElementById("dpListeWrap");
-  var ouvert = wrap.style.display !== "none";
-  wrap.style.display = ouvert ? "none" : "block";
+  var recherche = document.getElementById("dpListeRecherche");
+  if (recherche) recherche.value = "";
+  afficherListeDevisProspect();
+  document.getElementById("dpListeModal").style.display = "flex";
+  if (recherche) recherche.focus();
 });
+document.getElementById("dpListeFermerBtn").addEventListener("click", function(){
+  document.getElementById("dpListeModal").style.display = "none";
+});
+document.getElementById("dpListeModal").addEventListener("click", function(e){
+  if (e.target.id === "dpListeModal") document.getElementById("dpListeModal").style.display = "none";
+});
+document.getElementById("dpListeRecherche").addEventListener("input", afficherListeDevisProspect);
 
 document.getElementById("dpAccepteBtn").addEventListener("click", function(){
   var msg = document.getElementById("dpMsg");
@@ -3058,6 +3182,13 @@ document.getElementById("dpAccepteBtn").addEventListener("click", function(){
     .then(function(r){ if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
     .then(function(data){
       var nouveauRec = data.records && data.records[0];
+      var totalMep = 0, totalAbo = 0;
+      mods.forEach(function(m){ var v = baremeRSIA[m] || { misePlace: 0, abonnement: 0 }; totalMep += v.misePlace; totalAbo += v.abonnement; });
+      caValide.totalMep += totalMep;
+      caValide.totalAbo += totalAbo;
+      caValide.nombre += 1;
+      enregistrerCAValide();
+      afficherCompteursClients();
       if (dpEditingId){
         devisProspectListe = devisProspectListe.filter(function(x){ return x.id !== dpEditingId; });
         enregistrerListeDevisProspect();
