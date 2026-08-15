@@ -11,7 +11,7 @@ import { verifierOrigine, verifierDebit, reponseBloquee } from "./_securite.js";
 
 // TEST (15/08) : moteur bascule sur Gemini (gratuit) au lieu de Claude.
 // Pour revenir a Claude : git revert de ce commit, rien d'autre a toucher.
-const MODELE_GEMINI = "gemini-2.5-flash";
+const MODELE_GEMINI = "gemini-3.6-flash";
 const MAX_CHARS_MESSAGE = 1500;
 const MAX_CLIENTS_CONTEXTE = 100;
 
