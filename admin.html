@@ -620,6 +620,7 @@
             <div class="jauge-grand-valeur"><b id="jaugeClientsTexte">0</b><span>Clients (objectif 1000)</span></div>
           </div>
           <div class="jauge-grand-legende" id="jaugeClientsLegende"></div>
+          <div class="jauge-objectifs-annuels" id="jaugeClientsAnnuel"></div>
         </div>
 
         <div class="jauge-bloc">
@@ -1321,6 +1322,7 @@ function afficherCompteursClients(){
       formatTick: function(v){ return v; }
     });
     rendreLegendeJauge("jaugeClientsLegende", ZONES_JAUGE_CLIENTS);
+    rendreObjectifsAnnuelsClients();
   }
 
   var ca = (caValide.totalMep || 0) + (caValide.totalAbo || 0);
@@ -1335,6 +1337,18 @@ function afficherCompteursClients(){
     rendreLegendeJauge("jaugeCALegende", ZONES_JAUGE_CA);
     rendreObjectifsAnnuelsCA();
   }
+}
+
+function rendreObjectifsAnnuelsClients(){
+  var el = document.getElementById("jaugeClientsAnnuel");
+  if (!el) return;
+  var html = "";
+  for (var an = 1; an <= 5; an++){
+    var cible = Math.round(1000 * an / 5);
+    var estTotal = an === 5;
+    html += "<div class='jauge-objectif-an" + (estTotal ? " total" : "") + "'><b>" + cible + "</b><span>" + (estTotal ? "Total 5 ans" : "Année " + an) + "</span></div>";
+  }
+  el.innerHTML = html;
 }
 
 function formatEuroCompact(n){
