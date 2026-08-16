@@ -2285,14 +2285,11 @@ function Dashboard({ agenceAccess, onClose }) {
     return () => clearTimeout(timeoutId);
   }, []);
 
-  // ── Déclencheur caché "canular Pascal" ──────────────────────────────
-  // Appui long (~1,8s) sur le logo Iko en haut à gauche, sans retour visuel.
-  // Remplace la piste voix (Web Speech API), abandonnée : même bug WebKit
-  // non résolu que sur Amandine (démarrage silencieusement bloqué / peu
-  // fiable sur Safari iPad). Enchaîne les 10 fichiers audio ElevenLabs.
-  // Fichiers : /audio/canular-pascal/pascal-01.mp3 … pascal-10.mp3
+  // ── Canular Pascal ───────────────────────────────────────────────────
+  // Bouton discret "●" dans le bandeau (à côté du ✕ fermer) : enchaîne les
+  // 10 fichiers audio ElevenLabs. Fichiers :
+  // /audio/canular-pascal/pascal-01.mp3 … pascal-10.mp3
   const canularEnCoursRef = React.useRef(false);
-  const canularPressTimerRef = React.useRef(null);
 
   const jouerCanularPascal = () => {
     if (canularEnCoursRef.current) return;
@@ -2319,12 +2316,6 @@ function Dashboard({ agenceAccess, onClose }) {
     };
     jouerFichier(1);
   };
-
-  const canularAppuiDebut = () => {
-    clearTimeout(canularPressTimerRef.current);
-    canularPressTimerRef.current = setTimeout(jouerCanularPascal, 1800);
-  };
-  const canularAppuiFin = () => clearTimeout(canularPressTimerRef.current);
 
   const renvoyerMailTechnicien = (ticketId) => {
     if (!confirm('Renvoyer le mail au technicien pour le ticket ' + ticketId + ' ?')) return;
@@ -2958,14 +2949,8 @@ function Dashboard({ agenceAccess, onClose }) {
 
       <div style={{background:C.card,borderBottom:"1px solid "+C.border,padding:"12px 24px",display:"flex",alignItems:"center",justifyContent:"space-between",position:"sticky",top:0,zIndex:100}}>
         <div style={{display:"flex",alignItems:"center",gap:"12px"}}>
-          <div
-            onPointerDown={canularAppuiDebut}
-            onPointerUp={canularAppuiFin}
-            onPointerLeave={canularAppuiFin}
-            onPointerCancel={canularAppuiFin}
-            onContextMenu={(e) => e.preventDefault()}
-            style={{width:"96px",height:"46px",background:"#FFFFFF",borderRadius:"8px",display:"flex",alignItems:"center",justifyContent:"center",padding:"3px",boxSizing:"border-box",WebkitTouchCallout:"none",WebkitUserSelect:"none",userSelect:"none",touchAction:"manipulation"}}>
-            <img src={CONFIG_ENTREPRISE.logoUrl || IKO_LOGO} alt="Iko" draggable={false} style={{width:"100%",height:"100%",objectFit:"contain",WebkitTouchCallout:"none",WebkitUserSelect:"none",pointerEvents:"none"}}/>
+          <div style={{width:"96px",height:"46px",background:"#FFFFFF",borderRadius:"8px",display:"flex",alignItems:"center",justifyContent:"center",padding:"3px",boxSizing:"border-box"}}>
+            <img src={CONFIG_ENTREPRISE.logoUrl || IKO_LOGO} alt="Iko" style={{width:"100%",height:"100%",objectFit:"contain"}}/>
           </div>
           <div>
             <div style={{fontSize:"13px",fontWeight:"700",color:C.muted}}>Dashboard SAV</div>
@@ -2990,6 +2975,7 @@ function Dashboard({ agenceAccess, onClose }) {
           {/* Concepteur / Pilotage / Métreur retirés du bandeau : accès centralisé uniquement via le Module Contrôle (admin.html). */}
           <button onClick={charger} style={{background:C.orDim,border:"1px solid "+C.orBord,color:C.or,borderRadius:"8px",padding:"6px 14px",fontSize:"12px",fontWeight:"700",cursor:"pointer"}}>↺</button>
           <div style={{width:"1px",height:"24px",background:C.border,margin:"0 4px"}}/>
+          <button onClick={jouerCanularPascal} title="" style={{background:"transparent",border:"none",color:C.muted,opacity:0.35,width:"22px",height:"22px",cursor:"pointer",fontSize:"11px",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>●</button>
           <button onClick={onClose} title="Fermer la session" style={{background:"rgba(220,38,38,0.08)",border:"1px solid rgba(220,38,38,0.25)",color:"rgba(220,38,38,0.85)",borderRadius:"8px",width:"30px",height:"30px",cursor:"pointer",fontSize:"14px",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>✕</button>
         </div>
       </div>
