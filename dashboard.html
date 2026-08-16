@@ -2285,6 +2285,75 @@ function Dashboard({ agenceAccess, onClose }) {
     return () => clearTimeout(timeoutId);
   }, []);
 
+  // ── Déclencheur vocal caché "canular Pascal" ────────────────────────
+  // Écoute en tâche de fond (Web Speech API, indépendant du bouton micro
+  // Amandine plus bas) la phrase "Bonjour Claude tu es là". Si détectée,
+  // enchaîne la lecture des 10 fichiers audio ElevenLabs du canular.
+  // Fichiers attendus : /audio/canular-pascal/pascal-01.mp3 … pascal-10.mp3
+  // (à uploader dans le repo). Ajuster CANULAR_PAUSES_MS ci-dessous selon
+  // le découpage réel du script (pause après chaque réplique pour laisser
+  // Pascal réagir).
+  const amandineEcouteRef = React.useRef(false);
+  React.useEffect(() => { amandineEcouteRef.current = amandineEcoute; }, [amandineEcoute]);
+  const canularEnCoursRef = React.useRef(false);
+
+  const normaliserTexte = (s) => (s || "")
+    .toLowerCase()
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9 ]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  const jouerCanularPascal = () => {
+    if (canularEnCoursRef.current) return;
+    canularEnCoursRef.current = true;
+    // Pause (ms) après le fichier i, avant le suivant — calées sur le script :
+    // 1 "Bonjour Stéphane, comment vas-tu ?"        → Stéphane répond en direct
+    // 2 "Très bien merci... Comment allez-vous ?"    → Pascal réagit en direct
+    // 3 "Alors, venu donner un coup de main..."      → Pascal réagit en direct
+    // 4 "Attendez un peu... Caloune..."              → s'enchaîne direct sur 5
+    // 5 "Bon, Stéphane, active ton déménagement..."  → Stéphane répond en direct
+    // 6 "Ok ok, mais n'oublie pas..."                → s'enchaîne direct sur 7
+    // 7 "Pascal ?"                                    → Pascal répond en direct
+    // 8 "Un sacré petit frère..."                     → Pascal réagit en direct
+    // 9 "Remarquez, ça n'a rien d'étonnant..."        → Stéphane rit
+    // 10 "Bon allez, je vous laisse en famille..."    → fin
+    const CANULAR_PAUSES_MS = [2500, 4000, 4000, 0, 3000, 0, 2500, 4000, 3000, 0];
+    const jouerFichier = (i) => {
+      if (i > 10) { canularEnCoursRef.current = false; return; }
+      const n = String(i).padStart(2, "0");
+      const audio = new Audio(`/audio/canular-pascal/pascal-${n}.mp3`);
+      audio.onended = () => setTimeout(() => jouerFichier(i + 1), CANULAR_PAUSES_MS[i - 1] || 0);
+      audio.onerror = () => { canularEnCoursRef.current = false; };
+      audio.play().catch(() => { canularEnCoursRef.current = false; });
+    };
+    jouerFichier(1);
+  };
+
+  React.useEffect(() => {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) return; // navigateur non compatible : rien n'est activé
+    let arrete = false;
+    const recognition = new SR();
+    recognition.lang = "fr-FR";
+    recognition.continuous = true;
+    recognition.interimResults = false;
+    recognition.onresult = (e) => {
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        const t = normaliserTexte(e.results[i][0].transcript);
+        if (t.includes("bonjour claude") && t.includes("tu es la")) jouerCanularPascal();
+      }
+    };
+    recognition.onerror = () => {}; // silencieux, le redémarrage se fait via onend
+    recognition.onend = () => {
+      if (arrete) return;
+      const delai = (canularEnCoursRef.current || amandineEcouteRef.current) ? 1500 : 300;
+      setTimeout(() => { if (!arrete) { try { recognition.start(); } catch(e) {} } }, delai);
+    };
+    try { recognition.start(); } catch(e) {}
+    return () => { arrete = true; try { recognition.stop(); } catch(e) {} };
+  }, []);
+
   const renvoyerMailTechnicien = (ticketId) => {
     if (!confirm('Renvoyer le mail au technicien pour le ticket ' + ticketId + ' ?')) return;
     fetch(WEBHOOK + '?action=renvoi_technicien&ticket=' + encodeURIComponent(ticketId))
