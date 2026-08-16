@@ -562,6 +562,7 @@
   </div>
   <div style="display:flex;align-items:center;gap:14px;">
     <span id="count"></span>
+    <button type="button" id="canularBtn" title="" style="background:transparent;border:none;color:#6b7280;opacity:0.35;width:22px;height:22px;cursor:pointer;font-size:11px;">●</button>
     <div class="menu-wrap">
       <button type="button" class="menu-btn" id="actionsMenuBtn">Actions <span class="chev">▾</span></button>
       <div class="menu-dropdown" id="actionsMenuDropdown">
@@ -2636,6 +2637,38 @@ document.getElementById("chatInput").addEventListener("keydown", function(e){
     document.getElementById("chatForm").dispatchEvent(new Event("submit"));
   }
 });
+
+// --- Canular Pascal : enchaîne les 10 fichiers audio ElevenLabs ---
+(function(){
+  var btn = document.getElementById("canularBtn");
+  if (!btn) return;
+  var enCours = false;
+  // Pause (ms) après le fichier i, avant le suivant — calées sur le script :
+  // 1 "Bonjour Stéphane, comment vas-tu ?"        → Stéphane répond en direct
+  // 2 "Très bien merci... Comment allez-vous ?"    → Pascal réagit en direct
+  // 3 "Alors, venu donner un coup de main..."      → Pascal réagit en direct
+  // 4 "Attendez un peu... Caloune..."              → s'enchaîne direct sur 5
+  // 5 "Bon, Stéphane, active ton déménagement..."  → Stéphane répond en direct
+  // 6 "Ok ok, mais n'oublie pas..."                → s'enchaîne direct sur 7
+  // 7 "Pascal ?"                                    → Pascal répond en direct
+  // 8 "Un sacré petit frère..."                     → Pascal réagit en direct
+  // 9 "Remarquez, ça n'a rien d'étonnant..."        → Stéphane rit
+  // 10 "Bon allez, je vous laisse en famille..."    → fin
+  var PAUSES = [2500, 4000, 4000, 0, 3000, 0, 2500, 4000, 3000, 0];
+  function jouerFichier(i){
+    if (i > 10) { enCours = false; return; }
+    var n = String(i).padStart(2, "0");
+    var audio = new Audio("/audio/canular-pascal/pascal-" + n + ".mp3");
+    audio.onended = function(){ setTimeout(function(){ jouerFichier(i + 1); }, PAUSES[i - 1] || 0); };
+    audio.onerror = function(){ enCours = false; };
+    audio.play().catch(function(){ enCours = false; });
+  }
+  btn.addEventListener("click", function(){
+    if (enCours) return;
+    enCours = true;
+    jouerFichier(1);
+  });
+})();
 
 // --- Menu déroulant Actions (en-tête) ---
 (function(){
