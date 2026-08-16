@@ -2334,6 +2334,7 @@ function Dashboard({ agenceAccess, onClose }) {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SR) return; // navigateur non compatible : rien n'est activé
     let arrete = false;
+    let demarre = false;
     const recognition = new SR();
     recognition.lang = "fr-FR";
     recognition.continuous = true;
@@ -2341,17 +2342,34 @@ function Dashboard({ agenceAccess, onClose }) {
     recognition.onresult = (e) => {
       for (let i = e.resultIndex; i < e.results.length; i++) {
         const t = normaliserTexte(e.results[i][0].transcript);
-        if (t.includes("bonjour claude") && t.includes("tu es la")) jouerCanularPascal();
+        // Phrase assouplie : "claude" + "es la" (couvre "tu es là", "vous êtes là"…)
+        if (t.includes("claude") && t.includes("es la")) jouerCanularPascal();
       }
     };
     recognition.onerror = () => {}; // silencieux, le redémarrage se fait via onend
     recognition.onend = () => {
-      if (arrete) return;
+      if (arrete || !demarre) return;
       const delai = (canularEnCoursRef.current || amandineEcouteRef.current) ? 1500 : 300;
       setTimeout(() => { if (!arrete) { try { recognition.start(); } catch(e) {} } }, delai);
     };
-    try { recognition.start(); } catch(e) {}
-    return () => { arrete = true; try { recognition.stop(); } catch(e) {} };
+    // Safari (iPad) bloque silencieusement le démarrage d'une reconnaissance
+    // vocale déclenché hors interaction utilisateur (pas d'erreur visible,
+    // ça n'écoute simplement jamais). On arme donc discrètement au tout
+    // premier tap/clic sur la page (login, ouverture d'un ticket, etc.) —
+    // aucun bouton dédié, ça reste invisible pour l'utilisateur.
+    const demarrer = () => {
+      if (demarre || arrete) return;
+      demarre = true;
+      try { recognition.start(); } catch(e) {}
+    };
+    document.addEventListener('click', demarrer, { once: true });
+    document.addEventListener('touchend', demarrer, { once: true });
+    return () => {
+      arrete = true;
+      document.removeEventListener('click', demarrer);
+      document.removeEventListener('touchend', demarrer);
+      try { recognition.stop(); } catch(e) {}
+    };
   }, []);
 
   const renvoyerMailTechnicien = (ticketId) => {
