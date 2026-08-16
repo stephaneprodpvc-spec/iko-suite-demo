@@ -2285,24 +2285,14 @@ function Dashboard({ agenceAccess, onClose }) {
     return () => clearTimeout(timeoutId);
   }, []);
 
-  // ── Déclencheur vocal caché "canular Pascal" ────────────────────────
-  // Écoute en tâche de fond (Web Speech API, indépendant du bouton micro
-  // Amandine plus bas) la phrase "Bonjour Claude tu es là". Si détectée,
-  // enchaîne la lecture des 10 fichiers audio ElevenLabs du canular.
-  // Fichiers attendus : /audio/canular-pascal/pascal-01.mp3 … pascal-10.mp3
-  // (à uploader dans le repo). Ajuster CANULAR_PAUSES_MS ci-dessous selon
-  // le découpage réel du script (pause après chaque réplique pour laisser
-  // Pascal réagir).
-  const amandineEcouteRef = React.useRef(false);
-  React.useEffect(() => { amandineEcouteRef.current = amandineEcoute; }, [amandineEcoute]);
+  // ── Déclencheur caché "canular Pascal" ──────────────────────────────
+  // Appui long (~1,8s) sur le logo Iko en haut à gauche, sans retour visuel.
+  // Remplace la piste voix (Web Speech API), abandonnée : même bug WebKit
+  // non résolu que sur Amandine (démarrage silencieusement bloqué / peu
+  // fiable sur Safari iPad). Enchaîne les 10 fichiers audio ElevenLabs.
+  // Fichiers : /audio/canular-pascal/pascal-01.mp3 … pascal-10.mp3
   const canularEnCoursRef = React.useRef(false);
-
-  const normaliserTexte = (s) => (s || "")
-    .toLowerCase()
-    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9 ]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
+  const canularPressTimerRef = React.useRef(null);
 
   const jouerCanularPascal = () => {
     if (canularEnCoursRef.current) return;
@@ -2330,47 +2320,11 @@ function Dashboard({ agenceAccess, onClose }) {
     jouerFichier(1);
   };
 
-  React.useEffect(() => {
-    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SR) return; // navigateur non compatible : rien n'est activé
-    let arrete = false;
-    let demarre = false;
-    const recognition = new SR();
-    recognition.lang = "fr-FR";
-    recognition.continuous = true;
-    recognition.interimResults = false;
-    recognition.onresult = (e) => {
-      for (let i = e.resultIndex; i < e.results.length; i++) {
-        const t = normaliserTexte(e.results[i][0].transcript);
-        // Phrase assouplie : "claude" + "es la" (couvre "tu es là", "vous êtes là"…)
-        if (t.includes("claude") && t.includes("es la")) jouerCanularPascal();
-      }
-    };
-    recognition.onerror = () => {}; // silencieux, le redémarrage se fait via onend
-    recognition.onend = () => {
-      if (arrete || !demarre) return;
-      const delai = (canularEnCoursRef.current || amandineEcouteRef.current) ? 1500 : 300;
-      setTimeout(() => { if (!arrete) { try { recognition.start(); } catch(e) {} } }, delai);
-    };
-    // Safari (iPad) bloque silencieusement le démarrage d'une reconnaissance
-    // vocale déclenché hors interaction utilisateur (pas d'erreur visible,
-    // ça n'écoute simplement jamais). On arme donc discrètement au tout
-    // premier tap/clic sur la page (login, ouverture d'un ticket, etc.) —
-    // aucun bouton dédié, ça reste invisible pour l'utilisateur.
-    const demarrer = () => {
-      if (demarre || arrete) return;
-      demarre = true;
-      try { recognition.start(); } catch(e) {}
-    };
-    document.addEventListener('click', demarrer, { once: true });
-    document.addEventListener('touchend', demarrer, { once: true });
-    return () => {
-      arrete = true;
-      document.removeEventListener('click', demarrer);
-      document.removeEventListener('touchend', demarrer);
-      try { recognition.stop(); } catch(e) {}
-    };
-  }, []);
+  const canularAppuiDebut = () => {
+    clearTimeout(canularPressTimerRef.current);
+    canularPressTimerRef.current = setTimeout(jouerCanularPascal, 1800);
+  };
+  const canularAppuiFin = () => clearTimeout(canularPressTimerRef.current);
 
   const renvoyerMailTechnicien = (ticketId) => {
     if (!confirm('Renvoyer le mail au technicien pour le ticket ' + ticketId + ' ?')) return;
@@ -3004,7 +2958,12 @@ function Dashboard({ agenceAccess, onClose }) {
 
       <div style={{background:C.card,borderBottom:"1px solid "+C.border,padding:"12px 24px",display:"flex",alignItems:"center",justifyContent:"space-between",position:"sticky",top:0,zIndex:100}}>
         <div style={{display:"flex",alignItems:"center",gap:"12px"}}>
-          <div style={{width:"96px",height:"46px",background:"#FFFFFF",borderRadius:"8px",display:"flex",alignItems:"center",justifyContent:"center",padding:"3px",boxSizing:"border-box"}}>
+          <div
+            onPointerDown={canularAppuiDebut}
+            onPointerUp={canularAppuiFin}
+            onPointerLeave={canularAppuiFin}
+            onPointerCancel={canularAppuiFin}
+            style={{width:"96px",height:"46px",background:"#FFFFFF",borderRadius:"8px",display:"flex",alignItems:"center",justifyContent:"center",padding:"3px",boxSizing:"border-box"}}>
             <img src={CONFIG_ENTREPRISE.logoUrl || IKO_LOGO} alt="Iko" style={{width:"100%",height:"100%",objectFit:"contain"}}/>
           </div>
           <div>
