@@ -531,14 +531,11 @@
 <body>
 
 <div id="lock">
-  <form id="lockForm">
+  <div id="lockContent">
     <div class="icon">I</div>
     <h1>Poste de pilotage</h1>
-    <p>Accès réservé — RSIA Conseil</p>
-    <input type="password" id="pw" placeholder="Mot de passe" autofocus autocomplete="off">
-    <button type="submit">Entrer</button>
-    <div class="err" id="lockErr"></div>
-  </form>
+    <p id="lockMsg">Vérification de la session…</p>
+  </div>
 </div>
 
 <div class="app-shell">
@@ -1112,14 +1109,15 @@ var agencesActuelles = [];
 var chatHistorique = [];
 var actionEnAttente = null;
 
-var MDP = "ikopilote2026";
 var voixAmorcee = false;
 // Amorce la synthese vocale iOS : un premier speak() doit etre declenche
 // de maniere synchrone par un vrai geste utilisateur, sinon Safari bloque
 // silencieusement tous les appels speak() suivants qui arrivent apres un
-// fetch/async. Appelee au deverrouillage ET au premier envoi de message
-// chat (cas session deja deverrouillee via sessionStorage, ecran de mdp
-// jamais affiche donc amorcage jamais declenche autrement).
+// fetch/async. Avec Auth #003, il n'y a plus de formulaire mot de passe
+// declenchant ce premier geste : meme limitation deja existante avant
+// cette migration pour un retour via sessionStorage (l'ecran de mdp
+// n'etait alors jamais affiche non plus). Voir chargerAbonnements/mode
+// vocal pour le point d'amorcage reel le plus proche d'un geste utilisateur.
 function amorceVoix(){
   if (voixAmorcee) return;
   voixAmorcee = true;
@@ -1127,29 +1125,56 @@ function amorceVoix(){
     try { window.speechSynthesis.speak(new SpeechSynthesisUtterance("")); } catch(e){}
   }
 }
-document.getElementById("lockForm").addEventListener("submit", function(e){
-  e.preventDefault();
-  amorceVoix();
-  var val = document.getElementById("pw").value;
-  if (val === MDP){
-    sessionStorage.setItem("iko_admin_ok", "1");
-    document.getElementById("lock").style.display = "none";
-    chargerClients();
-    chargerConfigVerif();
-    chargerBaremeRSIA();
-    chargerAbonnements();
-    if (document.getElementById("modeVocal").checked) lancerEcouteClaude();
-  } else {
-    document.getElementById("lockErr").textContent = "Mot de passe incorrect.";
-  }
-});
-if (sessionStorage.getItem("iko_admin_ok") === "1"){
+
+// Authentification : session Auth #003 (api/verif-securite?action=session),
+// remplace l'ancien MDP en dur + sessionStorage. Seul SUPER_ADMIN_IKO est
+// autorise a acceder au Poste de pilotage. Le role et l'autorisation
+// viennent EXCLUSIVEMENT de la reponse serveur, jamais d'une information
+// fournie par l'URL ou stockee localement dans le navigateur.
+function afficherAccesRefuse(){
+  document.getElementById("lockMsg").textContent = "Accès refusé — votre compte n'a pas les droits nécessaires pour accéder au Poste de pilotage.";
+}
+function afficherErreurSession(){
+  var msg = document.getElementById("lockMsg");
+  msg.textContent = "";
+  var texte = document.createElement("div");
+  texte.textContent = "Erreur de vérification de session.";
+  var btn = document.createElement("button");
+  btn.type = "button";
+  btn.textContent = "Se reconnecter";
+  btn.style.marginTop = "12px";
+  btn.addEventListener("click", function(){
+    window.location.href = "/auth-login.html?retour=" + encodeURIComponent("/admin.html");
+  });
+  msg.appendChild(texte);
+  msg.appendChild(btn);
+}
+function deverrouillerPosteDePilotage(){
   document.getElementById("lock").style.display = "none";
   chargerClients();
   chargerConfigVerif();
   chargerBaremeRSIA();
   setTimeout(chargerAbonnements, 0);
+  if (document.getElementById("modeVocal").checked) lancerEcouteClaude();
 }
+fetch('/api/verif-securite?action=session')
+  .then(function(r){
+    if (r.status === 401) {
+      window.location.href = "/auth-login.html?retour=" + encodeURIComponent("/admin.html");
+      return null;
+    }
+    return r.json().then(function(json){ return { status: r.status, json: json }; });
+  })
+  .then(function(res){
+    if (!res) return; // redirection deja en cours
+    if (res.status !== 200) { afficherErreurSession(); return; }
+    if (res.json.role === "SUPER_ADMIN_IKO") {
+      deverrouillerPosteDePilotage();
+    } else {
+      afficherAccesRefuse();
+    }
+  })
+  .catch(afficherErreurSession);
 
 function couleurDe(nom){
   var h = 0;
