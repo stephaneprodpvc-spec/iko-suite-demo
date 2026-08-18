@@ -10,11 +10,59 @@
 //
 // Le rapport est toujours ecrit sur le record CONFIG (champ "Verif Dernier
 // Rapport") pour que admin.html puisse l'afficher au prochain chargement.
+//
+// AUTHENTIFICATION (ajout IKO #003/#004) -----------------------------------
+// Ce fichier heberge AUSSI l'authentification (login/session/logout), fusionnee
+// ici pour respecter le plafond de 12 fonctions serverless Vercel Hobby deja
+// atteint par le projet (voir audit IKO #001 et conception #004-B, choix
+// justifie par comparaison avec _securite.js et detecter-demande-client.js).
+//
+// Routage additif, sans toucher au comportement existant :
+//   - POST sans "action" dans le corps  -> comportement INCHANGE (declenchement
+//     manuel de la verification depuis admin.html).
+//   - POST avec action="login"/"logout" -> nouvelle authentification.
+//   - GET sans "action" en query        -> comportement INCHANGE (cron).
+//   - GET avec action="session" en query -> nouvelle verification de session.
+//
+// Cette brique est ISOLEE : aucune page existante ne l'appelle encore. Un
+// ecran de connexion autonome (auth-login.html) l'utilise en isolation pour
+// les tests, mais rien dans admin.html/dashboard.html/technicien.html/etc.
+// n'a ete modifie ni branche a ce jour.
+//
+// Table Airtable "Utilisateurs" : DOIT ETRE CREEE MANUELLEMENT PAR STEPHANE
+// avant tout test reel (voir plan IKO #003, etape 1). Ce code suppose le
+// schema suivant, mais n'a pas pu etre teste contre de vraies donnees
+// Airtable tant que la table n'existe pas :
+//   Identifiant (texte, email recommande)
+//   Hash mot de passe (texte, bcrypt uniquement)
+//   tenantId (lien vers table Clients)
+//   Rôle (select : SUPER_ADMIN_IKO / TENANT_ADMIN / TECHNICIEN / COMMERCIAL / CLIENT)
+//   Statut (select : Actif / Bloqué)
+//   Échecs de connexion (nombre)
+//   Bloqué jusqu'à (date/heure)
+//   Dernière connexion (date/heure)
+//   Dernier tokenId refresh valide (texte) — pour la rotation/anti-reutilisation
+
+import bcrypt from "bcryptjs";
+import jwt from "jsonwebtoken";
+import crypto from "crypto";
+import { verifierOrigine, verifierDebit, reponseBloquee } from "./_securite.js";
 
 const AIRTABLE_BASE = "appkI8RKHkYNWY86U";
 const CONFIG_RECORD_ID = "rec45X231n9dXnyaU";
 const CLIENTS_TABLE = "Clients";
 const PLANNING_TABLE = "Planning";
+const UTILISATEURS_TABLE = "Utilisateurs";
+
+const ACCESS_TOKEN_DUREE_S = 15 * 60;        // 15 minutes
+const REFRESH_TOKEN_DUREE_S = 7 * 24 * 3600; // 7 jours
+const MAX_ECHECS_AVANT_BLOCAGE = 8;
+const DUREE_BLOCAGE_MIN = 15;
+
+const MESSAGE_GENERIQUE = "Identifiant ou mot de passe incorrect.";
+// Hash factice pour egaliser le temps de reponse quand le compte n'existe pas
+// (evite qu'une absence de compte reponde plus vite qu'un mauvais mot de passe).
+const HASH_FACTICE = "$2a$10$CwTycUXWue0Thq9StjUM0uJ8Q0G1n2Bxw3aQK6bK6bK6bK6bK6bK6";
 
 function airtableHeaders() {
   return {
@@ -51,6 +99,187 @@ async function ecrireRapport(texte) {
   } catch (e) {
     console.error("Ecriture rapport verif echouee:", e);
   }
+}
+
+// --- AUTHENTIFICATION : helpers -------------------------------------------
+
+function cookie(nom, valeur, maxAgeSec, path) {
+  const base = nom + "=" + valeur + "; HttpOnly; Secure; SameSite=Strict; Path=" + path;
+  return maxAgeSec === 0 ? base + "; Max-Age=0" : base + "; Max-Age=" + maxAgeSec;
+}
+
+function lireCookie(req, nom) {
+  const brut = req.headers.cookie || "";
+  const m = brut.match(new RegExp("(?:^|; )" + nom + "=([^;]*)"));
+  return m ? decodeURIComponent(m[1]) : null;
+}
+
+function signAccessToken(user) {
+  return jwt.sign(
+    { userId: user.userId, tenantId: user.tenantId, role: user.role },
+    process.env.JWT_ACCESS_SECRET,
+    { expiresIn: ACCESS_TOKEN_DUREE_S }
+  );
+}
+
+function signRefreshToken(user, tokenId) {
+  return jwt.sign(
+    { userId: user.userId, tokenId },
+    process.env.JWT_REFRESH_SECRET,
+    { expiresIn: REFRESH_TOKEN_DUREE_S }
+  );
+}
+
+async function lireUtilisateurParIdentifiant(identifiant) {
+  const formule = "LOWER({Identifiant})=\"" + identifiant.toLowerCase().replace(/"/g, '\\"') + "\"";
+  const url = "https://api.airtable.com/v0/" + AIRTABLE_BASE + "/" + encodeURIComponent(UTILISATEURS_TABLE) +
+    "?filterByFormula=" + encodeURIComponent(formule) + "&maxRecords=1";
+  const r = await fetch(url, { headers: airtableHeaders() });
+  if (!r.ok) return null;
+  const json = await r.json();
+  const rec = (json.records || [])[0];
+  if (!rec) return null;
+  const f = rec.fields || {};
+  return {
+    userId: rec.id,
+    identifiant: f["Identifiant"] || "",
+    hash: f["Hash mot de passe"] || "",
+    tenantId: (f["tenantId"] || [])[0] || null,
+    role: f["Rôle"] || null,
+    statut: f["Statut"] || "Actif",
+    echecs: f["Échecs de connexion"] || 0,
+    bloqueJusqua: f["Bloqué jusqu'à"] || null,
+    dernierTokenId: f["Dernier tokenId refresh valide"] || null,
+  };
+}
+
+async function majUtilisateur(recordId, champs) {
+  await fetch(
+    "https://api.airtable.com/v0/" + AIRTABLE_BASE + "/" + encodeURIComponent(UTILISATEURS_TABLE) + "/" + recordId,
+    { method: "PATCH", headers: airtableHeaders(), body: JSON.stringify({ fields: champs }) }
+  );
+}
+
+async function reponseGeneriqueEchec(res, hashACompare) {
+  // Delai constant : on execute toujours un bcrypt.compare, meme si le
+  // compte n'existe pas (contre HASH_FACTICE), pour eviter une attaque par
+  // mesure de temps qui reveleraient qu'un identifiant existe ou non.
+  await bcrypt.compare("x", hashACompare || HASH_FACTICE);
+  return res.status(401).json({ erreur: MESSAGE_GENERIQUE });
+}
+
+async function gererLogin(req, res) {
+  const { identifiant, motDePasse } = req.body || {};
+  if (!identifiant || !motDePasse) {
+    return res.status(400).json({ erreur: "Identifiant et mot de passe requis." });
+  }
+
+  const user = await lireUtilisateurParIdentifiant(identifiant);
+
+  if (!user) return reponseGeneriqueEchec(res, null);
+
+  if (user.bloqueJusqua && new Date(user.bloqueJusqua) > new Date()) {
+    return reponseGeneriqueEchec(res, user.hash);
+  }
+
+  const motDePasseValide = await bcrypt.compare(motDePasse, user.hash || HASH_FACTICE);
+  if (!motDePasseValide || user.statut !== "Actif") {
+    const nouveauxEchecs = (user.echecs || 0) + 1;
+    const champs = { "Échecs de connexion": nouveauxEchecs };
+    if (nouveauxEchecs >= MAX_ECHECS_AVANT_BLOCAGE) {
+      champs["Bloqué jusqu'à"] = new Date(Date.now() + DUREE_BLOCAGE_MIN * 60000).toISOString();
+    }
+    await majUtilisateur(user.userId, champs);
+    return res.status(401).json({ erreur: MESSAGE_GENERIQUE });
+  }
+
+  // Succes : remise a zero des echecs, rotation refresh token.
+  const tokenId = crypto.randomUUID();
+  await majUtilisateur(user.userId, {
+    "Échecs de connexion": 0,
+    "Bloqué jusqu'à": null,
+    "Dernier tokenId refresh valide": tokenId,
+    "Dernière connexion": new Date().toISOString(),
+  });
+
+  const access = signAccessToken(user);
+  const refresh = signRefreshToken(user, tokenId);
+
+  res.setHeader("Set-Cookie", [
+    cookie("iko_access", access, ACCESS_TOKEN_DUREE_S, "/"),
+    cookie("iko_refresh", refresh, REFRESH_TOKEN_DUREE_S, "/api/verif-securite"),
+  ]);
+  return res.status(200).json({ role: user.role });
+}
+
+async function gererLogout(req, res) {
+  const refreshBrut = lireCookie(req, "iko_refresh");
+  if (refreshBrut) {
+    try {
+      const payload = jwt.verify(refreshBrut, process.env.JWT_REFRESH_SECRET);
+      await majUtilisateur(payload.userId, { "Dernier tokenId refresh valide": null });
+    } catch (e) {
+      // Token deja invalide/expire : rien a revoquer, on nettoie quand meme les cookies.
+    }
+  }
+  res.setHeader("Set-Cookie", [
+    cookie("iko_access", "", 0, "/"),
+    cookie("iko_refresh", "", 0, "/api/verif-securite"),
+  ]);
+  return res.status(200).json({ ok: true });
+}
+
+async function gererSession(req, res) {
+  const accessBrut = lireCookie(req, "iko_access");
+  if (accessBrut) {
+    try {
+      const payload = jwt.verify(accessBrut, process.env.JWT_ACCESS_SECRET);
+      return res.status(200).json({ userId: payload.userId, tenantId: payload.tenantId, role: payload.role });
+    } catch (e) {
+      // Access token absent/expire : on tente le refresh ci-dessous.
+    }
+  }
+
+  const refreshBrut = lireCookie(req, "iko_refresh");
+  if (!refreshBrut) return res.status(401).json({ erreur: "Session absente." });
+
+  let payload;
+  try {
+    payload = jwt.verify(refreshBrut, process.env.JWT_REFRESH_SECRET);
+  } catch (e) {
+    return res.status(401).json({ erreur: "Session expirée." });
+  }
+
+  // Relecture directe par userId (pas par identifiant) pour la rotation.
+  const r = await fetch(
+    "https://api.airtable.com/v0/" + AIRTABLE_BASE + "/" + encodeURIComponent(UTILISATEURS_TABLE) + "/" + payload.userId,
+    { headers: airtableHeaders() }
+  );
+  if (!r.ok) return res.status(401).json({ erreur: "Session invalide." });
+  const rec = await r.json();
+  const f = rec.fields || {};
+  const dernierTokenId = f["Dernier tokenId refresh valide"] || null;
+
+  if (!dernierTokenId || dernierTokenId !== payload.tokenId) {
+    // Reutilisation d'un refresh token deja tourne : invalidation totale par securite.
+    await majUtilisateur(payload.userId, { "Dernier tokenId refresh valide": null });
+    res.setHeader("Set-Cookie", [cookie("iko_access", "", 0, "/"), cookie("iko_refresh", "", 0, "/api/verif-securite")]);
+    return res.status(401).json({ erreur: "Session invalidée, reconnexion nécessaire." });
+  }
+
+  // Rotation : nouveau tokenId, nouveaux tokens.
+  const nouveauTokenId = crypto.randomUUID();
+  await majUtilisateur(payload.userId, { "Dernier tokenId refresh valide": nouveauTokenId });
+
+  const userPourSignature = { userId: payload.userId, tenantId: f["tenantId"] ? f["tenantId"][0] : null, role: f["Rôle"] || null };
+  const nouvelAccess = signAccessToken(userPourSignature);
+  const nouveauRefresh = signRefreshToken(userPourSignature, nouveauTokenId);
+
+  res.setHeader("Set-Cookie", [
+    cookie("iko_access", nouvelAccess, ACCESS_TOKEN_DUREE_S, "/"),
+    cookie("iko_refresh", nouveauRefresh, REFRESH_TOKEN_DUREE_S, "/api/verif-securite"),
+  ]);
+  return res.status(200).json({ userId: userPourSignature.userId, tenantId: userPourSignature.tenantId, role: userPourSignature.role });
 }
 
 // Determine si le cron doit executer une verification maintenant.
@@ -145,14 +374,32 @@ async function executerVerifications() {
 export default async function handler(req, res) {
   try {
     if (req.method === "POST") {
-      // Declenchement manuel (depuis admin.html) : toujours execute.
+      const action = req.body && req.body.action;
+
+      // --- Authentification (ajout, n'existait pas avant) ---
+      if (action === "login") {
+        if (!verifierOrigine(req)) return reponseBloquee(res, "origine");
+        if (!verifierDebit(req)) return reponseBloquee(res, "debit");
+        return gererLogin(req, res);
+      }
+      if (action === "logout") {
+        return gererLogout(req, res);
+      }
+
+      // --- Comportement EXISTANT, inchangé : pas d'"action" = déclenchement
+      // manuel de la vérification depuis admin.html ("Lancer maintenant"). ---
       const rapport = await executerVerifications();
       return res.status(200).json(rapport);
     }
 
     if (req.method === "GET") {
-      // Declenchement automatique (cron Vercel) : verifie d'abord si c'est
-      // le bon moment programme par Stephane.
+      // --- Authentification (ajout) : ?action=session ---
+      if (req.query && req.query.action === "session") {
+        return gererSession(req, res);
+      }
+
+      // --- Comportement EXISTANT, inchangé : déclenchement automatique
+      // (cron Vercel), vérifie d'abord si c'est le bon moment programmé. ---
       const config = await lireConfig();
       if (!estLeMomentProgramme(config)) {
         return res.status(200).json({ execute: false, raison: "hors programmation" });
