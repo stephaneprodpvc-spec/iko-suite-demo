@@ -46,8 +46,35 @@ input:focus, select:focus, textarea:focus { border-color:rgba(218,178,57,0.5); }
 
 window.IKO_CLIENT_ID = null;
 window.IKO_CLIENT_INFO = null;
+window.IKO_ROLE = null;
+window.IKO_ACCES_REFUSE = false;
 window.IKO_CLIENT_READY = (async function () {
   try {
+    var resSession = await fetch('/api/verif-securite?action=session');
+    if (resSession.status === 401) {
+      window.location.href = "/auth-login.html?retour=" + encodeURIComponent("/technicien.html");
+      return null;
+    }
+    var session = await resSession.json();
+    window.IKO_ROLE = session.role;
+    if (session.role !== "SUPER_ADMIN_IKO" && session.role !== "TECHNICIEN") {
+      window.IKO_ACCES_REFUSE = true;
+      return null;
+    }
+
+    if (session.role === "TECHNICIEN") {
+      // tenantId de la session = seule autorite. ?client=slug n'a plus
+      // aucun pouvoir d'autorisation pour ce role.
+      if (!session.tenantId) { window.IKO_ACCES_REFUSE = true; return null; }
+      var rTenant = await fetch('/api/airtable/Clients/' + session.tenantId, {});
+      if (!rTenant.ok) { window.IKO_ACCES_REFUSE = true; return null; }
+      var recTenant = await rTenant.json();
+      window.IKO_CLIENT_ID = recTenant.id;
+      window.IKO_CLIENT_INFO = recTenant.fields || {};
+      return recTenant.id;
+    }
+
+    // SUPER_ADMIN_IKO : ?client=slug = confort de navigation uniquement.
     var params = new URLSearchParams(window.location.search);
     var slug = params.get('client');
     if (slug) { localStorage.setItem('iko_client_slug', slug); }
@@ -460,24 +487,15 @@ function optimiserOrdre(start, stops) {
   return route;
 }
 
-let PASSWORDS = {
-  "agence1": "Agence 1",
-  "agence2": "Agence 2",
-  "agence3": "Agence 3",
-  "agence4": "Agence 4",
-};
-
-// Meme enregistrement "sentinelle" que dashboard.html (table Planning, Date="CONFIG")
-// pour lire les comptes technicien parametres en mode concepteur.
-const CONFIG_RECORD_ID = "rec45X231n9dXnyaU";
-
-function appliquerComptesTechnicien(techniciens) {
-  if (!techniciens) return;
-  Object.keys(techniciens).forEach(agence => {
-    const t = techniciens[agence];
-    if (t && t.motDePasse && !t.bloque) PASSWORDS[t.motDePasse] = agence;
-  });
-}
+// Authentification : session Auth #003 (voir window.IKO_CLIENT_READY plus
+// haut + composant Login plus bas). L'ancien mecanisme PASSWORDS (4 codes
+// statiques generiques) et appliquerComptesTechnicien (lecture de
+// Planning/Config JSON, jamais alimentee en donnees reelles - verifie en
+// lecture seule avant cette migration) ont ete entierement retires.
+// AGENCES_DEFAUT reprend la liste jusque-la portee implicitement par les
+// cles de PASSWORDS - c'est desormais un choix metier post-authentification,
+// plus une preuve d'identite (voir composant Login).
+const AGENCES_DEFAUT = ["Agence 1", "Agence 2", "Agence 3", "Agence 4"];
 
 const C = {
   bg: "#F5F5F5", card: "#FFFFFF", card2: "#F3F4F6", border: "#E2E2E2",
@@ -1949,32 +1967,39 @@ function Technicien({ agence, onClose }) {
 }
 
 function Login({ onLogin }) {
-  const [pwd, setPwd] = React.useState("");
-  const [error, setError] = React.useState(false);
-  const [show, setShow] = React.useState(false);
-  const [pret, setPret] = React.useState(false);
+  const [etat, setEtat] = React.useState("verification"); // verification | choix-agence | refuse
+  const [agenceChoisie, setAgenceChoisie] = React.useState(AGENCES_DEFAUT[0]);
 
   React.useEffect(() => {
-    fetch('/api/airtable/Planning/' + CONFIG_RECORD_ID)
-      .then(r => r.json())
-      .then(json => {
-        const brut = json.fields?.["Config JSON"];
-        if (brut) { try { appliquerComptesTechnicien(JSON.parse(brut).techniciens); } catch(e) {} }
-      })
-      .catch(() => {})
-      .finally(() => setPret(true));
+    window.IKO_CLIENT_READY.then(() => {
+      if (window.IKO_ACCES_REFUSE) { setEtat("refuse"); return; }
+      if (window.IKO_ROLE === "SUPER_ADMIN_IKO") { onLogin("global"); return; }
+      setEtat("choix-agence"); // TECHNICIEN : choix metier, pas une authentification
+    });
   }, []);
 
-  const tenter = () => {
-    const agence = PASSWORDS[pwd.trim()];
-    if (agence) { onLogin(agence); }
-    else { setError(true); setTimeout(() => setError(false), 2000); }
-  };
+  if (etat === "verification") {
+    return (
+      <div style={{minHeight:"100vh",background:C.bg,display:"flex",alignItems:"center",justifyContent:"center",padding:"24px"}}>
+        <div style={{fontSize:"13px",color:C.muted}}>Vérification de la session…</div>
+      </div>
+    );
+  }
 
+  if (etat === "refuse") {
+    return (
+      <div style={{minHeight:"100vh",background:C.bg,display:"flex",alignItems:"center",justifyContent:"center",padding:"24px"}}>
+        <div style={{textAlign:"center",maxWidth:"320px"}}>
+          <div style={{fontSize:"13px",color:C.rouge,marginBottom:"8px",fontWeight:"700"}}>Accès refusé</div>
+          <div style={{fontSize:"12px",color:C.muted}}>Votre compte n'a pas les droits nécessaires pour accéder à l'Espace Technicien.</div>
+        </div>
+      </div>
+    );
+  }
+
+  // etat === "choix-agence" : choix metier post-authentification, pas un mot de passe.
   return (
     <div style={{minHeight:"100vh",background:C.bg,display:"flex",alignItems:"center",justifyContent:"center",padding:"24px",position:"relative"}}>
-      <button onClick={() => window.location.href = "/"} title="Fermer"
-        style={{position:"absolute",top:"20px",right:"20px",background:"rgba(220,38,38,0.08)",border:"1px solid rgba(220,38,38,0.25)",color:"rgba(220,38,38,0.85)",borderRadius:"8px",width:"34px",height:"34px",cursor:"pointer",fontSize:"16px",display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>
       <div style={{width:"100%",maxWidth:"340px"}}>
         <div style={{textAlign:"center",marginBottom:"36px"}}>
           <div style={{width:"190px",height:"100px",background:"#FFFFFF",borderRadius:"16px",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 16px",boxShadow:"0 8px 32px rgba(218,178,57,0.3)",padding:"8px",boxSizing:"border-box"}}>
@@ -1982,17 +2007,12 @@ function Login({ onLogin }) {
           </div>
           <div style={{fontSize:"11px",color:C.muted,marginTop:"6px",letterSpacing:"2px",textTransform:"uppercase"}}>Espace Technicien</div>
         </div>
-        <div style={{background:C.card,border:"1px solid "+(error?"rgba(220,38,38,0.4)":C.orBord),borderRadius:"16px",padding:"24px"}}>
-          <div style={{position:"relative",marginBottom:"14px"}}>
-            <input type={show?"text":"password"} placeholder="Code agence" value={pwd}
-              onChange={e => setPwd(e.target.value)} onKeyDown={e => e.key==="Enter"&&tenter()}
-              style={{paddingRight:"40px",fontSize:"16px",textAlign:"center",letterSpacing:"2px"}}/>
-            <button onClick={() => setShow(!show)} style={{position:"absolute",right:"12px",top:"50%",transform:"translateY(-50%)",background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:"16px",width:"auto",padding:"0"}}>
-              {show?"🙈":"👁️"}
-            </button>
-          </div>
-          {error && <div style={{fontSize:"11px",color:C.rouge,marginBottom:"10px",textAlign:"center"}}>Code incorrect</div>}
-          <button onClick={tenter} style={{width:"100%",padding:"14px",background:C.or,color:"#111",border:"none",borderRadius:"10px",fontSize:"14px",fontWeight:"900",cursor:"pointer"}}>
+        <div style={{background:C.card,border:"1px solid "+C.orBord,borderRadius:"16px",padding:"24px"}}>
+          <div style={{fontSize:"12px",color:C.muted,marginBottom:"10px",textAlign:"center"}}>Choisissez votre agence</div>
+          <select value={agenceChoisie} onChange={e => setAgenceChoisie(e.target.value)} style={{marginBottom:"14px"}}>
+            {AGENCES_DEFAUT.map(a => <option key={a} value={a}>{a}</option>)}
+          </select>
+          <button onClick={() => onLogin(agenceChoisie)} style={{width:"100%",padding:"14px",background:C.or,color:"#111",border:"none",borderRadius:"10px",fontSize:"14px",fontWeight:"900",cursor:"pointer"}}>
             Accéder →
           </button>
         </div>

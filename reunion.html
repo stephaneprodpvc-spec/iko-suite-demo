@@ -131,6 +131,55 @@
 </head>
 <body>
 
+<!-- Authentification Auth #003 — page classée INTERNE, jamais publique
+     (agrège dashboard/amandine/technicien/metreur + Tickets SAV). Aucun
+     indice de rôle plus précis que "supervision globale" dans le code :
+     SUPER_ADMIN_IKO uniquement, le choix le plus restrictif possible. -->
+<div id="auth-gate" style="position:fixed;inset:0;z-index:999999;background:#0A0A0A;display:flex;align-items:center;justify-content:center;font-family:'Segoe UI',sans-serif;padding:24px;box-sizing:border-box;">
+  <div id="auth-gate-content" style="font-size:13px;color:#9CA3AF;">Vérification de la session…</div>
+</div>
+<script>
+(function(){
+  var gate = document.getElementById('auth-gate');
+  var contenu = document.getElementById('auth-gate-content');
+
+  function afficherRefus(){
+    contenu.innerHTML = '<div style="text-align:center;max-width:320px;">' +
+      '<div style="font-size:13px;color:#f87171;margin-bottom:8px;font-weight:700;">Accès refusé</div>' +
+      '<div style="font-size:12px;color:#9CA3AF;">Votre compte n\'a pas les droits nécessaires pour accéder à cette page.</div>' +
+      '</div>';
+  }
+  function afficherErreur(){
+    contenu.innerHTML = '<div style="text-align:center;">' +
+      '<div style="font-size:13px;color:#f87171;margin-bottom:12px;">Erreur de vérification de session.</div>' +
+      '<button id="auth-gate-reco" style="padding:12px 20px;background:#22C55E;color:#111;border:none;border-radius:10px;font-size:13px;font-weight:900;cursor:pointer;">Se reconnecter</button>' +
+      '</div>';
+    document.getElementById('auth-gate-reco').addEventListener('click', function(){
+      window.location.href = "/auth-login.html?retour=" + encodeURIComponent("/reunion.html");
+    });
+  }
+
+  fetch('/api/verif-securite?action=session')
+    .then(function(r){
+      if (r.status === 401) {
+        window.location.href = "/auth-login.html?retour=" + encodeURIComponent("/reunion.html");
+        return null;
+      }
+      return r.json().then(function(json){ return { status: r.status, json: json }; });
+    })
+    .then(function(res){
+      if (!res) return;
+      if (res.status !== 200) { afficherErreur(); return; }
+      if (res.json.role === "SUPER_ADMIN_IKO") {
+        gate.remove();
+      } else {
+        afficherRefus();
+      }
+    })
+    .catch(function(){ afficherErreur(); });
+})();
+</script>
+
 <header>
   <div class="titre">🗓️ Salle de réunion</div>
   <div class="sous-titre">IKO · Amandine · Max · Toise — le point à quatre voix</div>
