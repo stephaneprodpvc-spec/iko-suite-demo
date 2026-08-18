@@ -45,13 +45,6 @@ svg text { user-select: none; -webkit-user-select: none; }
 </script>
 <script type="text/babel">
 
-const PASSWORDS = {
-  "ikosuite2026": "global",
-  "agence1": "Agence 1",
-  "agence2": "Agence 2",
-  "agence3": "Agence 3",
-  "agence4": "Agence 4",
-};
 const AGENCES = ["Agence 1", "Agence 2", "Agence 3", "Agence 4"];
 const WEBHOOK = 'https://hook.eu1.make.com/xczscdk40wh653mmnxnx7x63kawjcgx4';
 
@@ -1938,19 +1931,78 @@ function TypeModal({ value, onSelect, onClose }) {
 }
 
 // ---- LOGIN ----
+// Authentification : session Auth #003 (api/verif-securite?action=session),
+// remplace l'ancienne table PASSWORDS (mots de passe en dur, supprimée).
+// La selection d'agence reste une VRAIE logique metier (liste AGENCES,
+// filtre des fiches par agence, cf. Metreur/FicheMetre plus bas) - elle
+// n'est plus utilisee comme preuve d'identite : elle n'apparait qu'APRES
+// une session valide, et n'est plus un champ "mot de passe" mais un choix.
 function Login({ onLogin }) {
-  const [pwd, setPwd] = React.useState("");
-  const [error, setError] = React.useState(false);
-  const [show, setShow] = React.useState(false);
-  const tenter = () => {
-    const access = PASSWORDS[pwd.trim()];
-    if (access) { onLogin(access); }
-    else { setError(true); setTimeout(() => setError(false), 2000); }
-  };
+  const [etat, setEtat] = React.useState("verification"); // verification | choix-agence | refuse | erreur
+  const [role, setRole] = React.useState(null);
+  const [agenceChoisie, setAgenceChoisie] = React.useState(AGENCES[0]);
+
+  React.useEffect(() => {
+    fetch('/api/verif-securite?action=session')
+      .then(r => {
+        if (r.status === 401) {
+          window.location.href = "/auth-login.html?retour=" + encodeURIComponent("/metreur.html");
+          return null;
+        }
+        return r.json().then(json => ({ status: r.status, json }));
+      })
+      .then(res => {
+        if (!res) return; // redirection deja en cours
+        if (res.status !== 200) { setEtat("erreur"); return; }
+        const r = res.json.role;
+        setRole(r);
+        if (r === "SUPER_ADMIN_IKO") {
+          onLogin("global"); // acces global, identique a l'ancien mot de passe maitre
+        } else if (r === "TECHNICIEN") {
+          setEtat("choix-agence");
+        } else {
+          setEtat("refuse");
+        }
+      })
+      .catch(() => setEtat("erreur"));
+  }, []);
+
+  if (etat === "verification") {
+    return (
+      <div style={{minHeight:"100vh",background:C.bg,display:"flex",alignItems:"center",justifyContent:"center",padding:"24px"}}>
+        <div style={{fontSize:"13px",color:C.muted}}>Vérification de la session…</div>
+      </div>
+    );
+  }
+
+  if (etat === "erreur") {
+    return (
+      <div style={{minHeight:"100vh",background:C.bg,display:"flex",alignItems:"center",justifyContent:"center",padding:"24px"}}>
+        <div style={{textAlign:"center"}}>
+          <div style={{fontSize:"13px",color:C.rouge,marginBottom:"12px"}}>Erreur de vérification de session.</div>
+          <button onClick={() => window.location.href = "/auth-login.html?retour=" + encodeURIComponent("/metreur.html")}
+            style={{padding:"12px 20px",background:C.or,color:"#111",border:"none",borderRadius:"10px",fontSize:"13px",fontWeight:"900",cursor:"pointer"}}>
+            Se reconnecter
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (etat === "refuse") {
+    return (
+      <div style={{minHeight:"100vh",background:C.bg,display:"flex",alignItems:"center",justifyContent:"center",padding:"24px"}}>
+        <div style={{textAlign:"center",maxWidth:"320px"}}>
+          <div style={{fontSize:"13px",color:C.rouge,marginBottom:"8px",fontWeight:"700"}}>Accès refusé</div>
+          <div style={{fontSize:"12px",color:C.muted}}>Votre compte n'a pas les droits nécessaires pour accéder au module Métreur.</div>
+        </div>
+      </div>
+    );
+  }
+
+  // etat === "choix-agence" (role TECHNICIEN) : choix metier, pas un mot de passe.
   return (
     <div style={{minHeight:"100vh",background:C.bg,display:"flex",alignItems:"center",justifyContent:"center",padding:"24px",position:"relative"}}>
-      <button onClick={() => window.location.href = "/"} title="Fermer"
-        style={{position:"absolute",top:"20px",right:"20px",background:"rgba(220,38,38,0.08)",border:"1px solid rgba(220,38,38,0.25)",color:"rgba(220,38,38,0.85)",borderRadius:"8px",width:"34px",height:"34px",cursor:"pointer",fontSize:"16px",display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>
       <div style={{width:"100%",maxWidth:"340px"}}>
         <div style={{textAlign:"center",marginBottom:"36px"}}>
           <div style={{width:"190px",height:"100px",background:"#FFFFFF",borderRadius:"16px",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 16px",boxShadow:"0 8px 32px rgba(218,178,57,0.3)",padding:"8px",boxSizing:"border-box"}}>
@@ -1958,17 +2010,12 @@ function Login({ onLogin }) {
           </div>
           <div style={{fontSize:"11px",color:C.muted,marginTop:"6px",letterSpacing:"2px",textTransform:"uppercase"}}>📐 Module Métreur</div>
         </div>
-        <div style={{background:C.card,border:"1px solid "+(error?"rgba(220,38,38,0.4)":C.orBord),borderRadius:"16px",padding:"24px"}}>
-          <div style={{position:"relative",marginBottom:"14px"}}>
-            <input type={show?"text":"password"} placeholder="Mot de passe agence" value={pwd}
-              onChange={e => setPwd(e.target.value)} onKeyDown={e => e.key==="Enter"&&tenter()}
-              style={{paddingRight:"40px",fontSize:"16px",textAlign:"center",letterSpacing:"2px"}}/>
-            <button onClick={() => setShow(!show)} style={{position:"absolute",right:"12px",top:"50%",transform:"translateY(-50%)",background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:"16px",width:"auto",padding:"0"}}>
-              {show?"🙈":"👁️"}
-            </button>
-          </div>
-          {error && <div style={{fontSize:"11px",color:C.rouge,marginBottom:"10px",textAlign:"center"}}>Mot de passe incorrect</div>}
-          <button onClick={tenter} style={{width:"100%",padding:"14px",background:C.or,color:"#111",border:"none",borderRadius:"10px",fontSize:"14px",fontWeight:"900",cursor:"pointer"}}>
+        <div style={{background:C.card,border:"1px solid "+C.orBord,borderRadius:"16px",padding:"24px"}}>
+          <div style={{fontSize:"12px",color:C.muted,marginBottom:"10px",textAlign:"center"}}>Choisissez votre agence</div>
+          <select value={agenceChoisie} onChange={e => setAgenceChoisie(e.target.value)} style={{marginBottom:"14px"}}>
+            {AGENCES.map(a => <option key={a} value={a}>{a}</option>)}
+          </select>
+          <button onClick={() => onLogin(agenceChoisie)} style={{width:"100%",padding:"14px",background:C.or,color:"#111",border:"none",borderRadius:"10px",fontSize:"14px",fontWeight:"900",cursor:"pointer"}}>
             Accéder →
           </button>
         </div>
@@ -2906,7 +2953,20 @@ function Header({ agenceAccess, onClose }) {
 
 function App() {
   const [access, setAccess] = React.useState(null);
-  return access ? <Metreur agenceAccess={access} onClose={() => setAccess(null)}/> : <Login onLogin={setAccess}/>;
+  const deconnecter = async () => {
+    try {
+      await fetch('/api/verif-securite', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'logout' }),
+      });
+    } catch (e) {
+      // Meme en cas d'erreur reseau, on redirige quand meme : mieux vaut
+      // renvoyer vers l'ecran de connexion que de laisser un etat incertain.
+    }
+    window.location.href = "/auth-login.html";
+  };
+  return access ? <Metreur agenceAccess={access} onClose={deconnecter}/> : <Login onLogin={setAccess}/>;
 }
 
 ReactDOM.createRoot(document.getElementById('root')).render(<App/>);

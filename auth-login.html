@@ -54,6 +54,22 @@
   function afficherMsg(texte) { msg.textContent = texte || ''; }
   function afficherEtat(obj) { etat.textContent = obj ? JSON.stringify(obj, null, 2) : ''; }
 
+  // Protection anti "open redirect" : n'accepte qu'un chemin local relatif,
+  // commencant par un seul "/", vers un fichier .html connu de l'app, sans
+  // schema ("http://", "https://", "javascript:"...) ni "//" (qui serait
+  // interprete comme une redirection vers un autre domaine), ni "\".
+  function retourSurEstSur(valeur) {
+    if (!valeur || valeur.length > 200) return false;
+    if (valeur.indexOf('\\') !== -1) return false;
+    if (valeur.slice(0, 2) === '//') return false;
+    return /^\/[A-Za-z0-9_\-\/]*\.html(\?[A-Za-z0-9_\-=&%.]*)?$/.test(valeur);
+  }
+
+  function retourDemande() {
+    var brut = new URLSearchParams(window.location.search).get('retour');
+    return retourSurEstSur(brut) ? brut : null;
+  }
+
   async function appel(action, methode) {
     var opts = { method: methode, headers: { 'Content-Type': 'application/json' } };
     var url = '/api/verif-securite';
@@ -70,7 +86,15 @@
   $('btnLogin').addEventListener('click', async function () {
     afficherMsg(''); afficherEtat(null);
     var res = await appel('login', 'POST');
-    if (res.status === 200) { afficherEtat(res.json); }
+    if (res.status === 200) {
+      var retour = retourDemande();
+      if (retour) {
+        afficherEtat(Object.assign({}, res.json, { redirection: retour }));
+        window.location.href = retour;
+        return;
+      }
+      afficherEtat(res.json);
+    }
     else { afficherMsg(res.json.erreur || 'Erreur.'); }
   });
 
