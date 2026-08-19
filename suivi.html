@@ -443,6 +443,7 @@ function App() {
     if (!ticket) return;
     setChangeEnCours(true); setChangeErr(false);
     try {
+      const ancienCreneau = ticket.fields?.Créneau || '';
       const nouvelleId = dateInfo.ids[0];
       await fetch('/api/airtable/Planning/' + nouvelleId, {
         method: 'PATCH',
@@ -466,6 +467,12 @@ function App() {
       setTicket(prev => ({ ...prev, fields: { ...prev.fields, Créneau: nouveauCreneau, PlanningID: nouvelleId, Statut: 'Nouveau', "Proposition auto en attente": false, "Proposition auto créneau": "", "Proposition auto mois": "", "Réponse agence": nouvelleReponse } }));
       setShowChanger(false);
       setChangeOk(true);
+      // Notif agence (best-effort, ne bloque pas l'UI si ca echoue)
+      fetch('https://hook.eu1.make.com/n3lwi92wldkf22jcemmjfem334p4mv6a', { // webhook démo isolé
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'rdv_modifie', ticket: ticket.fields?.Name, agence: ticket.fields?.Agence, ancien_creneau: ancienCreneau, nouveau_creneau: nouveauCreneau, auteur_modification: 'client' })
+      }).catch(() => {});
     } catch (e) {
       setChangeErr(true);
     }

@@ -389,6 +389,7 @@ function TicketRow({ t, onStatusChange, onAnnuler, onSupprimer, onSupprimerDefin
   };
 
   const urgent = t.fields?.Qualification === "Oui";
+  const rdvModifie = !!t.fields?.["RDV modifié - notif technicien"];
   const statut = t.fields?.Statut || "Nouveau";
   const statusColors = {
     "Nouveau": { color: C.bleu, bg: C.bleuDim },
@@ -410,6 +411,7 @@ function TicketRow({ t, onStatusChange, onAnnuler, onSupprimer, onSupprimerDefin
         <div style={{display:"flex",alignItems:"center",gap:"8px",flexWrap:"wrap",marginBottom:"6px"}}>
           <span style={{fontSize:"12px",fontWeight:"900",color:C.or,fontFamily:"monospace"}}>{t.fields?.Name||"—"}</span>
           {urgent && <Badge label="URGENT" color={C.rouge} bg={C.rougeDim} style={{animation:"clignoteUrgent 1.1s ease-in-out infinite"}}/>}
+          {rdvModifie && <Badge label="🔄 RDV modifié" color={C.bleu} bg={C.bleuDim}/>}
           <Badge label={statut} color={sc.color} bg={sc.bg}/>
           {t.fields?.["Source"] === "telephone" && <Badge label="📞 Tél." color={C.jaune} bg={C.jauneDim}/>}
           <span style={{fontSize:"10px",color:C.muted,marginLeft:"auto"}}>{t.fields?.Agence}</span>
@@ -2138,6 +2140,7 @@ function Dashboard({ agenceAccess, onClose }) {
   const [statutFilter, setStatutFilter] = React.useState("tous");
   const [urgentOnly, setUrgentOnly] = React.useState(false);
   const [messagesOnly, setMessagesOnly] = React.useState(false);
+  const [rdvModifieOnly, setRdvModifieOnly] = React.useState(false);
   const [openMessageTicketId, setOpenMessageTicketId] = React.useState(null);
   const [amandineOuverte, setAmandineOuverte] = React.useState(false);
   const [amandineEcoute, setAmandineEcoute] = React.useState(false);
@@ -2196,6 +2199,12 @@ function Dashboard({ agenceAccess, onClose }) {
   const [exportFin, setExportFin] = React.useState("");
   const [notifs, setNotifs] = React.useState([]);
   const idsConnusRef = React.useRef(null);
+  // Suivi séparé de l'état du flag "RDV modifié - notif technicien" par ticket,
+  // pour détecter une TRANSITION false->true sur un ticket déjà connu (donc une
+  // modification), distincte de l'apparition d'un ticket tout neuf (checkNouveaux
+  // ci-dessous). Le Dashboard ne consomme JAMAIS ce flag (ne le remet pas à false) :
+  // seul technicien.html le fait, pour éviter toute course entre les deux pages.
+  const rdvFlagsConnusRef = React.useRef(null);
   const audioCtxRef = React.useRef(null);
   const isFetchingRef = React.useRef(false);
 
@@ -2268,6 +2277,7 @@ function Dashboard({ agenceAccess, onClose }) {
       const json = await r.json();
       const records = json.records||[];
       const idsActuels = new Set(records.map(t => t.id));
+      const flagsActuels = new Map(records.map(t => [t.id, !!t.fields?.["RDV modifié - notif technicien"]]));
       if (idsConnusRef.current) {
         const nouveaux = records.filter(t => !idsConnusRef.current.has(t.id));
         if (nouveaux.length > 0) {
@@ -2279,8 +2289,28 @@ function Dashboard({ agenceAccess, onClose }) {
           setNotifs(prev => [...prev, ...toasts]);
           toasts.forEach(t => setTimeout(() => setNotifs(prev => prev.filter(n => n.id !== t.id)), 7000));
         }
+        // RDV modifiés : uniquement sur des tickets DÉJÀ connus (jamais les nouveaux
+        // ci-dessus, pour ne jamais mélanger les deux notifications) dont le flag
+        // passe de false/absent à true entre deux vérifications.
+        if (rdvFlagsConnusRef.current) {
+          const rdvModifies = records.filter(t =>
+            idsConnusRef.current.has(t.id) &&
+            flagsActuels.get(t.id) === true &&
+            rdvFlagsConnusRef.current.get(t.id) !== true
+          );
+          if (rdvModifies.length > 0) {
+            jouerSon();
+            const toastsRdv = rdvModifies.map(t => ({
+              id: t.id + '-rdv-' + Date.now(),
+              texte: '🔄 RDV modifié — ' + (t.fields?.Name||'Ticket') + ' — ' + (t.fields?.Client||'Client inconnu') + ' (' + (t.fields?.Agence||'') + ')'
+            }));
+            setNotifs(prev => [...prev, ...toastsRdv]);
+            toastsRdv.forEach(t => setTimeout(() => setNotifs(prev => prev.filter(n => n.id !== t.id)), 7000));
+          }
+        }
       }
       idsConnusRef.current = idsActuels;
+      rdvFlagsConnusRef.current = flagsActuels;
     } catch(e) { console.error(e); }
     isCheckingNouveauxRef.current = false;
   };
@@ -2506,7 +2536,7 @@ function Dashboard({ agenceAccess, onClose }) {
     const cible = tickets.find(x => x.id === ref || x.fields?.Name === ref);
     if (!cible) return;
     setVue('tickets');
-    setStatutFilter('tous'); setUrgentOnly(false); setMessagesOnly(false);
+    setStatutFilter('tous'); setUrgentOnly(false); setMessagesOnly(false); setRdvModifieOnly(false);
     setSearch(cible.fields?.Name || '');
     setTimeout(() => {
       const el = document.getElementById('ticket-'+cible.id);
@@ -2589,11 +2619,11 @@ function Dashboard({ agenceAccess, onClose }) {
         setAgenceFilter(a.input.agence === 'toutes' ? 'global' : a.input.agence);
       } else if (a.name === 'rechercher') {
         setSearch(a.input.requete || '');
-        setStatutFilter('tous'); setUrgentOnly(false); setMessagesOnly(false);
+        setStatutFilter('tous'); setUrgentOnly(false); setMessagesOnly(false); setRdvModifieOnly(false);
       } else if (a.name === 'changer_statut' && a.input.ticket_id) {
         updateStatus(a.input.ticket_id, a.input.nouveau_statut);
       } else if (a.name === 'filtrer_statut') {
-        setStatutFilter(a.input.statut); setUrgentOnly(false); setMessagesOnly(false);
+        setStatutFilter(a.input.statut); setUrgentOnly(false); setMessagesOnly(false); setRdvModifieOnly(false);
       } else if (a.name === 'ouvrir_ticket') {
         ouvrirTicket(a.input.ticket_id || a.input.numero);
       } else if (a.name === 'renvoyer_ticket') {
@@ -2801,9 +2831,10 @@ function Dashboard({ agenceAccess, onClose }) {
     const matchStatut = statutFilter==="tous" ? (t.fields?.Statut !== "Terminé" && t.fields?.Statut !== "Annulé" && t.fields?.Statut !== "Supprimé") : statutFilter==="archives" ? (t.fields?.Statut === "Annulé" || t.fields?.Statut === "Supprimé") : (statutFilter==="devis" ? ["Devis à faire","Devis envoyé","Devis - Suivi","Devis - Attente fournisseur","Devis refusé"].includes(t.fields?.Statut) : t.fields?.Statut===statutFilter) || (!t.fields?.Statut&&statutFilter==="Nouveau");
     const matchUrgent = !urgentOnly || (t.fields?.Qualification === "Oui" && !isStatutClos(t.fields?.Statut));
     const matchMessages = !messagesOnly || t.fields?.["Message client non lu"] || t.id === openMessageTicketId;
+    const matchRdvModifie = !rdvModifieOnly || t.fields?.["RDV modifié - notif technicien"];
     const q = search.toLowerCase();
     const matchSearch = !q || (t.fields?.Client||"").toLowerCase().includes(q) || (t.fields?.Name||"").toLowerCase().includes(q) || (t.fields?.Produit||"").toLowerCase().includes(q);
-    return matchAgence && matchStatut && matchUrgent && matchMessages && matchSearch;
+    return matchAgence && matchStatut && matchUrgent && matchMessages && matchRdvModifie && matchSearch;
   });
 
   const sortFn = (a,b) => {
@@ -2832,6 +2863,7 @@ function Dashboard({ agenceAccess, onClose }) {
     supprime: tickets.filter(t => t.fields?.Statut==="Supprimé").length,
     devisEnAttente: tickets.filter(t => ["Devis à faire","Devis envoyé","Devis - Suivi","Devis - Attente fournisseur"].includes(t.fields?.Statut)).length,
     messagesNonLus: tickets.filter(t => t.fields?.["Message client non lu"]).length,
+    rdvModifies: tickets.filter(t => t.fields?.["RDV modifié - notif technicien"] && !isStatutClos(t.fields?.Statut)).length,
   };
   stats.archives = stats.annule + stats.supprime;
   const ticketsNotes = tickets.filter(t => typeof t.fields?.Note === "number");
@@ -2983,11 +3015,19 @@ function Dashboard({ agenceAccess, onClose }) {
         <div style={{display:"flex",alignItems:"center",gap:"10px"}}>
           {lastRefresh && <span style={{fontSize:"10px",color:C.muted,display:"flex",alignItems:"center",gap:"4px"}}><span style={{width:"6px",height:"6px",background:"#22c55e",borderRadius:"50%",display:"inline-block"}}/>MAJ {lastRefresh}</span>}
           {stats.messagesNonLus > 0 && (
-            <button onClick={() => { setMessagesOnly(!messagesOnly); setStatutFilter("tous"); setUrgentOnly(false); }}
+            <button onClick={() => { setMessagesOnly(!messagesOnly); setStatutFilter("tous"); setUrgentOnly(false); setRdvModifieOnly(false); }}
               className={messagesOnly ? "" : "alert-blink"}
               title="Tickets avec un message client non lu"
               style={{background:"#DC2626",border:messagesOnly?"2px solid #fff":"none",boxShadow:messagesOnly?"0 0 0 2px #DC2626":"none",color:"#fff",borderRadius:"8px",padding:"8px 14px",fontSize:"12px",fontWeight:"900",cursor:"pointer",display:"flex",alignItems:"center",gap:"6px"}}>
               🔴 Messages clients <span style={{background:"#fff",color:"#DC2626",borderRadius:"10px",padding:"1px 7px",fontSize:"10px"}}>{stats.messagesNonLus}</span>
+            </button>
+          )}
+          {stats.rdvModifies > 0 && (
+            <button onClick={() => { setRdvModifieOnly(!rdvModifieOnly); setStatutFilter("tous"); setUrgentOnly(false); setMessagesOnly(false); }}
+              className={rdvModifieOnly ? "" : "alert-blink"}
+              title="Tickets avec un RDV modifié par le client ou le technicien"
+              style={{background:C.bleu,border:rdvModifieOnly?"2px solid #fff":"none",boxShadow:rdvModifieOnly?"0 0 0 2px "+C.bleu:"none",color:"#fff",borderRadius:"8px",padding:"8px 14px",fontSize:"12px",fontWeight:"900",cursor:"pointer",display:"flex",alignItems:"center",gap:"6px"}}>
+              🔄 RDV modifiés <span style={{background:"#fff",color:C.bleu,borderRadius:"10px",padding:"1px 7px",fontSize:"10px"}}>{stats.rdvModifies}</span>
             </button>
           )}
           <button onClick={() => setShowModalGestionDevis(true)}
@@ -3022,23 +3062,26 @@ function Dashboard({ agenceAccess, onClose }) {
 
         <div style={{display:"flex",gap:"12px",marginBottom:"20px",flexWrap:"wrap"}}>
           <StatCard label="Total tickets" value={stats.total} accent
-            active={statutFilter==="tous" && !urgentOnly && !messagesOnly}
-            onClick={() => { setStatutFilter("tous"); setUrgentOnly(false); setMessagesOnly(false); }}/>
+            active={statutFilter==="tous" && !urgentOnly && !messagesOnly && !rdvModifieOnly}
+            onClick={() => { setStatutFilter("tous"); setUrgentOnly(false); setMessagesOnly(false); setRdvModifieOnly(false); }}/>
           <StatCard label="Urgents" value={stats.urgent} sub="à traiter en priorité" alert
             active={urgentOnly}
-            onClick={() => { setUrgentOnly(!urgentOnly); setStatutFilter("tous"); setMessagesOnly(false); }}/>
+            onClick={() => { setUrgentOnly(!urgentOnly); setStatutFilter("tous"); setMessagesOnly(false); setRdvModifieOnly(false); }}/>
           <StatCard label="Nouveaux" value={stats.nouveau}
             active={statutFilter==="Nouveau"}
-            onClick={() => { setStatutFilter("Nouveau"); setUrgentOnly(false); setMessagesOnly(false); }}/>
+            onClick={() => { setStatutFilter("Nouveau"); setUrgentOnly(false); setMessagesOnly(false); setRdvModifieOnly(false); }}/>
+          <StatCard label="RDV modifiés" value={stats.rdvModifies} sub="changés par client/technicien"
+            active={rdvModifieOnly}
+            onClick={() => { setRdvModifieOnly(!rdvModifieOnly); setStatutFilter("tous"); setUrgentOnly(false); setMessagesOnly(false); }}/>
           <StatCard label="En cours" value={stats.encours}
             active={statutFilter==="En cours"}
-            onClick={() => { setStatutFilter("En cours"); setUrgentOnly(false); setMessagesOnly(false); }}/>
+            onClick={() => { setStatutFilter("En cours"); setUrgentOnly(false); setMessagesOnly(false); setRdvModifieOnly(false); }}/>
           <StatCard label="Terminés" value={stats.termine}
             active={statutFilter==="Terminé"}
-            onClick={() => { setStatutFilter("Terminé"); setUrgentOnly(false); setMessagesOnly(false); }}/>
+            onClick={() => { setStatutFilter("Terminé"); setUrgentOnly(false); setMessagesOnly(false); setRdvModifieOnly(false); }}/>
           <StatCard label="Archives" value={stats.archives} sub="annulés + supprimés"
             active={statutFilter==="archives"}
-            onClick={() => { setStatutFilter("archives"); setUrgentOnly(false); setMessagesOnly(false); }}/>
+            onClick={() => { setStatutFilter("archives"); setUrgentOnly(false); setMessagesOnly(false); setRdvModifieOnly(false); }}/>
           <StatCard label="Note client" value={stats.noteMoyenne ? "⭐ "+stats.noteMoyenne.toFixed(1) : "—"} sub={stats.nbNotes+" avis"} onClick={() => setShowModalNotes(true)}/>
         </div>
 
