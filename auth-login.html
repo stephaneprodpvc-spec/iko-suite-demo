@@ -4,29 +4,39 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
 <title>Iko Suite — Connexion (test isolé)</title>
+<link rel="stylesheet" href="/assets/tokens.css">
+<link rel="stylesheet" href="/assets/primitives.css">
 <style>
   * { box-sizing: border-box; }
   body {
     margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center;
-    background: #F5F5F5; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    background: var(--iko-bg); font-family: var(--iko-font);
   }
   .carte {
-    width: 100%; max-width: 360px; background: #FFFFFF; border: 1px solid #E2E2E2;
-    border-radius: 16px; padding: 32px 24px;
+    width: 100%; max-width: 360px; background: var(--iko-surface);
+    backdrop-filter: var(--iko-blur); -webkit-backdrop-filter: var(--iko-blur);
+    border: 1px solid var(--iko-border); border-radius: var(--iko-radius-lg);
+    box-shadow: var(--iko-shadow-card); padding: var(--iko-space-6) var(--iko-space-5);
   }
-  h1 { font-size: 15px; text-transform: uppercase; letter-spacing: 2px; color: #5B6472; text-align: center; margin: 0 0 24px; }
+  h1 { font-size: var(--iko-text-sm); text-transform: uppercase; letter-spacing: 2px; color: var(--iko-text-secondary); text-align: center; margin: 0 0 var(--iko-space-5); }
   input {
-    width: 100%; padding: 12px 14px; margin-bottom: 12px; border: 1px solid #d1d5db;
-    border-radius: 10px; font-size: 16px;
+    width: 100%; min-height: var(--iko-touch-min); padding: 0 var(--iko-space-3); margin-bottom: var(--iko-space-3);
+    background: rgba(255,255,255,0.04); border: 1px solid var(--iko-border);
+    border-radius: var(--iko-radius-md); color: var(--iko-text); font-size: 16px;
   }
+  input::placeholder { color: var(--iko-text-tertiary); }
+  input:focus { outline: none; border-color: var(--iko-accent); box-shadow: var(--iko-shadow-focus); }
   button {
-    width: 100%; padding: 14px; background: #22C55E; color: #fff; border: none;
-    border-radius: 10px; font-weight: 700; font-size: 14px; cursor: pointer; margin-top: 4px;
+    width: 100%; min-height: var(--iko-touch-min); border: 1px solid transparent; font-family: var(--iko-font);
+    border-radius: var(--iko-radius-md); font-weight: 800; font-size: var(--iko-text-sm); cursor: pointer; margin-top: var(--iko-space-2);
   }
-  button:disabled { opacity: .6; cursor: not-allowed; }
-  .msg { min-height: 18px; font-size: 12px; color: #DC2626; text-align: center; margin-top: 8px; }
-  .etat { font-size: 12px; color: #16a34a; text-align: center; margin-top: 14px; white-space: pre-wrap; }
-  .note { font-size: 10px; color: #9CA3AF; text-align: center; margin-top: 20px; line-height: 1.5; }
+  .btn-primary { background: var(--iko-accent); color: var(--iko-text-on-accent); }
+  .btn-secondary { background: var(--iko-surface); border-color: var(--iko-border); color: var(--iko-text); }
+  .btn-danger { background: transparent; border-color: var(--iko-border); color: var(--iko-danger); }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  .msg { min-height: 18px; font-size: var(--iko-text-xs); color: var(--iko-danger); text-align: center; margin-top: var(--iko-space-2); }
+  .etat { font-size: var(--iko-text-xs); color: var(--iko-success); text-align: center; margin-top: var(--iko-space-4); white-space: pre-wrap; }
+  .note { font-size: 10px; color: var(--iko-text-tertiary); text-align: center; margin-top: var(--iko-space-5); line-height: 1.5; }
 </style>
 </head>
 <body>
@@ -34,9 +44,9 @@
     <h1>Iko Suite — Test Auth (isolé)</h1>
     <input id="identifiant" type="email" placeholder="Identifiant (email)" autocomplete="username" />
     <input id="motDePasse" type="password" placeholder="Mot de passe" autocomplete="current-password" />
-    <button id="btnLogin">Se connecter</button>
-    <button id="btnSession" style="background:#374151;margin-top:8px;">Vérifier la session</button>
-    <button id="btnLogout" style="background:#DC2626;margin-top:8px;">Se déconnecter</button>
+    <button id="btnLogin" class="btn-primary">Se connecter</button>
+    <button id="btnSession" class="btn-secondary">Vérifier la session</button>
+    <button id="btnLogout" class="btn-danger">Se déconnecter</button>
     <div class="msg" id="msg"></div>
     <div class="etat" id="etat"></div>
     <div class="note">

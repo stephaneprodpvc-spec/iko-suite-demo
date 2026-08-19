@@ -1,0 +1,170 @@
+/* ==========================================================================
+   IKO — Primitives
+   Composants visuels partagés. Dépend de tokens.css (chargé avant).
+   Classes préfixées "iko-" pour ne jamais entrer en collision avec le CSS
+   existant de chaque page pendant la migration progressive.
+   ========================================================================== */
+
+.iko-btn, .iko-input, .iko-card, .iko-badge, .iko-toast, .iko-modal {
+  box-sizing: border-box;
+  font-family: var(--iko-font);
+}
+
+.iko-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--iko-space-2);
+  min-height: var(--iko-touch-min);
+  padding: 0 var(--iko-space-4);
+  border-radius: var(--iko-radius-md);
+  border: 1px solid transparent;
+  font-size: var(--iko-text-sm);
+  font-weight: var(--iko-weight-bold);
+  cursor: pointer;
+  transition: background var(--iko-transition-fast), border-color var(--iko-transition-fast), transform var(--iko-transition-fast);
+  -webkit-tap-highlight-color: transparent;
+}
+.iko-btn:active { transform: scale(0.97); }
+.iko-btn:focus-visible { outline: none; box-shadow: var(--iko-shadow-focus); }
+.iko-btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+
+.iko-btn-primary {
+  background: var(--iko-accent);
+  color: var(--iko-text-on-accent);
+}
+.iko-btn-primary:hover { background: var(--iko-accent-hover); }
+
+.iko-btn-secondary {
+  background: var(--iko-surface);
+  border-color: var(--iko-border);
+  color: var(--iko-text);
+  backdrop-filter: var(--iko-blur);
+  -webkit-backdrop-filter: var(--iko-blur);
+}
+.iko-btn-secondary:hover { background: var(--iko-surface-hover); }
+
+.iko-btn-danger {
+  background: transparent;
+  border-color: var(--iko-border);
+  color: var(--iko-danger);
+}
+.iko-btn-danger:hover { background: var(--iko-danger-soft); }
+
+.iko-card {
+  background: var(--iko-surface);
+  backdrop-filter: var(--iko-blur);
+  -webkit-backdrop-filter: var(--iko-blur);
+  border: 1px solid var(--iko-border);
+  border-radius: var(--iko-radius-lg);
+  box-shadow: var(--iko-shadow-card);
+  padding: var(--iko-space-5);
+  color: var(--iko-text);
+}
+
+.iko-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--iko-space-1);
+  padding: var(--iko-space-1) var(--iko-space-3);
+  border-radius: var(--iko-radius-pill);
+  font-size: var(--iko-text-xs);
+  font-weight: var(--iko-weight-bold);
+  line-height: 1.6;
+  white-space: nowrap;
+}
+.iko-badge-success { background: var(--iko-success-soft); color: var(--iko-success); }
+.iko-badge-warning { background: var(--iko-warning-soft); color: var(--iko-warning); }
+.iko-badge-danger  { background: var(--iko-danger-soft);  color: var(--iko-danger); }
+.iko-badge-info    { background: var(--iko-info-soft);    color: var(--iko-info); }
+.iko-badge-neutral { background: var(--iko-surface-hover); color: var(--iko-text-secondary); }
+
+.iko-input {
+  display: block;
+  width: 100%;
+  min-height: var(--iko-touch-min);
+  padding: 0 var(--iko-space-3);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--iko-border);
+  border-radius: var(--iko-radius-md);
+  color: var(--iko-text);
+  font-size: var(--iko-text-base);
+  transition: border-color var(--iko-transition-fast), box-shadow var(--iko-transition-fast);
+}
+.iko-input::placeholder { color: var(--iko-text-tertiary); }
+.iko-input:focus { outline: none; border-color: var(--iko-accent); box-shadow: var(--iko-shadow-focus); }
+.iko-input:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.iko-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 998;
+  background: rgba(0, 0, 0, 0.6);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: var(--iko-space-5);
+}
+.iko-modal-overlay.iko-ouvert { display: flex; }
+.iko-modal {
+  background: var(--iko-surface-solid);
+  border: 1px solid var(--iko-border-strong);
+  border-radius: var(--iko-radius-lg);
+  box-shadow: var(--iko-shadow-modal);
+  max-width: 480px;
+  width: 100%;
+  max-height: 86vh;
+  overflow: auto;
+  padding: var(--iko-space-5);
+  color: var(--iko-text);
+}
+
+.iko-toast {
+  position: fixed;
+  left: 50%;
+  bottom: var(--iko-space-6);
+  transform: translate(-50%, 12px);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  gap: var(--iko-space-2);
+  background: var(--iko-surface-solid);
+  border: 1px solid var(--iko-border-strong);
+  border-radius: var(--iko-radius-md);
+  box-shadow: var(--iko-shadow-modal);
+  padding: var(--iko-space-3) var(--iko-space-4);
+  color: var(--iko-text);
+  font-size: var(--iko-text-sm);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--iko-transition-base), transform var(--iko-transition-base);
+}
+.iko-toast.iko-visible {
+  opacity: 1;
+  transform: translate(-50%, 0);
+  pointer-events: auto;
+}
+.iko-toast-success { border-color: rgba(34, 197, 94, 0.4); }
+.iko-toast-danger  { border-color: rgba(255, 69, 58, 0.4); }
+
+.iko-loader {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2.5px solid var(--iko-border-strong);
+  border-top-color: var(--iko-accent);
+  animation: iko-spin 0.8s linear infinite;
+}
+@keyframes iko-spin { to { transform: rotate(360deg); } }
+
+.iko-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--iko-space-2);
+  padding: var(--iko-space-7) var(--iko-space-4);
+  text-align: center;
+  color: var(--iko-text-tertiary);
+  font-size: var(--iko-text-sm);
+}

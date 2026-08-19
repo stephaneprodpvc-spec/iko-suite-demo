@@ -4,12 +4,14 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <title>Salle de réunion — Iko Suite</title>
+<link rel="stylesheet" href="/assets/tokens.css">
+<link rel="stylesheet" href="/assets/primitives.css">
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   body {
-    background: #0D0D0D;
-    color: #fff;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--iko-bg, #0D0D0D);
+    color: var(--iko-text, #fff);
+    font-family: var(--iko-font, -apple-system, sans-serif);
     min-height: 100vh;
     min-height: 100dvh;
     display: flex;
@@ -44,17 +46,17 @@
   .avatar-bloc { display: flex; flex-direction: column; align-items: center; gap: 8px; }
   .sphere {
     width: 64px; height: 64px; border-radius: 50%;
-    box-shadow: 0 0 22px rgba(255,107,0,0.25);
+    box-shadow: 0 0 22px rgba(34,197,94,0.25);
     transition: transform 0.3s ease, box-shadow 0.3s ease;
   }
-  .sphere.iko { background: radial-gradient(circle at 35% 30%, #FFB067, #FF6B00 55%, #7a3200 100%); }
-  .sphere.amandine { background: radial-gradient(circle at 35% 30%, #FFFFFF, #FDEBF1 45%, #F5A9C5 78%, #FF6B00 135%); }
-  .sphere.max { background: radial-gradient(circle at 35% 30%, #4a4a4a, #0D0D0D 55%, #000000 100%); border: 2px solid #FF6B00; }
+  .sphere.iko { background: radial-gradient(circle at 35% 30%, #FFB067, #22C55E 55%, #7a3200 100%); }
+  .sphere.amandine { background: radial-gradient(circle at 35% 30%, #FFFFFF, #FDEBF1 45%, #F5A9C5 78%, #22C55E 135%); }
+  .sphere.max { background: radial-gradient(circle at 35% 30%, #4a4a4a, #0D0D0D 55%, #000000 100%); border: 2px solid #22C55E; }
   .sphere.toise { background: radial-gradient(circle at 35% 30%, #E8D4B0, #C9A876 55%, #8a6d1f 100%); }
-  .sphere.reflechit { animation: pulseSphere 0.9s ease-in-out infinite; box-shadow: 0 0 34px rgba(255,107,0,0.55); }
+  .sphere.reflechit { animation: pulseSphere 0.9s ease-in-out infinite; box-shadow: 0 0 34px rgba(34,197,94,0.55); }
   .sphere.parle {
     transform: scale(1.35);
-    box-shadow: 0 0 50px rgba(255,107,0,0.75), 0 0 90px rgba(255,107,0,0.35);
+    box-shadow: 0 0 50px rgba(34,197,94,0.75), 0 0 90px rgba(34,197,94,0.35);
     z-index: 5;
   }
   @keyframes pulseSphere { 0%,100% { transform: scale(1); } 50% { transform: scale(1.1); } }
@@ -68,14 +70,14 @@
     background: #161616;
     border-radius: 14px;
     padding: 14px 16px;
-    border-left: 3px solid #FF6B00;
+    border-left: 3px solid #22C55E;
     animation: apparition 0.25s ease;
   }
   .bulle-reponse.amandine { border-left-color: #F5A9C5; }
   .bulle-reponse.max { border-left-color: #ffffff; }
   .bulle-reponse.toise { border-left-color: #C9A876; }
   .bulle-entete { font-size: 11px; font-weight: 800; letter-spacing: 0.5px; margin-bottom: 6px; }
-  .bulle-entete.iko { color: #FF6B00; }
+  .bulle-entete.iko { color: #22C55E; }
   .bulle-entete.amandine { color: #F5A9C5; }
   .bulle-entete.max { color: #ffffff; }
   .bulle-entete.toise { color: #C9A876; }
@@ -100,7 +102,7 @@
     font-size: 13px;
     color: #b8b8b8;
     padding: 8px 16px;
-    background: rgba(255,107,0,0.08);
+    background: rgba(34,197,94,0.08);
     border-radius: 12px;
   }
 
@@ -115,7 +117,7 @@
   }
   #micro-reunion {
     width: 44px; height: 44px; border-radius: 50%; flex-shrink: 0;
-    background: #FF6B00; border: none; color: #111; font-size: 18px; cursor: pointer;
+    background: #22C55E; border: none; color: #111; font-size: 18px; cursor: pointer;
   }
   #micro-reunion.ecoute { background: #DC2626; animation: pulseSphere 1s infinite; }
   #saisie-reunion {
@@ -124,7 +126,7 @@
   }
   #envoyer-reunion {
     width: 44px; height: 44px; border-radius: 50%; flex-shrink: 0;
-    background: #FF6B00; border: none; color: #111; font-size: 18px; cursor: pointer;
+    background: #22C55E; border: none; color: #111; font-size: 18px; cursor: pointer;
   }
   #envoyer-reunion:disabled { opacity: 0.5; }
 </style>
@@ -135,8 +137,8 @@
      (agrège dashboard/amandine/technicien/metreur + Tickets SAV). Aucun
      indice de rôle plus précis que "supervision globale" dans le code :
      SUPER_ADMIN_IKO uniquement, le choix le plus restrictif possible. -->
-<div id="auth-gate" style="position:fixed;inset:0;z-index:999999;background:#0A0A0A;display:flex;align-items:center;justify-content:center;font-family:'Segoe UI',sans-serif;padding:24px;box-sizing:border-box;">
-  <div id="auth-gate-content" style="font-size:13px;color:#9CA3AF;">Vérification de la session…</div>
+<div id="auth-gate" style="position:fixed;inset:0;z-index:999999;background:var(--iko-bg,#0A0A0A);display:flex;align-items:center;justify-content:center;font-family:var(--iko-font,-apple-system,sans-serif);padding:24px;box-sizing:border-box;">
+  <div id="auth-gate-content" style="font-size:13px;color:var(--iko-text-tertiary,#9CA3AF);">Vérification de la session…</div>
 </div>
 <script>
 (function(){
@@ -152,7 +154,7 @@
   function afficherErreur(){
     contenu.innerHTML = '<div style="text-align:center;">' +
       '<div style="font-size:13px;color:#f87171;margin-bottom:12px;">Erreur de vérification de session.</div>' +
-      '<button id="auth-gate-reco" style="padding:12px 20px;background:#22C55E;color:#111;border:none;border-radius:10px;font-size:13px;font-weight:900;cursor:pointer;">Se reconnecter</button>' +
+      '<button id="auth-gate-reco" style="min-height:44px;padding:0 20px;background:var(--iko-accent,#22C55E);color:var(--iko-text-on-accent,#06210F);border:none;border-radius:var(--iko-radius-md,13px);font-family:var(--iko-font,-apple-system,sans-serif);font-size:13px;font-weight:900;cursor:pointer;">Se reconnecter</button>' +
       '</div>';
     document.getElementById('auth-gate-reco').addEventListener('click', function(){
       window.location.href = "/auth-login.html?retour=" + encodeURIComponent("/reunion.html");

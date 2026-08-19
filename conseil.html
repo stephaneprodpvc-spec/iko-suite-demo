@@ -4,7 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>RSIA IKO — Conseil menuiserie</title>
-<meta name="theme-color" content="#111111">
+<link rel="stylesheet" href="/assets/tokens.css">
+<link rel="stylesheet" href="/assets/primitives.css">
+<meta name="theme-color" content="#22C55E">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -13,8 +15,8 @@
   :root {
     --noir: #111111;
     --noir-doux: #1C1C1C;
-    --orange: #FF6B00;
-    --orange-pale: #FFF1E6;
+    --orange: #22C55E;
+    --orange-pale: rgba(34, 197, 94, 0.18);
     --gris: #6B7280;
     --gris-clair: #E8E8E8;
     --blanc: #FFFFFF;
@@ -255,8 +257,8 @@
      (orientation commerciale : "orienter vers un rendez-vous ou un devis
      avec un conseiller humain") — même rôle que commerce.html, choix le
      plus restrictif justifié faute d'indication plus précise dans le code. -->
-<div id="auth-gate" style="position:fixed;inset:0;z-index:999999;background:#F5F5F5;display:flex;align-items:center;justify-content:center;font-family:'Segoe UI',sans-serif;padding:24px;box-sizing:border-box;">
-  <div id="auth-gate-content" style="font-size:13px;color:#5B6472;">Vérification de la session…</div>
+<div id="auth-gate" style="position:fixed;inset:0;z-index:999999;background:var(--noir);display:flex;align-items:center;justify-content:center;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;padding:24px;box-sizing:border-box;">
+  <div id="auth-gate-content" style="font-size:13px;color:var(--gris-clair);">Vérification de la session…</div>
 </div>
 <script>
 (function(){
@@ -265,14 +267,14 @@
 
   function afficherRefus(){
     contenu.innerHTML = '<div style="text-align:center;max-width:320px;">' +
-      '<div style="font-size:13px;color:#dc2626;margin-bottom:8px;font-weight:700;">Accès refusé</div>' +
-      '<div style="font-size:12px;color:#5B6472;">Votre compte n\'a pas les droits nécessaires pour accéder à cette page.</div>' +
+      '<div style="font-size:13px;color:#f87171;margin-bottom:8px;font-weight:700;">Accès refusé</div>' +
+      '<div style="font-size:12px;color:var(--gris-clair);">Votre compte n\'a pas les droits nécessaires pour accéder à cette page.</div>' +
       '</div>';
   }
   function afficherErreur(){
     contenu.innerHTML = '<div style="text-align:center;">' +
-      '<div style="font-size:13px;color:#dc2626;margin-bottom:12px;">Erreur de vérification de session.</div>' +
-      '<button id="auth-gate-reco" style="padding:12px 20px;background:#FF6B00;color:#111;border:none;border-radius:10px;font-size:13px;font-weight:900;cursor:pointer;">Se reconnecter</button>' +
+      '<div style="font-size:13px;color:#f87171;margin-bottom:12px;">Erreur de vérification de session.</div>' +
+      '<button id="auth-gate-reco" style="min-height:44px;padding:0 20px;background:var(--orange);color:#111;border:none;border-radius:10px;font-size:13px;font-weight:900;cursor:pointer;">Se reconnecter</button>' +
       '</div>';
     document.getElementById('auth-gate-reco').addEventListener('click', function(){
       window.location.href = "/auth-login.html?retour=" + encodeURIComponent("/conseil.html");

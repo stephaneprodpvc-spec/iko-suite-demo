@@ -1,0 +1,89 @@
+/* ==========================================================================
+   IKO — Design Tokens
+   Socle partagé, variables uniquement. Aucune logique, aucun sélecteur de
+   composant ici (voir primitives.css). A charger sur toutes les pages IKO,
+   avant primitives.css.
+   ========================================================================== */
+
+:root {
+
+  /* --- Fond & surfaces ------------------------------------------------- */
+  --iko-bg: #0A0A0A;
+  --iko-surface: rgba(255, 255, 255, 0.045);
+  --iko-surface-solid: #141414;       /* utiliser si backdrop-filter indisponible */
+  --iko-surface-hover: rgba(255, 255, 255, 0.07);
+  --iko-border: rgba(255, 255, 255, 0.09);
+  --iko-border-strong: rgba(255, 255, 255, 0.16);
+  --iko-blur: blur(24px) saturate(150%);
+
+  /* --- Accent (officiel : vert IKO) ------------------------------------ */
+  --iko-accent: #22C55E;
+  --iko-accent-hover: #16A34A;        /* hover/pressed, plus sombre */
+  --iko-accent-soft: rgba(34, 197, 94, 0.12);   /* fonds légers (badge actif, ligne sélectionnée) */
+  --iko-text-on-accent: #06210F;      /* texte sombre sur bouton/pastille vert */
+
+  /* --- Statuts ----------------------------------------------------------
+     Le vert d'accent double comme couleur "succès" pour rester cohérent. */
+  --iko-success: #22C55E;
+  --iko-success-soft: rgba(34, 197, 94, 0.12);
+  --iko-warning: #F5A623;
+  --iko-warning-soft: rgba(245, 166, 35, 0.14);
+  --iko-danger: #FF453A;              /* texte seul, jamais de fond plein (règle existante) */
+  --iko-danger-soft: rgba(255, 69, 58, 0.12);
+  --iko-info: #3B82F6;
+  --iko-info-soft: rgba(59, 130, 246, 0.12);
+
+  /* --- Texte ------------------------------------------------------------ */
+  --iko-text: #F5F5F5;
+  --iko-text-secondary: rgba(255, 255, 255, 0.62);
+  --iko-text-tertiary: rgba(255, 255, 255, 0.40);
+  --iko-text-disabled: rgba(255, 255, 255, 0.28);
+
+  /* --- Typographie -------------------------------------------------------
+     Pile officielle (mission design system) : -apple-system en priorité,
+     iPad/tactile en cible n°1. */
+  --iko-font: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+
+  --iko-text-xs:  11px;
+  --iko-text-sm:  13px;
+  --iko-text-base: 15px;
+  --iko-text-md:  17px;
+  --iko-text-lg:  20px;
+  --iko-text-xl:  26px;
+  --iko-text-2xl: 34px;
+
+  --iko-weight-regular: 400;
+  --iko-weight-medium: 600;
+  --iko-weight-bold: 800;
+
+  /* --- Rayons ------------------------------------------------------------ */
+  --iko-radius-sm: 10px;    /* badges, petites pastilles */
+  --iko-radius-md: 13px;    /* boutons, inputs, panneaux */
+  --iko-radius-lg: 20px;    /* cartes, modales */
+  --iko-radius-pill: 999px; /* badges de statut, chips */
+
+  /* --- Ombres ------------------------------------------------------------ */
+  --iko-shadow-card: 0 8px 24px rgba(0, 0, 0, 0.35);
+  --iko-shadow-modal: 0 20px 60px rgba(0, 0, 0, 0.5);
+  --iko-shadow-focus: 0 0 0 3px rgba(34, 197, 94, 0.35);
+
+  /* --- Espacements (échelle 4px) ------------------------------------------ */
+  --iko-space-1: 4px;
+  --iko-space-2: 8px;
+  --iko-space-3: 12px;
+  --iko-space-4: 16px;
+  --iko-space-5: 24px;
+  --iko-space-6: 32px;
+  --iko-space-7: 48px;
+
+  /* --- Transitions --------------------------------------------------------
+     -slide reprend exactement le timing déjà validé sur le panneau latéral
+     d'admin.html (§9.3) : ne pas changer sans revalider ce panneau. */
+  --iko-transition-fast: 120ms cubic-bezier(.25, .8, .25, 1);
+  --iko-transition-base: 200ms cubic-bezier(.25, .8, .25, 1);
+  --iko-transition-slide: 280ms cubic-bezier(.25, .8, .25, 1);
+
+  /* --- Dimensions tactiles (iPad = cas nominal) --------------------------- */
+  --iko-touch-min: 44px;         /* minimum Apple HIG */
+  --iko-touch-comfortable: 48px; /* boutons d'action principale */
+}
