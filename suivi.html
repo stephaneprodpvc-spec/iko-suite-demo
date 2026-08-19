@@ -194,6 +194,17 @@ const STATUT_STYLE = {
 
 const isStatutClos = (statut) => statut === "Terminé" || statut === "Annulé";
 
+// ---- PRO SANS INTERVENTION : pas de parcours RDV -------------------------
+// Compatibilite historique : "Type de demande" vide/absent = PARTICULIER
+// (comportement historique inchange). La condition metier n'est PAS
+// "Type de demande === PROFESSIONNEL" seul : un Pro AVEC PlanningID a un
+// vrai rendez-vous et garde le parcours RDV complet, exactement comme un
+// Particulier. Seul un Pro SANS PlanningID n'a aucun parcours RDV.
+const estRdvIndisponiblePourTicket = (t) => {
+  const typeDemande = t?.fields?.["Type de demande"] === "PROFESSIONNEL" ? "PROFESSIONNEL" : "PARTICULIER";
+  return typeDemande === "PROFESSIONNEL" && !t?.fields?.PlanningID;
+};
+
 const CRENEAUX = [
   { id: "matin", label: "🌅 Matin", heure: "8h30 — 12h00", valeur: "Matin (8h30 — 12h00)" },
   { id: "apres_midi", label: "🌇 Après-midi", heure: "13h00 — 17h00", valeur: "Après-midi (13h00 — 17h00)" },
@@ -418,6 +429,7 @@ function App() {
 
   const annulerDemande = async () => {
     if (!ticket) return;
+    if (estRdvIndisponiblePourTicket(ticket)) return; // Pro sans PlanningID : aucune action RDV possible, meme par appel direct
     const raison = raisonAnnulation.trim();
     if (!raison) { setRaisonManquante(true); return; }
     setRaisonManquante(false);
@@ -441,6 +453,7 @@ function App() {
 
   const appliquerNouvelleDate = async (typeCreneau, dateInfo) => {
     if (!ticket) return;
+    if (estRdvIndisponiblePourTicket(ticket)) return; // Pro sans PlanningID : aucun appel Planning possible, meme par appel direct
     setChangeEnCours(true); setChangeErr(false);
     try {
       const ancienCreneau = ticket.fields?.Créneau || '';
@@ -560,7 +573,7 @@ function App() {
               )}
             </div>
 
-            {!isStatutClos(statut) && (
+            {!isStatutClos(statut) && !estRdvIndisponiblePourTicket(ticket) && (
               <div style={{background:F.blanc,border:"1px solid "+F.grisBord,borderRadius:"14px",padding:"22px",boxShadow:"0 4px 20px rgba(0,0,0,0.05)",marginBottom:"16px"}}>
                 <h2 style={{fontSize:"14px",color:F.marine,marginBottom:"12px"}}>🛠️ Gérer ma demande</h2>
 
@@ -626,7 +639,7 @@ function App() {
                 onChangeMessage={setMessage}
                 onEnvoyer={envoyerMessage}
                 envoi={envoi}
-                propositionEnAttente={!!ticket.fields?.["Proposition auto en attente"]}
+                propositionEnAttente={!!ticket.fields?.["Proposition auto en attente"] && !estRdvIndisponiblePourTicket(ticket)}
                 propositionCreneau={ticket.fields?.["Proposition auto créneau"]}
                 propositionMois={ticket.fields?.["Proposition auto mois"]}
                 onChoisirProposition={appliquerNouvelleDate}

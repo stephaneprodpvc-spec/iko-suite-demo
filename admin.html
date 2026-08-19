@@ -808,6 +808,7 @@
           <div class="chip" data-mod="Technicien">Technicien</div>
           <div class="chip" data-mod="SAV">SAV</div>
           <div class="chip" data-mod="Métreur">Métreur</div>
+          <div class="chip" data-mod="SAV Pro">SAV Pro</div>
         </div>
 
         <label>Nombre d'agences (1 à 10)</label>
@@ -1984,12 +1985,22 @@ function afficherQuestionnaire(records){
     var actif = f["Actif"] !== false ? "checked" : "";
     var oblig = f["Obligatoire"] ? "checked" : "";
     var type = f["Type de réponse"] || "Texte libre";
+    // Valeur vide (questions historiques creees avant ce champ) -> affichee
+    // explicitement comme "Particulier" par defaut, sans rien ecrire tant
+    // que l'utilisateur ne touche pas au selecteur (ecriture uniquement au
+    // "change", meme mecanisme generique que les autres champs ci-dessous).
+    var parcours = f["Parcours"] || "Particulier";
     return "<div class='q-row' style='border:1px solid var(--border);border-radius:12px;padding:10px;'>" +
       "<input type='text' value='" + escHtml(f["Question"]) + "' placeholder='Texte de la question' data-id='" + rec.id + "' data-champ='Question' style='width:100%;margin-bottom:6px;padding:8px 10px;border-radius:8px;border:1px solid var(--border);background:rgba(255,255,255,0.04);color:var(--texte);font-size:13px;outline:none;'>" +
       "<div style='display:flex;gap:8px;flex-wrap:wrap;align-items:center;'>" +
         "<select data-id='" + rec.id + "' data-champ='Type de réponse' class='q-type' style='padding:6px 8px;border-radius:8px;border:1px solid var(--border);background:rgba(255,255,255,0.04);color:var(--texte);font-size:12px;'>" +
           "<option " + (type === "Texte libre" ? "selected" : "") + ">Texte libre</option>" +
           "<option " + (type === "Choix multiple" ? "selected" : "") + ">Choix multiple</option>" +
+        "</select>" +
+        "<select data-id='" + rec.id + "' data-champ='Parcours' title='Parcours' style='padding:6px 8px;border-radius:8px;border:1px solid var(--border);background:rgba(255,255,255,0.04);color:var(--texte);font-size:12px;'>" +
+          "<option " + (parcours === "Particulier" ? "selected" : "") + ">Particulier</option>" +
+          "<option " + (parcours === "Professionnel" ? "selected" : "") + ">Professionnel</option>" +
+          "<option " + (parcours === "Les deux" ? "selected" : "") + ">Les deux</option>" +
         "</select>" +
         "<input type='number' value='" + (f["Ordre"] || (i + 1)) + "' data-id='" + rec.id + "' data-champ='Ordre' title='Ordre' style='width:52px;padding:6px 8px;border-radius:8px;border:1px solid var(--border);background:rgba(255,255,255,0.04);color:var(--texte);font-size:12px;'>" +
         "<label style='font-size:11px;color:var(--texte-dim);display:flex;align-items:center;gap:4px;'><input type='checkbox' data-id='" + rec.id + "' data-champ='Obligatoire' " + oblig + "> Obligatoire</label>" +

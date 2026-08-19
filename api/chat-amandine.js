@@ -53,10 +53,9 @@ const CRENEAUX = {
     apres_midi: "Après-midi (13h00 — 17h00)",
 };
 
-function buildSystemPrompt(vocab, agencesNoms, questionnairePersonnalise) {
-  const listeDiagnostics = vocab.diagnostics.map(function (d) { return "- " + d; }).join("\n");
-  const listeAgences = (agencesNoms && agencesNoms.length > 0 ? agencesNoms : ["Agence 1", "Agence 2", "Agence 3", "Agence 4"]).join(", ");
-  const blocQuestionnaire = (questionnairePersonnalise && questionnairePersonnalise.length > 0) ? `
+function construireBlocQuestionnaire(questionnairePersonnalise, nomOutil) {
+  if (!questionnairePersonnalise || questionnairePersonnalise.length === 0) return "";
+  return `
 
 QUESTIONNAIRE PERSONNALISE DE CE CLIENT
 En plus (et a la place) des questions generiques du deroule ci-dessus pour
@@ -68,9 +67,71 @@ ${questionnairePersonnalise.map(function (q, i) {
   const oblig = q.obligatoire ? " [reponse obligatoire]" : " [optionnel, tu peux passer si le client ne sait pas]";
   return (i + 1) + ". " + q.question + choix + oblig;
 }).join("\n")}
-Quand tu appelles creer_ticket, remplis le champ reponses_questionnaire avec
+Quand tu appelles ${nomOutil}, remplis le champ reponses_questionnaire avec
 un objet JSON en texte, au format {"question 1": "reponse", "question 2": "reponse"},
-en reprenant exactement le texte de chaque question ci-dessus comme cle.` : "";
+en reprenant exactement le texte de chaque question ci-dessus comme cle.`;
+}
+
+function buildSystemPrompt(vocab, agencesNoms, questionnaireParticulier, questionnaireProfessionnel, savProActif) {
+  const listeDiagnostics = vocab.diagnostics.map(function (d) { return "- " + d; }).join("\n");
+  const listeAgences = (agencesNoms && agencesNoms.length > 0 ? agencesNoms : ["Agence 1", "Agence 2", "Agence 3", "Agence 4"]).join(", ");
+  const blocQuestionnaire = construireBlocQuestionnaire(questionnaireParticulier, "creer_ticket");
+
+  // Bloc bifurcation + deroule Professionnel : UNIQUEMENT si ce tenant a le
+  // module SAV Pro actif. Pour tout le reste (tenant sans le module, ou
+  // aucun tenant resolu), ces deux blocs sont des chaines vides : le prompt
+  // final est alors rigoureusement identique a avant ce lot, donc aucune
+  // regression possible sur le parcours Particulier.
+  const blocBifurcation = savProActif ? `
+
+BIFURCATION INITIALE (a faire avant toute autre question, etape 0)
+Ce client propose deux parcours SAV distincts : PARTICULIER (proprietaire,
+client final apres pose) et PROFESSIONNEL (artisan, revendeur, poseur,
+entreprise ayant commande des produits, avec ou sans pose par l'entreprise).
+Des le debut de la conversation, si ce n'est pas deja evident d'apres
+l'historique, demande simplement : "Etes-vous un particulier ou un
+professionnel ?" Une fois la reponse obtenue (ou si elle ressort deja
+clairement des echanges precedents), utilise EXCLUSIVEMENT le deroule
+correspondant ci-dessous pour le reste de la conversation.
+REGLE ABSOLUE : ne melange jamais les deux deroules. Ne pose jamais une
+question du deroule PROFESSIONNEL a un particulier, ni une question du
+deroule PARTICULIER a un professionnel. Le deroule PARTICULIER ci-dessous
+s'applique uniquement si le client est un particulier.` : "";
+
+  const blocProfessionnel = savProActif ? `
+
+DEROULE PROFESSIONNEL (uniquement si le client s'est identifie comme
+professionnel a l'etape 0 ci-dessus)
+1. Comprendre le contexte : nom de la societe, nom et prenom du contact.
+2. Recuperer telephone et e-mail (meme vigilance qu'au-dessus sur l'email
+   dicte a l'oral).
+3. Demander la reference de commande et, si le client la connait, la date
+   de commande.
+4. Demander l'agence concernee parmi : ${listeAgences}.
+5. Comprendre le probleme : quels produits sont concernes, quel est le type
+   de probleme (non-conformite par rapport a la commande, erreur de
+   produit, quantite incorrecte, defaut produit, probleme technique,
+   probleme constate apres une pose faite par le professionnel lui-meme,
+   ou autre), et une description precise.
+6. Demander si une pose a deja ete effectuee (par le professionnel ou pas).
+7. Demander si une intervention terrain est reellement necessaire pour
+   traiter cette demande (besoin_intervention). Une non-conformite
+   documentaire ou une erreur de quantite se traite souvent sans
+   intervention ; un probleme technique sur produit pose en necessite
+   generalement une. Ne force JAMAIS une prise de rendez-vous si le client
+   n'en a pas besoin.
+   - Si intervention necessaire : demande l'adresse complete du chantier,
+     puis demande la periode preferee (matin ou apres-midi), appelle
+     lister_creneaux, propose 2-3 dates, puis reserver_creneau une fois le
+     choix fait. Si le client prefere etre rappele pour convenir d'un
+     horaire, c'est possible : n'appelle alors pas reserver_creneau.
+   - Si pas d'intervention necessaire : ne demande pas d'adresse chantier
+     sauf si le client la mentionne spontanement, et ne parle pas de
+     rendez-vous.
+8. Une fois toutes les infos reunies, appelle creer_ticket_pro. Donne au
+   client le numero de ticket EXACT retourne par l'outil (ne l'invente
+   jamais) et confirme le rendez-vous s'il y en a un.${construireBlocQuestionnaire(questionnaireProfessionnel, "creer_ticket_pro")}` : "";
+
   return `
 Tu es Amandine, l'assistante SAV en ligne d'Iko Suite, specialiste de
 ${vocab.nom_metier}.
@@ -93,9 +154,9 @@ simple, car tes reponses sont aussi lues a voix haute.
 - N'utilise JAMAIS de markdown dans tes reponses (pas d'asterisques, pas de
 gras, pas d'italique, pas de #, pas de listes a puces) : le texte est affiche
 brut, donc ecris uniquement du texte simple, y compris pour les numeros de
-ticket (ex: SAV-2026-1234, jamais **SAV-2026-1234**).
+ticket (ex: SAV-2026-1234, jamais **SAV-2026-1234**).${blocBifurcation}
 
-DEROULE POUR OUVRIR UN TICKET / PRENDRE RDV
+${savProActif ? "DEROULE PARTICULIER (uniquement si le client est un particulier, voir bifurcation ci-dessus)" : "DEROULE POUR OUVRIR UN TICKET / PRENDRE RDV"}
 1. Comprendre le probleme (quel produit, quelle panne, depuis quand).
 2. Demander l'agence du client parmi : ${listeAgences}. Si le client
    donne juste sa ville, associe-la a l'agence la plus proche parmi
@@ -123,7 +184,7 @@ DEROULE POUR OUVRIR UN TICKET / PRENDRE RDV
                         choisir maintenant, c'est possible : n'appelle alors pas reserver_creneau.
                         6. Une fois toutes les infos reunies, appelle creer_ticket. Donne ensuite au
                            client le numero de ticket EXACT retourne par l'outil (ne l'invente
-                              jamais toi-meme) et confirme le rendez-vous s'il y en a un.
+                              jamais toi-meme) et confirme le rendez-vous s'il y en a un.${blocProfessionnel}
 
                               REGLES ABSOLUES
                               - Ne donne JAMAIS de prix. Si on te le demande, dis-le simplement et propose
@@ -150,9 +211,9 @@ ${blocQuestionnaire}
 // client resolu). Reconstruit a chaque requete au lieu d'une constante
 // partagee, pour eviter qu'un client A voie les agences d'un client B sur
 // un meme serveur (meme raison que resoudreClient calcule par requete).
-function buildTools(agencesNoms, vocab) {
+function buildTools(agencesNoms, vocab, savProActif) {
   const listeAgences = agencesNoms && agencesNoms.length > 0 ? agencesNoms : AGENCES_VALIDES;
-  return [
+  const outils = [
   {
     name: "lister_creneaux",
     description: "Liste les creneaux de rendez-vous disponibles pour une agence et une periode donnees (au moins " + DELAI_MIN_JOURS + " jours a l'avance). Retourne jusqu'a 5 dates avec leur identifiant interne a reutiliser dans reserver_creneau.",
@@ -201,7 +262,7 @@ function buildTools(agencesNoms, vocab) {
   },
   {
     name: "consulter_historique_ouvertures",
-    description: "Recherche si ce client a deja des ouvertures (fenetres, portes...) mesurees et posees precedemment, a partir de son nom ou telephone. A appeler des que tu connais le nom ou le telephone du client et avant de lui demander de decrire son produit en detail : s'il a un historique, tu peux t'appuyer dessus (repere, type, pose, dimensions) au lieu de tout lui faire redecrire.",
+    description: "Recherche si ce client a deja des ouvertures (fenetres, portes...) mesurees et posees precedemment, a partir de son nom ou telephone. A appeler des que tu connais le nom ou le telephone du client et avant de lui demander de decrire son produit en detail : s'il a un historique, tu peux t'appuyer dessus (repere, type, pose, dimensions) au lieu de tout lui faire redecrire. Uniquement pour un client PARTICULIER : n'utilise jamais cet outil pour un professionnel.",
     input_schema: {
       type: "object",
       properties: {
@@ -211,6 +272,44 @@ function buildTools(agencesNoms, vocab) {
     },
   },
   ];
+
+  // creer_ticket_pro : uniquement propose si ce tenant a le module SAV Pro
+  // actif. Verrou structurel en plus du verrou prompt (blocBifurcation /
+  // blocProfessionnel dans buildSystemPrompt) : meme si le texte du prompt
+  // fuitait ou etait mal suivi, l'outil serait de toute facon absent de la
+  // liste envoyee a Claude pour un tenant sans ce module, donc aucun ticket
+  // Professionnel ne peut techniquement etre cree.
+  if (savProActif) {
+    outils.push({
+      name: "creer_ticket_pro",
+      description: "Cree reellement un ticket SAV PROFESSIONNEL dans le systeme Iko Suite (meme table que les tickets Particulier, mais Type de demande = PROFESSIONNEL) et notifie l'agence. A appeler une seule fois, quand toutes les informations necessaires du deroule PROFESSIONNEL ont ete recueillies. N'appelle jamais cet outil pour un client PARTICULIER : utilise creer_ticket dans ce cas.",
+      input_schema: {
+        type: "object",
+        properties: {
+          agence: { type: "string", enum: listeAgences },
+          societe: { type: "string", description: "Nom de la societe du professionnel." },
+          nom: { type: "string", description: "Nom et prenom du contact chez le professionnel." },
+          telephone: { type: "string" },
+          email: { type: "string" },
+          reference_commande: { type: "string", description: "Reference de la commande concernee. Laisser vide si inconnue." },
+          date_commande: { type: "string", description: "Date de la commande si connue, sinon vide." },
+          produit: { type: "string", description: "Produit(s) concerne(s) par la demande." },
+          probleme: { type: "string", description: "Type de probleme : non-conformite, erreur de produit, quantite incorrecte, defaut produit, probleme technique, probleme apres pose par le professionnel, ou autre." },
+          description: { type: "string", description: "Description precise de la demande." },
+          pose_effectuee: { type: "string", enum: ["oui", "non", "sans_objet"], description: "Une pose a-t-elle deja ete effectuee (par le professionnel ou un tiers) ?" },
+          besoin_intervention: { type: "boolean", description: "true si une intervention terrain d'un technicien est reellement necessaire, false si la demande peut etre traitee sans deplacement." },
+          adresse: { type: "string", description: "Adresse complete du chantier. Uniquement si besoin_intervention est true, sinon laisser vide." },
+          urgent: { type: "boolean", description: "true si probleme de securite ou degat en cours." },
+          creneau_texte: { type: "string", description: "Texte lisible du rendez-vous choisi si besoin_intervention est true et qu'un creneau a ete reserve, sinon A convenir ou vide." },
+          planning_id: { type: "string", description: "Identifiant du creneau reserve via reserver_creneau, si applicable. Laisser vide sinon." },
+          reponses_questionnaire: { type: "string", description: "Si un questionnaire personnalise Professionnel a ete fourni dans tes instructions, objet JSON en texte {\"question\": \"reponse\"} avec les reponses recueillies. Laisser vide sinon." },
+        },
+        required: ["agence", "societe", "nom", "telephone", "email", "produit", "probleme", "description", "besoin_intervention", "urgent"],
+      },
+    });
+  }
+
+  return outils;
 }
 
 function airtableHeaders() {
@@ -246,6 +345,7 @@ async function obtenirQuestionnaireClient(clientId) {
         type: rec.fields["Type de réponse"] || "Texte libre",
         options: rec.fields["Options"] || "",
         obligatoire: !!rec.fields["Obligatoire"],
+        parcours: rec.fields["Parcours"] || "",
       };
     }).filter(function (q) { return q.question; });
     return questions.length > 0 ? questions : null;
@@ -253,6 +353,22 @@ async function obtenirQuestionnaireClient(clientId) {
     console.error("obtenirQuestionnaireClient erreur:", e);
     return null;
   }
+}
+
+// Repartit la liste unique (deja filtree Client+Actif, un seul appel
+// Airtable) selon le champ "Parcours" de chaque question : une question
+// sans valeur (anciennes questions creees avant l'existence du champ)
+// reste compatible avec le parcours Particulier, comportement historique.
+// "Les deux" apparait dans les deux listes. Aucune fuite possible entre
+// tenants : la liste source est deja filtree par clientId en amont.
+function filtrerQuestionnairePourParcours(questions, parcours) {
+  if (!questions) return null;
+  const filtrees = questions.filter(function (q) {
+    const p = q.parcours || "Particulier";
+    if (parcours === "professionnel") return p === "Professionnel" || p === "Les deux";
+    return p === "Particulier" || p === "Les deux";
+  });
+  return filtrees.length > 0 ? filtrees : null;
 }
 
 // Agences de ce client (table "Agences", filtre Client + Actif), avec leurs
@@ -296,12 +412,18 @@ async function resoudreClient(slug) {
       obtenirQuestionnaireClient(rec.id),
       obtenirAgencesClient(rec.id),
     ]);
+    const modulesActifs = (rec.fields && rec.fields["Modules actifs"]) || [];
     return {
       id: rec.id,
       tradeId: (metierId && TRADES[metierId]) ? metierId : null,
       questionnaire: questionnaire,
       agences: agences,
       bloque: rec.fields && rec.fields["Accès bloqué"] === true,
+      // SAV Pro : uniquement si explicitement active pour ce tenant (module
+      // dans Clients/Modules actifs). Par defaut false : un client sans ce
+      // module ne voit jamais la bifurcation Professionnel (voir
+      // buildSystemPrompt). Independant du tenant lui-meme (JWT/slug).
+      savProActif: modulesActifs.indexOf("SAV Pro") !== -1,
     };
   } catch (e) {
     console.error("resoudreClient erreur:", e);
@@ -335,6 +457,40 @@ function filtreAvecClientServeur(baseFormula, clientId) {
   if (!clientId) return baseFormula;
   const clause = 'FIND("' + clientId + '", ARRAYJOIN({Compte client}))';
   return baseFormula ? "AND(" + baseFormula + "," + clause + ")" : clause;
+}
+
+// Filet de securite uniquement (voir commentaires aux points d'appel) :
+// recherche le ticket par son numero (connu et unique des sa generation)
+// et repose Compte client / Reponses questionnaire / Type de demande si
+// besoin. Idempotent et sans effet si Make les a deja correctement poses
+// via compte_client_id/reponses_questionnaire/type_demande dans le payload
+// initial. Best-effort : une erreur ici ne fait jamais echouer la creation
+// du ticket, qui existe deja a ce stade.
+async function rattacherTicketApresCoup(numero, clientId, reponsesQuestionnaire, typeDemande) {
+  try {
+    await new Promise(function (resolve) { setTimeout(resolve, 2500); });
+    const formuleTicket = encodeURIComponent('{Name}="' + numero + '"');
+    const rTicket = await fetch("https://api.airtable.com/v0/" + AIRTABLE_BASE + "/Tickets%20SAV?filterByFormula=" + formuleTicket + "&maxRecords=1", { headers: airtableHeaders() });
+    const jsonTicket = await rTicket.json();
+    const ticketRec = (jsonTicket.records || [])[0];
+    if (!ticketRec) return;
+    const dejaCompteClient = Array.isArray(ticketRec.fields && ticketRec.fields["Compte client"]) && ticketRec.fields["Compte client"].length > 0;
+    const dejaReponses = !!(ticketRec.fields && ticketRec.fields["Réponses questionnaire"]);
+    const champsMaj = {};
+    if (clientId && !dejaCompteClient) champsMaj["Compte client"] = [clientId];
+    if (reponsesQuestionnaire && !dejaReponses) champsMaj["Réponses questionnaire"] = String(reponsesQuestionnaire).slice(0, 5000);
+    // "Type de demande" n'a pas de mapping Make confirme dans ce lot : pose
+    // systematique ici tant que ce mapping n'est pas branche cote scenario.
+    if (typeDemande) champsMaj["Type de demande"] = typeDemande;
+    if (Object.keys(champsMaj).length === 0) return;
+    await fetch("https://api.airtable.com/v0/" + AIRTABLE_BASE + "/Tickets%20SAV/" + ticketRec.id, {
+      method: "PATCH",
+      headers: airtableHeaders(),
+      body: JSON.stringify({ fields: champsMaj }),
+    });
+  } catch (e) {
+    console.error("rattacherTicketApresCoup erreur (non bloquant):", e);
+  }
 }
 
 async function executerOutil(nom, input, clientId, tradeId, agencesObjets) {
@@ -414,6 +570,17 @@ async function executerOutil(nom, input, clientId, tradeId, agencesObjets) {
       // notifications par agence (mapping non fait dans cette session).
       email_agence: (agenceInfo && agenceInfo.emailAgence) || "",
       email_technicien: (agenceInfo && agenceInfo.emailTechnicien) || "",
+      // Fournis des la creation initiale (mecanisme principal desormais) :
+      // le scenario Make 6852711 sait deja patcher Compte client et
+      // Reponses questionnaire de facon synchrone via sa branche "Tenant a
+      // rattacher" des lors que compte_client_id est present dans le
+      // payload. type_demande est envoye des maintenant par anticipation ;
+      // le mapping cote champ Airtable n'a pas pu etre confirme/branche
+      // dans ce lot (voir rapport), donc PARTICULIER est aussi pose via le
+      // filet de securite ci-dessous en attendant.
+      compte_client_id: clientId || "",
+      reponses_questionnaire: input.reponses_questionnaire || "",
+      type_demande: "PARTICULIER",
     };
 
     const r = await fetch(MAKE_WEBHOOK, {
@@ -423,33 +590,81 @@ async function executerOutil(nom, input, clientId, tradeId, agencesObjets) {
     });
     if (!r.ok) return { erreur: "La creation du ticket a echoue, merci de reessayer." };
 
-    if (clientId || input.reponses_questionnaire) {
-      // Le ticket est cree de maniere asynchrone par le scenario Make (pas
-      // directement par ce code). On attend un court instant puis on le
-      // retrouve par son numero (genere ci-dessus, donc connu et unique)
-      // pour lui attacher le lien "Compte client" et/ou les reponses du
-      // questionnaire personnalise. Best-effort : si ca echoue, le ticket
-      // existe deja et fonctionne, juste sans ces champs complementaires.
-      try {
-        await new Promise(function (resolve) { setTimeout(resolve, 2500); });
-        const formuleTicket = encodeURIComponent('{Name}="' + numero + '"');
-        const rTicket = await fetch("https://api.airtable.com/v0/" + AIRTABLE_BASE + "/Tickets%20SAV?filterByFormula=" + formuleTicket + "&maxRecords=1", { headers: airtableHeaders() });
-        const jsonTicket = await rTicket.json();
-        const ticketRec = (jsonTicket.records || [])[0];
-        if (ticketRec) {
-          const champsMaj = {};
-          if (clientId) champsMaj["Compte client"] = [clientId];
-          if (input.reponses_questionnaire) champsMaj["Réponses questionnaire"] = String(input.reponses_questionnaire).slice(0, 5000);
-          await fetch("https://api.airtable.com/v0/" + AIRTABLE_BASE + "/Tickets%20SAV/" + ticketRec.id, {
-            method: "PATCH",
-            headers: airtableHeaders(),
-            body: JSON.stringify({ fields: champsMaj }),
-          });
-        }
-      } catch (e) {
-        console.error("Maj complementaire du ticket echouee (non bloquant):", e);
-      }
+    // Filet de securite uniquement : la branche Make "Tenant a rattacher"
+    // recoit deja compte_client_id/reponses_questionnaire des l'appel
+    // ci-dessus et doit normalement suffire. Ce PATCH differe ne reste
+    // necessaire que pour "Type de demande" (mapping Make non confirme
+    // dans ce lot) ; il est conserve pour Compte client/Reponses
+    // questionnaire uniquement par prudence (idempotent, sans effet si
+    // Make les a deja poses correctement).
+    await rattacherTicketApresCoup(numero, clientId, input.reponses_questionnaire, "PARTICULIER");
+
+    return { ok: true, ticket: numero };
+  }
+
+  if (nom === "creer_ticket_pro") {
+    if (!agencesNoms.includes(input.agence)) {
+      return { erreur: "Agence invalide." };
     }
+    const numero = "SAV-" + new Date().getFullYear() + "-" + (Math.floor(Math.random() * 9000) + 1000);
+    const agenceInfo = (agencesObjets || []).find(function (a) { return a.nom === input.agence; });
+    const besoinIntervention = !!input.besoin_intervention;
+
+    // Champs structures propres au parcours Pro (societe, commande, pose,
+    // intervention...) : pas de mapping Make dedie pour ces colonnes, donc
+    // regroupes ici dans le meme JSON que le questionnaire personnalise
+    // (mecanisme deja existant et deja tenant-aware, aucune modif Make
+    // necessaire pour cette partie).
+    const infosPro = {
+      "Société": input.societe || "",
+      "Référence commande": input.reference_commande || "",
+      "Date de commande": input.date_commande || "",
+      "Pose déjà effectuée": input.pose_effectuee || "",
+      "Intervention nécessaire": besoinIntervention ? "Oui" : "Non",
+      "Description": input.description || "",
+    };
+    let reponsesQuestionnairePro;
+    try {
+      const custom = input.reponses_questionnaire ? JSON.parse(input.reponses_questionnaire) : {};
+      reponsesQuestionnairePro = JSON.stringify(Object.assign({}, infosPro, custom));
+    } catch (e) {
+      reponsesQuestionnairePro = JSON.stringify(infosPro);
+    }
+
+    const payload = {
+      marque: "iko",
+      ticket: numero,
+      agence: input.agence,
+      nom: input.nom,
+      tel: input.telephone,
+      "e-mail": input.email,
+      adresse: besoinIntervention ? (input.adresse || "") : "",
+      produit: input.produit,
+      probleme: input.probleme,
+      creneau: besoinIntervention ? (input.creneau_texte || "") : "",
+      garantie: "N/A",
+      facture: "",
+      urgent: input.urgent ? "Oui" : "Non",
+      photos: "",
+      facture_photo: "",
+      planningId: besoinIntervention ? (input.planning_id || "") : "",
+      source: "Amandine Pro (IA)",
+      email_agence: (agenceInfo && agenceInfo.emailAgence) || "",
+      email_technicien: (agenceInfo && agenceInfo.emailTechnicien) || "",
+      compte_client_id: clientId || "",
+      reponses_questionnaire: reponsesQuestionnairePro,
+      type_demande: "PROFESSIONNEL",
+    };
+
+    const r = await fetch(MAKE_WEBHOOK, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!r.ok) return { erreur: "La creation du ticket a echoue, merci de reessayer." };
+
+    // Meme filet de securite que creer_ticket (voir commentaire ci-dessus).
+    await rattacherTicketApresCoup(numero, clientId, reponsesQuestionnairePro, "PROFESSIONNEL");
 
     return { ok: true, ticket: numero };
   }
@@ -540,8 +755,10 @@ try {
   // reglage demo global (Planning/CONFIG, mode concepteur du dashboard).
   const agencesObjetsActuels = (contexteClient && contexteClient.agences) || AGENCES_VALIDES.map(function (n) { return { nom: n, emailAgence: "", emailTechnicien: "" }; });
   const agencesNomsActuels = agencesObjetsActuels.map(function (a) { return a.nom; });
-  const questionnaireActuel = contexteClient ? contexteClient.questionnaire : null;
-  const toolsActuels = buildTools(agencesNomsActuels, vocabActuel);
+  const savProActifActuel = !!(contexteClient && contexteClient.savProActif);
+  const questionnaireParticulierActuel = filtrerQuestionnairePourParcours(contexteClient ? contexteClient.questionnaire : null, "particulier");
+  const questionnaireProfessionnelActuel = savProActifActuel ? filtrerQuestionnairePourParcours(contexteClient ? contexteClient.questionnaire : null, "professionnel") : null;
+  const toolsActuels = buildTools(agencesNomsActuels, vocabActuel, savProActifActuel);
   const messages = (req.body || {}).messages;
   if (!Array.isArray(messages) || messages.length === 0) {
     return res.status(400).json({ error: "Aucun message recu" });
@@ -603,7 +820,7 @@ sait deja qui tu es, ce n'est pas ta premiere reunion avec eux.
         model: MODELE,
         max_tokens: 800,
         temperature: 0.6,
-        system: [{ type: "text", text: buildSystemPrompt(vocabActuel, agencesNomsActuels, questionnaireActuel) + (req.body.reunion ? BLOC_REUNION_AMANDINE : ""), cache_control: { type: "ephemeral" } }],
+        system: [{ type: "text", text: buildSystemPrompt(vocabActuel, agencesNomsActuels, questionnaireParticulierActuel, questionnaireProfessionnelActuel, savProActifActuel) + (req.body.reunion ? BLOC_REUNION_AMANDINE : ""), cache_control: { type: "ephemeral" } }],
         tools: toolsActuels,
         messages: convertis,
       }),

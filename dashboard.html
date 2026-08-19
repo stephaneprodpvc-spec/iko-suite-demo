@@ -211,6 +211,13 @@ const parseDateCreneau = (creneau) => {
 // ---- STATUTS "CLOS" (Terminé / Annulé) ----
 const isStatutClos = (statut) => statut === "Terminé" || statut === "Annulé" || statut === "Supprimé";
 
+// ---- TYPE DE DEMANDE (Particulier / Professionnel) ----
+// Compatibilite historique : un ticket sans valeur "Type de demande" (tous
+// les tickets crees avant l'ajout de ce champ) est considere PARTICULIER.
+// Purement cote lecture/affichage : aucun backfill Airtable, la valeur en
+// base reste vide tant que personne ne la modifie explicitement ailleurs.
+const normaliserTypeDemande = (t) => (t.fields?.["Type de demande"] === "PROFESSIONNEL") ? "PROFESSIONNEL" : "PARTICULIER";
+
 function Badge({ label, color, bg, style }) {
   return <span style={{display:"inline-block",padding:"2px 8px",borderRadius:"20px",fontSize:"10px",fontWeight:"700",color,background:bg,letterSpacing:"0.5px",...style}}>{label}</span>;
 }
@@ -390,6 +397,7 @@ function TicketRow({ t, onStatusChange, onAnnuler, onSupprimer, onSupprimerDefin
 
   const urgent = t.fields?.Qualification === "Oui";
   const rdvModifie = !!t.fields?.["RDV modifié - notif technicien"];
+  const typeDemande = normaliserTypeDemande(t);
   const statut = t.fields?.Statut || "Nouveau";
   const statusColors = {
     "Nouveau": { color: C.bleu, bg: C.bleuDim },
@@ -412,6 +420,7 @@ function TicketRow({ t, onStatusChange, onAnnuler, onSupprimer, onSupprimerDefin
           <span style={{fontSize:"12px",fontWeight:"900",color:C.or,fontFamily:"monospace"}}>{t.fields?.Name||"—"}</span>
           {urgent && <Badge label="URGENT" color={C.rouge} bg={C.rougeDim} style={{animation:"clignoteUrgent 1.1s ease-in-out infinite"}}/>}
           {rdvModifie && <Badge label="🔄 RDV modifié" color={C.bleu} bg={C.bleuDim}/>}
+          {typeDemande === "PROFESSIONNEL" ? <Badge label="PRO" color={C.or} bg={C.orDim}/> : <Badge label="PARTICULIER" color={C.muted} bg="#F3F4F6"/>}
           <Badge label={statut} color={sc.color} bg={sc.bg}/>
           {t.fields?.["Source"] === "telephone" && <Badge label="📞 Tél." color={C.jaune} bg={C.jauneDim}/>}
           <span style={{fontSize:"10px",color:C.muted,marginLeft:"auto"}}>{t.fields?.Agence}</span>
@@ -2141,6 +2150,9 @@ function Dashboard({ agenceAccess, onClose }) {
   const [urgentOnly, setUrgentOnly] = React.useState(false);
   const [messagesOnly, setMessagesOnly] = React.useState(false);
   const [rdvModifieOnly, setRdvModifieOnly] = React.useState(false);
+  // Independant des toggles ci-dessus (jamais reset ni resetant les autres) :
+  // permet le cumul demande, ex. Professionnels + RDV modifies simultanement.
+  const [typeDemandeFilter, setTypeDemandeFilter] = React.useState("tous");
   const [openMessageTicketId, setOpenMessageTicketId] = React.useState(null);
   const [amandineOuverte, setAmandineOuverte] = React.useState(false);
   const [amandineEcoute, setAmandineEcoute] = React.useState(false);
@@ -2832,9 +2844,10 @@ function Dashboard({ agenceAccess, onClose }) {
     const matchUrgent = !urgentOnly || (t.fields?.Qualification === "Oui" && !isStatutClos(t.fields?.Statut));
     const matchMessages = !messagesOnly || t.fields?.["Message client non lu"] || t.id === openMessageTicketId;
     const matchRdvModifie = !rdvModifieOnly || t.fields?.["RDV modifié - notif technicien"];
+    const matchTypeDemande = typeDemandeFilter==="tous" || normaliserTypeDemande(t) === (typeDemandeFilter==="professionnel" ? "PROFESSIONNEL" : "PARTICULIER");
     const q = search.toLowerCase();
     const matchSearch = !q || (t.fields?.Client||"").toLowerCase().includes(q) || (t.fields?.Name||"").toLowerCase().includes(q) || (t.fields?.Produit||"").toLowerCase().includes(q);
-    return matchAgence && matchStatut && matchUrgent && matchMessages && matchRdvModifie && matchSearch;
+    return matchAgence && matchStatut && matchUrgent && matchMessages && matchRdvModifie && matchTypeDemande && matchSearch;
   });
 
   const sortFn = (a,b) => {
@@ -2864,6 +2877,8 @@ function Dashboard({ agenceAccess, onClose }) {
     devisEnAttente: tickets.filter(t => ["Devis à faire","Devis envoyé","Devis - Suivi","Devis - Attente fournisseur"].includes(t.fields?.Statut)).length,
     messagesNonLus: tickets.filter(t => t.fields?.["Message client non lu"]).length,
     rdvModifies: tickets.filter(t => t.fields?.["RDV modifié - notif technicien"] && !isStatutClos(t.fields?.Statut)).length,
+    particuliers: tickets.filter(t => normaliserTypeDemande(t) === "PARTICULIER").length,
+    professionnels: tickets.filter(t => normaliserTypeDemande(t) === "PROFESSIONNEL").length,
   };
   stats.archives = stats.annule + stats.supprime;
   const ticketsNotes = tickets.filter(t => typeof t.fields?.Note === "number");
@@ -3063,7 +3078,7 @@ function Dashboard({ agenceAccess, onClose }) {
         <div style={{display:"flex",gap:"12px",marginBottom:"20px",flexWrap:"wrap"}}>
           <StatCard label="Total tickets" value={stats.total} accent
             active={statutFilter==="tous" && !urgentOnly && !messagesOnly && !rdvModifieOnly}
-            onClick={() => { setStatutFilter("tous"); setUrgentOnly(false); setMessagesOnly(false); setRdvModifieOnly(false); }}/>
+            onClick={() => { setStatutFilter("tous"); setUrgentOnly(false); setMessagesOnly(false); setRdvModifieOnly(false); setTypeDemandeFilter("tous"); }}/>
           <StatCard label="Urgents" value={stats.urgent} sub="à traiter en priorité" alert
             active={urgentOnly}
             onClick={() => { setUrgentOnly(!urgentOnly); setStatutFilter("tous"); setMessagesOnly(false); setRdvModifieOnly(false); }}/>
@@ -3083,6 +3098,16 @@ function Dashboard({ agenceAccess, onClose }) {
             active={statutFilter==="archives"}
             onClick={() => { setStatutFilter("archives"); setUrgentOnly(false); setMessagesOnly(false); setRdvModifieOnly(false); }}/>
           <StatCard label="Note client" value={stats.noteMoyenne ? "⭐ "+stats.noteMoyenne.toFixed(1) : "—"} sub={stats.nbNotes+" avis"} onClick={() => setShowModalNotes(true)}/>
+        </div>
+
+        <div style={{display:"flex",gap:"8px",marginBottom:"20px",flexWrap:"wrap"}}>
+          {[["tous","Tous types",stats.total],["particulier","Particuliers",stats.particuliers],["professionnel","Professionnels",stats.professionnels]].map(([v,l,n]) => (
+            <button key={v} onClick={() => setTypeDemandeFilter(v)}
+              style={{padding:"7px 16px",borderRadius:"20px",border:"1px solid "+(typeDemandeFilter===v?C.or:C.border),background:typeDemandeFilter===v?C.or:"transparent",color:typeDemandeFilter===v?"#111":C.muted,fontSize:"12px",fontWeight:"700",cursor:"pointer",display:"flex",alignItems:"center",gap:"6px"}}>
+              {l}
+              <span style={{background:"#2563EB",color:"#fff",borderRadius:"10px",padding:"1px 7px",fontSize:"10px",fontWeight:"900"}}>{n}</span>
+            </button>
+          ))}
         </div>
 
         <div style={{display:"flex",gap:"4px",marginBottom:"16px",background:C.card,borderRadius:"10px",padding:"4px",border:"1px solid "+C.border,width:"fit-content"}}>
