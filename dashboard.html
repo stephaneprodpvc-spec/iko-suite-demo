@@ -219,6 +219,7 @@ const isStatutClos = (statut) => statut === "Terminé" || statut === "Annulé" |
 // un ticket déjà chargé et propose une priorité + les raisons (jamais une
 // exécution automatique — juste une lecture des données déjà présentes).
 // Priorités : "urgent" > "a_traiter" > "en_attente" > "termine".
+const SEUIL_ANCIENNETE_JOURS = 5; // ticket ouvert plus longtemps -> signalé
 function evaluerPrioriteIKO(t) {
   const statut = t.fields?.Statut || "Nouveau";
   if (isStatutClos(statut)) return { priorite: "termine", raisons: [] };
@@ -237,6 +238,15 @@ function evaluerPrioriteIKO(t) {
   if (statut === "Devis à faire") raisons.push("Devis à établir");
   if (statut === "Devis refusé") raisons.push("Devis refusé, décision à prendre");
   if (t.fields?.["IKO Utilisé"] && (statut === "Nouveau" || statut === "En cours")) raisons.push("Diagnostic Max disponible, à exploiter pour clôturer");
+  // Ancienneté : réutilise createdTime (champ natif Airtable, déjà présent
+  // sur chaque enregistrement, déjà exploité ailleurs — ligne "Date création"
+  // de l'export). Zéro nouveau champ, zéro appel supplémentaire. Cible en
+  // particulier les devis envoyés qui traînent sans réponse (encaissement
+  // bloqué) et tout ticket oublié faute de suivi.
+  if (t.createdTime) {
+    const ageJours = Math.floor((Date.now() - new Date(t.createdTime).getTime()) / 86400000);
+    if (ageJours >= SEUIL_ANCIENNETE_JOURS) raisons.push("Ouvert depuis " + ageJours + " jours sans clôture");
+  }
 
   if (urgent) return { priorite: "urgent", raisons: raisons.length ? raisons : ["Ticket qualifié urgent"] };
   if (raisons.length) return { priorite: "a_traiter", raisons };
