@@ -24,7 +24,7 @@
 // Appelé via /api/airtable/push (même route réécrite que le reste).
 
 import webpush from 'web-push';
-import { verifierSession } from './_securite.js';
+import { verifierSession, verifierDebit } from './_securite.js';
 
 // AUTH #004 — sécurisation serveur de ce proxy -------------------------------
 // Principe retenu (mode de COEXISTENCE, volontairement non strict) :
@@ -177,6 +177,32 @@ export default async function handler(req, res) {
   const premierSegment = subPathRaw.split('/').filter(Boolean)[0] || '';
   if (premierSegment.toLowerCase() === 'utilisateurs') {
     return res.status(403).json({ error: 'Accès à cette ressource non autorisé via ce proxy.' });
+  }
+
+  // CORRECTION SECURITE #1 — recherche publique d'un ticket par numero.
+  // suivi.html (aucune session, page publique) recherche un ticket via
+  // GET Tickets SAV?filterByFormula=UPPER({Name})=UPPER("SAV-...") : c'est
+  // le seul point d'entree ou un tiers peut "deviner" un ticket appartenant
+  // a quelqu'un d'autre (numero genere sur ~9000 combinaisons/an, cf.
+  // index.html). Rate-limit dedie et delibrement strict, cible UNIQUEMENT
+  // sur ce motif exact (filtre par {Name} sur Tickets SAV) - jamais sur les
+  // listes internes filtrees par Statut/Agence utilisees en continu par
+  // dashboard.html/technicien.html (verifie : aucun autre appel du depot
+  // n'utilise {Name} sur cette table). Seuil genereux pour un client qui se
+  // trompe une ou deux fois, mais qui rend un balayage des ~9000
+  // combinaisons totalement impraticable (des jours de tentatives continues
+  // depuis la meme IP, deja tres au-dela de tout usage legitime).
+  const SEUIL_RECHERCHE_TICKET = 5;
+  const FENETRE_RECHERCHE_TICKET_MS = 10 * 60 * 1000; // 10 minutes
+  if (
+    req.method === 'GET' &&
+    premierSegment === 'Tickets SAV' &&
+    typeof rest.filterByFormula === 'string' &&
+    rest.filterByFormula.includes('{Name}')
+  ) {
+    if (!verifierDebit(req, { max: SEUIL_RECHERCHE_TICKET, fenetreMs: FENETRE_RECHERCHE_TICKET_MS, cle: 'recherche-ticket' })) {
+      return res.status(429).json({ error: 'Trop de tentatives de recherche. Réessayez dans quelques minutes.' });
+    }
   }
 
   if (subPathRaw === 'push') {

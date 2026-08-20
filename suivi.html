@@ -429,6 +429,11 @@ function App() {
     try {
       const formula = encodeURIComponent('UPPER({Name})=UPPER("' + num.replace(/"/g, '') + '")');
       const resp = await fetch('/api/airtable/Tickets%20SAV?filterByFormula=' + formula + '&maxRecords=1');
+      if (resp.status === 429) {
+        setErreur("Trop de tentatives de recherche depuis cet appareil. Merci de réessayer dans quelques minutes.");
+        setLoading(false);
+        return;
+      }
       const data = await resp.json();
       if (data.records && data.records.length > 0) {
         const found = data.records[0];

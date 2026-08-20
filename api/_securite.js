@@ -21,7 +21,7 @@ const ORIGINES_AUTORISEES = [
   "iko-suite-demo-git-main-akial.vercel.app",
 ];
 
-const compteurs = new Map(); // ip -> { debut: timestamp, nb: compte }
+const compteurs = new Map(); // "cle:ip" -> { debut: timestamp, nb: compte }
 const FENETRE_MS = 60_000; // 1 minute
 const MAX_REQUETES_PAR_FENETRE = 12;
 
@@ -31,17 +31,24 @@ export function verifierOrigine(req) {
   return ORIGINES_AUTORISEES.some(d => origine.includes(d)) || origine.includes("localhost");
 }
 
-export function verifierDebit(req) {
+// Options optionnelles { max, fenetreMs, cle } : permet de réutiliser ce
+// même mécanisme (Map en mémoire, clé par IP) avec un seuil différent pour
+// un usage distinct, sans dupliquer la logique ni affecter le compteur
+// historique des appels /api/chat-* (clé "" par défaut, comportement
+// strictement inchangé pour tout appel existant sans options).
+export function verifierDebit(req, options = {}) {
+  const { max = MAX_REQUETES_PAR_FENETRE, fenetreMs = FENETRE_MS, cle = "" } = options;
   const ip = (req.headers["x-forwarded-for"] || req.socket?.remoteAddress || "inconnu").split(",")[0].trim();
+  const cleComplete = (cle ? cle + ":" : "") + ip;
   const maintenant = Date.now();
-  const entree = compteurs.get(ip);
+  const entree = compteurs.get(cleComplete);
 
-  if (!entree || maintenant - entree.debut > FENETRE_MS) {
-    compteurs.set(ip, { debut: maintenant, nb: 1 });
+  if (!entree || maintenant - entree.debut > fenetreMs) {
+    compteurs.set(cleComplete, { debut: maintenant, nb: 1 });
     return true;
   }
   entree.nb += 1;
-  if (entree.nb > MAX_REQUETES_PAR_FENETRE) return false;
+  if (entree.nb > max) return false;
   return true;
 }
 
