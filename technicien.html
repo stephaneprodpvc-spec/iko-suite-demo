@@ -538,6 +538,132 @@ function filtreAvecClient(baseFormula) {
   return 'AND(' + baseFormula + ',' + clause + ')';
 }
 
+// Jumeau numerique : cherche l'historique des ouvertures mesurees/posees
+// pour le client donne, pour que Max le connaisse deja sans que le client
+// ait a tout redecrire sur place. Remontee au niveau module (Bloc 1) pour
+// etre partagee par Technicien (widget vocal general) et DiagnosticMaxCard
+// (diagnostic sur ticket ouvert dans ModalAction).
+async function chercherHistoriqueClientMax(nomClient) {
+  if (!nomClient) return null;
+  try {
+    const formuleFiche = "FIND(LOWER(\"" + nomClient.replace(/"/g, '\\"') + "\"),LOWER({Client}))";
+    const rFiches = await fetch('/api/airtable/' + encodeURIComponent("Métrés") +
+      '?filterByFormula=' + encodeURIComponent(formuleFiche) + '&sort[0][field]=Date&sort[0][direction]=desc&maxRecords=2');
+    const jsonFiches = await rFiches.json();
+    if (!rFiches.ok || !jsonFiches.records || jsonFiches.records.length === 0) return null;
+
+    const dossiers = [];
+    for (const fiche of jsonFiches.records) {
+      const formuleOuv = "FIND(\"" + fiche.id + "\",ARRAYJOIN({Métré}))";
+      const rOuv = await fetch('/api/airtable/' + encodeURIComponent("Ouvertures Métré") +
+        '?filterByFormula=' + encodeURIComponent(formuleOuv) + '&maxRecords=20');
+      const jsonOuv = await rOuv.json();
+      const ouvertures = (jsonOuv.records || []).map(o => ({
+        repere: o.fields["Repère"] || "", type: o.fields["Type"] || "", pose: o.fields["Pose"] || "",
+        dimensions: (o.fields["Largeur mm"] || "?") + "x" + (o.fields["Hauteur mm"] || "?") + " mm",
+        couleur: o.fields["Couleur / RAL"] || "",
+      }));
+      dossiers.push({ adresse: fiche.fields["Adresse"] || "", date_mesure: fiche.fields["Date"] || "", ouvertures });
+    }
+    return dossiers.length ? dossiers : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+// ==================== Bloc 1 : DiagnosticMaxCard ====================
+// Carte lecture seule affichee quand un ticket est ouvert. Le technicien
+// declenche explicitement le diagnostic (jamais automatique). Aucune
+// ecriture Airtable depuis ce composant : le technicien reste seul
+// decisionnaire.
+const LABELS_ACTION_MAX = {
+  terminer: "SAV terminé", devis: "Devis", devis_place: "Devis sur place",
+  replanifier: "Replanifier", annuler: "Annuler le RDV",
+};
+
+function DiagnosticMaxCard({ ticket }) {
+  const [ouvert, setOuvert] = React.useState(false);
+  const [messageDiag, setMessageDiag] = React.useState("");
+  const [analyserPhoto, setAnalyserPhoto] = React.useState(false);
+  const [enCours, setEnCours] = React.useState(false);
+  const [resultat, setResultat] = React.useState(null);
+  const [erreur, setErreur] = React.useState("");
+
+  const photosUrls = (ticket.fields?.Photos || "").split(",").map(s => s.trim()).filter(Boolean);
+
+  const lancerDiagnostic = async () => {
+    setEnCours(true); setErreur(""); setResultat(null);
+    try {
+      const historiqueToise = await chercherHistoriqueClientMax(ticket.fields?.Client);
+      const r = await fetch('/api/chat-technicien', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mode: 'diagnostic',
+          message: messageDiag.trim(),
+          analyserPhoto: analyserPhoto && photosUrls.length > 0,
+          photosUrls,
+          ticket: {
+            numero: ticket.fields?.Name || "",
+            produit: ticket.fields?.Produit || "",
+            probleme: ticket.fields?.["Problème"] || "",
+            garantie: ticket.fields?.Garantie || "",
+            adresse: ticket.fields?.Adresse || "",
+            commentaireExistant: ticket.fields?.Commentaire || "",
+            diagnosticExistant: ticket.fields?.Diagnostic || "",
+            urgence: ticket.fields?.Qualification || "",
+            historiqueToise,
+          },
+        }),
+      });
+      const data = await r.json();
+      if (!r.ok || data.erreur) { setErreur(data.erreur || "Diagnostic indisponible."); setEnCours(false); return; }
+      setResultat(data);
+    } catch (e) {
+      setErreur("Connexion impossible. Réessayez.");
+    }
+    setEnCours(false);
+  };
+
+  return (
+    <div style={{border:"1px solid rgba(34,197,94,0.35)",borderRadius:"12px",padding:"12px",marginBottom:"14px",background:"rgba(34,197,94,0.05)"}}>
+      <div onClick={() => setOuvert(!ouvert)} style={{display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer"}}>
+        <span style={{fontSize:"12px",fontWeight:"800",color:"#22C55E"}}>🧠 Diagnostic Max</span>
+        <span style={{fontSize:"11px",color:C.muted}}>{ouvert ? "▲" : "▼"}</span>
+      </div>
+      {ouvert && (
+        <div style={{marginTop:"10px"}}>
+          <textarea rows={2} placeholder="Précisez le contexte pour Max (facultatif)..."
+            value={messageDiag} onChange={e => setMessageDiag(e.target.value)} style={{resize:"none",fontSize:"12px"}}/>
+          {photosUrls.length > 0 && (
+            <label style={{display:"flex",alignItems:"center",gap:"6px",fontSize:"11px",color:C.muted,marginTop:"6px"}}>
+              <input type="checkbox" checked={analyserPhoto} onChange={e => setAnalyserPhoto(e.target.checked)}/>
+              Analyser les {Math.min(photosUrls.length, 3)} photo(s) du ticket
+            </label>
+          )}
+          <button type="button" onClick={lancerDiagnostic} disabled={enCours}
+            style={{width:"100%",marginTop:"8px",padding:"10px",background:enCours?"#D1D5DB":"#22C55E",color:enCours?"#666":"#111",border:"none",borderRadius:"8px",fontSize:"12px",fontWeight:"800",cursor:enCours?"not-allowed":"pointer"}}>
+            {enCours ? "⏳ Max réfléchit..." : "Demander à Max"}
+          </button>
+          {erreur && <div style={{fontSize:"11px",color:"#DC2626",marginTop:"8px"}}>{erreur}</div>}
+          {resultat && (
+            <div style={{marginTop:"10px",fontSize:"11px",color:C.text,display:"flex",flexDirection:"column",gap:"6px"}}>
+              {resultat.fait && <div><b style={{color:"#22C55E"}}>FAIT · </b>{resultat.fait}</div>}
+              {resultat.signal && <div><b style={{color:"#DAB239"}}>SIGNAL · </b>{resultat.signal}</div>}
+              {resultat.piste && <div><b style={{color:"#8a8a8a"}}>PISTE · </b>{resultat.piste}</div>}
+              {resultat.proposition && <div><b style={{color:"#0D0D0D"}}>PROPOSITION · </b>{resultat.proposition}</div>}
+              {resultat.action_suggeree && resultat.action_suggeree !== "aucune" && (
+                <div style={{fontSize:"10px",color:C.muted,fontStyle:"italic",marginTop:"2px"}}>
+                  Max suggère : {LABELS_ACTION_MAX[resultat.action_suggeree] || resultat.action_suggeree} — à toi de choisir.
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ModalAction({ ticket, onClose, onDone }) {
   const [mode, setMode] = React.useState(ticket.fields?.Statut === "Devis envoyé" ? "debloquer" : null);
   const [commentaire, setCommentaire] = React.useState("");
@@ -570,6 +696,112 @@ function ModalAction({ ticket, onClose, onDone }) {
   const [qteLigneAuto, setQteLigneAuto] = React.useState(1);
   const [emailAuto, setEmailAuto] = React.useState(ticket.fields?.Email || "");
   const [modePaiementPlace, setModePaiementPlace] = React.useState("");
+
+  // ---- Bloc 2B : compte-rendu vocal structuré (mode "terminer") ----
+  // Réutilise l'infrastructure existante MediaRecorder -> /api/tts (comme
+  // le widget Max). Le texte dicté brut reste toujours visible/modifiable.
+  // Structuration sur demande explicite uniquement, aucune écriture
+  // automatique dans Commentaire — confirmer() n'est pas modifiée.
+  const [texteDicteBrut, setTexteDicteBrut] = React.useState("");
+  const [enregistrementCREnCours, setEnregistrementCREnCours] = React.useState(false);
+  const [structurationEnCours, setStructurationEnCours] = React.useState(false);
+  const [compteRenduStructure, setCompteRenduStructure] = React.useState(null);
+  const recorderCRRef = React.useRef(null);
+  const chunksCRRef = React.useRef([]);
+
+  const dicterCompteRendu = async () => {
+    if (!navigator.mediaDevices || !window.MediaRecorder) return;
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mimeType = MediaRecorder.isTypeSupported('audio/mp4') ? 'audio/mp4'
+        : MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : '';
+      const recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+      chunksCRRef.current = [];
+      recorder.ondataavailable = e => { if (e.data.size > 0) chunksCRRef.current.push(e.data); };
+      recorder.onstop = async () => {
+        stream.getTracks().forEach(t => t.stop());
+        setEnregistrementCREnCours(false);
+        const blob = new Blob(chunksCRRef.current, { type: recorder.mimeType || mimeType || 'audio/webm' });
+        if (blob.size < 800) return;
+        try {
+          const r = await fetch('/api/tts', { method: 'POST', headers: { 'Content-Type': blob.type || 'audio/webm' }, body: blob });
+          const data = await r.json();
+          if (r.ok && data.texte) setTexteDicteBrut(prev => (prev ? prev + " " : "") + data.texte);
+        } catch (e) {}
+      };
+      recorderCRRef.current = recorder;
+      recorder.start();
+      setEnregistrementCREnCours(true);
+      setTimeout(() => { if (recorder.state === 'recording') recorder.stop(); }, 30000);
+    } catch (e) { setEnregistrementCREnCours(false); }
+  };
+  const arreterDicteeCompteRendu = () => {
+    if (recorderCRRef.current && recorderCRRef.current.state === 'recording') recorderCRRef.current.stop();
+  };
+
+  const structurerCompteRendu = async () => {
+    if (!texteDicteBrut.trim()) return;
+    setStructurationEnCours(true);
+    try {
+      const r = await fetch('/api/chat-technicien', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode: 'structurer_compte_rendu', texteDicte: texteDicteBrut.trim() }),
+      });
+      const data = await r.json();
+      if (r.ok && !data.erreur) setCompteRenduStructure(data);
+    } catch (e) {}
+    setStructurationEnCours(false);
+  };
+
+  // Écriture dans Commentaire uniquement sur validation explicite du
+  // technicien (clic). confirmer() reste inchangée : elle lit simplement
+  // le state "commentaire" comme avant.
+  const utiliserCompteRenduStructure = () => {
+    if (!compteRenduStructure) return;
+    const parties = [];
+    if (compteRenduStructure.fait_constate) parties.push("Fait constaté : " + compteRenduStructure.fait_constate);
+    if (compteRenduStructure.intervention_realisee) parties.push("Intervention réalisée : " + compteRenduStructure.intervention_realisee);
+    if (compteRenduStructure.piece_action_necessaire) parties.push("Pièce/action nécessaire : " + compteRenduStructure.piece_action_necessaire);
+    if (compteRenduStructure.suite_a_donner) parties.push("Suite à donner : " + compteRenduStructure.suite_a_donner);
+    setCommentaire(parties.join("\n"));
+  };
+
+  // ---- Bloc 2C : suggestions de lignes de devis (mode "devis_place") ----
+  // Le catalogue réel est déjà chargé (catalogueAuto). Ajout UNE PAR UNE
+  // après validation du technicien, jamais de devis complet automatique.
+  const [suggestionsDevis, setSuggestionsDevis] = React.useState(null);
+  const [chargementSuggestionsDevis, setChargementSuggestionsDevis] = React.useState(false);
+
+  const demanderSuggestionsDevis = async () => {
+    if (!catalogueAuto.produits.length && !catalogueAuto.mo.length) return;
+    setChargementSuggestionsDevis(true);
+    setSuggestionsDevis(null);
+    try {
+      const catalogueEnvoye = [
+        ...catalogueAuto.produits.map(p => ({ id: p.id, type: 'produit', designation: p.fields?.["Désignation"] || '', prix: p.fields?.["Prix unitaire HT"] || 0 })),
+        ...catalogueAuto.mo.map(m => ({ id: m.id, type: 'mo', designation: m.fields?.["Type d'action"] || '', prix: m.fields?.["Prix forfait HT"] || m.fields?.["Taux horaire HT"] || 0 })),
+      ];
+      const r = await fetch('/api/chat-technicien', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mode: 'devis_suggestion',
+          ticket: { produit: ticket.fields?.Produit || '', probleme: ticket.fields?.["Problème"] || '' },
+          catalogue: catalogueEnvoye,
+        }),
+      });
+      const data = await r.json();
+      if (r.ok && !data.erreur) setSuggestionsDevis(data.lignes || []);
+    } catch (e) {}
+    setChargementSuggestionsDevis(false);
+  };
+
+  const ajouterLigneSuggeree = (ligne) => {
+    const produitSource = catalogueAuto.produits.find(p => p.id === ligne.catalogue_id);
+    const tauxTva = ligne.type === 'produit' ? tauxTvaVersDecimal(produitSource?.fields?.["Taux TVA"]) : 0.20;
+    const totalHT = (ligne.quantite || 1) * ligne.prix;
+    setLignesAuto(prev => [...prev, { designation: ligne.designation, qte: ligne.quantite || 1, puHT: ligne.prix, tauxTva, totalHT, totalTTC: totalHT * (1 + tauxTva) }]);
+    setSuggestionsDevis(prev => (prev || []).filter(l => l.catalogue_id !== ligne.catalogue_id));
+  };
 
   React.useEffect(() => {
     if (mode !== "devis_place" || catalogueAuto.mep !== null) return;
@@ -784,6 +1016,7 @@ function ModalAction({ ticket, onClose, onDone }) {
           <div style={{fontSize:"12px",color:C.text,marginTop:"6px"}}>📅 {ticket.fields?.["Créneau"]}</div>
           {ticket.fields?.Adresse && <div style={{fontSize:"12px",color:C.muted,marginTop:"2px"}}>📍 {ticket.fields?.Adresse}</div>}
         </div>
+        <DiagnosticMaxCard ticket={ticket}/>
         {!mode && (
           <>
             <div style={{fontSize:"12px",color:C.muted,marginBottom:"12px",textAlign:"center"}}>Que souhaitez-vous faire ?</div>
@@ -855,6 +1088,32 @@ function ModalAction({ ticket, onClose, onDone }) {
               <label style={{fontSize:"11px",color:C.muted,display:"block",marginBottom:"6px",fontWeight:"700"}}>Commentaire (facultatif)</label>
               <textarea rows={3} placeholder="Ex : Joint remplacé, fenêtre fonctionnelle. Client satisfait."
                 value={commentaire} onChange={e => setCommentaire(e.target.value)} style={{resize:"none"}}/>
+              <button type="button" onClick={enregistrementCREnCours ? arreterDicteeCompteRendu : dicterCompteRendu}
+                style={{marginTop:"6px",padding:"7px 12px",borderRadius:"8px",background:enregistrementCREnCours?"#DC2626":"#0D0D0D",color:"#fff",border:"none",fontSize:"11px",fontWeight:"700",cursor:"pointer"}}>
+                {enregistrementCREnCours ? "⏹️ Arrêter la dictée" : "🎙️ Dicter le compte-rendu"}
+              </button>
+              {texteDicteBrut && (
+                <div style={{marginTop:"10px"}}>
+                  <label style={{fontSize:"10px",color:C.muted,display:"block",marginBottom:"4px",fontWeight:"700"}}>Texte dicté (toujours visible, modifiable)</label>
+                  <textarea rows={2} value={texteDicteBrut} onChange={e => setTexteDicteBrut(e.target.value)} style={{resize:"none",fontSize:"11px"}}/>
+                  <button type="button" onClick={structurerCompteRendu} disabled={structurationEnCours}
+                    style={{marginTop:"6px",padding:"7px 12px",borderRadius:"8px",background:structurationEnCours?"#D1D5DB":"#22C55E",color:"#111",border:"none",fontSize:"11px",fontWeight:"800",cursor:structurationEnCours?"not-allowed":"pointer"}}>
+                    {structurationEnCours ? "⏳ Structuration..." : "🧠 Structurer avec Max"}
+                  </button>
+                </div>
+              )}
+              {compteRenduStructure && (
+                <div style={{marginTop:"10px",border:"1px solid rgba(34,197,94,0.3)",borderRadius:"8px",padding:"10px",fontSize:"11px",display:"flex",flexDirection:"column",gap:"4px"}}>
+                  {compteRenduStructure.fait_constate && <div><b>Fait constaté</b> · {compteRenduStructure.fait_constate}</div>}
+                  {compteRenduStructure.intervention_realisee && <div><b>Intervention réalisée</b> · {compteRenduStructure.intervention_realisee}</div>}
+                  {compteRenduStructure.piece_action_necessaire && <div><b>Pièce/action nécessaire</b> · {compteRenduStructure.piece_action_necessaire}</div>}
+                  {compteRenduStructure.suite_a_donner && <div><b>Suite à donner</b> · {compteRenduStructure.suite_a_donner}</div>}
+                  <button type="button" onClick={utiliserCompteRenduStructure}
+                    style={{marginTop:"4px",padding:"7px 12px",borderRadius:"8px",background:"#0D0D0D",color:"#fff",border:"none",fontSize:"11px",fontWeight:"700",cursor:"pointer"}}>
+                    ✓ Utiliser ce texte pour le commentaire
+                  </button>
+                </div>
+              )}
             </div>
             <button onClick={confirmer} disabled={saving}
               style={{width:"100%",padding:"14px",background:saving?"#D1D5DB":C.vert,color:saving?C.muted:"#fff",border:"none",borderRadius:"12px",fontSize:"14px",fontWeight:"900",cursor:saving?"not-allowed":"pointer"}}>
@@ -880,6 +1139,29 @@ function ModalAction({ ticket, onClose, onDone }) {
               )}
               {!chargementCatalogueAuto && clientInfoAuto && (
                 <>
+                  <button type="button" onClick={demanderSuggestionsDevis} disabled={chargementSuggestionsDevis}
+                    style={{width:"100%",padding:"8px",marginBottom:"8px",borderRadius:"8px",background:"rgba(34,197,94,0.1)",border:"1px solid #22C55E",color:"#16A34A",fontSize:"11px",fontWeight:"700",cursor:chargementSuggestionsDevis?"not-allowed":"pointer"}}>
+                    {chargementSuggestionsDevis ? "⏳ Max réfléchit..." : "🧠 Suggestions Max"}
+                  </button>
+                  {suggestionsDevis && suggestionsDevis.length === 0 && (
+                    <div style={{fontSize:"10px",color:C.muted,marginBottom:"8px",fontStyle:"italic"}}>Aucune suggestion pertinente pour ce ticket.</div>
+                  )}
+                  {suggestionsDevis && suggestionsDevis.length > 0 && (
+                    <div style={{marginBottom:"8px",display:"flex",flexDirection:"column",gap:"5px"}}>
+                      {suggestionsDevis.map(l => (
+                        <div key={l.catalogue_id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:"6px",fontSize:"10px",background:"rgba(34,197,94,0.06)",borderRadius:"6px",padding:"6px 8px"}}>
+                          <div>
+                            <b>{l.designation}</b> ×{l.quantite} — {Number(l.prix).toFixed(2)} €
+                            {l.justification && <div style={{color:C.muted,fontStyle:"italic",marginTop:"2px"}}>{l.justification}</div>}
+                          </div>
+                          <button type="button" onClick={() => ajouterLigneSuggeree(l)}
+                            style={{flexShrink:0,padding:"5px 10px",borderRadius:"6px",background:"#22C55E",color:"#111",border:"none",fontWeight:"800",cursor:"pointer",fontSize:"10px"}}>
+                            + Ajouter
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                   <div style={{display:"flex",gap:"6px",marginBottom:"8px"}}>
                     <select value={choixLigneAuto} onChange={e => setChoixLigneAuto(e.target.value)} style={{flex:1,fontSize:"12px"}}>
                       <option value="">— Ajouter une ligne —</option>
@@ -1642,36 +1924,8 @@ function Technicien({ agence, onClose }) {
     });
   };
 
-  // Jumeau numerique : cherche l'historique des ouvertures mesurees/posees
-  // pour le client du ticket actuellement ouvert, pour que Max le connaisse
-  // deja sans que le client ait a tout redecrire sur place.
-  const chercherHistoriqueClientMax = async (nomClient) => {
-    if (!nomClient) return null;
-    try {
-      const formuleFiche = "FIND(LOWER(\"" + nomClient.replace(/"/g, '\\"') + "\"),LOWER({Client}))";
-      const rFiches = await fetch('/api/airtable/' + encodeURIComponent("Métrés") +
-        '?filterByFormula=' + encodeURIComponent(formuleFiche) + '&sort[0][field]=Date&sort[0][direction]=desc&maxRecords=2');
-      const jsonFiches = await rFiches.json();
-      if (!rFiches.ok || !jsonFiches.records || jsonFiches.records.length === 0) return null;
-
-      const dossiers = [];
-      for (const fiche of jsonFiches.records) {
-        const formuleOuv = "FIND(\"" + fiche.id + "\",ARRAYJOIN({Métré}))";
-        const rOuv = await fetch('/api/airtable/' + encodeURIComponent("Ouvertures Métré") +
-          '?filterByFormula=' + encodeURIComponent(formuleOuv) + '&maxRecords=20');
-        const jsonOuv = await rOuv.json();
-        const ouvertures = (jsonOuv.records || []).map(o => ({
-          repere: o.fields["Repère"] || "", type: o.fields["Type"] || "", pose: o.fields["Pose"] || "",
-          dimensions: (o.fields["Largeur mm"] || "?") + "x" + (o.fields["Hauteur mm"] || "?") + " mm",
-          couleur: o.fields["Couleur / RAL"] || "",
-        }));
-        dossiers.push({ adresse: fiche.fields["Adresse"] || "", date_mesure: fiche.fields["Date"] || "", ouvertures });
-      }
-      return dossiers.length ? dossiers : null;
-    } catch (e) {
-      return null;
-    }
-  };
+  // chercherHistoriqueClientMax est maintenant definie au niveau module
+  // (Bloc 1), partagee avec DiagnosticMaxCard — voir plus haut dans le fichier.
 
   const envoyerMax = async (transcript) => {
     setMaxEnCours(true);
