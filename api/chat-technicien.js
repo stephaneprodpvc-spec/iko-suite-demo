@@ -18,6 +18,12 @@ const MAX_CATALOGUE_CONTEXTE = 60;
 
 const ONGLETS_VALIDES = ["aujourd_hui", "urgent", "devis", "termines", "annules"];
 const ACTIONS_SUGGERABLES = ["terminer", "devis", "devis_place", "replanifier", "annuler", "aucune"];
+// Bloc 3 - axe F : niveau de confiance du diagnostic, toujours accompagné
+// du diagnostic (jamais un champ Airtable séparé, embarqué dans le texte).
+const NIVEAUX_CONFIANCE = ["faible", "moyenne", "elevee"];
+// Bloc 3 - axe E : historique des tickets passés du même client, informatif
+// uniquement, jamais confondu avec le ticket actuellement ouvert.
+const MAX_TICKETS_HISTORIQUE = 3;
 
 // ---- Bloc 1 : photos jointes au ticket (champ Airtable "Photos", URLs
 // séparées par virgules côté client). Aucun nouvel upload/caméra ici : on
@@ -82,12 +88,21 @@ RÈGLES ABSOLUES
 - Ne jamais inventer une information absente du ticket ou des photos.
 - Si aucune photo n'est fournie, base-toi uniquement sur les données
   textuelles du ticket et dis-le si c'est insuffisant pour aller plus loin.
+- Si un historique des tickets précédents du même client est fourni, il est
+  PUREMENT INFORMATIF (contexte passé) : ne le confonds jamais avec l'état
+  actuel du ticket ouvert. Utilise-le seulement s'il éclaire réellement le
+  diagnostic (ex. panne récurrente au même endroit).
 - resume_vocal : 1 à 2 phrases courtes, ton naturel de collègue, sans
   markdown ni emoji, utilisables telles quelles à l'oral.
 - action_suggeree : uniquement si une action du parcours technicien
   (terminer, devis, devis_place, replanifier, annuler) te semble
   pertinente au vu du diagnostic ; "aucune" sinon. Cela reste une
   suggestion, jamais une décision.
+- confiance : évalue honnêtement la fiabilité de CE diagnostic précis.
+  "faible" si tu disposes de très peu d'éléments (pas de photo, description
+  vague) ; "moyenne" si les éléments sont partiels ; "elevee" UNIQUEMENT si
+  tu as des éléments concrets et cohérents (ex. photo nette + description
+  précise qui se corroborent). Ne mets jamais "elevee" sans base solide.
 - Le technicien reste toujours seul décisionnaire.
 `;
 
@@ -103,8 +118,9 @@ const OUTIL_DIAGNOSTIC = {
       proposition: { type: "string", description: "Proposition d'action à vérifier par le technicien, jamais une décision." },
       resume_vocal: { type: "string", description: "Résumé très court (1-2 phrases) utilisable à l'oral par Max." },
       action_suggeree: { type: "string", enum: ACTIONS_SUGGERABLES, description: "Action du parcours technicien éventuellement suggérée (aucune si pas pertinent)." },
+      confiance: { type: "string", enum: NIVEAUX_CONFIANCE, description: "Niveau de confiance honnête dans ce diagnostic, selon la quantité et la clarté des éléments disponibles." },
     },
-    required: ["fait", "signal", "piste", "proposition", "resume_vocal", "action_suggeree"],
+    required: ["fait", "signal", "piste", "proposition", "resume_vocal", "action_suggeree", "confiance"],
   },
 };
 
@@ -406,6 +422,20 @@ async function traiterDiagnostic(req, res, body, cle) {
       historiqueToise: Array.isArray(ticket.historiqueToise) ? ticket.historiqueToise.slice(0, 3) : null,
     };
 
+    // Bloc 3 - axe E : historique des tickets précédents du même client,
+    // tronqué et assaini côté serveur (défense en profondeur, même si le
+    // client tronque déjà à 3 avant envoi).
+    const historiqueTickets = Array.isArray(ticket.historiqueTickets)
+      ? ticket.historiqueTickets.slice(0, MAX_TICKETS_HISTORIQUE).map(h => ({
+          date: String(h?.date || "").slice(0, 20),
+          produit: String(h?.produit || "").slice(0, 100),
+          probleme: String(h?.probleme || "").slice(0, 200),
+          statut: String(h?.statut || "").slice(0, 40),
+          diagnostic: String(h?.diagnostic || "").slice(0, 300),
+        }))
+      : [];
+    if (historiqueTickets.length) contexteTicket.historiqueTicketsClient = historiqueTickets;
+
     const blocsContenu = [];
     let nbPhotosAnalysees = 0;
     if (demanderPhotos) {
@@ -465,6 +495,7 @@ async function traiterDiagnostic(req, res, body, cle) {
       proposition: String(sortie.proposition || ""),
       resume_vocal: String(sortie.resume_vocal || ""),
       action_suggeree: ACTIONS_SUGGERABLES.includes(sortie.action_suggeree) ? sortie.action_suggeree : "aucune",
+      confiance: NIVEAUX_CONFIANCE.includes(sortie.confiance) ? sortie.confiance : "moyenne",
       photosAnalysees: nbPhotosAnalysees,
     });
   } catch (e) {

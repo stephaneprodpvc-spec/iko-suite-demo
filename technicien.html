@@ -97,6 +97,52 @@ const IKO_LOGO = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAZAAAACgCAYAAAAi
 
 const WEBHOOK = 'https://hook.eu1.make.com/n3lwi92wldkf22jcemmjfem334p4mv6a'; // webhook démo isolé
 
+// ==================== Bloc 3 - axe B : photo terrain (Cloudinary) ====================
+// Même compte/preset Cloudinary que index.html (dvbh3llqq / rsia_sav_unsigned,
+// dossier iko-suite-sav) : infrastructure réutilisée à l'identique, pas un
+// nouveau flux. Fonctions portées ici (fichiers standalone, pas de script
+// partagé entre modules dans ce projet) — garder synchronisé avec index.html
+// en cas d'évolution.
+const CLOUDINARY_CLOUD = 'dvbh3llqq';
+const CLOUDINARY_PRESET = 'rsia_sav_unsigned';
+
+async function compresserImageTech(file) {
+  return new Promise((resolve) => {
+    if (!file.type.startsWith('image/')) { resolve(file); return; }
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let w = img.width, h = img.height;
+        const maxDim = 1920;
+        if (w > maxDim || h > maxDim) {
+          if (w > h) { h = Math.round(h * maxDim / w); w = maxDim; }
+          else { w = Math.round(w * maxDim / h); h = maxDim; }
+        }
+        canvas.width = w; canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        canvas.toBlob((blob) => {
+          resolve(new File([blob], file.name, { type: 'image/jpeg' }));
+        }, 'image/jpeg', 0.8);
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+async function uploadCloudinaryTech(file) {
+  const compressed = await compresserImageTech(file);
+  const formData = new FormData();
+  formData.append('file', compressed);
+  formData.append('upload_preset', CLOUDINARY_PRESET);
+  formData.append('folder', 'iko-suite-sav');
+  const resp = await fetch('https://api.cloudinary.com/v1_1/' + CLOUDINARY_CLOUD + '/auto/upload', { method: 'POST', body: formData });
+  const data = await resp.json();
+  return data.secure_url;
+}
+
 // ==================== Devis Auto (Iko) — porté depuis dashboard.html ====================
 // Ce bundle (technicien.html) est indépendant de dashboard.html (pas de build
 // commun), donc cette logique est dupliquée ici plutôt que partagée. Garder
@@ -571,6 +617,32 @@ async function chercherHistoriqueClientMax(nomClient) {
   }
 }
 
+// Bloc 3 - axe E : historique des tickets SAV precedents du meme client
+// (hors ticket actuellement ouvert), tronque a 3 et resume — purement
+// informatif pour Max, jamais confondu avec le ticket en cours.
+async function chercherHistoriqueTicketsClientMax(nomClient, idTicketActuel) {
+  if (!nomClient) return [];
+  try {
+    const formule = "FIND(LOWER(\"" + nomClient.replace(/"/g, '\\"') + "\"),LOWER({Client}))";
+    const r = await fetch('/api/airtable/Tickets%20SAV?filterByFormula=' + encodeURIComponent(formule) +
+      '&sort[0][field]=Créneau&sort[0][direction]=desc&maxRecords=6');
+    const json = await r.json();
+    if (!r.ok || !json.records) return [];
+    return json.records
+      .filter(t => t.id !== idTicketActuel)
+      .slice(0, 3)
+      .map(t => ({
+        date: t.fields?.["Créneau"] || "",
+        produit: t.fields?.Produit || "",
+        probleme: t.fields?.["Problème"] || "",
+        statut: t.fields?.Statut || "",
+        diagnostic: t.fields?.["IKO Diagnostic"] || t.fields?.Diagnostic || "",
+      }));
+  } catch (e) {
+    return [];
+  }
+}
+
 // ==================== Bloc 1 : DiagnosticMaxCard ====================
 // Carte lecture seule affichee quand un ticket est ouvert. Le technicien
 // declenche explicitement le diagnostic (jamais automatique). Aucune
@@ -581,6 +653,9 @@ const LABELS_ACTION_MAX = {
   replanifier: "Replanifier", annuler: "Annuler le RDV",
 };
 
+const LABELS_CONFIANCE_MAX = { faible: "Confiance faible", moyenne: "Confiance moyenne", elevee: "Confiance élevée" };
+const COULEURS_CONFIANCE_MAX = { faible: "#DC2626", moyenne: "#DAB239", elevee: "#22C55E" };
+
 function DiagnosticMaxCard({ ticket }) {
   const [ouvert, setOuvert] = React.useState(false);
   const [messageDiag, setMessageDiag] = React.useState("");
@@ -588,13 +663,18 @@ function DiagnosticMaxCard({ ticket }) {
   const [enCours, setEnCours] = React.useState(false);
   const [resultat, setResultat] = React.useState(null);
   const [erreur, setErreur] = React.useState("");
+  const [enregistrementDiagEnCours, setEnregistrementDiagEnCours] = React.useState(false);
+  const [diagnosticGarde, setDiagnosticGarde] = React.useState(!!ticket.fields?.["IKO Utilisé"]);
 
   const photosUrls = (ticket.fields?.Photos || "").split(",").map(s => s.trim()).filter(Boolean);
 
   const lancerDiagnostic = async () => {
     setEnCours(true); setErreur(""); setResultat(null);
     try {
-      const historiqueToise = await chercherHistoriqueClientMax(ticket.fields?.Client);
+      const [historiqueToise, historiqueTickets] = await Promise.all([
+        chercherHistoriqueClientMax(ticket.fields?.Client),
+        chercherHistoriqueTicketsClientMax(ticket.fields?.Client, ticket.id),
+      ]);
       const r = await fetch('/api/chat-technicien', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -612,6 +692,7 @@ function DiagnosticMaxCard({ ticket }) {
             diagnosticExistant: ticket.fields?.Diagnostic || "",
             urgence: ticket.fields?.Qualification || "",
             historiqueToise,
+            historiqueTickets,
           },
         }),
       });
@@ -624,10 +705,39 @@ function DiagnosticMaxCard({ ticket }) {
     setEnCours(false);
   };
 
+  // Bloc 3 - axe A + C : écriture Airtable UNIQUEMENT sur clic explicite du
+  // technicien (jamais automatique à la réception du résultat). Un seul
+  // PATCH écrit à la fois le diagnostic (A), son horodatage, et le flag de
+  // traçabilité agence "IKO Utilisé" (C).
+  const garderDiagnostic = async () => {
+    if (!resultat) return;
+    setEnregistrementDiagEnCours(true);
+    try {
+      const texte =
+        (LABELS_CONFIANCE_MAX[resultat.confiance] || "Confiance moyenne") + "\n\n" +
+        "FAIT : " + (resultat.fait || "—") + "\n" +
+        "SIGNAL : " + (resultat.signal || "—") + "\n" +
+        "PISTE : " + (resultat.piste || "—") + "\n" +
+        "PROPOSITION : " + (resultat.proposition || "—");
+      const r = await fetch('/api/airtable/Tickets%20SAV/' + ticket.id, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fields: {
+          "IKO Diagnostic": texte,
+          "IKO Diagnostic Date": new Date().toISOString(),
+          "IKO Utilisé": true,
+        }}),
+      });
+      if (r.ok) setDiagnosticGarde(true);
+    } catch (e) {}
+    setEnregistrementDiagEnCours(false);
+  };
+
   return (
     <div style={{border:"1px solid rgba(34,197,94,0.35)",borderRadius:"12px",padding:"12px",marginBottom:"14px",background:"rgba(34,197,94,0.05)"}}>
       <div onClick={() => setOuvert(!ouvert)} style={{display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer"}}>
-        <span style={{fontSize:"12px",fontWeight:"800",color:"#22C55E"}}>🧠 Diagnostic Max</span>
+        <span style={{fontSize:"12px",fontWeight:"800",color:"#22C55E"}}>
+          🧠 Diagnostic Max {diagnosticGarde && <span style={{fontSize:"10px",color:C.muted,fontWeight:"400"}}>· déjà enregistré</span>}
+        </span>
         <span style={{fontSize:"11px",color:C.muted}}>{ouvert ? "▲" : "▼"}</span>
       </div>
       {ouvert && (
@@ -647,6 +757,11 @@ function DiagnosticMaxCard({ ticket }) {
           {erreur && <div style={{fontSize:"11px",color:"#DC2626",marginTop:"8px"}}>{erreur}</div>}
           {resultat && (
             <div style={{marginTop:"10px",fontSize:"11px",color:C.text,display:"flex",flexDirection:"column",gap:"6px"}}>
+              {resultat.confiance && (
+                <div style={{display:"inline-flex",alignSelf:"flex-start",alignItems:"center",gap:"5px",background:"#fff",border:"1px solid "+(COULEURS_CONFIANCE_MAX[resultat.confiance]||C.muted),borderRadius:"10px",padding:"2px 8px",fontSize:"10px",fontWeight:"700",color:COULEURS_CONFIANCE_MAX[resultat.confiance]||C.muted}}>
+                  {LABELS_CONFIANCE_MAX[resultat.confiance] || "Confiance moyenne"}
+                </div>
+              )}
               {resultat.fait && <div><b style={{color:"#22C55E"}}>FAIT · </b>{resultat.fait}</div>}
               {resultat.signal && <div><b style={{color:"#DAB239"}}>SIGNAL · </b>{resultat.signal}</div>}
               {resultat.piste && <div><b style={{color:"#8a8a8a"}}>PISTE · </b>{resultat.piste}</div>}
@@ -656,6 +771,10 @@ function DiagnosticMaxCard({ ticket }) {
                   Max suggère : {LABELS_ACTION_MAX[resultat.action_suggeree] || resultat.action_suggeree} — à toi de choisir.
                 </div>
               )}
+              <button type="button" onClick={garderDiagnostic} disabled={enregistrementDiagEnCours}
+                style={{marginTop:"4px",padding:"7px 12px",borderRadius:"8px",background:enregistrementDiagEnCours?"#D1D5DB":"#0D0D0D",color:"#fff",border:"none",fontSize:"11px",fontWeight:"700",cursor:enregistrementDiagEnCours?"not-allowed":"pointer",alignSelf:"flex-start"}}>
+                {enregistrementDiagEnCours ? "⏳..." : diagnosticGarde ? "📌 Mettre à jour le diagnostic gardé" : "📌 Garder ce diagnostic"}
+              </button>
             </div>
           )}
         </div>
@@ -696,6 +815,35 @@ function ModalAction({ ticket, onClose, onDone }) {
   const [qteLigneAuto, setQteLigneAuto] = React.useState(1);
   const [emailAuto, setEmailAuto] = React.useState(ticket.fields?.Email || "");
   const [modePaiementPlace, setModePaiementPlace] = React.useState("");
+
+  // ---- Bloc 3 - axe B : photo terrain ----
+  // Réutilise l'infrastructure Cloudinary existante (même compte/preset que
+  // index.html, voir uploadCloudinaryTech plus haut) : aucun nouveau flux.
+  // Concatène simplement la nouvelle URL au champ "Photos" existant, comme
+  // le fait déjà le portail client.
+  const [photoEnCoursUpload, setPhotoEnCoursUpload] = React.useState(false);
+  const [erreurPhoto, setErreurPhoto] = React.useState("");
+  const [photosTicket, setPhotosTicket] = React.useState(ticket.fields?.Photos || "");
+
+  const ajouterPhotoTerrain = async (fichier) => {
+    if (!fichier) return;
+    setErreurPhoto(""); setPhotoEnCoursUpload(true);
+    try {
+      const url = await uploadCloudinaryTech(fichier);
+      if (!url) throw new Error("upload échoué");
+      const nouvelleValeur = photosTicket ? photosTicket + ',' + url : url;
+      const r = await fetch('/api/airtable/Tickets%20SAV/' + ticket.id, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fields: { Photos: nouvelleValeur } }),
+      });
+      if (!r.ok) throw new Error("écriture échouée");
+      setPhotosTicket(nouvelleValeur);
+      ticket.fields.Photos = nouvelleValeur; // reflet immédiat pour DiagnosticMaxCard, sans re-fetch du ticket
+    } catch (e) {
+      setErreurPhoto("Envoi de la photo impossible. Réessayez.");
+    }
+    setPhotoEnCoursUpload(false);
+  };
 
   // ---- Bloc 2B : compte-rendu vocal structuré (mode "terminer") ----
   // Réutilise l'infrastructure existante MediaRecorder -> /api/tts (comme
@@ -1015,6 +1163,16 @@ function ModalAction({ ticket, onClose, onDone }) {
           <div style={{fontSize:"12px",color:C.muted,marginTop:"3px"}}>{ticket.fields?.Produit} · {ticket.fields?.["Problème"]}</div>
           <div style={{fontSize:"12px",color:C.text,marginTop:"6px"}}>📅 {ticket.fields?.["Créneau"]}</div>
           {ticket.fields?.Adresse && <div style={{fontSize:"12px",color:C.muted,marginTop:"2px"}}>📍 {ticket.fields?.Adresse}</div>}
+          <div style={{display:"flex",alignItems:"center",gap:"8px",marginTop:"8px"}}>
+            <input id={"photoTerrain-" + ticket.id} type="file" accept="image/*" capture="environment" style={{display:"none"}}
+              onChange={e => { const f = e.target.files?.[0]; e.target.value = ""; if (f) ajouterPhotoTerrain(f); }}/>
+            <label htmlFor={"photoTerrain-" + ticket.id}
+              style={{padding:"6px 10px",borderRadius:"8px",background:photoEnCoursUpload?"#D1D5DB":"rgba(34,197,94,0.1)",border:"1px solid #22C55E",color:"#16A34A",fontSize:"11px",fontWeight:"700",cursor:photoEnCoursUpload?"not-allowed":"pointer"}}>
+              {photoEnCoursUpload ? "⏳ Envoi..." : "📷 Ajouter une photo"}
+            </label>
+            {photosTicket && <span style={{fontSize:"10px",color:C.muted}}>{photosTicket.split(",").filter(Boolean).length} photo(s) sur ce ticket</span>}
+          </div>
+          {erreurPhoto && <div style={{fontSize:"11px",color:"#DC2626",marginTop:"6px"}}>{erreurPhoto}</div>}
         </div>
         <DiagnosticMaxCard ticket={ticket}/>
         {!mode && (
