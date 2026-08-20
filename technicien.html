@@ -656,15 +656,24 @@ const LABELS_ACTION_MAX = {
 const LABELS_CONFIANCE_MAX = { faible: "Confiance faible", moyenne: "Confiance moyenne", elevee: "Confiance élevée" };
 const COULEURS_CONFIANCE_MAX = { faible: "#DC2626", moyenne: "#DAB239", elevee: "#22C55E" };
 
-function DiagnosticMaxCard({ ticket }) {
+// Bloc 4 - point 1 : fonction partagée entre DiagnosticMaxCard (sauvegarde
+// manuelle) et ModalAction.confirmer() (fusion automatique à la clôture),
+// pour ne jamais dupliquer le format du texte enregistré dans "IKO Diagnostic".
+function formaterTexteDiagnosticMax(resultat) {
+  return (LABELS_CONFIANCE_MAX[resultat.confiance] || "Confiance moyenne") + "\n\n" +
+    "FAIT : " + (resultat.fait || "—") + "\n" +
+    "SIGNAL : " + (resultat.signal || "—") + "\n" +
+    "PISTE : " + (resultat.piste || "—") + "\n" +
+    "PROPOSITION : " + (resultat.proposition || "—");
+}
+
+function DiagnosticMaxCard({ ticket, resultat, setResultat, diagnosticGarde, setDiagnosticGarde }) {
   const [ouvert, setOuvert] = React.useState(false);
   const [messageDiag, setMessageDiag] = React.useState("");
   const [analyserPhoto, setAnalyserPhoto] = React.useState(false);
   const [enCours, setEnCours] = React.useState(false);
-  const [resultat, setResultat] = React.useState(null);
   const [erreur, setErreur] = React.useState("");
   const [enregistrementDiagEnCours, setEnregistrementDiagEnCours] = React.useState(false);
-  const [diagnosticGarde, setDiagnosticGarde] = React.useState(!!ticket.fields?.["IKO Utilisé"]);
 
   const photosUrls = (ticket.fields?.Photos || "").split(",").map(s => s.trim()).filter(Boolean);
 
@@ -713,12 +722,7 @@ function DiagnosticMaxCard({ ticket }) {
     if (!resultat) return;
     setEnregistrementDiagEnCours(true);
     try {
-      const texte =
-        (LABELS_CONFIANCE_MAX[resultat.confiance] || "Confiance moyenne") + "\n\n" +
-        "FAIT : " + (resultat.fait || "—") + "\n" +
-        "SIGNAL : " + (resultat.signal || "—") + "\n" +
-        "PISTE : " + (resultat.piste || "—") + "\n" +
-        "PROPOSITION : " + (resultat.proposition || "—");
+      const texte = formaterTexteDiagnosticMax(resultat);
       const r = await fetch('/api/airtable/Tickets%20SAV/' + ticket.id, {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ fields: {
@@ -783,8 +787,56 @@ function DiagnosticMaxCard({ ticket }) {
   );
 }
 
+// Bloc 4 - point 4 : bloc compte-rendu (dictée + structuration Max) extrait
+// en composant purement présentationnel, réutilisé en mode "terminer" ET
+// "devis_place" — évite de dupliquer une seconde fois cette UI. L'état et
+// la logique restent centralisés dans ModalAction (props uniquement ici).
+function BlocCompteRenduMax({ commentaire, setCommentaire, placeholder, rows,
+  enregistrementCREnCours, dicterCompteRendu, arreterDicteeCompteRendu,
+  texteDicteBrut, setTexteDicteBrut, structurationEnCours, structurerCompteRendu,
+  compteRenduStructure, utiliserCompteRenduStructure }) {
+  return (
+    <div style={{marginBottom:"14px"}}>
+      <label style={{fontSize:"11px",color:C.muted,display:"block",marginBottom:"6px",fontWeight:"700"}}>Commentaire (facultatif)</label>
+      <textarea rows={rows || 3} placeholder={placeholder}
+        value={commentaire} onChange={e => setCommentaire(e.target.value)} style={{resize:"none"}}/>
+      <button type="button" onClick={enregistrementCREnCours ? arreterDicteeCompteRendu : dicterCompteRendu}
+        style={{marginTop:"6px",padding:"7px 12px",borderRadius:"8px",background:enregistrementCREnCours?"#DC2626":"#0D0D0D",color:"#fff",border:"none",fontSize:"11px",fontWeight:"700",cursor:"pointer"}}>
+        {enregistrementCREnCours ? "⏹️ Arrêter la dictée" : "🎙️ Dicter le compte-rendu"}
+      </button>
+      {texteDicteBrut && (
+        <div style={{marginTop:"10px"}}>
+          <label style={{fontSize:"10px",color:C.muted,display:"block",marginBottom:"4px",fontWeight:"700"}}>Texte dicté (toujours visible, modifiable)</label>
+          <textarea rows={2} value={texteDicteBrut} onChange={e => setTexteDicteBrut(e.target.value)} style={{resize:"none",fontSize:"11px"}}/>
+          <button type="button" onClick={structurerCompteRendu} disabled={structurationEnCours}
+            style={{marginTop:"6px",padding:"7px 12px",borderRadius:"8px",background:structurationEnCours?"#D1D5DB":"#22C55E",color:"#111",border:"none",fontSize:"11px",fontWeight:"800",cursor:structurationEnCours?"not-allowed":"pointer"}}>
+            {structurationEnCours ? "⏳ Structuration..." : "🧠 Structurer avec Max"}
+          </button>
+        </div>
+      )}
+      {compteRenduStructure && (
+        <div style={{marginTop:"10px",border:"1px solid rgba(34,197,94,0.3)",borderRadius:"8px",padding:"10px",fontSize:"11px",display:"flex",flexDirection:"column",gap:"4px"}}>
+          {compteRenduStructure.fait_constate && <div><b>Fait constaté</b> · {compteRenduStructure.fait_constate}</div>}
+          {compteRenduStructure.intervention_realisee && <div><b>Intervention réalisée</b> · {compteRenduStructure.intervention_realisee}</div>}
+          {compteRenduStructure.piece_action_necessaire && <div><b>Pièce/action nécessaire</b> · {compteRenduStructure.piece_action_necessaire}</div>}
+          {compteRenduStructure.suite_a_donner && <div><b>Suite à donner</b> · {compteRenduStructure.suite_a_donner}</div>}
+          <button type="button" onClick={utiliserCompteRenduStructure}
+            style={{marginTop:"4px",padding:"7px 12px",borderRadius:"8px",background:"#0D0D0D",color:"#fff",border:"none",fontSize:"11px",fontWeight:"700",cursor:"pointer"}}>
+            ✓ Utiliser ce texte pour le commentaire
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ModalAction({ ticket, onClose, onDone }) {
   const [mode, setMode] = React.useState(ticket.fields?.Statut === "Devis envoyé" ? "debloquer" : null);
+  // Bloc 4 - point 1 : state du diagnostic remonté ici (au lieu de rester
+  // interne à DiagnosticMaxCard) pour pouvoir le fusionner dans le PATCH de
+  // confirmer() si le technicien clôture sans avoir cliqué "Garder" manuellement.
+  const [resultatDiagnostic, setResultatDiagnostic] = React.useState(null);
+  const [diagnosticGarde, setDiagnosticGarde] = React.useState(!!ticket.fields?.["IKO Utilisé"]);
   const [commentaire, setCommentaire] = React.useState("");
   const [newDate, setNewDate] = React.useState("");
   const [newCreneau, setNewCreneau] = React.useState("Matin (8h30 — 12h00)");
@@ -1102,6 +1154,16 @@ function ModalAction({ ticket, onClose, onDone }) {
         fields["Créneau"] = newCreneau + ' — ' + dateLabel;
         if (commentaire) fields.Commentaire = "Replanifié : " + commentaire;
       }
+      // Bloc 4 - point 1 : si un diagnostic Max a été généré mais jamais
+      // gardé manuellement, on l'inclut dans ce même PATCH de clôture — un
+      // seul appel Airtable, et le diagnostic n'est plus perdu par oubli.
+      // Ne touche rien si déjà gardé manuellement (ne pas écraser un texte
+      // éventuellement mis à jour entre-temps).
+      if ((mode === "terminer" || mode === "devis_place") && resultatDiagnostic && !diagnosticGarde) {
+        fields["IKO Diagnostic"] = formaterTexteDiagnosticMax(resultatDiagnostic);
+        fields["IKO Diagnostic Date"] = new Date().toISOString();
+        fields["IKO Utilisé"] = true;
+      }
       await fetch('/api/airtable/Tickets%20SAV/'+ticket.id, {
         method:'PATCH',
         headers:{'Content-Type':'application/json'},
@@ -1174,7 +1236,8 @@ function ModalAction({ ticket, onClose, onDone }) {
           </div>
           {erreurPhoto && <div style={{fontSize:"11px",color:"#DC2626",marginTop:"6px"}}>{erreurPhoto}</div>}
         </div>
-        <DiagnosticMaxCard ticket={ticket}/>
+        <DiagnosticMaxCard ticket={ticket} resultat={resultatDiagnostic} setResultat={setResultatDiagnostic}
+          diagnosticGarde={diagnosticGarde} setDiagnosticGarde={setDiagnosticGarde}/>
         {!mode && (
           <>
             <div style={{fontSize:"12px",color:C.muted,marginBottom:"12px",textAlign:"center"}}>Que souhaitez-vous faire ?</div>
@@ -1242,37 +1305,12 @@ function ModalAction({ ticket, onClose, onDone }) {
             <div style={{background:C.vertDim,border:"1px solid rgba(22,163,74,0.3)",borderRadius:"10px",padding:"10px 14px",marginBottom:"14px",fontSize:"12px",color:C.vert}}>
               Intervention sous garantie — rien à facturer au client.
             </div>
-            <div style={{marginBottom:"14px"}}>
-              <label style={{fontSize:"11px",color:C.muted,display:"block",marginBottom:"6px",fontWeight:"700"}}>Commentaire (facultatif)</label>
-              <textarea rows={3} placeholder="Ex : Joint remplacé, fenêtre fonctionnelle. Client satisfait."
-                value={commentaire} onChange={e => setCommentaire(e.target.value)} style={{resize:"none"}}/>
-              <button type="button" onClick={enregistrementCREnCours ? arreterDicteeCompteRendu : dicterCompteRendu}
-                style={{marginTop:"6px",padding:"7px 12px",borderRadius:"8px",background:enregistrementCREnCours?"#DC2626":"#0D0D0D",color:"#fff",border:"none",fontSize:"11px",fontWeight:"700",cursor:"pointer"}}>
-                {enregistrementCREnCours ? "⏹️ Arrêter la dictée" : "🎙️ Dicter le compte-rendu"}
-              </button>
-              {texteDicteBrut && (
-                <div style={{marginTop:"10px"}}>
-                  <label style={{fontSize:"10px",color:C.muted,display:"block",marginBottom:"4px",fontWeight:"700"}}>Texte dicté (toujours visible, modifiable)</label>
-                  <textarea rows={2} value={texteDicteBrut} onChange={e => setTexteDicteBrut(e.target.value)} style={{resize:"none",fontSize:"11px"}}/>
-                  <button type="button" onClick={structurerCompteRendu} disabled={structurationEnCours}
-                    style={{marginTop:"6px",padding:"7px 12px",borderRadius:"8px",background:structurationEnCours?"#D1D5DB":"#22C55E",color:"#111",border:"none",fontSize:"11px",fontWeight:"800",cursor:structurationEnCours?"not-allowed":"pointer"}}>
-                    {structurationEnCours ? "⏳ Structuration..." : "🧠 Structurer avec Max"}
-                  </button>
-                </div>
-              )}
-              {compteRenduStructure && (
-                <div style={{marginTop:"10px",border:"1px solid rgba(34,197,94,0.3)",borderRadius:"8px",padding:"10px",fontSize:"11px",display:"flex",flexDirection:"column",gap:"4px"}}>
-                  {compteRenduStructure.fait_constate && <div><b>Fait constaté</b> · {compteRenduStructure.fait_constate}</div>}
-                  {compteRenduStructure.intervention_realisee && <div><b>Intervention réalisée</b> · {compteRenduStructure.intervention_realisee}</div>}
-                  {compteRenduStructure.piece_action_necessaire && <div><b>Pièce/action nécessaire</b> · {compteRenduStructure.piece_action_necessaire}</div>}
-                  {compteRenduStructure.suite_a_donner && <div><b>Suite à donner</b> · {compteRenduStructure.suite_a_donner}</div>}
-                  <button type="button" onClick={utiliserCompteRenduStructure}
-                    style={{marginTop:"4px",padding:"7px 12px",borderRadius:"8px",background:"#0D0D0D",color:"#fff",border:"none",fontSize:"11px",fontWeight:"700",cursor:"pointer"}}>
-                    ✓ Utiliser ce texte pour le commentaire
-                  </button>
-                </div>
-              )}
-            </div>
+            <BlocCompteRenduMax commentaire={commentaire} setCommentaire={setCommentaire}
+              placeholder="Ex : Joint remplacé, fenêtre fonctionnelle. Client satisfait." rows={3}
+              enregistrementCREnCours={enregistrementCREnCours} dicterCompteRendu={dicterCompteRendu} arreterDicteeCompteRendu={arreterDicteeCompteRendu}
+              texteDicteBrut={texteDicteBrut} setTexteDicteBrut={setTexteDicteBrut}
+              structurationEnCours={structurationEnCours} structurerCompteRendu={structurerCompteRendu}
+              compteRenduStructure={compteRenduStructure} utiliserCompteRenduStructure={utiliserCompteRenduStructure}/>
             <button onClick={confirmer} disabled={saving}
               style={{width:"100%",padding:"14px",background:saving?"#D1D5DB":C.vert,color:saving?C.muted:"#fff",border:"none",borderRadius:"12px",fontSize:"14px",fontWeight:"900",cursor:saving?"not-allowed":"pointer"}}>
               {saving ? "⏳ Enregistrement..." : "✅ Confirmer — SAV terminé"}
@@ -1366,11 +1404,12 @@ function ModalAction({ ticket, onClose, onDone }) {
               </div>
             </div>
 
-            <div style={{marginBottom:"14px"}}>
-              <label style={{fontSize:"11px",color:C.muted,display:"block",marginBottom:"6px",fontWeight:"700"}}>Commentaire (facultatif)</label>
-              <textarea rows={2} placeholder="Ex : Vitrage remplacé, réglage gâche."
-                value={commentaire} onChange={e => setCommentaire(e.target.value)} style={{resize:"none"}}/>
-            </div>
+            <BlocCompteRenduMax commentaire={commentaire} setCommentaire={setCommentaire}
+              placeholder="Ex : Vitrage remplacé, réglage gâche." rows={2}
+              enregistrementCREnCours={enregistrementCREnCours} dicterCompteRendu={dicterCompteRendu} arreterDicteeCompteRendu={arreterDicteeCompteRendu}
+              texteDicteBrut={texteDicteBrut} setTexteDicteBrut={setTexteDicteBrut}
+              structurationEnCours={structurationEnCours} structurerCompteRendu={structurerCompteRendu}
+              compteRenduStructure={compteRenduStructure} utiliserCompteRenduStructure={utiliserCompteRenduStructure}/>
 
             <button onClick={confirmer} disabled={saving||!lignesAuto.length||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailAuto.trim())||!modePaiementPlace}
               style={{width:"100%",padding:"14px",background:(saving||!lignesAuto.length||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailAuto.trim())||!modePaiementPlace)?"#D1D5DB":C.vert,color:(saving||!lignesAuto.length)?C.muted:"#fff",border:"none",borderRadius:"12px",fontSize:"14px",fontWeight:"900",cursor:saving?"not-allowed":"pointer"}}>

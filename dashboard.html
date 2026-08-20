@@ -215,6 +215,21 @@ function Badge({ label, color, bg, style }) {
   return <span style={{display:"inline-block",padding:"2px 8px",borderRadius:"20px",fontSize:"10px",fontWeight:"700",color,background:bg,letterSpacing:"0.5px",...style}}>{label}</span>;
 }
 
+// Bloc 4 - point 3 : le niveau de confiance (Bloc 3, axe F) est embarqué
+// comme première ligne de texte dans "IKO Diagnostic" (voir
+// formaterTexteDiagnosticMax dans technicien.html — garder synchronisé en
+// cas d'évolution du format). On l'extrait ici pour l'afficher avec le
+// même code couleur que technicien.html, plutôt que du texte brut.
+const COULEURS_CONFIANCE_DASH = { "Confiance faible": "#DC2626", "Confiance moyenne": "#DAB239", "Confiance élevée": "#22C55E" };
+function extraireConfianceDiagnosticMax(texte) {
+  if (!texte) return { confiance: null, corps: "" };
+  const premiereLigne = texte.split("\n")[0].trim();
+  if (COULEURS_CONFIANCE_DASH[premiereLigne]) {
+    return { confiance: premiereLigne, corps: texte.slice(premiereLigne.length).replace(/^\n+/, "") };
+  }
+  return { confiance: null, corps: texte };
+}
+
 function StatCard({ label, value, sub, accent, active, onClick, alert }) {
   const isAlert = alert && value > 0;
   return (
@@ -454,7 +469,19 @@ function TicketRow({ t, onStatusChange, onAnnuler, onSupprimer, onSupprimerDefin
         {t.fields?.["IKO Diagnostic"] && (
           <div style={{marginTop:"8px",background:"rgba(34,197,94,0.06)",border:"1px solid rgba(34,197,94,0.25)",borderRadius:"8px",padding:"7px 10px",fontSize:"11px",color:C.text,whiteSpace:"pre-line"}}>
             🧠 <strong>Diagnostic Max</strong>{t.fields?.["IKO Diagnostic Date"] ? " · " + new Date(t.fields["IKO Diagnostic Date"]).toLocaleString('fr-FR') : ""}
-            <div style={{marginTop:"3px"}}>{t.fields["IKO Diagnostic"]}</div>
+            {(() => {
+              const { confiance, corps } = extraireConfianceDiagnosticMax(t.fields["IKO Diagnostic"]);
+              return (
+                <>
+                  {confiance && (
+                    <span style={{display:"inline-block",marginLeft:"6px",padding:"1px 7px",borderRadius:"10px",fontSize:"9px",fontWeight:"800",color:"#fff",background:COULEURS_CONFIANCE_DASH[confiance]}}>
+                      {confiance}
+                    </span>
+                  )}
+                  <div style={{marginTop:"3px"}}>{corps}</div>
+                </>
+              );
+            })()}
           </div>
         )}
         {t.fields?.["Montant devis"] && (statut === "Devis envoyé" || statut === "Devis refusé") && (
@@ -2213,6 +2240,11 @@ function Dashboard({ agenceAccess, onClose }) {
   // ci-dessous). Le Dashboard ne consomme JAMAIS ce flag (ne le remet pas à false) :
   // seul technicien.html le fait, pour éviter toute course entre les deux pages.
   const rdvFlagsConnusRef = React.useRef(null);
+  // Bloc 4 - point 2 : même principe que rdvFlagsConnusRef ci-dessus, mais
+  // pour détecter la transition false/absent -> true du flag "IKO Utilisé"
+  // (diagnostic Max gardé/fusionné à la clôture). Dashboard ne remet jamais
+  // ce flag à false — seul technicien.html l'écrit.
+  const diagFlagsConnusRef = React.useRef(null);
   const audioCtxRef = React.useRef(null);
   const isFetchingRef = React.useRef(false);
 
@@ -2286,6 +2318,7 @@ function Dashboard({ agenceAccess, onClose }) {
       const records = json.records||[];
       const idsActuels = new Set(records.map(t => t.id));
       const flagsActuels = new Map(records.map(t => [t.id, !!t.fields?.["RDV modifié - notif technicien"]]));
+      const diagFlagsActuels = new Map(records.map(t => [t.id, !!t.fields?.["IKO Utilisé"]]));
       if (idsConnusRef.current) {
         const nouveaux = records.filter(t => !idsConnusRef.current.has(t.id));
         if (nouveaux.length > 0) {
@@ -2316,9 +2349,29 @@ function Dashboard({ agenceAccess, onClose }) {
             toastsRdv.forEach(t => setTimeout(() => setNotifs(prev => prev.filter(n => n.id !== t.id)), 7000));
           }
         }
+        // Bloc 4 - point 2 : même logique de transition, sur "IKO Utilisé"
+        // (diagnostic Max gardé ou fusionné à la clôture). Même garde-fou
+        // anti-doublon (uniquement sur tickets déjà connus, transition stricte).
+        if (diagFlagsConnusRef.current) {
+          const diagnosticsMax = records.filter(t =>
+            idsConnusRef.current.has(t.id) &&
+            diagFlagsActuels.get(t.id) === true &&
+            diagFlagsConnusRef.current.get(t.id) !== true
+          );
+          if (diagnosticsMax.length > 0) {
+            jouerSon();
+            const toastsDiag = diagnosticsMax.map(t => ({
+              id: t.id + '-diag-' + Date.now(),
+              texte: '🧠 Diagnostic Max disponible — ' + (t.fields?.Name||'Ticket') + ' — ' + (t.fields?.Client||'Client inconnu') + ' (' + (t.fields?.Agence||'') + ')'
+            }));
+            setNotifs(prev => [...prev, ...toastsDiag]);
+            toastsDiag.forEach(t => setTimeout(() => setNotifs(prev => prev.filter(n => n.id !== t.id)), 7000));
+          }
+        }
       }
       idsConnusRef.current = idsActuels;
       rdvFlagsConnusRef.current = flagsActuels;
+      diagFlagsConnusRef.current = diagFlagsActuels;
     } catch(e) { console.error(e); }
     isCheckingNouveauxRef.current = false;
   };
