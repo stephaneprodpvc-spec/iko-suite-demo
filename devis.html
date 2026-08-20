@@ -185,9 +185,21 @@ function DevisItemiseView({ devisId }) {
   // Lien Yousign attendu (demande déjà créée côté agence) mais pas encore
   // généré : cas visé par cette correction. Le cas "aucune demande Yousign
   // du tout" (cause n°3) n'est volontairement pas traité ici.
+  // Cause n°2 (déjà corrigée) : une demande Yousign a bien été créée
+  // (Request ID + Signer ID présents) mais le lien de signature n'est pas
+  // encore généré -> polling automatique légitime.
   const lienManquantMaisAttendu = statutPage === "attente" && devis &&
     !devis.fields?.["Yousign Signer Link"] && devis.fields?.["Yousign Request ID"] && devis.fields?.["Yousign Signer ID"];
   const pollingEpuise = lienManquantMaisAttendu && tentativesPolling >= MAX_TENTATIVES_POLLING;
+
+  // Cause n°3 : la création de la demande Yousign a échoué côté agence
+  // (dashboard.html / technicien.html avalent l'erreur et laissent le devis
+  // "Envoyé" sans aucun champ Yousign). Aucun Request ID à interroger : le
+  // polling n'a aucun sens ici, il ne ferait qu'entretenir une fausse
+  // attente. État distinct, détecté immédiatement (pas besoin d'attendre
+  // un épuisement de tentatives puisqu'il n'y a rien à tenter).
+  const signatureIndisponible = statutPage === "attente" && devis &&
+    !devis.fields?.["Yousign Signer Link"] && !devis.fields?.["Yousign Request ID"];
 
   React.useEffect(() => {
     if (lienManquantMaisAttendu && tentativesPolling < MAX_TENTATIVES_POLLING) {
@@ -281,6 +293,17 @@ function DevisItemiseView({ devisId }) {
                 style={{width:"100%",padding:"10px",background:"#F3F4F6",color:"#374151",border:"1px solid #E2E2E2",borderRadius:"10px",fontSize:"12px",fontWeight:"700",cursor:refreshing?"not-allowed":"pointer",marginBottom:"10px"}}>
                 {refreshing ? "⏳ Vérification..." : "🔄 J'ai signé, actualiser"}
               </button>
+              <button onClick={() => setStatutPage("refuser")} style={{width:"100%",padding:"11px",background:"transparent",color:"#94A3B8",border:"none",fontSize:"12px",cursor:"pointer",textDecoration:"underline"}}>
+                Je refuse ce devis
+              </button>
+            </div>
+          ) : signatureIndisponible ? (
+            <div>
+              <div style={{textAlign:"center",fontSize:"12px",color:F.marine,background:"#F3F4F6",border:"1px solid "+F.grisBord,borderRadius:"8px",padding:"14px 12px",marginBottom:"10px"}}>
+                <div style={{fontSize:"22px",marginBottom:"6px"}}>📞</div>
+                <div style={{fontWeight:"700",marginBottom:"4px"}}>Signature électronique momentanément indisponible</div>
+                <div style={{color:"#64748B"}}>Merci de contacter votre agence, ou de revenir un peu plus tard pour signer votre devis.</div>
+              </div>
               <button onClick={() => setStatutPage("refuser")} style={{width:"100%",padding:"11px",background:"transparent",color:"#94A3B8",border:"none",fontSize:"12px",cursor:"pointer",textDecoration:"underline"}}>
                 Je refuse ce devis
               </button>
