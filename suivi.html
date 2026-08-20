@@ -203,7 +203,7 @@ const PROGRESSION = {
   "Nouveau": { etape: 1, titre: "Demande reçue", message: "Votre demande a bien été enregistrée et va être prise en charge par votre agence." },
   "En cours": { etape: 2, titre: "Prise en charge", message: "Votre demande est en cours de traitement par l'agence." },
   "Devis à faire": { etape: 2, titre: "Préparation du devis", message: "Un technicien prépare le devis nécessaire à votre intervention." },
-  "Devis envoyé": { etape: 2, titre: "Devis à valider", message: "Un devis vous a été envoyé. Répondez-nous dans la conversation ci-dessous pour que l'intervention puisse être programmée.", actionAttendue: "Merci de valider ou de nous répondre au sujet du devis reçu." },
+  "Devis envoyé": { etape: 2, titre: "Devis à valider", message: "Un devis vous a été envoyé. Consultez-le et signez-le électroniquement pour que l'intervention puisse être programmée.", actionAttendue: "Un devis vous attend — consultez-le et signez-le ci-dessous." },
   "Devis - Suivi": { etape: 2, titre: "Devis en cours de suivi", message: "Votre dossier concernant le devis est en cours de suivi par l'agence." },
   "Devis - Attente fournisseur": { etape: 2, titre: "En attente d'une pièce", message: "Nous attendons une information ou une pièce nécessaire à la poursuite de votre dossier." },
   "Devis refusé": { etape: 2, titre: "Devis non retenu", message: "Le devis proposé n'a pas été retenu. N'hésitez pas à nous écrire si vous souhaitez revoir les options disponibles." },
@@ -212,7 +212,7 @@ const PROGRESSION = {
 };
 const ETAPES_PROGRESSION = ["Demande reçue", "Prise en charge", "Terminée"];
 
-function BandeauProgression({ statut, propositionEnAttente }) {
+function BandeauProgression({ statut, propositionEnAttente, devisId }) {
   const info = PROGRESSION[statut] || PROGRESSION["Nouveau"];
   const annule = statut === "Annulé";
   return (
@@ -249,6 +249,12 @@ function BandeauProgression({ statut, propositionEnAttente }) {
               : info.actionAttendue}
           </div>
         </div>
+      )}
+      {devisId && (
+        <a href={"devis.html?devisId=" + encodeURIComponent(devisId)}
+          style={{display:"block",marginTop:"8px",padding:"12px",background:F.or,color:"#111",borderRadius:"10px",fontSize:"13px",fontWeight:"900",textAlign:"center",textDecoration:"none"}}>
+          ✍️ Voir et signer mon devis
+        </a>
       )}
     </div>
   );
@@ -382,6 +388,39 @@ function App() {
     timeoutId = setTimeout(tick, 90000 + Math.random() * 10000);
     return () => clearTimeout(timeoutId);
   }, [ticket?.id]);
+
+  // Correction n°1 (fuite identifiée dans le tunnel devis) : retrouve le
+  // devis lié via la table "Devis" déjà existante et son champ "Ticket lié",
+  // pour donner au client un vrai accès à la signature depuis sa page de
+  // suivi — pas seulement via l'e-mail initial, facilement perdu. Ne se
+  // déclenche que si "Montant devis" est renseigné (évite un appel Airtable
+  // inutile pour les tickets qui n'ont jamais eu de devis).
+  const [devisId, setDevisId] = useState(null);
+  React.useEffect(() => {
+    if (!ticket?.fields?.["Montant devis"] || !ticket.fields?.Name) { setDevisId(null); return; }
+    let annule = false;
+    (async () => {
+      try {
+        const nomTicket = ticket.fields.Name.replace(/"/g, '');
+        // Ticket lié est un champ lié Airtable : ARRAYJOIN() renvoie la
+        // valeur affichée (le Name du ticket), pas son record id — on
+        // filtre donc sur le Name, pas sur ticket.id.
+        const formule = 'FIND("' + nomTicket + '",ARRAYJOIN({Ticket lié}))';
+        const r = await fetch('/api/airtable/Devis?filterByFormula=' + encodeURIComponent(formule) + '&maxRecords=10');
+        const data = await r.json();
+        if (annule) return;
+        const records = data.records || [];
+        if (!records.length) { setDevisId(null); return; }
+        // Plusieurs devis possibles dans le temps (ex: un refusé puis un
+        // second envoyé) : on retient le plus récent.
+        records.sort((a, b) => new Date(b.createdTime) - new Date(a.createdTime));
+        setDevisId(records[0].id);
+      } catch (e) {
+        if (!annule) setDevisId(null);
+      }
+    })();
+    return () => { annule = true; };
+  }, [ticket?.id, ticket?.fields?.["Montant devis"]]);
 
   const rechercher = async (numeroForce) => {
     const num = (typeof numeroForce === "string" ? numeroForce : numero).trim();
@@ -601,7 +640,7 @@ function App() {
                 <span style={{fontSize:"10px",fontWeight:"800",color:sc.color,background:sc.bg,borderRadius:"20px",padding:"3px 10px"}}>{statut}</span>
               </div>
 
-              <BandeauProgression statut={statut} propositionEnAttente={!!ticket.fields?.["Proposition auto en attente"]}/>
+              <BandeauProgression statut={statut} propositionEnAttente={!!ticket.fields?.["Proposition auto en attente"]} devisId={devisId}/>
 
               {!isStatutClos(statut) && ticket.fields?.Créneau && (
                 <div style={{background:F.marine,borderRadius:"10px",padding:"12px 14px",marginBottom:"14px",display:"flex",alignItems:"center",gap:"10px"}}>
