@@ -1632,6 +1632,37 @@ function ModalGestionDevis({ tickets, onClose, onRefresh }) {
       .finally(() => setChargementSignes(false));
   }, [sousOnglet]);
 
+  // Anomalie Yousign côté agence : un devis "Envoyé" sans aucun Yousign
+  // Request ID signifie que la création a échoué (cf. dashboard.html/
+  // technicien.html, erreur avalée silencieusement au moment de l'envoi) —
+  // le client se retrouve sans aucun moyen de signer. Même pattern que
+  // l'onglet "Signés" ci-dessus (fetch uniquement quand l'onglet concerné
+  // est ouvert, aucun polling, aucun nouveau système) : zéro coût tant que
+  // l'agent ne consulte pas cet onglet.
+  const [devisEnvoyesAnomalies, setDevisEnvoyesAnomalies] = React.useState(new Set());
+  React.useEffect(() => {
+    if (sousOnglet !== "envoye") { setDevisEnvoyesAnomalies(new Set()); return; }
+    let annule = false;
+    (async () => {
+      try {
+        const formule = encodeURIComponent('{Statut}="Envoyé"');
+        const r = await fetch('/api/airtable/Devis?filterByFormula=' + formule + '&maxRecords=100');
+        const j = await r.json();
+        if (annule) return;
+        const idsTicketsSansSignature = new Set();
+        (j.records || []).forEach(d => {
+          if (!d.fields?.["Yousign Request ID"]) {
+            (d.fields?.["Ticket lié"] || []).forEach(id => idsTicketsSansSignature.add(id));
+          }
+        });
+        setDevisEnvoyesAnomalies(idsTicketsSansSignature);
+      } catch (e) {
+        if (!annule) setDevisEnvoyesAnomalies(new Set());
+      }
+    })();
+    return () => { annule = true; };
+  }, [sousOnglet]);
+
   // Note : la table Devis n'a pas de champ Agence propre — le filtre agence
   // du modal ne s'applique donc pas à l'onglet Signés (comptage global).
   const compteur = (id) => {
@@ -1725,6 +1756,11 @@ function ModalGestionDevis({ tickets, onClose, onRefresh }) {
                 </div>
                 {t.fields?.["Montant devis"] && <span style={{fontSize:"13px",fontWeight:"900",color:C.white}}>{t.fields["Montant devis"]} € TTC</span>}
               </div>
+              {sousOnglet === "envoye" && devisEnvoyesAnomalies.has(t.id) && (
+                <div style={{background:"rgba(220,38,38,0.1)",border:"1px solid rgba(220,38,38,0.35)",borderRadius:"8px",padding:"7px 10px",marginBottom:"10px",fontSize:"11px",color:"#DC2626",fontWeight:"700"}}>
+                  ⚠️ Signature électronique non créée — le client ne peut pas signer ce devis. Relancer manuellement (Établir le devis à nouveau).
+                </div>
+              )}
               <div style={{fontSize:"13px",fontWeight:"700",color:C.white,marginBottom:"4px"}}>{t.fields?.Client}</div>
               <div style={{fontSize:"11px",color:C.muted,marginBottom:"10px"}}>{t.fields?.Produit} — {t.fields?.Problème}</div>
               {t.fields?.Diagnostic && (
