@@ -81,6 +81,17 @@ const CONFIG_RECORD_ID = 'rec45X231n9dXnyaU';
 // restreint a du personnel, priorite moindre).
 const MAKE_WEBHOOK_URL = 'https://hook.eu1.make.com/n3lwi92wldkf22jcemmjfem334p4mv6a'; // scenario demo isole
 
+// Whitelist stricte des actions webhook reellement utilisees par les 3 pages
+// publiques (index.html n'envoie aucun champ "action" du tout - cas "nouvelle
+// demande SAV", traite a part ci-dessous ; suivi.html : message_client,
+// rdv_modifie ; devis.html : devis_refuse, devis_accepte). Toute autre valeur
+// est rejetee : reduit la surface reelle exploitable par un tiers qui
+// connaitrait le secret applicatif (deja documente comme limite acceptee
+// du proxy) - sans empecher completement l'usurpation de contenu sur une
+// action legitime (necessiterait de verifier l'existence/propriete du
+// ticket cote Airtable avant de relayer, hors perimetre de ce correctif).
+const ACTIONS_WEBHOOK_AUTORISEES = ['message_client', 'rdv_modifie', 'devis_refuse', 'devis_accepte'];
+
 async function lireConfigPush(baseId, headers) {
   const res = await fetch('https://api.airtable.com/v0/' + baseId + '/Planning/' + CONFIG_RECORD_ID, { headers });
   const json = await res.json();
@@ -221,6 +232,13 @@ export default async function handler(req, res) {
   if (subPathRaw === 'webhook') {
     if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
     if (!verifierOrigine(req)) return res.status(403).json({ error: 'Origine non autorisée.' });
+    const actionDemandee = req.body && req.body.action;
+    // index.html (nouvelle demande SAV) n'envoie jamais de champ "action" :
+    // cas legitime distinct, laisse passer. Toute AUTRE valeur doit figurer
+    // dans la whitelist.
+    if (actionDemandee !== undefined && !ACTIONS_WEBHOOK_AUTORISEES.includes(actionDemandee)) {
+      return res.status(400).json({ error: 'Action non reconnue.' });
+    }
     try {
       const webhookRes = await fetch(MAKE_WEBHOOK_URL, {
         method: 'POST',
