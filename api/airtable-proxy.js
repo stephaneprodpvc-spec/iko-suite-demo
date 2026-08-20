@@ -68,29 +68,50 @@ import { verifierSession, verifierDebit, verifierOrigine } from './_securite.js'
 
 const CONFIG_RECORD_ID = 'rec45X231n9dXnyaU';
 
-// CORRECTION SECURITE — webhook Make expose cote client. Jusqu'ici, plusieurs
-// pages PUBLIQUES (index.html, suivi.html, devis.html) appelaient directement
-// cette URL depuis le navigateur : visible en clair dans le code source,
-// n'importe qui pouvait la rejouer avec un payload arbitraire (fausses
-// notifications "devis_envoye"/"rdv_modifie" vers l'agence ou vers un client,
-// usurpation de donnees). Deplacee ici, cote serveur : le navigateur n'appelle
-// plus que /api/airtable/webhook (proxy relaye ensuite), l'URL Make n'est
-// plus jamais transmise au client. Perimetre de ce correctif : les 3 pages
-// publiques uniquement (index.html, suivi.html, devis.html) - dashboard.html/
-// technicien.html/commerce.html restent inchanges pour l'instant (acces deja
-// restreint a du personnel, priorite moindre).
-const MAKE_WEBHOOK_URL = 'https://hook.eu1.make.com/n3lwi92wldkf22jcemmjfem334p4mv6a'; // scenario demo isole
+// CORRECTION SECURITE — webhook Make expose cote client. Plusieurs pages
+// appelaient directement cette URL depuis le navigateur : visible en clair
+// dans le code source, n'importe qui pouvait la rejouer avec un payload
+// arbitraire (fausses notifications vers l'agence ou vers un client,
+// usurpation de donnees). Deplacee ici, cote serveur : le navigateur
+// n'appelle plus que /api/airtable/webhook (proxy relaye ensuite), l'URL
+// Make n'est plus jamais transmise au client.
+// Etape 1 (deja en prod) : 3 pages publiques (index.html, suivi.html,
+// devis.html), scenario Make principal, POST + corps JSON uniquement.
+// Etape 2 (ce correctif) : 4 pages internes (dashboard.html, technicien.html,
+// commerce.html, metreur.html). Deux particularites reelles decouvertes a la
+// verification prealable des flux, traitees sans changer le comportement :
+//   - dashboard.html envoie 2 appels historiques en GET avec action/ticket
+//     dans la query string (jamais de corps JSON) : /webhook accepte donc
+//     aussi GET, en relayant la meme query string telle quelle vers Make -
+//     jamais convertie en POST (le parsing cote scenario Make n'est pas
+//     verifiable depuis ce depot, une conversion aurait ete un changement de
+//     comportement non maitrise).
+//   - metreur.html utilise un scenario Make DIFFERENT (URL distincte) : route
+//     separee /webhook-metreur, avec sa propre URL et sa propre whitelist.
+const MAKE_WEBHOOK_URL = 'https://hook.eu1.make.com/n3lwi92wldkf22jcemmjfem334p4mv6a'; // scenario demo isole (principal)
+const MAKE_WEBHOOK_URL_METREUR = 'https://hook.eu1.make.com/xczscdk40wh653mmnxnx7x63kawjcgx4'; // scenario metreur/BE, distinct
 
-// Whitelist stricte des actions webhook reellement utilisees par les 3 pages
-// publiques (index.html n'envoie aucun champ "action" du tout - cas "nouvelle
-// demande SAV", traite a part ci-dessous ; suivi.html : message_client,
-// rdv_modifie ; devis.html : devis_refuse, devis_accepte). Toute autre valeur
-// est rejetee : reduit la surface reelle exploitable par un tiers qui
-// connaitrait le secret applicatif (deja documente comme limite acceptee
-// du proxy) - sans empecher completement l'usurpation de contenu sur une
-// action legitime (necessiterait de verifier l'existence/propriete du
-// ticket cote Airtable avant de relayer, hors perimetre de ce correctif).
-const ACTIONS_WEBHOOK_AUTORISEES = ['message_client', 'rdv_modifie', 'devis_refuse', 'devis_accepte'];
+// Whitelist stricte des actions webhook reellement utilisees par les pages
+// publiques (index.html : aucun champ "action" - cas "nouvelle demande SAV",
+// traite a part ci-dessous ; suivi.html : message_client, rdv_modifie ;
+// devis.html : devis_refuse, devis_accepte) et par les 4 pages internes
+// (dashboard.html : aucun champ "action" - creation ticket agent -, egalement
+// traite a part, + devis_envoye, reponse_agence, renvoi_technicien,
+// renvoi_client ; technicien.html : devis_auto_envoye, renvoi_client,
+// devis_deblocage, demande_note ; commerce.html : rdv_commercial). Toute
+// autre valeur est rejetee : reduit la surface reelle exploitable par un
+// tiers qui connaitrait le secret applicatif (deja documente comme limite
+// acceptee du proxy) - sans empecher completement l'usurpation de contenu
+// sur une action legitime (necessiterait de verifier l'existence/propriete
+// du ticket cote Airtable avant de relayer, hors perimetre de ce correctif).
+const ACTIONS_WEBHOOK_AUTORISEES = [
+  'message_client', 'rdv_modifie', 'devis_refuse', 'devis_accepte',
+  'devis_envoye', 'reponse_agence', 'renvoi_technicien', 'renvoi_client',
+  'devis_auto_envoye', 'devis_deblocage', 'demande_note', 'rdv_commercial',
+];
+// Whitelist separee et distincte pour le scenario metreur/BE (URL Make
+// differente ci-dessus) : jamais melangee avec la liste principale.
+const ACTIONS_WEBHOOK_METREUR_AUTORISEES = ['metreur_envoye', 'resume_be_envoye'];
 
 async function lireConfigPush(baseId, headers) {
   const res = await fetch('https://api.airtable.com/v0/' + baseId + '/Planning/' + CONFIG_RECORD_ID, { headers });
@@ -162,6 +183,64 @@ async function handlerPush(req, res, baseId, headers, session) {
   }
 }
 
+// Relais webhook partage entre /webhook (scenario principal) et
+// /webhook-metreur (scenario distinct) : whitelist + URL cible passees en
+// parametre pour ne jamais melanger les deux. Supporte GET (query string
+// relayee telle quelle, cas historique dashboard.html) et POST (corps JSON
+// relaye tel quel, tous les autres appels du depot) - jamais l'un converti
+// en l'autre, pour ne rien changer au comportement reellement observe.
+async function relayerWebhook(req, res, urlCible, actionsAutorisees) {
+  if (req.method !== 'GET' && req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
+  if (!verifierOrigine(req)) {
+    return res.status(403).json({ error: 'Origine non autorisée.' });
+  }
+
+  if (req.method === 'GET') {
+    const { path, ...restQuery } = req.query || {};
+    const actionDemandee = restQuery.action;
+    if (actionDemandee !== undefined && !actionsAutorisees.includes(actionDemandee)) {
+      return res.status(400).json({ error: 'Action non reconnue.' });
+    }
+    const qs = new URLSearchParams();
+    for (const [cle, valeur] of Object.entries(restQuery)) {
+      if (valeur !== undefined) qs.append(cle, valeur);
+    }
+    try {
+      const webhookRes = await fetch(urlCible + (qs.toString() ? '?' + qs.toString() : ''));
+      return res.status(webhookRes.ok ? 200 : 502).json({ ok: webhookRes.ok });
+    } catch (err) {
+      console.error('Erreur relais webhook Make (GET):', err);
+      return res.status(502).json({ error: 'Erreur webhook' });
+    }
+  }
+
+  // POST
+  const actionDemandee = req.body && req.body.action;
+  // Certaines pages (index.html, dashboard.html - creation de ticket) n'envoient
+  // jamais de champ "action" : cas legitime distinct, laisse passer. Toute
+  // AUTRE valeur doit figurer dans la whitelist fournie.
+  if (actionDemandee !== undefined && !actionsAutorisees.includes(actionDemandee)) {
+    return res.status(400).json({ error: 'Action non reconnue.' });
+  }
+  try {
+    const webhookRes = await fetch(urlCible, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(req.body || {}),
+    });
+    return res.status(webhookRes.ok ? 200 : 502).json({ ok: webhookRes.ok });
+  } catch (err) {
+    // Ne jamais renvoyer le detail brut de l'erreur au client : un message
+    // d'erreur reseau (DNS, connexion) peut contenir l'URL/l'hote Make, ce
+    // qui romprait exactement la protection visee par ce relais. Logue cote
+    // serveur uniquement (visible dans les logs Vercel).
+    console.error('Erreur relais webhook Make (POST):', err);
+    return res.status(502).json({ error: 'Erreur webhook' });
+  }
+}
+
 export default async function handler(req, res) {
   const token = process.env.AIRTABLE_TOKEN;
   const appSecret = process.env.APP_PROXY_SECRET;
@@ -230,30 +309,11 @@ export default async function handler(req, res) {
   }
 
   if (subPathRaw === 'webhook') {
-    if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
-    if (!verifierOrigine(req)) return res.status(403).json({ error: 'Origine non autorisée.' });
-    const actionDemandee = req.body && req.body.action;
-    // index.html (nouvelle demande SAV) n'envoie jamais de champ "action" :
-    // cas legitime distinct, laisse passer. Toute AUTRE valeur doit figurer
-    // dans la whitelist.
-    if (actionDemandee !== undefined && !ACTIONS_WEBHOOK_AUTORISEES.includes(actionDemandee)) {
-      return res.status(400).json({ error: 'Action non reconnue.' });
-    }
-    try {
-      const webhookRes = await fetch(MAKE_WEBHOOK_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(req.body || {}),
-      });
-      return res.status(webhookRes.ok ? 200 : 502).json({ ok: webhookRes.ok });
-    } catch (err) {
-      // Ne jamais renvoyer le detail brut de l'erreur au client : un message
-      // d'erreur reseau (DNS, connexion) peut contenir l'URL/l'hote Make,
-      // ce qui romprait exactement la protection visee par ce relais.
-      // Logue cote serveur uniquement (visible dans les logs Vercel).
-      console.error('Erreur relais webhook Make:', err);
-      return res.status(502).json({ error: 'Erreur webhook' });
-    }
+    return relayerWebhook(req, res, MAKE_WEBHOOK_URL, ACTIONS_WEBHOOK_AUTORISEES);
+  }
+
+  if (subPathRaw === 'webhook-metreur') {
+    return relayerWebhook(req, res, MAKE_WEBHOOK_URL_METREUR, ACTIONS_WEBHOOK_METREUR_AUTORISEES);
   }
 
   if (subPathRaw === 'push') {
