@@ -197,10 +197,13 @@ const C = {
 const MOIS = {janvier:1,février:2,mars:3,avril:4,mai:5,juin:6,juillet:7,août:8,septembre:9,octobre:10,novembre:11,décembre:12};
 const parseDateCreneau = (creneau) => {
   if (!creneau) return new Date(9999,0,1);
-  const match = creneau.match(/(\d+)\s+(\w+)(?:\s+(\d{4}))?/g);
+  // Correctif : \w+ ne matche pas les caractères accentués en JS (février,
+  // août, décembre tombaient silencieusement sur janvier). \p{L}+ (avec le
+  // flag u) matche toute lettre Unicode, accentuée ou non.
+  const match = creneau.match(/(\d+)\s+(\p{L}+)(?:\s+(\d{4}))?/gu);
   if (!match) return new Date(9999,0,1);
   const last = match[match.length-1];
-  const parts = last.match(/(\d+)\s+(\w+)(?:\s+(\d{4}))?/);
+  const parts = last.match(/(\d+)\s+(\p{L}+)(?:\s+(\d{4}))?/u);
   if (!parts) return new Date(9999,0,1);
   const day = parseInt(parts[1]);
   const month = MOIS[parts[2].toLowerCase()] || 1;
