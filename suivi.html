@@ -498,7 +498,7 @@ function App() {
       setMessage("");
       setEnvoi('ok');
       // E-mail d'accuse de reception automatique au client (best-effort, ne bloque pas l'UI si ca echoue)
-      fetch('https://hook.eu1.make.com/n3lwi92wldkf22jcemmjfem334p4mv6a', { // webhook démo isolé
+      fetch('/api/airtable/webhook', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'message_client', ticket: ticket.fields?.Name, message: texteMessage })
@@ -586,7 +586,7 @@ function App() {
       setShowChanger(false);
       setChangeOk(true);
       // Notif agence (best-effort, ne bloque pas l'UI si ca echoue)
-      fetch('https://hook.eu1.make.com/n3lwi92wldkf22jcemmjfem334p4mv6a', { // webhook démo isolé
+      fetch('/api/airtable/webhook', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'rdv_modifie', ticket: ticket.fields?.Name, agence: ticket.fields?.Agence, ancien_creneau: ancienCreneau, nouveau_creneau: nouveauCreneau, auteur_modification: 'client' })

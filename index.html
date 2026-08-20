@@ -380,7 +380,7 @@ async function uploadCloudinary(file) {
 }
 
 async function envoyerWebhook(data) {
-  const resp = await fetch('https://hook.eu1.make.com/n3lwi92wldkf22jcemmjfem334p4mv6a', { // webhook démo isolé
+  const resp = await fetch('/api/airtable/webhook', {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data)
   });
   if (!resp.ok) throw new Error('Erreur webhook');

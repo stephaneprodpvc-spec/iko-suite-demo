@@ -24,7 +24,7 @@
 // Appelé via /api/airtable/push (même route réécrite que le reste).
 
 import webpush from 'web-push';
-import { verifierSession, verifierDebit } from './_securite.js';
+import { verifierSession, verifierDebit, verifierOrigine } from './_securite.js';
 
 // AUTH #004 — sécurisation serveur de ce proxy -------------------------------
 // Principe retenu (mode de COEXISTENCE, volontairement non strict) :
@@ -67,6 +67,19 @@ import { verifierSession, verifierDebit } from './_securite.js';
 // ne l'utilise via ce proxy a ce jour (verifie) - aucun risque de regression.
 
 const CONFIG_RECORD_ID = 'rec45X231n9dXnyaU';
+
+// CORRECTION SECURITE — webhook Make expose cote client. Jusqu'ici, plusieurs
+// pages PUBLIQUES (index.html, suivi.html, devis.html) appelaient directement
+// cette URL depuis le navigateur : visible en clair dans le code source,
+// n'importe qui pouvait la rejouer avec un payload arbitraire (fausses
+// notifications "devis_envoye"/"rdv_modifie" vers l'agence ou vers un client,
+// usurpation de donnees). Deplacee ici, cote serveur : le navigateur n'appelle
+// plus que /api/airtable/webhook (proxy relaye ensuite), l'URL Make n'est
+// plus jamais transmise au client. Perimetre de ce correctif : les 3 pages
+// publiques uniquement (index.html, suivi.html, devis.html) - dashboard.html/
+// technicien.html/commerce.html restent inchanges pour l'instant (acces deja
+// restreint a du personnel, priorite moindre).
+const MAKE_WEBHOOK_URL = 'https://hook.eu1.make.com/n3lwi92wldkf22jcemmjfem334p4mv6a'; // scenario demo isole
 
 async function lireConfigPush(baseId, headers) {
   const res = await fetch('https://api.airtable.com/v0/' + baseId + '/Planning/' + CONFIG_RECORD_ID, { headers });
@@ -202,6 +215,21 @@ export default async function handler(req, res) {
   ) {
     if (!verifierDebit(req, { max: SEUIL_RECHERCHE_TICKET, fenetreMs: FENETRE_RECHERCHE_TICKET_MS, cle: 'recherche-ticket' })) {
       return res.status(429).json({ error: 'Trop de tentatives de recherche. Réessayez dans quelques minutes.' });
+    }
+  }
+
+  if (subPathRaw === 'webhook') {
+    if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+    if (!verifierOrigine(req)) return res.status(403).json({ error: 'Origine non autorisée.' });
+    try {
+      const webhookRes = await fetch(MAKE_WEBHOOK_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(req.body || {}),
+      });
+      return res.status(webhookRes.ok ? 200 : 502).json({ ok: webhookRes.ok });
+    } catch (err) {
+      return res.status(502).json({ error: 'Erreur webhook', details: String(err) });
     }
   }
 
