@@ -229,7 +229,12 @@ export default async function handler(req, res) {
       });
       return res.status(webhookRes.ok ? 200 : 502).json({ ok: webhookRes.ok });
     } catch (err) {
-      return res.status(502).json({ error: 'Erreur webhook', details: String(err) });
+      // Ne jamais renvoyer le detail brut de l'erreur au client : un message
+      // d'erreur reseau (DNS, connexion) peut contenir l'URL/l'hote Make,
+      // ce qui romprait exactement la protection visee par ce relais.
+      // Logue cote serveur uniquement (visible dans les logs Vercel).
+      console.error('Erreur relais webhook Make:', err);
+      return res.status(502).json({ error: 'Erreur webhook' });
     }
   }
 
