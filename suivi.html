@@ -194,6 +194,66 @@ const STATUT_STYLE = {
 
 const isStatutClos = (statut) => statut === "Terminé" || statut === "Annulé";
 
+// ==================== Amélioration expérience client (suivi.html) ====================
+// Traduit le statut interne (déjà visible du client) en un repère clair :
+// où en est ma demande, que va-t-il se passer, et ai-je une action à faire.
+// Aucune nouvelle donnée : uniquement une lecture plus claire de ce qui est
+// déjà chargé (Statut, Proposition auto en attente, Montant devis...).
+const PROGRESSION = {
+  "Nouveau": { etape: 1, titre: "Demande reçue", message: "Votre demande a bien été enregistrée et va être prise en charge par votre agence." },
+  "En cours": { etape: 2, titre: "Prise en charge", message: "Votre demande est en cours de traitement par l'agence." },
+  "Devis à faire": { etape: 2, titre: "Préparation du devis", message: "Un technicien prépare le devis nécessaire à votre intervention." },
+  "Devis envoyé": { etape: 2, titre: "Devis à valider", message: "Un devis vous a été envoyé. Répondez-nous dans la conversation ci-dessous pour que l'intervention puisse être programmée.", actionAttendue: "Merci de valider ou de nous répondre au sujet du devis reçu." },
+  "Devis - Suivi": { etape: 2, titre: "Devis en cours de suivi", message: "Votre dossier concernant le devis est en cours de suivi par l'agence." },
+  "Devis - Attente fournisseur": { etape: 2, titre: "En attente d'une pièce", message: "Nous attendons une information ou une pièce nécessaire à la poursuite de votre dossier." },
+  "Devis refusé": { etape: 2, titre: "Devis non retenu", message: "Le devis proposé n'a pas été retenu. N'hésitez pas à nous écrire si vous souhaitez revoir les options disponibles." },
+  "Terminé": { etape: 3, titre: "Intervention terminée", message: "Votre demande SAV est clôturée. Merci de votre confiance !" },
+  "Annulé": { etape: 0, titre: "Demande annulée", message: "Cette demande a été annulée." },
+};
+const ETAPES_PROGRESSION = ["Demande reçue", "Prise en charge", "Terminée"];
+
+function BandeauProgression({ statut, propositionEnAttente }) {
+  const info = PROGRESSION[statut] || PROGRESSION["Nouveau"];
+  const annule = statut === "Annulé";
+  return (
+    <div style={{marginBottom:"16px"}}>
+      {!annule && (
+        <div style={{display:"flex",alignItems:"center",marginBottom:"10px"}}>
+          {ETAPES_PROGRESSION.map((label, i) => {
+            const n = i + 1;
+            const atteinte = n <= info.etape;
+            return (
+              <React.Fragment key={label}>
+                {i > 0 && <div style={{flex:1,height:"2px",background:atteinte?F.or:F.grisBord}}/>}
+                <div style={{display:"flex",flexDirection:"column",alignItems:"center",flexShrink:0}}>
+                  <div style={{width:"22px",height:"22px",borderRadius:"50%",background:atteinte?F.or:F.grisClair,border:"2px solid "+(atteinte?F.or:F.grisBord),display:"flex",alignItems:"center",justifyContent:"center",fontSize:"10px",fontWeight:"900",color:atteinte?"#111":"#9CA3AF"}}>
+                    {n < info.etape ? "✓" : n}
+                  </div>
+                  <span style={{fontSize:"9px",color:atteinte?F.marine:"#9CA3AF",fontWeight:atteinte?"700":"400",marginTop:"4px",textAlign:"center",maxWidth:"70px"}}>{label}</span>
+                </div>
+              </React.Fragment>
+            );
+          })}
+        </div>
+      )}
+      <div style={{background:annule?"#F3F4F6":"rgba(34,197,94,0.06)",border:"1px solid "+(annule?F.grisBord:"rgba(34,197,94,0.25)"),borderRadius:"10px",padding:"10px 12px"}}>
+        <div style={{fontSize:"12px",fontWeight:"800",color:F.marine,marginBottom:"3px"}}>{info.titre}</div>
+        <div style={{fontSize:"11px",color:"#4B5563",lineHeight:"1.4"}}>{info.message}</div>
+      </div>
+      {(info.actionAttendue || propositionEnAttente) && (
+        <div style={{marginTop:"8px",background:F.jauneClair,border:"1px solid rgba(217,119,6,0.3)",borderRadius:"10px",padding:"10px 12px",display:"flex",gap:"8px",alignItems:"flex-start"}}>
+          <span style={{fontSize:"14px"}}>⚡</span>
+          <div style={{fontSize:"11px",color:"#92400E",fontWeight:"700",lineHeight:"1.4"}}>
+            {propositionEnAttente
+              ? "Une proposition de nouveau créneau vous attend — répondez dans la conversation ci-dessous pour la confirmer."
+              : info.actionAttendue}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 const CRENEAUX = [
   { id: "matin", label: "🌅 Matin", heure: "8h30 — 12h00", valeur: "Matin (8h30 — 12h00)" },
   { id: "apres_midi", label: "🌇 Après-midi", heure: "13h00 — 17h00", valeur: "Après-midi (13h00 — 17h00)" },
@@ -527,6 +587,18 @@ function App() {
                 <span style={{fontSize:"10px",fontWeight:"800",color:sc.color,background:sc.bg,borderRadius:"20px",padding:"3px 10px"}}>{statut}</span>
               </div>
 
+              <BandeauProgression statut={statut} propositionEnAttente={!!ticket.fields?.["Proposition auto en attente"]}/>
+
+              {!isStatutClos(statut) && ticket.fields?.Créneau && (
+                <div style={{background:F.marine,borderRadius:"10px",padding:"12px 14px",marginBottom:"14px",display:"flex",alignItems:"center",gap:"10px"}}>
+                  <span style={{fontSize:"20px"}}>📅</span>
+                  <div>
+                    <div style={{fontSize:"9px",color:"rgba(255,255,255,0.55)",textTransform:"uppercase",letterSpacing:"0.5px",fontWeight:"700"}}>Votre rendez-vous</div>
+                    <div style={{fontSize:"13px",color:"#fff",fontWeight:"800",marginTop:"2px"}}>{ticket.fields.Créneau}</div>
+                  </div>
+                </div>
+              )}
+
               <div style={{display:"flex",flexDirection:"column",gap:"9px"}}>
                 {ticket.fields?.Produit && (
                   <div style={{fontSize:"12px",color:"#374151",display:"flex",gap:"8px"}}>
@@ -538,9 +610,9 @@ function App() {
                     <span>🔧</span><span><strong>Problème :</strong> {ticket.fields["Problème"]}</span>
                   </div>
                 )}
-                {ticket.fields?.Créneau && (
+                {isStatutClos(statut) && ticket.fields?.Créneau && (
                   <div style={{fontSize:"12px",color:"#374151",display:"flex",gap:"8px"}}>
-                    <span>📅</span><span><strong>Date d'intervention :</strong> {ticket.fields.Créneau}</span>
+                    <span>📅</span><span><strong>Intervention prévue le :</strong> {ticket.fields.Créneau}</span>
                   </div>
                 )}
                 {ticket.fields?.Agence && (
