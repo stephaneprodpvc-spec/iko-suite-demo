@@ -211,6 +211,38 @@ const parseDateCreneau = (creneau) => {
 // ---- STATUTS "CLOS" (Terminé / Annulé) ----
 const isStatutClos = (statut) => statut === "Terminé" || statut === "Annulé" || statut === "Supprimé";
 
+// ==================== Bloc 5 : Suivi intelligent IKO (sans Toise) ====================
+// Fonction pure, 100% déterministe, aucun appel Anthropic/Airtable : évalue
+// un ticket déjà chargé et propose une priorité + les raisons (jamais une
+// exécution automatique — juste une lecture des données déjà présentes).
+// Priorités : "urgent" > "a_traiter" > "en_attente" > "termine".
+function evaluerPrioriteIKO(t) {
+  const statut = t.fields?.Statut || "Nouveau";
+  if (isStatutClos(statut)) return { priorite: "termine", raisons: [] };
+
+  const urgent = t.fields?.Qualification === "Oui";
+  const raisons = [];
+
+  const dateCreneau = parseDateCreneau(t.fields?.Créneau);
+  const aujourdhui = new Date(); aujourdhui.setHours(0, 0, 0, 0);
+  const enRetard = t.fields?.Créneau && dateCreneau.getFullYear() < 9999 && dateCreneau < aujourdhui;
+
+  if (!t.fields?.Créneau && (statut === "Nouveau" || !t.fields?.Statut)) raisons.push("Aucun créneau planifié");
+  if (enRetard && (statut === "Nouveau" || statut === "En cours")) raisons.push("Créneau dépassé, ticket toujours ouvert");
+  if (t.fields?.["Message client non lu"]) raisons.push("Message client en attente de réponse");
+  if (t.fields?.["RDV modifié - notif technicien"]) raisons.push("RDV modifié à vérifier");
+  if (statut === "Devis à faire") raisons.push("Devis à établir");
+  if (statut === "Devis refusé") raisons.push("Devis refusé, décision à prendre");
+  if (t.fields?.["IKO Utilisé"] && (statut === "Nouveau" || statut === "En cours")) raisons.push("Diagnostic Max disponible, à exploiter pour clôturer");
+
+  if (urgent) return { priorite: "urgent", raisons: raisons.length ? raisons : ["Ticket qualifié urgent"] };
+  if (raisons.length) return { priorite: "a_traiter", raisons };
+  if (["Devis envoyé", "Devis - Suivi", "Devis - Attente fournisseur"].includes(statut)) {
+    return { priorite: "en_attente", raisons: ["En attente de retour (client ou fournisseur)"] };
+  }
+  return { priorite: "en_attente", raisons: [] };
+}
+
 function Badge({ label, color, bg, style }) {
   return <span style={{display:"inline-block",padding:"2px 8px",borderRadius:"20px",fontSize:"10px",fontWeight:"700",color,background:bg,letterSpacing:"0.5px",...style}}>{label}</span>;
 }
@@ -2176,6 +2208,7 @@ function Dashboard({ agenceAccess, onClose }) {
   const [urgentOnly, setUrgentOnly] = React.useState(false);
   const [messagesOnly, setMessagesOnly] = React.useState(false);
   const [rdvModifieOnly, setRdvModifieOnly] = React.useState(false);
+  const [suiviIKOOuvert, setSuiviIKOOuvert] = React.useState(true); // Bloc 5 : zone "À traiter", ouverte par défaut
   const [openMessageTicketId, setOpenMessageTicketId] = React.useState(null);
   const [amandineOuverte, setAmandineOuverte] = React.useState(false);
   const [amandineEcoute, setAmandineEcoute] = React.useState(false);
@@ -2935,6 +2968,24 @@ function Dashboard({ agenceAccess, onClose }) {
   const byAgence = {};
   AGENCES.forEach(a => { byAgence[a] = tickets.filter(t => t.fields?.Agence===AGENCE_VERS_AIRTABLE[a] && !["Terminé","Annulé","Supprimé"].includes(t.fields?.Statut)).length; });
 
+  // Bloc 5 : Suivi intelligent IKO — dérivé de `tickets` (déjà chargé, aucun
+  // appel supplémentaire), respecte l'agence sélectionnée comme byAgence,
+  // indépendant des filtres de la liste principale (statutFilter, etc.) :
+  // c'est une vue de synthèse, pas un filtre de plus.
+  const ticketsPourAgence = tickets.filter(t => agenceFilter==="global" || t.fields?.Agence===AGENCE_VERS_AIRTABLE[agenceFilter]);
+  const ticketsATraiterIKO = ticketsPourAgence
+    .map(t => ({ t, info: evaluerPrioriteIKO(t) }))
+    .filter(x => x.info.priorite === "urgent" || x.info.priorite === "a_traiter")
+    .sort((a, b) => {
+      if (a.info.priorite !== b.info.priorite) return a.info.priorite === "urgent" ? -1 : 1;
+      return parseDateCreneau(a.t.fields?.Créneau) - parseDateCreneau(b.t.fields?.Créneau);
+    });
+
+  const allerAuTicketIKO = (id) => {
+    setStatutFilter("tous"); setUrgentOnly(false); setMessagesOnly(false); setRdvModifieOnly(false);
+    setTimeout(() => document.getElementById("ticket-"+id)?.scrollIntoView({ behavior: "smooth", block: "center" }), 50);
+  };
+
   if (vueMode === "vocal") {
     return (
       <div style={{position:"fixed",inset:0,background:"#0D0D0D",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",zIndex:100}}>
@@ -3119,6 +3170,40 @@ function Dashboard({ agenceAccess, onClose }) {
                 </span>
               </button>
             ))}
+          </div>
+        )}
+
+        {/* Bloc 5 : Suivi intelligent IKO — zone "À traiter", lecture seule,
+            ne modifie jamais un ticket automatiquement. Un clic ouvre le
+            ticket dans la liste principale (aucune action déclenchée ici). */}
+        {ticketsATraiterIKO.length > 0 && (
+          <div style={{background:"#fff",border:"2px solid "+C.rouge,borderRadius:"12px",marginBottom:"20px",overflow:"hidden"}}>
+            <div onClick={() => setSuiviIKOOuvert(!suiviIKOOuvert)}
+              style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 16px",cursor:"pointer",background:C.rougeDim}}>
+              <div style={{display:"flex",alignItems:"center",gap:"8px"}}>
+                <span style={{fontSize:"13px",fontWeight:"900",color:C.rouge}}>🎯 À traiter</span>
+                <span style={{background:C.rouge,color:"#fff",borderRadius:"10px",padding:"1px 8px",fontSize:"11px",fontWeight:"900"}}>{ticketsATraiterIKO.length}</span>
+              </div>
+              <span style={{fontSize:"12px",color:C.muted}}>{suiviIKOOuvert ? "▲ réduire" : "▼ afficher"}</span>
+            </div>
+            {suiviIKOOuvert && (
+              <div style={{padding:"10px 16px 14px",display:"flex",flexDirection:"column",gap:"8px"}}>
+                {ticketsATraiterIKO.map(({ t, info }) => (
+                  <div key={t.id} onClick={() => allerAuTicketIKO(t.id)}
+                    style={{display:"flex",alignItems:"flex-start",gap:"10px",padding:"8px 10px",borderRadius:"8px",border:"1px solid "+(info.priorite==="urgent"?"rgba(220,38,38,0.3)":C.border),background:info.priorite==="urgent"?C.rougeDim:"#F9FAFB",cursor:"pointer"}}>
+                    <span style={{fontSize:"10px",fontWeight:"900",color:"#fff",background:info.priorite==="urgent"?C.rouge:C.jaune,borderRadius:"6px",padding:"2px 6px",flexShrink:0,marginTop:"1px"}}>
+                      {info.priorite==="urgent"?"URGENT":"À TRAITER"}
+                    </span>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{fontSize:"12px",fontWeight:"700",color:C.white}}>
+                        {t.fields?.Name||"—"} · {t.fields?.Client||"Client inconnu"} <span style={{color:C.muted,fontWeight:"400"}}>({t.fields?.Agence||""})</span>
+                      </div>
+                      <div style={{fontSize:"11px",color:C.muted,marginTop:"2px"}}>{info.raisons.join(" · ")}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
