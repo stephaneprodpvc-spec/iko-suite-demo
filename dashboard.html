@@ -3257,6 +3257,9 @@ function Dashboard({ agenceAccess, onClose }) {
           <StatCard label="Total tickets" value={stats.total} accent
             active={statutFilter==="tous" && !urgentOnly && !messagesOnly && !rdvModifieOnly}
             onClick={() => { setStatutFilter("tous"); setUrgentOnly(false); setMessagesOnly(false); setRdvModifieOnly(false); }}/>
+          <StatCard label="À traiter" value={ticketsATraiterIKO.length} sub="urgent + signalé par IKO" alert
+            active={suiviIKOOuvert && ticketsATraiterIKO.length > 0}
+            onClick={() => { setSuiviIKOOuvert(true); window.scrollTo({ top: 0, behavior: "smooth" }); }}/>
           <StatCard label="Urgents" value={stats.urgent} sub="à traiter en priorité" alert
             active={urgentOnly}
             onClick={() => { setUrgentOnly(!urgentOnly); setStatutFilter("tous"); setMessagesOnly(false); setRdvModifieOnly(false); }}/>
