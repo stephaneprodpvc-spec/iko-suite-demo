@@ -383,8 +383,8 @@ function App() {
     return () => clearTimeout(timeoutId);
   }, [ticket?.id]);
 
-  const rechercher = async () => {
-    const num = numero.trim();
+  const rechercher = async (numeroForce) => {
+    const num = (typeof numeroForce === "string" ? numeroForce : numero).trim();
     if (!num) { setErreur("Merci de saisir votre numéro de ticket."); return; }
     setLoading(true); setErreur(""); setTicket(null); setEnvoi(null); setMessage("");
     try {
@@ -419,6 +419,20 @@ function App() {
     }
     setLoading(false);
   };
+
+  // Lien profond depuis index.html (bouton "Suivre ma demande" après
+  // confirmation) : ?ticket=SAV-2026-1234 préremplit et lance la recherche
+  // automatiquement. Comportement manuel intégralement conservé si le
+  // paramètre est absent — ce useEffect ne fait rien dans ce cas.
+  React.useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const ticketUrl = (params.get('ticket') || '').trim();
+    if (ticketUrl) {
+      setNumero(ticketUrl);
+      rechercher(ticketUrl);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const envoyerMessage = async () => {
     if (!message.trim() || !ticket) return;

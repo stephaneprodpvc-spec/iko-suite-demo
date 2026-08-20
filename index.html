@@ -913,6 +913,10 @@ function App() {
               </div>
               <div style={{fontSize:"11px",color:"#475569",marginTop:"2px"}}>Créneau : {creneau}</div>
             </div>
+            <a href={"suivi.html?ticket=" + encodeURIComponent(ticket)}
+              style={{display:"block",width:"100%",padding:"13px",background:F.marine,color:F.blanc,border:"2px solid " + F.or,borderRadius:"10px",fontSize:"13px",fontWeight:"700",textAlign:"center",textDecoration:"none",boxSizing:"border-box"}}>
+              📋 Suivre ma demande
+            </a>
             <button onClick={reset}
               style={{width:"100%",padding:"11px",background:F.blanc,color:F.marine,border:"2px solid " + F.grisBord,borderRadius:"10px",fontSize:"12px",fontWeight:"600",cursor:"pointer"}}>
               Faire une nouvelle demande SAV
