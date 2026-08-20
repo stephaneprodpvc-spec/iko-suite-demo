@@ -220,6 +220,7 @@ const isStatutClos = (statut) => statut === "Terminé" || statut === "Annulé" |
 // exécution automatique — juste une lecture des données déjà présentes).
 // Priorités : "urgent" > "a_traiter" > "en_attente" > "termine".
 const SEUIL_ANCIENNETE_JOURS = 5; // ticket ouvert plus longtemps -> signalé
+const SEUIL_RDV_MODIFIE_JOURS = 2; // RDV modifié : acquittement attendu plus vite (impacte la tournée du technicien)
 function evaluerPrioriteIKO(t) {
   const statut = t.fields?.Statut || "Nouveau";
   if (isStatutClos(statut)) return { priorite: "termine", raisons: [] };
@@ -230,23 +231,28 @@ function evaluerPrioriteIKO(t) {
   const dateCreneau = parseDateCreneau(t.fields?.Créneau);
   const aujourdhui = new Date(); aujourdhui.setHours(0, 0, 0, 0);
   const enRetard = t.fields?.Créneau && dateCreneau.getFullYear() < 9999 && dateCreneau < aujourdhui;
+  // Ancienneté : réutilise createdTime (champ natif Airtable, déjà présent
+  // sur chaque enregistrement, déjà exploité ailleurs — ligne "Date création"
+  // de l'export). Zéro nouveau champ, zéro appel supplémentaire. Limite
+  // assumée : c'est la date de CRÉATION du ticket, pas la date exacte du
+  // dernier changement de statut/flag — proxy raisonnable en l'absence de
+  // tout champ de date dédié côté Airtable.
+  const ageJours = t.createdTime ? Math.floor((Date.now() - new Date(t.createdTime).getTime()) / 86400000) : null;
 
   if (!t.fields?.Créneau && (statut === "Nouveau" || !t.fields?.Statut)) raisons.push("Aucun créneau planifié");
   if (enRetard && (statut === "Nouveau" || statut === "En cours")) raisons.push("Créneau dépassé, ticket toujours ouvert");
   if (t.fields?.["Message client non lu"]) raisons.push("Message client en attente de réponse");
-  if (t.fields?.["RDV modifié - notif technicien"]) raisons.push("RDV modifié à vérifier");
+  if (t.fields?.["RDV modifié - notif technicien"]) {
+    if (ageJours !== null && ageJours >= SEUIL_RDV_MODIFIE_JOURS) {
+      raisons.push("RDV modifié non acquitté depuis " + ageJours + " jour" + (ageJours > 1 ? "s" : ""));
+    } else {
+      raisons.push("RDV modifié à vérifier");
+    }
+  }
   if (statut === "Devis à faire") raisons.push("Devis à établir");
   if (statut === "Devis refusé") raisons.push("Devis refusé, décision à prendre");
   if (t.fields?.["IKO Utilisé"] && (statut === "Nouveau" || statut === "En cours")) raisons.push("Diagnostic Max disponible, à exploiter pour clôturer");
-  // Ancienneté : réutilise createdTime (champ natif Airtable, déjà présent
-  // sur chaque enregistrement, déjà exploité ailleurs — ligne "Date création"
-  // de l'export). Zéro nouveau champ, zéro appel supplémentaire. Cible en
-  // particulier les devis envoyés qui traînent sans réponse (encaissement
-  // bloqué) et tout ticket oublié faute de suivi.
-  if (t.createdTime) {
-    const ageJours = Math.floor((Date.now() - new Date(t.createdTime).getTime()) / 86400000);
-    if (ageJours >= SEUIL_ANCIENNETE_JOURS) raisons.push("Ouvert depuis " + ageJours + " jours sans clôture");
-  }
+  if (ageJours !== null && ageJours >= SEUIL_ANCIENNETE_JOURS) raisons.push("Ouvert depuis " + ageJours + " jours sans clôture");
 
   if (urgent) return { priorite: "urgent", raisons: raisons.length ? raisons : ["Ticket qualifié urgent"] };
   if (raisons.length) return { priorite: "a_traiter", raisons };
@@ -450,6 +456,10 @@ function TicketRow({ t, onStatusChange, onAnnuler, onSupprimer, onSupprimerDefin
 
   const urgent = t.fields?.Qualification === "Oui";
   const rdvModifie = !!t.fields?.["RDV modifié - notif technicien"];
+  // Bloc 5 (extension) : durée d'attente d'acquittement, même proxy
+  // createdTime que le signal d'ancienneté général (aucune date dédiée
+  // n'existe côté Airtable pour ce flag).
+  const ageJoursRdv = rdvModifie && t.createdTime ? Math.floor((Date.now() - new Date(t.createdTime).getTime()) / 86400000) : null;
   const diagnosticMaxUtilise = !!t.fields?.["IKO Utilisé"]; // Bloc 3 - axe C : traçabilité diagnostic Max
   const statut = t.fields?.Statut || "Nouveau";
   const statusColors = {
@@ -472,7 +482,7 @@ function TicketRow({ t, onStatusChange, onAnnuler, onSupprimer, onSupprimerDefin
         <div style={{display:"flex",alignItems:"center",gap:"8px",flexWrap:"wrap",marginBottom:"6px"}}>
           <span style={{fontSize:"12px",fontWeight:"900",color:C.or,fontFamily:"monospace"}}>{t.fields?.Name||"—"}</span>
           {urgent && <Badge label="URGENT" color={C.rouge} bg={C.rougeDim} style={{animation:"clignoteUrgent 1.1s ease-in-out infinite"}}/>}
-          {rdvModifie && <Badge label="🔄 RDV modifié" color={C.bleu} bg={C.bleuDim}/>}
+          {rdvModifie && <Badge label={"🔄 RDV modifié" + (ageJoursRdv !== null && ageJoursRdv >= SEUIL_RDV_MODIFIE_JOURS ? " · " + ageJoursRdv + "j sans acquittement" : "")} color={C.bleu} bg={C.bleuDim}/>}
           {diagnosticMaxUtilise && <Badge label="🧠 Diagnostic Max" color={C.vert} bg={C.vertDim}/>}
           <Badge label={statut} color={sc.color} bg={sc.bg}/>
           {t.fields?.["Source"] === "telephone" && <Badge label="📞 Tél." color={C.jaune} bg={C.jauneDim}/>}
