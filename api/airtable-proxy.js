@@ -618,11 +618,13 @@ export default async function handler(req, res) {
   //     son ID) — permet un filtrage de LISTE fiable via filterByFormula.
   //   - "Compte client" / "Client" : lien Airtable brut uniquement. Fiable
   //     pour vérifier la propriété d'UN enregistrement précis (on relit le
-  //     champ après avoir récupéré le record par son ID), mais PAS pour
-  //     construire un filtre de liste fiable (même piège ARRAYJOIN) — donc
-  //     filtrageListeFiable=false pour ces tables : aucune tentative de
-  //     filtrer une recherche/liste n'est faite ci-dessous, volontairement,
-  //     plutôt que d'inventer un filtre par nom potentiellement faux.
+  //     champ après avoir récupéré le record par son ID). Pour le
+  //     filtrage de LISTE, ARRAYJOIN() sur ce lien brut renvoie le NOM du
+  //     client et non son recordId (même piège) — filtrageListeFiable=false
+  //     signale ce cas, résolu depuis le Jalon 5 (audit sécurité) par une
+  //     résolution du nom de tenant via un appel serveur séparé à
+  //     Clients/<tenantId> (voir bloc GET ci-dessous) plutôt que par
+  //     l'absence de filtre pratiquée avant ce correctif.
   const TABLES_TENANT_CONFIRME = {
     'Devis': { champ: 'Client Record ID', filtrageListeFiable: true },
     'Catalogue Produits': { champ: 'Client Record ID', filtrageListeFiable: true },
@@ -668,10 +670,28 @@ export default async function handler(req, res) {
       const formuleTenant = 'FIND("' + session.tenantId + '", ARRAYJOIN({' + conf.champ + '}))';
       rest.filterByFormula = rest.filterByFormula ? 'AND(' + rest.filterByFormula + ', ' + formuleTenant + ')' : formuleTenant;
     } else if (req.method === 'GET' && !conf.filtrageListeFiable) {
-      // Table sans champ ID fiable pour une recherche par formule (cf.
-      // commentaire de configuration ci-dessus). NON FILTRÉ dans cette
-      // étape, volontairement — signalé explicitement dans le rapport
-      // plutôt que de deviner un filtre par nom.
+      // JALON 5 — CORRECTIF SÉCURITÉ : auparavant non filtré du tout ici
+      // (fuite de liste inter-tenant réelle, trouvée lors de l'audit —
+      // n'importe quelle session valide d'un tenant pouvait lister TOUTES
+      // les listes/recherches Métrés, Agences, RDV Commercial de TOUS les
+      // tenants). Corrigé avec la même technique que AUTH #007 (Planning
+      // Commercial) : "conf.champ" est un lien Airtable brut (ARRAYJOIN
+      // renvoie le NOM du client, pas son recordId — piège déjà documenté
+      // sur ce projet), donc le nom du tenant est résolu via un appel
+      // serveur séparé à Clients/<tenantId> — jamais depuis une valeur
+      // fournie par le navigateur — avant de construire le filtre.
+      let nomTenantListe;
+      try {
+        const rTenantListe = await fetch('https://api.airtable.com/v0/' + baseId + '/Clients/' + session.tenantId, { headers });
+        if (!rTenantListe.ok) return res.status(403).json({ error: 'Accès refusé : tenant de session introuvable.' });
+        const recTenantListe = await rTenantListe.json();
+        nomTenantListe = (recTenantListe.fields || {})['Nom client'];
+      } catch (err) {
+        return res.status(502).json({ error: 'Erreur en résolvant le tenant de session.', details: String(err) });
+      }
+      if (!nomTenantListe) return res.status(403).json({ error: 'Accès refusé : tenant de session incomplet.' });
+      const formuleTenantListe = 'FIND("' + String(nomTenantListe).replace(/"/g, '\\"') + '", ARRAYJOIN({' + conf.champ + '}))';
+      rest.filterByFormula = rest.filterByFormula ? 'AND(' + rest.filterByFormula + ', ' + formuleTenantListe + ')' : formuleTenantListe;
     } else if (req.method === 'POST') {
       // Création : si le champ tenant est explicitement fourni par le
       // navigateur, il doit correspondre exactement au tenant de la
@@ -690,6 +710,104 @@ export default async function handler(req, res) {
       // PATCH/DELETE sans recordId : forme non valide pour une table
       // tenant-confirmée, aucun usage légitime connu — refusé par prudence.
       return res.status(400).json({ error: 'Requête invalide pour cette table.' });
+    }
+  }
+
+  // JALON 5 — "Ouvertures Métré" : AUCUNE protection tenant n'existait pour
+  // cette table (ni dans TABLES_TENANT_CONFIRME, ni bloc dédié) — trouvé
+  // lors de l'audit de sécurité demandé. Contrairement aux autres tables,
+  // elle n'a PAS de champ "Compte client" direct : le rattachement tenant
+  // passe UNIQUEMENT par son lien "Métré" vers la table Métrés (qui, elle,
+  // porte "Compte client"). Protection en DEUX SAUTS : on relit le Métré
+  // lié pour vérifier sa propriété, jamais de confiance dans une valeur
+  // fournie par le navigateur.
+  if (premierSegment === 'Ouvertures Métré') {
+    if (!session) {
+      return res.status(401).json({ error: 'Authentification requise pour accéder à Ouvertures Métré.' });
+    }
+    if (session.role !== 'SUPER_ADMIN_IKO') {
+      if (!session.tenantId) {
+        return res.status(403).json({ error: 'Accès refusé : session sans tenant valide.' });
+      }
+
+      // Vérifie qu'un recordId Métrés donné appartient au tenant de session
+      // (2e saut) — jamais de confiance dans une valeur fournie par le
+      // navigateur, seule la valeur réellement stockée sur Métrés compte.
+      const metreAppartientAuTenant = async (idMetre) => {
+        try {
+          const r = await fetch('https://api.airtable.com/v0/' + baseId + '/' + encodeURIComponent('Métrés') + '/' + idMetre, { headers });
+          if (!r.ok) return false;
+          const rec = await r.json();
+          const v = (rec.fields || {})['Compte client'];
+          const ids = Array.isArray(v) ? v : (v ? [v] : []);
+          return ids.includes(session.tenantId);
+        } catch (e) { return false; }
+      };
+
+      const segmentsOM = subPathRaw.split('/').filter(Boolean);
+      const recordIdOM = segmentsOM[1];
+
+      if (recordIdOM) {
+        // GET/PATCH/DELETE sur une ouverture précise : relit l'ouverture,
+        // vérifie que SON Métré actuel appartient au tenant — échec fermé
+        // (aucune ouverture sans Métré rattaché légitime connu).
+        let recOM;
+        try {
+          const rOM = await fetch('https://api.airtable.com/v0/' + baseId + '/' + encodeURIComponent(premierSegment) + '/' + recordIdOM, { headers });
+          if (!rOM.ok) {
+            const errData = await rOM.json().catch(() => ({}));
+            return res.status(rOM.status).json(errData);
+          }
+          recOM = await rOM.json();
+        } catch (err) {
+          return res.status(502).json({ error: 'Erreur en vérifiant la propriété tenant de cette ouverture.', details: String(err) });
+        }
+        const metreLies = (recOM.fields || {})['Métré'];
+        const idsMetre = Array.isArray(metreLies) ? metreLies : (metreLies ? [metreLies] : []);
+        const appartient = idsMetre.length > 0 && (await Promise.all(idsMetre.map(metreAppartientAuTenant))).some(Boolean);
+        if (!appartient) {
+          return res.status(403).json({ error: "Accès refusé : cette ouverture n'appartient pas à votre tenant." });
+        }
+        // PATCH : si un nouveau lien "Métré" est envoyé, il doit LUI AUSSI
+        // appartenir au tenant — empêche un re-rattachement vers un autre
+        // tenant via une valeur du navigateur.
+        if (req.method === 'PATCH' && req.body && req.body.fields && Object.prototype.hasOwnProperty.call(req.body.fields, 'Métré')) {
+          const nouveauxMetre = req.body.fields['Métré'];
+          const idsNouveaux = Array.isArray(nouveauxMetre) ? nouveauxMetre : (nouveauxMetre ? [nouveauxMetre] : []);
+          const nouveauOk = idsNouveaux.length > 0 && (await Promise.all(idsNouveaux.map(metreAppartientAuTenant))).every(Boolean);
+          if (!nouveauOk) {
+            return res.status(403).json({ error: 'Accès refusé : le métré cible ne correspond pas à votre tenant.' });
+          }
+        }
+      } else if (req.method === 'POST') {
+        // Création : le Métré cible fourni ("Métré": [recordId]) doit
+        // appartenir au tenant de session — jamais de création orpheline
+        // ni rattachée à un autre tenant.
+        const champsOM = (req.body && req.body.fields) || {};
+        const metreVoulu = champsOM['Métré'];
+        const idsVoulu = Array.isArray(metreVoulu) ? metreVoulu : (metreVoulu ? [metreVoulu] : []);
+        const ok = idsVoulu.length > 0 && (await Promise.all(idsVoulu.map(metreAppartientAuTenant))).every(Boolean);
+        if (!ok) {
+          return res.status(403).json({ error: 'Création refusée : le métré cible ne correspond pas à votre tenant.' });
+        }
+      } else if (req.method === 'GET') {
+        // Liste/recherche (filterByFormula par nom de fiche Métré, cf.
+        // metreur.html) : aucun filtre serveur fiable possible ici — cette
+        // table n'a pas de champ tenant direct ni de lookup dédié, et un
+        // formula Airtable ne peut pas traverser 2 sauts de lien sans champ
+        // créé à cet effet (hors périmètre : modification de schéma
+        // Airtable non autorisée dans ce jalon). Rate-limit dédié à la
+        // place, même esprit que la recherche Tickets SAV par numéro (cf.
+        // plus haut dans ce fichier) : rend un balayage systématique
+        // impraticable sans bloquer l'usage normal (ouvrir une fiche =
+        // quelques requêtes). Limitation documentée, pas une règle
+        // inventée en silence.
+        if (!verifierDebit(req, { max: 30, fenetreMs: 10 * 60 * 1000, cle: 'recherche-ouvertures-metre' })) {
+          return res.status(429).json({ error: 'Trop de requêtes sur Ouvertures Métré. Réessayez dans quelques minutes.' });
+        }
+      } else {
+        return res.status(400).json({ error: 'Requête invalide pour cette table.' });
+      }
     }
   }
 

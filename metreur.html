@@ -1959,7 +1959,33 @@ function Login({ onLogin }) {
         if (r === "SUPER_ADMIN_IKO") {
           onLogin("global"); // acces global, identique a l'ancien mot de passe maitre
         } else if (r === "TECHNICIEN") {
-          setEtat("choix-agence");
+          // JALON 5 — CORRECTIF : le role TECHNICIEN seul ne garantit pas
+          // que le module Metreur soit achete/actif pour ce tenant (role
+          // et modules sont deux notions distinctes - un technicien peut
+          // tres bien n'avoir que le module Technicien/SAV, sans Metreur).
+          // Avant ce correctif, aucun controle de module n'existait ici :
+          // n'importe quel TECHNICIEN pouvait ouvrir cette page quel que
+          // soit l'etat reel de "Modules actifs" du client. Le controle se
+          // fait ici (recordId "Clients/<tenantId>" deja protege par AUTH
+          // #004, jamais une valeur du navigateur - tenantId vient de la
+          // session verifiee serveur ci-dessus) plutot que dans le proxy
+          // Airtable (Metres/Ouvertures Metre) : Max (technicien.html)
+          // doit continuer a lire l'historique metre pour le jumeau
+          // numerique MEME SANS le module Metreur actif - decision
+          // explicite conservee, la lecture par Max n'est pas concernee.
+          const tenantId = res.json.tenantId;
+          if (!tenantId) { setEtat("refuse"); return; }
+          fetch('/api/airtable/Clients/' + tenantId)
+            .then(r2 => r2.json())
+            .then(clientJson => {
+              const modules = (clientJson.fields || {})["Modules actifs"] || [];
+              if (modules.indexOf("Métreur") !== -1) {
+                setEtat("choix-agence");
+              } else {
+                setEtat("refuse");
+              }
+            })
+            .catch(() => setEtat("erreur"));
         } else {
           setEtat("refuse");
         }
