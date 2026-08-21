@@ -58,6 +58,11 @@ const ACCESS_TOKEN_DUREE_S = 15 * 60;        // 15 minutes
 const REFRESH_TOKEN_DUREE_S = 7 * 24 * 3600; // 7 jours
 const MAX_ECHECS_AVANT_BLOCAGE = 8;
 const DUREE_BLOCAGE_MIN = 15;
+// Roles provisionnables depuis l'admin (Poste de pilotage). SUPER_ADMIN_IKO
+// est volontairement exclu de cette liste : ce role ne doit jamais etre
+// creable via un formulaire de provisioning client, seulement en direct
+// dans Airtable par RSIA.
+const ROLES_PROVISIONNABLES = ["TENANT_ADMIN", "TECHNICIEN", "COMMERCIAL", "CLIENT"];
 
 const MESSAGE_GENERIQUE = "Identifiant ou mot de passe incorrect.";
 // Hash factice pour egaliser le temps de reponse quand le compte n'existe pas
@@ -229,6 +234,65 @@ async function gererLogout(req, res) {
   return res.status(200).json({ ok: true });
 }
 
+// --- PROVISIONING (ajout) : creation d'un compte utilisateur pour un
+// client, depuis le Poste de pilotage (admin.html). Reutilise l'infra
+// d'authentification deja validee (meme table, meme hachage bcrypt),
+// aucune nouvelle fonction Vercel. Le hachage du mot de passe reste
+// exclusivement serveur, jamais transmis ni calcule cote client.
+//
+// SECURITE : cette route n'a aujourd'hui pas de verification d'identite
+// de l'appelant au-dela de verifierOrigine/verifierDebit (memes garde-fous
+// que login), car admin.html n'a pas encore de session admin reelle
+// branchee (mot de passe code en dur, point deja documente comme en
+// attente de validation Stephane). Tant que ce point n'est pas resolu,
+// cette route offre le meme niveau de protection que le reste de
+// l'admin, pas plus : a durcir en priorite des que l'auth admin reelle
+// sera active (cf. failles documentees dans les memoires du projet).
+async function gererCreationUtilisateur(req, res) {
+  const { identifiant, motDePasse, tenantId, role } = req.body || {};
+  if (!identifiant || !motDePasse || !tenantId || !role) {
+    return res.status(400).json({ erreur: "Identifiant, mot de passe, client et rôle sont requis." });
+  }
+  if (!ROLES_PROVISIONNABLES.includes(role)) {
+    return res.status(400).json({ erreur: "Rôle invalide." });
+  }
+  if (String(motDePasse).length < 8) {
+    return res.status(400).json({ erreur: "Le mot de passe doit contenir au moins 8 caractères." });
+  }
+
+  const existant = await lireUtilisateurParIdentifiant(identifiant);
+  if (existant) {
+    return res.status(409).json({ erreur: "Cet identifiant existe déjà." });
+  }
+
+  const hash = await bcrypt.hash(motDePasse, 12);
+  const r = await fetch(
+    "https://api.airtable.com/v0/" + AIRTABLE_BASE + "/" + encodeURIComponent(UTILISATEURS_TABLE),
+    {
+      method: "POST",
+      headers: airtableHeaders(),
+      body: JSON.stringify({
+        records: [{ fields: {
+          "Identifiant": String(identifiant).trim(),
+          "Hash mot de passe": hash,
+          "tenantId": [tenantId],
+          "Rôle": role,
+          "Statut": "Actif",
+          "Échecs de connexion": 0,
+        } }],
+      }),
+    }
+  );
+  if (!r.ok) {
+    const detail = await r.text();
+    console.error("Erreur creation utilisateur:", r.status, detail);
+    return res.status(502).json({ erreur: "Création du compte impossible." });
+  }
+  const json = await r.json();
+  const rec = json.records && json.records[0];
+  return res.status(200).json({ id: rec ? rec.id : null, identifiant, role });
+}
+
 async function gererSession(req, res) {
   const accessBrut = lireCookie(req, "iko_access");
   if (accessBrut) {
@@ -384,6 +448,11 @@ export default async function handler(req, res) {
       }
       if (action === "logout") {
         return gererLogout(req, res);
+      }
+      if (action === "creer_utilisateur") {
+        if (!verifierOrigine(req)) return reponseBloquee(res, "origine");
+        if (!verifierDebit(req)) return reponseBloquee(res, "debit");
+        return gererCreationUtilisateur(req, res);
       }
 
       // --- Comportement EXISTANT, inchangé : pas d'"action" = déclenchement

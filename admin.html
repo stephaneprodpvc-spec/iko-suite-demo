@@ -832,6 +832,28 @@
           </div>
         </div>
 
+        <div id="utilisateursWrap" style="display:none;">
+          <button type="button" class="secondary" id="utilisateursToggleBtn" style="width:100%;text-align:left;display:flex;justify-content:space-between;align-items:center;margin-top:18px;">
+            <span>Comptes utilisateurs <span id="utilisateursCount" style="color:var(--texte-faint);font-weight:400;"></span></span><span id="utilisateursChevron">▾</span>
+          </button>
+          <div id="utilisateursBody" style="display:none;margin-top:10px;">
+            <div id="utilisateursListe" style="display:flex;flex-direction:column;gap:8px;"></div>
+            <div style="display:flex;flex-direction:column;gap:6px;margin-top:8px;padding:10px;border:1px dashed var(--border);border-radius:12px;">
+              <input type="text" id="fNouvelUtilisateurId" placeholder="Identifiant (email recommandé)" style="width:100%;padding:8px 10px;border-radius:8px;border:1px solid var(--border);background:rgba(255,255,255,0.04);color:var(--texte);font-size:12px;outline:none;">
+              <input type="password" id="fNouvelUtilisateurMdp" placeholder="Mot de passe (8 caractères min.)" style="width:100%;padding:8px 10px;border-radius:8px;border:1px solid var(--border);background:rgba(255,255,255,0.04);color:var(--texte);font-size:12px;outline:none;">
+              <select id="fNouvelUtilisateurRole" style="width:100%;padding:8px 10px;border-radius:8px;border:1px solid var(--border);background:rgba(255,255,255,0.04);color:var(--texte);font-size:12px;outline:none;">
+                <option value="TENANT_ADMIN">Admin client</option>
+                <option value="TECHNICIEN">Technicien</option>
+                <option value="COMMERCIAL">Commercial</option>
+                <option value="CLIENT">Client</option>
+              </select>
+              <button type="button" class="secondary" id="creerUtilisateurBtn" style="width:100%;">+ Créer le compte</button>
+              <div id="utilisateurMsg" style="font-size:11px;"></div>
+            </div>
+            <div class="hint" style="font-size:11px;color:var(--texte-faint);margin-top:5px;">Authentification isolée (JWT), pas encore branchée sur les écrans de connexion des modules — voir dépendances documentées dans api/verif-securite.js.</div>
+          </div>
+        </div>
+
         <div id="questionnaireWrap" style="display:none;">
           <button type="button" class="secondary" id="questionnaireToggleBtn" style="width:100%;text-align:left;display:flex;justify-content:space-between;align-items:center;margin-top:18px;">
             <span>Questionnaire SAV personnalisé <span id="questionnaireCount" style="color:var(--texte-faint);font-weight:400;"></span></span><span id="questionnaireChevron">▾</span>
@@ -1828,11 +1850,13 @@ function chargerDansFormulaire(id){
   document.getElementById("formMsg").textContent = "";
   chargerActivite(id);
   chargerAgencesClient(id);
+  chargerUtilisateursClient(id);
   chargerQuestionnaire(id);
   ouvrirDevisPourClient(id, f);
 }
 
 var AGENCES_TABLE = "Agences";
+var UTILISATEURS_TABLE = "Utilisateurs";
 var QUESTIONNAIRE_TABLE = "Questionnaire SAV";
 
 function escHtml(s){
@@ -1946,6 +1970,77 @@ document.getElementById("fNbAgences").addEventListener("change", function(){
   if (editingId) chargerAgencesClient(editingId);
 });
 
+// ---- Comptes utilisateurs (provisioning) ----
+// Reutilise l'infra d'authentification isolee (api/verif-securite.js,
+// action=creer_utilisateur pour la creation avec hachage bcrypt serveur ;
+// /api/airtable/ generique pour lecture/statut, comme pour les agences).
+function chargerUtilisateursClient(clientId){
+  var wrap = document.getElementById("utilisateursWrap");
+  if (!clientId) { wrap.style.display = "none"; return; }
+  wrap.style.display = "block";
+  var formule = encodeURIComponent('FIND("' + clientId + '", ARRAYJOIN({tenantId}))');
+  fetch("/api/airtable/" + encodeURIComponent(UTILISATEURS_TABLE) + "?filterByFormula=" + formule + "&maxRecords=50")
+    .then(function(r){ return r.json(); })
+    .then(function(data){ afficherUtilisateurs(data.records || []); })
+    .catch(function(){ document.getElementById("utilisateursListe").innerHTML = "<div style='color:#FF453A;font-size:12px;'>Erreur de chargement.</div>"; });
+}
+
+function afficherUtilisateurs(records){
+  var el = document.getElementById("utilisateursListe");
+  document.getElementById("utilisateursCount").textContent = "(" + records.length + ")";
+  if (!records.length){
+    el.innerHTML = "<div style='font-size:12px;color:var(--texte-faint);'>Aucun compte pour ce client.</div>";
+    return;
+  }
+  el.innerHTML = records.map(function(rec){
+    var f = rec.fields || {};
+    var actif = f["Statut"] !== "Bloqué" ? "checked" : "";
+    return "<div style='border:1px solid var(--border);border-radius:12px;padding:10px;display:flex;align-items:center;gap:10px;'>" +
+      "<div style='flex:1;min-width:0;'>" +
+        "<div style='font-size:13px;color:var(--texte);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;'>" + escHtml(f["Identifiant"]) + "</div>" +
+        "<div style='font-size:11px;color:var(--texte-faint);'>" + escHtml(f["Rôle"]) + (f["Dernière connexion"] ? " · dernière connexion " + new Date(f["Dernière connexion"]).toLocaleDateString("fr-FR") : " · jamais connecté") + "</div>" +
+      "</div>" +
+      "<label style='font-size:11px;color:var(--texte-dim);display:flex;align-items:center;gap:4px;flex-shrink:0;'><input type='checkbox' data-id='" + rec.id + "' class='ut-actif' " + actif + "> Actif</label>" +
+    "</div>";
+  }).join("");
+
+  Array.prototype.forEach.call(el.querySelectorAll(".ut-actif"), function(champ){
+    champ.addEventListener("change", function(){
+      var id = this.getAttribute("data-id");
+      fetch("/api/airtable/" + encodeURIComponent(UTILISATEURS_TABLE) + "/" + id, {
+        method: "PATCH", headers: {"Content-Type":"application/json"},
+        body: JSON.stringify({ fields: { "Statut": this.checked ? "Actif" : "Bloqué" } })
+      });
+    });
+  });
+}
+
+document.getElementById("creerUtilisateurBtn").addEventListener("click", function(){
+  if (!editingId) return;
+  var msg = document.getElementById("utilisateurMsg");
+  var identifiant = document.getElementById("fNouvelUtilisateurId").value.trim();
+  var motDePasse = document.getElementById("fNouvelUtilisateurMdp").value;
+  var role = document.getElementById("fNouvelUtilisateurRole").value;
+  if (!identifiant || !motDePasse){
+    msg.style.color = "#FF453A"; msg.textContent = "Identifiant et mot de passe requis.";
+    return;
+  }
+  msg.style.color = "var(--texte-faint)"; msg.textContent = "Création…";
+  fetch("/api/verif-securite", {
+    method: "POST", headers: {"Content-Type":"application/json"},
+    body: JSON.stringify({ action: "creer_utilisateur", identifiant: identifiant, motDePasse: motDePasse, tenantId: editingId, role: role })
+  })
+    .then(function(r){ return r.json().then(function(data){ return { ok: r.ok, data: data }; }); })
+    .then(function(res){
+      if (!res.ok){ msg.style.color = "#FF453A"; msg.textContent = res.data.erreur || "Erreur de création."; return; }
+      msg.style.color = "#22C55E"; msg.textContent = "Compte créé.";
+      document.getElementById("fNouvelUtilisateurId").value = "";
+      document.getElementById("fNouvelUtilisateurMdp").value = "";
+      chargerUtilisateursClient(editingId);
+    })
+    .catch(function(){ msg.style.color = "#FF453A"; msg.textContent = "Erreur de création."; });
+});
+
 function toggleSection(btnId, bodyId, chevronId){
   var btn = document.getElementById(btnId), body = document.getElementById(bodyId), chev = document.getElementById(chevronId);
   btn.addEventListener("click", function(){
@@ -1955,6 +2050,7 @@ function toggleSection(btnId, bodyId, chevronId){
   });
 }
 toggleSection("agencesToggleBtn", "agencesBody", "agencesChevron");
+toggleSection("utilisateursToggleBtn", "utilisateursBody", "utilisateursChevron");
 toggleSection("questionnaireToggleBtn", "questionnaireBody", "questionnaireChevron");
 
 // --- Questionnaire SAV par client ---------------------------------------
@@ -2189,6 +2285,7 @@ function reinitialiserFormulaire(){
   document.getElementById("fNbAgences").value = 1;
   document.getElementById("fMontantDiag").value = "";
   document.getElementById("agencesWrap").style.display = "none";
+  document.getElementById("utilisateursWrap").style.display = "none";
   document.getElementById("questionnaireWrap").style.display = "none";
   Array.prototype.forEach.call(document.querySelectorAll(".client-item"), function(x){ x.classList.remove("selected"); });
 }
