@@ -3266,7 +3266,17 @@ function Dashboard({ agenceAccess, onClose }) {
     const matchMessages = !messagesOnly || t.fields?.["Message client non lu"] || t.id === openMessageTicketId;
     const matchRdvModifie = !rdvModifieOnly || t.fields?.["RDV modifié - notif technicien"];
     const q = search.toLowerCase();
-    const matchSearch = !q || (t.fields?.Client||"").toLowerCase().includes(q) || (t.fields?.Name||"").toLowerCase().includes(q) || (t.fields?.Produit||"").toLowerCase().includes(q);
+    // Recherche globale : tous les champs textuels utiles déjà chargés
+    // côté client, pas seulement Client/Numéro/Produit. Aucun nouvel
+    // appel Airtable (les tickets sont déjà en mémoire) et aucune IA
+    // nécessaire ici : simple recherche multi-champs déterministe. La
+    // recherche vocale (outil "rechercher" de chat-dashboard.js) appelle
+    // ce même filtre via setSearch, elle en bénéficie automatiquement.
+    const matchSearch = !q || [
+      t.fields?.Client, t.fields?.Name, t.fields?.Produit, t.fields?.Adresse,
+      t.fields?.Email, t.fields?.Téléphone, t.fields?.Problème,
+      t.fields?.Diagnostic, t.fields?.Commentaire,
+    ].some(v => (v || "").toString().toLowerCase().includes(q));
     return matchAgence && matchStatut && matchUrgent && matchMessages && matchRdvModifie && matchSearch;
   });
 
@@ -3619,7 +3629,7 @@ function Dashboard({ agenceAccess, onClose }) {
         {vue === "tickets" && (
             <div style={{display:"flex",flexDirection:"column",gap:"10px"}}>
               <div style={{display:"flex",gap:"10px",flexWrap:"wrap",alignItems:"center",background:"#F3F4F6",border:"1px solid "+C.border,borderRadius:"10px",padding:"8px 12px"}}>
-                <input placeholder="🔍 Rechercher client, ticket, produit..." value={search} onChange={e => setSearch(e.target.value)} style={{width:"240px"}}/>
+                <input placeholder="🔍 Recherche globale (client, ticket, produit, adresse, email, tél., diagnostic...)" value={search} onChange={e => setSearch(e.target.value)} style={{width:"320px"}}/>
                 <span style={{fontSize:"11px",color:C.muted,fontWeight:"700",marginRight:"2px"}}>Trier :</span>
                 {[["date","📅 Date"],["ticket","🔢 N° Ticket"]].map(([v,l]) => (
                   <button key={v} onClick={() => setSortBy(v)}

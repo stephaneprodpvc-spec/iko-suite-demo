@@ -179,7 +179,7 @@ const TOOLS = [
   },
   {
     name: "rechercher",
-    description: "Lance une recherche texte (nom client, numero de ticket, produit) dans la liste des tickets.",
+    description: "Lance une recherche texte globale (nom client, numero de ticket, produit, adresse, email, telephone, diagnostic, commentaire) dans la liste des tickets.",
     input_schema: {
       type: "object",
       properties: {
