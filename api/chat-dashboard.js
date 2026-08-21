@@ -14,6 +14,7 @@ import { verifierOrigine, verifierDebit, reponseBloquee } from "./_securite.js";
 const MODELE = "claude-haiku-4-5-20251001";
 const MAX_CHARS_MESSAGE = 500;
 const MAX_TICKETS_CONTEXTE = 150;
+const MAX_CATALOGUE_CONTEXTE = 60;
 
 const AGENCES_VALIDES = ["Agence 1", "Agence 2", "Agence 3", "Agence 4"];
 const STATUTS_VALIDES = ["Nouveau", "En cours", "Terminé", "Annulé", "Devis à faire", "Devis envoyé", "Devis - Suivi", "Devis - Attente fournisseur", "Devis refusé"];
@@ -21,6 +22,52 @@ const STATUTS_VALIDES = ["Nouveau", "En cours", "Terminé", "Annulé", "Devis à
 // cette transition exige un motif et passe par preparer_annulation_ticket.
 const STATUTS_MODIFIABLES = STATUTS_VALIDES.filter(s => s !== "Annulé");
 const MOTIFS_BLOCAGE_VALIDES = ["Congé", "Congé payé", "Maladie", "Autre"];
+
+// ==================== Bloc devis assisté (mode "devis_suggestion") ====================
+// Meme principe que le Bloc 2C deja livre cote technicien/Max
+// (api/chat-technicien.js, fonction traiterDevisSuggestion) : l'IA ne
+// propose QUE des catalogue_id pioches dans le catalogue reel transmis,
+// jamais de prix ni de designation. Le serveur revalide integralement
+// chaque ligne avant de la renvoyer au dashboard.
+const SYSTEM_PROMPT_DEVIS = `
+Tu es IKO, assistant du responsable pour preparer un devis depuis le
+dashboard SAV de l'application Iko Suite. Tu recois le probleme du
+ticket et le catalogue REEL du client (produits et main d'oeuvre, avec
+leurs identifiants exacts).
+
+REGLES ABSOLUES
+- Tu ne peux proposer QUE des lignes dont le catalogue_id existe
+  EXACTEMENT dans le catalogue fourni. N'invente jamais un identifiant.
+- Ne propose jamais de prix, reference ou designation : le serveur les
+  recalcule depuis le catalogue reel, tu n'as qu'a choisir le bon
+  catalogue_id et une quantite raisonnable.
+- Justifie chaque ligne brievement en lien avec le probleme decrit.
+- Si aucune ligne du catalogue ne correspond, renvoie un tableau vide.
+`;
+
+const OUTIL_DEVIS = {
+  name: "suggerer_lignes_devis",
+  description: "Suggere des lignes de devis en piochant EXCLUSIVEMENT dans le catalogue reel fourni.",
+  input_schema: {
+    type: "object",
+    properties: {
+      lignes: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: {
+            catalogue_id: { type: "string", description: "Identifiant exact d'un element du catalogue fourni (jamais invente)." },
+            quantite: { type: "number" },
+            justification: { type: "string", description: "Courte justification en lien avec le probleme du ticket." },
+          },
+          required: ["catalogue_id", "quantite", "justification"],
+        },
+      },
+      resume_vocal: { type: "string" },
+    },
+    required: ["lignes", "resume_vocal"],
+  },
+};
 
 const SYSTEM_PROMPT = `
 Tu es IKO, l'assistant vocal integre au dashboard SAV d'Iko Suite.
@@ -216,6 +263,15 @@ const TOOLS = [
     },
   },
   {
+    name: "afficher_analytics_sav",
+    description: "Ouvre le panneau Analytics SAV du dashboard (produits generant le plus de tickets, repartition par agence). N'ecrit rien, ouverture d'un panneau de lecture seule.",
+    input_schema: {
+      type: "object",
+      properties: {},
+      required: [],
+    },
+  },
+  {
     name: "reponse_vocale",
     description: "Repond simplement a voix haute, sans modifier le dashboard (question factuelle, demande de precision, ou confirmation).",
     input_schema: {
@@ -227,6 +283,88 @@ const TOOLS = [
     },
   },
 ];
+
+// ==================== Bloc devis assiste : validation serveur ====================
+async function traiterDevisSuggestion(req, res, body, cle) {
+  try {
+    const ticket = body.ticket && typeof body.ticket === "object" ? body.ticket : {};
+    const catalogueRecu = Array.isArray(body.catalogue) ? body.catalogue.slice(0, MAX_CATALOGUE_CONTEXTE) : [];
+
+    const catalogueValide = catalogueRecu
+      .filter(c => c && typeof c.id === "string" && c.id)
+      .map(c => ({
+        id: c.id,
+        type: c.type === "mo" ? "mo" : "produit",
+        designation: String(c.designation || "").slice(0, 200),
+        prix: Number(c.prix) || 0,
+      }));
+
+    if (!catalogueValide.length) {
+      return res.status(200).json({ lignes: [], resume_vocal: "Le catalogue n'est pas disponible pour ce client.", rejets: 0 });
+    }
+
+    const indexCatalogue = new Map(catalogueValide.map(c => [c.id, c]));
+
+    const texteContexte =
+      "Ticket (JSON) :\n" + JSON.stringify({
+        produit: String(ticket.produit || "").slice(0, 200),
+        probleme: String(ticket.probleme || "").slice(0, 500),
+      }) +
+      "\n\nCatalogue reel disponible (JSON, catalogue_id exact a reutiliser) :\n" +
+      JSON.stringify(catalogueValide.map(c => ({ catalogue_id: c.id, type: c.type, designation: c.designation }))) +
+      "\n\nDemande du responsable : \"" + String(body.message || "Propose des lignes de devis adaptees.").slice(0, MAX_CHARS_MESSAGE) + "\"";
+
+    const reponse = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-api-key": cle, "anthropic-version": "2023-06-01" },
+      body: JSON.stringify({
+        model: MODELE,
+        max_tokens: 500,
+        temperature: 0.2,
+        system: [{ type: "text", text: SYSTEM_PROMPT_DEVIS, cache_control: { type: "ephemeral" } }],
+        tools: [OUTIL_DEVIS],
+        tool_choice: { type: "tool", name: "suggerer_lignes_devis" },
+        messages: [{ role: "user", content: texteContexte }],
+      }),
+    });
+
+    if (!reponse.ok) {
+      const detail = await reponse.text();
+      console.error("Erreur API Anthropic (devis dashboard):", reponse.status, detail);
+      return res.status(502).json({ erreur: "IKO est momentanément indisponible." });
+    }
+
+    const data = await reponse.json();
+    const appel = (Array.isArray(data.content) ? data.content : []).find(b => b.type === "tool_use" && b.name === "suggerer_lignes_devis");
+    if (!appel) return res.status(502).json({ erreur: "Réponse de suggestion invalide." });
+
+    const lignesBrutes = Array.isArray(appel.input?.lignes) ? appel.input.lignes : [];
+    let rejets = 0;
+    const lignesValidees = [];
+    for (const ligne of lignesBrutes) {
+      const ref = indexCatalogue.get(String(ligne?.catalogue_id || ""));
+      if (!ref) { rejets += 1; continue; } // catalogue_id halluciné : rejeté côté serveur
+      const quantite = Math.max(1, Math.round(Number(ligne.quantite) || 1));
+      lignesValidees.push({
+        catalogue_id: ref.id,
+        type: ref.type,
+        designation: ref.designation, // toujours depuis le catalogue reel, jamais depuis Claude
+        prix: ref.prix,
+        quantite,
+        justification: String(ligne.justification || "").slice(0, 200),
+      });
+    }
+
+    return res.status(200).json({
+      lignes: lignesValidees,
+      resume_vocal: String(appel.input?.resume_vocal || ""),
+      rejets,
+    });
+  } catch (e) {
+    console.error("Erreur traiterDevisSuggestion (dashboard):", e);
+    return res.status(500).json({ erreur: "Une erreur est survenue." });
+  }
+}
 
 export default async function handler(req, res) {
   if (req.method !== "POST") {
@@ -244,6 +382,11 @@ export default async function handler(req, res) {
 
   try {
     const body = req.body || {};
+
+    // Mode dédié, distinct de la navigation vocale par défaut. Origine et
+    // débit déjà vérifiés ci-dessus pour tous les modes.
+    if (body.mode === "devis_suggestion") return await traiterDevisSuggestion(req, res, body, cle);
+
     const message = String(body.message || "").slice(0, MAX_CHARS_MESSAGE).trim();
     if (!message) {
       return res.status(400).json({ erreur: "Aucune commande recue" });

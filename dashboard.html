@@ -1358,9 +1358,49 @@ function tauxTvaVersDecimal(label) {
   return m ? parseFloat(m[1].replace(',', '.')) / 100 : 0.20;
 }
 
-function LigneDevisEditeur({ produits, mo, lignes, onAjouter, onSupprimer }) {
+function LigneDevisEditeur({ produits, mo, lignes, ticket, onAjouter, onSupprimer }) {
   const [choix, setChoix] = React.useState("");
   const [qte, setQte] = React.useState(1);
+
+  // ---- Suggestion IA (mode "devis_suggestion") ----
+  // Meme principe que le Bloc 2C deja livre cote technicien/Max
+  // (technicien.html / api/chat-technicien.js) : le catalogue reel deja
+  // charge (produits/mo) est envoye au serveur qui revalide chaque
+  // catalogue_id renvoye par l'IA. Ajout ligne par ligne apres validation
+  // manuelle, jamais d'ecriture automatique.
+  const [suggestionsDevis, setSuggestionsDevis] = React.useState(null);
+  const [chargementSuggestions, setChargementSuggestions] = React.useState(false);
+
+  const demanderSuggestionsDevis = async () => {
+    if (!produits.length && !mo.length) return;
+    setChargementSuggestions(true);
+    setSuggestionsDevis(null);
+    try {
+      const catalogueEnvoye = [
+        ...produits.map(p => ({ id: p.id, type: 'produit', designation: p.fields?.["Désignation"] || '', prix: p.fields?.["Prix unitaire HT"] || 0 })),
+        ...mo.map(m => ({ id: m.id, type: 'mo', designation: m.fields?.["Type d'action"] || '', prix: m.fields?.["Prix forfait HT"] || m.fields?.["Taux horaire HT"] || 0 })),
+      ];
+      const r = await fetch('/api/chat-dashboard', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mode: 'devis_suggestion',
+          ticket: { produit: ticket?.fields?.Produit || '', probleme: ticket?.fields?.Problème || '' },
+          catalogue: catalogueEnvoye,
+        }),
+      });
+      const data = await r.json();
+      if (r.ok && !data.erreur) setSuggestionsDevis(data.lignes || []);
+    } catch (e) {}
+    setChargementSuggestions(false);
+  };
+
+  const ajouterLigneSuggeree = (l) => {
+    const produitSource = produits.find(p => p.id === l.catalogue_id);
+    const tauxTva = l.type === 'produit' ? tauxTvaVersDecimal(produitSource?.fields?.["Taux TVA"]) : 0.20;
+    const totalHT = (l.quantite || 1) * l.prix;
+    onAjouter({ designation: l.designation, qte: l.quantite || 1, puHT: l.prix, tauxTva, totalHT, totalTTC: totalHT * (1 + tauxTva) });
+    setSuggestionsDevis(prev => (prev || []).filter(x => x.catalogue_id !== l.catalogue_id));
+  };
 
   const ajouter = () => {
     if (!choix) return;
@@ -1381,6 +1421,33 @@ function LigneDevisEditeur({ produits, mo, lignes, onAjouter, onSupprimer }) {
   return (
     <div style={{marginBottom:"14px"}}>
       <label style={{fontSize:"11px",fontWeight:"700",color:C.muted,display:"block",marginBottom:"6px"}}>Lignes du devis (catalogue du client)</label>
+      {(produits.length > 0 || mo.length > 0) && (
+        <>
+          <button type="button" onClick={demanderSuggestionsDevis} disabled={chargementSuggestions}
+            style={{width:"100%",padding:"8px",marginBottom:"8px",borderRadius:"8px",background:"rgba(34,197,94,0.1)",border:"1px solid #22C55E",color:"#16A34A",fontSize:"11px",fontWeight:"700",cursor:chargementSuggestions?"not-allowed":"pointer"}}>
+            {chargementSuggestions ? "⏳ IKO réfléchit..." : "🧠 Suggestion IA"}
+          </button>
+          {suggestionsDevis && suggestionsDevis.length === 0 && (
+            <div style={{fontSize:"10px",color:C.muted,marginBottom:"8px",fontStyle:"italic"}}>Aucune suggestion pertinente pour ce ticket.</div>
+          )}
+          {suggestionsDevis && suggestionsDevis.length > 0 && (
+            <div style={{marginBottom:"8px",display:"flex",flexDirection:"column",gap:"5px"}}>
+              {suggestionsDevis.map(l => (
+                <div key={l.catalogue_id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:"6px",fontSize:"10px",background:"rgba(34,197,94,0.06)",borderRadius:"6px",padding:"6px 8px"}}>
+                  <div>
+                    <b>{l.designation}</b> ×{l.quantite} — {Number(l.prix).toFixed(2)} €
+                    {l.justification && <div style={{color:C.muted,fontStyle:"italic",marginTop:"2px"}}>{l.justification}</div>}
+                  </div>
+                  <button type="button" onClick={() => ajouterLigneSuggeree(l)}
+                    style={{flexShrink:0,padding:"5px 10px",borderRadius:"6px",background:"#22C55E",color:"#111",border:"none",fontWeight:"800",cursor:"pointer",fontSize:"10px"}}>
+                    + Ajouter
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </>
+      )}
       <div style={{display:"flex",gap:"8px",marginBottom:"10px"}}>
         <select value={choix} onChange={e => setChoix(e.target.value)} style={{flex:1}}>
           <option value="">— Ajouter une ligne —</option>
@@ -1575,7 +1642,7 @@ function ModalDevis({ ticket, onClose, onSent }) {
         {chargement && <div style={{textAlign:"center",padding:"20px 0",color:C.muted,fontSize:"12px"}}>⏳ Chargement du catalogue client...</div>}
 
         {!chargement && (
-          <LigneDevisEditeur produits={catalogue.produits} mo={catalogue.mo} lignes={lignes}
+          <LigneDevisEditeur produits={catalogue.produits} mo={catalogue.mo} lignes={lignes} ticket={ticket}
             onAjouter={l => setLignes([...lignes, l])} onSupprimer={i => setLignes(lignes.filter((_,idx) => idx!==i))}/>
         )}
 
@@ -1798,6 +1865,76 @@ function ModalGestionDevis({ tickets, onClose, onRefresh }) {
             </div>
           ))}
         </div>
+      </div>
+    </div>
+  );
+}
+
+/* ---- Analytics SAV : lecture seule, calculée uniquement à partir des
+   champs réellement présents sur les tickets déjà chargés. Aucune donnée
+   inventée : les indicateurs sans champ Airtable fiable (cause de la
+   panne, nombre de passages technicien) sont explicitement marqués
+   "non calculable" plutôt qu'estimés. ---- */
+function ModalAnalyticsSAV({ tickets, onClose }) {
+  const actifs = tickets; // toutes agences, tous statuts confondus (vue globale demandée)
+
+  const parProduit = {};
+  const parAgence = {};
+  actifs.forEach(t => {
+    const produit = (t.fields?.Produit || "").trim();
+    if (produit) parProduit[produit] = (parProduit[produit] || 0) + 1;
+    const agence = (t.fields?.Agence || "").trim();
+    if (agence) parAgence[agence] = (parAgence[agence] || 0) + 1;
+  });
+
+  const topProduits = Object.entries(parProduit).sort((a, b) => b[1] - a[1]).slice(0, 8);
+  const totalAvecAgence = Object.values(parAgence).reduce((s, n) => s + n, 0);
+  const repartitionAgences = Object.entries(parAgence).sort((a, b) => b[1] - a[1]);
+
+  return (
+    <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="modal-box" style={{maxWidth:"560px"}}>
+        <div style={{fontSize:"16px",fontWeight:"900",color:C.white,marginBottom:"4px"}}>📊 Analytics SAV</div>
+        <div style={{fontSize:"11px",color:C.muted,marginBottom:"16px"}}>{tickets.length} ticket(s) chargé(s) — lecture seule</div>
+
+        <div style={{marginBottom:"18px"}}>
+          <div style={{fontSize:"12px",fontWeight:"700",color:C.white,marginBottom:"8px"}}>Produits générant le plus de SAV</div>
+          {topProduits.length === 0 && <div style={{fontSize:"11px",color:C.muted,fontStyle:"italic"}}>Aucun produit renseigné sur les tickets chargés.</div>}
+          {topProduits.length > 0 && (
+            <div style={{border:"1px solid "+C.border,borderRadius:"8px",overflow:"hidden"}}>
+              {topProduits.map(([produit, n], i) => (
+                <div key={produit} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 12px",borderBottom:i<topProduits.length-1?"1px solid "+C.border:"none",fontSize:"12px"}}>
+                  <span>{produit}</span>
+                  <b style={{color:C.or}}>{n}</b>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div style={{marginBottom:"18px"}}>
+          <div style={{fontSize:"12px",fontWeight:"700",color:C.white,marginBottom:"8px"}}>Répartition par agence</div>
+          {repartitionAgences.length === 0 && <div style={{fontSize:"11px",color:C.muted,fontStyle:"italic"}}>Aucune agence renseignée sur les tickets chargés.</div>}
+          {repartitionAgences.length > 0 && (
+            <div style={{border:"1px solid "+C.border,borderRadius:"8px",overflow:"hidden"}}>
+              {repartitionAgences.map(([agence, n], i) => (
+                <div key={agence} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 12px",borderBottom:i<repartitionAgences.length-1?"1px solid "+C.border:"none",fontSize:"12px"}}>
+                  <span>{agence}</span>
+                  <span><b>{n}</b> <span style={{color:C.muted}}>({totalAvecAgence ? Math.round(n / totalAvecAgence * 100) : 0}%)</span></span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div style={{background:"#F3F4F6",border:"1px solid "+C.border,borderRadius:"8px",padding:"10px 12px",fontSize:"11px",color:C.muted,marginBottom:"6px"}}>
+          ⚠️ Causes récurrentes : non calculable — aucun champ de cause ou de malfaçon n'est actuellement enregistré sur les tickets.
+        </div>
+        <div style={{background:"#F3F4F6",border:"1px solid "+C.border,borderRadius:"8px",padding:"10px 12px",fontSize:"11px",color:C.muted,marginBottom:"16px"}}>
+          ⚠️ Taux de résolution au premier passage : non calculable — le schéma actuel ne trace pas le nombre de passages technicien par ticket.
+        </div>
+
+        <button onClick={onClose} style={{width:"100%",padding:"11px",background:"#0D0D0D",color:"#fff",border:"none",borderRadius:"10px",fontSize:"13px",fontWeight:"900",cursor:"pointer"}}>Fermer</button>
       </div>
     </div>
   );
@@ -2304,6 +2441,7 @@ function Dashboard({ agenceAccess, onClose }) {
   const [annulationMotifPrefill, setAnnulationMotifPrefill] = React.useState("");
   const [showModalBlocage, setShowModalBlocage] = React.useState(false);
   const [showModalConcepteur, setShowModalConcepteur] = React.useState(false);
+  const [showModalAnalytics, setShowModalAnalytics] = React.useState(false);
   const [debugInfo, setDebugInfo] = React.useState(null);
   const [debugOuvert, setDebugOuvert] = React.useState(false);
   const [, forcerRender] = React.useState(0);
@@ -2835,6 +2973,8 @@ function Dashboard({ agenceAccess, onClose }) {
       } else if (a.name === 'preparer_suppression_ticket') {
         const cible = tickets.find(x => x.id === a.input.ticket_id || x.fields?.Name === a.input.numero);
         if (cible) setModalSuppression(cible);
+      } else if (a.name === 'afficher_analytics_sav') {
+        setShowModalAnalytics(true);
       }
     });
   };
@@ -3147,6 +3287,12 @@ function Dashboard({ agenceAccess, onClose }) {
           onSuccess={() => { setShowModalConcepteur(false); forcerRender(x => x + 1); }}
         />
       )}
+      {showModalAnalytics && (
+        <ModalAnalyticsSAV
+          tickets={tickets}
+          onClose={() => setShowModalAnalytics(false)}
+        />
+      )}
       {showModalGestionDevis && (
         <ModalGestionDevis
           tickets={tickets}
@@ -3228,6 +3374,10 @@ function Dashboard({ agenceAccess, onClose }) {
           <button onClick={() => setShowModalGestionDevis(true)}
             style={{background:C.or,border:"none",color:"#111",borderRadius:"8px",padding:"8px 14px",fontSize:"12px",fontWeight:"900",cursor:"pointer",display:"flex",alignItems:"center",gap:"6px"}}>
             📋 Devis {stats.devisEnAttente > 0 && <span style={{background:"#0D0D0D",color:"#fff",borderRadius:"10px",padding:"1px 6px",fontSize:"10px"}}>{stats.devisEnAttente}</span>}
+          </button>
+          <button onClick={() => setShowModalAnalytics(true)}
+            style={{background:"#fff",border:"1px solid "+C.border,color:C.white,borderRadius:"8px",padding:"8px 14px",fontSize:"12px",fontWeight:"900",cursor:"pointer",display:"flex",alignItems:"center",gap:"6px"}}>
+            📊 Analytics
           </button>
           <button onClick={() => setShowModalRdv(true)} style={{background:C.or,border:"none",color:"#111",borderRadius:"8px",padding:"8px 16px",fontSize:"12px",fontWeight:"900",cursor:"pointer",display:"flex",alignItems:"center",gap:"6px"}}>📞 + Nouveau RDV</button>
           <button onClick={() => setShowModalBlocage(true)} style={{background:"#fff",border:"1px solid "+C.border,color:C.white,borderRadius:"8px",padding:"8px 14px",fontSize:"12px",fontWeight:"900",cursor:"pointer",display:"flex",alignItems:"center",gap:"6px"}}>🔒 Bloquer dates</button>
