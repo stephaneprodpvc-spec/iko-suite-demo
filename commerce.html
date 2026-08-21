@@ -175,7 +175,7 @@ function toggleRdvWidget() {
   window.fetch = function(url, opts) {
     if (typeof url === "string" && url.indexOf("/api/airtable") === 0) {
       opts = opts || {};
-      opts.headers = Object.assign({}, opts.headers || {}, { "X-App-Secret": APP_SECRET, "X-Iko-Contexte": "interne" });
+      opts.headers = Object.assign({}, opts.headers || {}, { "X-App-Secret": APP_SECRET });
     }
     return _fetch(url, opts);
   };

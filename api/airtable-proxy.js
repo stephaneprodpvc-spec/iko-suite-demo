@@ -271,7 +271,23 @@ export default async function handler(req, res) {
   const session = verifierSession(req);
 
   const { path, ...rest } = req.query || {};
-  const subPathRaw = Array.isArray(path) ? path.join('/') : (path || '');
+  const cheminBrut = Array.isArray(path) ? path.join('/') : (path || '');
+
+  // CHANTIER MULTI-TENANT #1 (Option B) — route interne dédiée pour
+  // "Tickets SAV" : /api/airtable/tenant/Tickets SAV. Le préfixe "tenant/"
+  // est un simple signal de ROUTAGE, jamais un signal de sécurité fourni
+  // par le client (contrairement à l'ancien en-tête X-Iko-Contexte,
+  // retiré : un appel direct qui l'omettait désactivait entièrement le
+  // contrôle — faille démontrée et corrigée ici). Une fois détecté, le
+  // préfixe est retiré pour reconstruire le VRAI chemin Airtable
+  // ("Tickets SAV" ou "Tickets SAV/recXXXX") : toute la logique existante
+  // ci-dessous (rate-limit recherche, garde-fou annulation, construction
+  // de l'URL finale) s'applique alors de façon transparente, sans
+  // duplication. La route PUBLIQUE historique (/api/airtable/Tickets SAV,
+  // sans préfixe) reste strictement inchangée : routeTenantTickets est
+  // false pour tout appel à cette route.
+  const routeTenantTickets = cheminBrut === 'tenant/Tickets SAV' || cheminBrut.startsWith('tenant/Tickets SAV/');
+  const subPathRaw = routeTenantTickets ? cheminBrut.slice('tenant/'.length) : cheminBrut;
   const baseId = process.env.AIRTABLE_BASE_ID || 'appkI8RKHkYNWY86U'; // base démo Iko Suite
   const headers = { Authorization: 'Bearer ' + token };
 
@@ -414,12 +430,12 @@ export default async function handler(req, res) {
     }
   }
 
-  // AUTH #004D (historique) / AUTH #005 (voir plus bas) : "Tickets SAV" —
+  // AUTH #004D (historique) / AUTH #006 (voir plus bas) : "Tickets SAV" —
   // longtemps volontairement non filtrée côté serveur à cause d'une
-  // ambiguïté réelle (pages publiques accédant aussi par recordId direct,
-  // cf. détail complet dans le bloc AUTH #005 ci-dessous). Cette ambiguïté
-  // est levée depuis le Chantier Multi-Tenant #1 (en-tête X-Iko-Contexte) —
-  // voir le bloc dédié après TABLES_TENANT_CONFIRME.
+  // ambiguïté réelle (pages publiques accédant aussi par recordId direct
+  // sur la MÊME route que les pages internes). Résolu depuis le Chantier
+  // Multi-Tenant #1 par une ROUTE SERVEUR DÉDIÉE (Option B), jamais par un
+  // signal client — voir le bloc AUTH #006 après TABLES_TENANT_CONFIRME.
   //   - "Planning Commercial" : aucun champ de rattachement tenant, direct
   //     ou indirect (audit #004B). Dette structurelle — nécessiterait une
   //     modification du modèle de données Airtable, hors périmètre ici.
@@ -508,84 +524,93 @@ export default async function handler(req, res) {
     }
   }
 
-  // AUTH #005 — Chantier Multi-Tenant #1 : isolation serveur de "Tickets SAV".
+  // AUTH #006 — Chantier Multi-Tenant #1 (Option B) : isolation serveur de
+  // "Tickets SAV" par ROUTE DÉDIÉE, jamais par un signal client.
   //
-  // Problème résolu : cette table portait un champ de rattachement tenant
-  // fiable ("Compte client"), mais était volontairement laissée non filtrée
-  // (cf. AUTH #004D ci-dessus) à cause d'une ambiguïté réelle — les pages
-  // PUBLIQUES (avis.html, devis.html, suivi.html) accèdent aussi à des
-  // tickets par recordId DIRECT. Un contrôle basé uniquement sur "une
-  // session existe" aurait bloqué à tort l'accès public à un ticket d'un
-  // AUTRE tenant que la session d'un utilisateur interne qui aurait, par
-  // ailleurs, ce même cookie actif dans son navigateur (ex. un technicien
-  // connecté qui ouvrirait ensuite un lien suivi.html d'un client).
+  // Historique : une première tentative (AUTH #005) reposait sur un
+  // en-tête "X-Iko-Contexte: interne" envoyé par le wrapper fetch des
+  // pages internes. Faille démontrée : un utilisateur authentifié pouvait
+  // appeler le proxy directement (curl, devtools) avec son cookie de
+  // session réel, en omettant simplement cet en-tête, désactivant
+  // intégralement le contrôle. Un en-tête est une CONVENTION cliente, pas
+  // une garantie serveur — corrigé ici en supprimant toute dépendance à un
+  // signal fourni par le navigateur.
   //
-  // Solution retenue : un en-tête dédié, "X-Iko-Contexte: interne", envoyé
-  // UNIQUEMENT par le wrapper fetch des 4 pages internes authentifiées
-  // (dashboard.html, technicien.html, commerce.html, metreur.html) — jamais
-  // par les 4 pages publiques (index.html, suivi.html, devis.html,
-  // avis.html), qui ne sont pas modifiées et gardent leur comportement
-  // strictement inchangé, avec ou sans session active en arrière-plan.
-  // Cet en-tête ne détermine JAMAIS le tenant appliqué (toujours
-  // session.tenantId, vérifié serveur via le JWT) — il indique seulement
-  // s'il faut appliquer le contrôle. Le filtre du navigateur n'est jamais
-  // la source de vérité : il est au mieux complété (AND), jamais remplacé
-  // ni fait confiance seul.
-  const appelInterne = req.headers['x-iko-contexte'] === 'interne';
-
-  if (premierSegment === 'Tickets SAV' && session && session.role !== 'SUPER_ADMIN_IKO' && appelInterne) {
-    const segmentsTickets = subPathRaw.split('/').filter(Boolean);
-    const recordIdTicket = segmentsTickets[1];
-
-    if (recordIdTicket) {
-      // Accès à un ticket précis (GET/PATCH/DELETE) : on relit le ticket
-      // pour vérifier sa propriété réelle AVANT l'opération demandée —
-      // jamais de confiance dans un filtre fourni par le navigateur.
-      let recTicketCheck;
-      try {
-        const rTicket = await fetch('https://api.airtable.com/v0/' + baseId + '/' + encodeURIComponent(premierSegment) + '/' + recordIdTicket, { headers });
-        if (!rTicket.ok) {
-          const errData = await rTicket.json().catch(() => ({}));
-          return res.status(rTicket.status).json(errData);
-        }
-        recTicketCheck = await rTicket.json();
-      } catch (err) {
-        return res.status(502).json({ error: 'Erreur en vérifiant la propriété tenant de ce ticket.', details: String(err) });
-      }
-      const valeurCompteClient = (recTicketCheck.fields || {})['Compte client'];
-      const idsLiesTicket = Array.isArray(valeurCompteClient) ? valeurCompteClient : (valeurCompteClient ? [valeurCompteClient] : []);
-      if (!session.tenantId || !idsLiesTicket.includes(session.tenantId)) {
-        return res.status(403).json({ error: "Accès refusé : ce ticket n'appartient pas à votre tenant." });
-      }
-    } else if (req.method === 'GET') {
-      // Liste/recherche interne : injecte un filtre tenant obligatoire, en
-      // PLUS (jamais à la place) du filtre déjà fourni par le navigateur.
-      // "Compte client" est un lien Airtable brut (pas de "Client Record
-      // ID" dédié sur cette table) : ARRAYJOIN() renvoie le NOM du client,
-      // pas son recordId (piège déjà documenté sur ce projet) — le nom du
-      // tenant est donc résolu à partir de la session vérifiée serveur,
-      // jamais à partir d'une valeur fournie par le navigateur.
-      if (!session.tenantId) {
-        return res.status(403).json({ error: 'Accès refusé : session sans tenant valide.' });
-      }
-      let nomTenant;
-      try {
-        const rTenant = await fetch('https://api.airtable.com/v0/' + baseId + '/Clients/' + session.tenantId, { headers });
-        if (!rTenant.ok) return res.status(403).json({ error: 'Accès refusé : tenant de session introuvable.' });
-        const recTenant = await rTenant.json();
-        nomTenant = (recTenant.fields || {})['Nom client'];
-      } catch (err) {
-        return res.status(502).json({ error: 'Erreur en résolvant le tenant de session.', details: String(err) });
-      }
-      if (!nomTenant) return res.status(403).json({ error: 'Accès refusé : tenant de session incomplet.' });
-      const formuleTenantTicket = 'FIND("' + String(nomTenant).replace(/"/g, '\\"') + '", ARRAYJOIN({Compte client}))';
-      rest.filterByFormula = rest.filterByFormula ? 'AND(' + rest.filterByFormula + ', ' + formuleTenantTicket + ')' : formuleTenantTicket;
+  // Solution retenue : deux routes strictement séparées au niveau du
+  // ROUTAGE SERVEUR lui-même (jamais un flag optionnel) :
+  //   - /api/airtable/Tickets SAV (historique, publique) : AUCUN contrôle
+  //     tenant, comportement strictement inchangé, quelle que soit la
+  //     présence d'une session (cf. usage par avis.html, devis.html,
+  //     suivi.html — accès par numéro/token, pas par tenant).
+  //   - /api/airtable/tenant/Tickets SAV (nouvelle, réservée aux pages
+  //     internes authentifiées) : session OBLIGATOIRE (401 sinon), tenant
+  //     TOUJOURS résolu depuis session.tenantId (JWT vérifié serveur),
+  //     jamais depuis une valeur fournie par le client. Un appel direct
+  //     (curl/devtools) avec un cookie de session réel subit exactement le
+  //     même contrôle que l'interface officielle : la route elle-même
+  //     l'impose, il n'existe plus aucun signal à omettre pour le
+  //     contourner.
+  if (routeTenantTickets) {
+    if (!session) {
+      return res.status(401).json({ error: 'Authentification requise pour cette route.' });
     }
-    // POST (création) : aucune page interne ne crée de "Tickets SAV" via ce
-    // proxy à ce jour (vérifié) — pas de règle inventée pour un cas qui
-    // n'existe pas. Si un flux de création apparaît un jour, ce cas devra
-    // être traité explicitement, à l'image du pattern déjà utilisé pour
-    // TABLES_TENANT_CONFIRME ci-dessus.
+    if (session.role !== 'SUPER_ADMIN_IKO') {
+      const segmentsTickets = subPathRaw.split('/').filter(Boolean);
+      const recordIdTicket = segmentsTickets[1];
+
+      if (recordIdTicket) {
+        // Accès à un ticket précis (GET/PATCH/DELETE) : on relit le ticket
+        // pour vérifier sa propriété réelle AVANT l'opération demandée —
+        // jamais de confiance dans un filtre fourni par le navigateur.
+        let recTicketCheck;
+        try {
+          const rTicket = await fetch('https://api.airtable.com/v0/' + baseId + '/' + encodeURIComponent(premierSegment) + '/' + recordIdTicket, { headers });
+          if (!rTicket.ok) {
+            const errData = await rTicket.json().catch(() => ({}));
+            return res.status(rTicket.status).json(errData);
+          }
+          recTicketCheck = await rTicket.json();
+        } catch (err) {
+          return res.status(502).json({ error: 'Erreur en vérifiant la propriété tenant de ce ticket.', details: String(err) });
+        }
+        const valeurCompteClient = (recTicketCheck.fields || {})['Compte client'];
+        const idsLiesTicket = Array.isArray(valeurCompteClient) ? valeurCompteClient : (valeurCompteClient ? [valeurCompteClient] : []);
+        if (!session.tenantId || !idsLiesTicket.includes(session.tenantId)) {
+          return res.status(403).json({ error: "Accès refusé : ce ticket n'appartient pas à votre tenant." });
+        }
+      } else if (req.method === 'GET') {
+        // Liste/recherche interne : injecte un filtre tenant obligatoire,
+        // en PLUS (jamais à la place) du filtre déjà fourni par le
+        // navigateur (cf. filtreAvecClient() côté client, conservée comme
+        // optimisation de volume — le serveur reste seul juge). "Compte
+        // client" est un lien Airtable brut (pas de "Client Record ID"
+        // dédié sur cette table) : ARRAYJOIN() renvoie le NOM du client,
+        // pas son recordId (piège déjà documenté sur ce projet) — le nom
+        // du tenant est donc résolu depuis la session vérifiée serveur,
+        // jamais depuis une valeur fournie par le navigateur.
+        if (!session.tenantId) {
+          return res.status(403).json({ error: 'Accès refusé : session sans tenant valide.' });
+        }
+        let nomTenant;
+        try {
+          const rTenant = await fetch('https://api.airtable.com/v0/' + baseId + '/Clients/' + session.tenantId, { headers });
+          if (!rTenant.ok) return res.status(403).json({ error: 'Accès refusé : tenant de session introuvable.' });
+          const recTenant = await rTenant.json();
+          nomTenant = (recTenant.fields || {})['Nom client'];
+        } catch (err) {
+          return res.status(502).json({ error: 'Erreur en résolvant le tenant de session.', details: String(err) });
+        }
+        if (!nomTenant) return res.status(403).json({ error: 'Accès refusé : tenant de session incomplet.' });
+        const formuleTenantTicket = 'FIND("' + String(nomTenant).replace(/"/g, '\\"') + '", ARRAYJOIN({Compte client}))';
+        rest.filterByFormula = rest.filterByFormula ? 'AND(' + rest.filterByFormula + ', ' + formuleTenantTicket + ')' : formuleTenantTicket;
+      } else {
+        // PATCH/DELETE/POST sans recordId sur cette route : aucun usage
+        // légitime connu (pas de création de "Tickets SAV" via ce proxy à
+        // ce jour, vérifié) — refusé par prudence, pas de règle inventée.
+        return res.status(400).json({ error: 'Requête invalide pour cette route.' });
+      }
+    }
+    // SUPER_ADMIN_IKO : accès global conservé, aucune restriction supplémentaire.
   }
 
   // Garde-fou métier : une annulation de ticket SAV doit toujours être

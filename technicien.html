@@ -38,7 +38,7 @@ input:focus, select:focus, textarea:focus { border-color:rgba(218,178,57,0.5); }
   window.fetch = function(url, opts) {
     if (typeof url === "string" && url.indexOf("/api/airtable") === 0) {
       opts = opts || {};
-      opts.headers = Object.assign({}, opts.headers || {}, { "X-App-Secret": APP_SECRET, "X-Iko-Contexte": "interne" });
+      opts.headers = Object.assign({}, opts.headers || {}, { "X-App-Secret": APP_SECRET });
     }
     return _fetch(url, opts);
   };
@@ -624,7 +624,7 @@ async function chercherHistoriqueTicketsClientMax(nomClient, idTicketActuel) {
   if (!nomClient) return [];
   try {
     const formule = "FIND(LOWER(\"" + nomClient.replace(/"/g, '\\"') + "\"),LOWER({Client}))";
-    const r = await fetch('/api/airtable/Tickets%20SAV?filterByFormula=' + encodeURIComponent(formule) +
+    const r = await fetch('/api/airtable/tenant/Tickets%20SAV?filterByFormula=' + encodeURIComponent(formule) +
       '&sort[0][field]=Créneau&sort[0][direction]=desc&maxRecords=6');
     const json = await r.json();
     if (!r.ok || !json.records) return [];
@@ -724,7 +724,7 @@ function DiagnosticMaxCard({ ticket, resultat, setResultat, diagnosticGarde, set
     setEnregistrementDiagEnCours(true);
     try {
       const texte = formaterTexteDiagnosticMax(resultat);
-      const r = await fetch('/api/airtable/Tickets%20SAV/' + ticket.id, {
+      const r = await fetch('/api/airtable/tenant/Tickets%20SAV/' + ticket.id, {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ fields: {
           "IKO Diagnostic": texte,
@@ -885,7 +885,7 @@ function ModalAction({ ticket, onClose, onDone }) {
       const url = await uploadCloudinaryTech(fichier);
       if (!url) throw new Error("upload échoué");
       const nouvelleValeur = photosTicket ? photosTicket + ',' + url : url;
-      const r = await fetch('/api/airtable/Tickets%20SAV/' + ticket.id, {
+      const r = await fetch('/api/airtable/tenant/Tickets%20SAV/' + ticket.id, {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ fields: { Photos: nouvelleValeur } }),
       });
@@ -1082,7 +1082,7 @@ function ModalAction({ ticket, onClose, onDone }) {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fields: yousignFields })
     });
 
-    await fetch('/api/airtable/Tickets%20SAV/' + ticket.id, {
+    await fetch('/api/airtable/tenant/Tickets%20SAV/' + ticket.id, {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ fields: { "Montant devis": Math.round(montantTTC * 100) / 100, Email: emailAuto.trim() } })
     });
@@ -1165,7 +1165,7 @@ function ModalAction({ ticket, onClose, onDone }) {
         fields["IKO Diagnostic Date"] = new Date().toISOString();
         fields["IKO Utilisé"] = true;
       }
-      await fetch('/api/airtable/Tickets%20SAV/'+ticket.id, {
+      await fetch('/api/airtable/tenant/Tickets%20SAV/'+ticket.id, {
         method:'PATCH',
         headers:{'Content-Type':'application/json'},
         body:JSON.stringify({fields})
@@ -1952,7 +1952,7 @@ function Technicien({ agence, onClose }) {
       await window.IKO_CLIENT_READY;
       const rawFilter = filtreAvecClient(agence === "global" || !agence ? "" : '{Agence}="' + agence + '"');
       const filter = rawFilter ? "&filterByFormula=" + encodeURIComponent(rawFilter) : "";
-      const url = '/api/airtable/Tickets%20SAV?sort[0][field]=Name&sort[0][direction]=desc&maxRecords=100' + filter;
+      const url = '/api/airtable/tenant/Tickets%20SAV?sort[0][field]=Name&sort[0][direction]=desc&maxRecords=100' + filter;
       const r = await fetch(url, {});
       const json = await r.json();
       setTickets(json.records||[]);
@@ -1975,7 +1975,7 @@ function Technicien({ agence, onClose }) {
   const acquitterRdv = async (ticket) => {
     setTickets(prev => prev.map(t => t.id===ticket.id ? {...t, fields:{...t.fields, "RDV modifié - notif technicien": false}} : t));
     try {
-      await fetch('/api/airtable/Tickets%20SAV/'+ticket.id, {
+      await fetch('/api/airtable/tenant/Tickets%20SAV/'+ticket.id, {
         method:'PATCH',
         headers:{'Content-Type':'application/json'},
         body:JSON.stringify({fields:{"RDV modifié - notif technicien": false}})

@@ -41,7 +41,7 @@ input:focus, select:focus, textarea:focus { border-color:rgba(218,178,57,0.5); }
   window.fetch = function(url, opts) {
     if (typeof url === "string" && url.indexOf("/api/airtable") === 0) {
       opts = opts || {};
-      opts.headers = Object.assign({}, opts.headers || {}, { "X-App-Secret": APP_SECRET, "X-Iko-Contexte": "interne" });
+      opts.headers = Object.assign({}, opts.headers || {}, { "X-App-Secret": APP_SECRET });
     }
     return _fetch(url, opts);
   };
@@ -1493,7 +1493,7 @@ function ModalDevis({ ticket, onClose, onSent }) {
       });
 
       // Compatibilité avec le pipeline existant (ModalGestionDevis, badges, filtres par Statut de ticket).
-      const ticketPatchRes = await fetch('/api/airtable/Tickets%20SAV/' + ticket.id, {
+      const ticketPatchRes = await fetch('/api/airtable/tenant/Tickets%20SAV/' + ticket.id, {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ fields: { Statut: 'Devis envoyé', "Montant devis": Math.round(montantTTC * 100) / 100, Email: email.trim() } })
       });
@@ -1675,7 +1675,7 @@ function ModalGestionDevis({ tickets, onClose, onRefresh }) {
   const changerStatut = async (ticketId, nouveauStatut) => {
     setChanging(ticketId);
     try {
-      await fetch('/api/airtable/Tickets%20SAV/'+ticketId, {
+      await fetch('/api/airtable/tenant/Tickets%20SAV/'+ticketId, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ fields: { Statut: nouveauStatut } })
@@ -2072,7 +2072,7 @@ function PlanningView({ agenceFilter, onOpenTicket }) {
 
       // Charger les tickets SAV liés à un créneau (champ PlanningID = ID du record Planning)
       const filterTickets = encodeURIComponent('NOT({PlanningID}="")');
-      const rt = await fetch('/api/airtable/Tickets SAV?filterByFormula='+filterTickets+'&maxRecords=1000', {});
+      const rt = await fetch('/api/airtable/tenant/Tickets SAV?filterByFormula='+filterTickets+'&maxRecords=1000', {});
       const jt = await rt.json();
       const map = {};
       (jt.records||[]).forEach(t => {
@@ -2389,7 +2389,7 @@ function Dashboard({ agenceAccess, onClose }) {
       let rawFilter = agenceFilter !== "global" ? '{Agence}="'+AGENCE_VERS_AIRTABLE[agenceFilter]+'"' : "";
       rawFilter = filtreAvecClient(rawFilter);
       let filter = rawFilter ? encodeURIComponent(rawFilter) : "";
-      const url = '/api/airtable/Tickets SAV?'+(filter?'filterByFormula='+filter+'&':'')+'sort[0][field]=Name&sort[0][direction]=desc&maxRecords=200';
+      const url = '/api/airtable/tenant/Tickets SAV?'+(filter?'filterByFormula='+filter+'&':'')+'sort[0][field]=Name&sort[0][direction]=desc&maxRecords=200';
       const r = await fetch(url, {});
       const json = await r.json();
       const records = json.records||[];
@@ -2424,7 +2424,7 @@ function Dashboard({ agenceAccess, onClose }) {
       await window.IKO_CLIENT_READY;
       const cf = filtreAvecClient("");
       const fp = cf ? 'filterByFormula='+encodeURIComponent(cf)+'&' : '';
-      const r = await fetch('/api/airtable/Tickets SAV?'+fp+'sort[0][field]=Name&sort[0][direction]=desc&maxRecords=200', {});
+      const r = await fetch('/api/airtable/tenant/Tickets SAV?'+fp+'sort[0][field]=Name&sort[0][direction]=desc&maxRecords=200', {});
       const json = await r.json();
       const records = json.records||[];
       const idsActuels = new Set(records.map(t => t.id));
@@ -2560,7 +2560,7 @@ function Dashboard({ agenceAccess, onClose }) {
   const marquerMessageLu = async (ticket) => {
     setTickets(prev => prev.map(t => t.id===ticket.id?{...t,fields:{...t.fields,"Message client non lu":false}}:t));
     try {
-      await fetch('/api/airtable/Tickets%20SAV/'+ticket.id, {
+      await fetch('/api/airtable/tenant/Tickets%20SAV/'+ticket.id, {
         method:'PATCH', headers:{'Content-Type':'application/json'},
         body:JSON.stringify({fields:{"Message client non lu": false}})
       });
@@ -2571,7 +2571,7 @@ function Dashboard({ agenceAccess, onClose }) {
   // de la fenêtre SMS ouverte, sans recharger toute la liste).
   const rafraichirTicketMessage = async (ticketId) => {
     try {
-      const resp = await fetch('/api/airtable/Tickets%20SAV/' + ticketId);
+      const resp = await fetch('/api/airtable/tenant/Tickets%20SAV/' + ticketId);
       const data = await resp.json();
       if (data && data.fields) {
         setTickets(prev => prev.map(t => t.id === ticketId ? { ...t, fields: { ...t.fields, ...data.fields } } : t));
@@ -2584,7 +2584,7 @@ function Dashboard({ agenceAccess, onClose }) {
     const existant = ticket.fields?.["Réponse agence"] || "";
     const nouveauTexte = existant ? existant + '\n\n[' + horodatage + ']\n' + texteReponse : '[' + horodatage + ']\n' + texteReponse;
     setTickets(prev => prev.map(t => t.id===ticket.id?{...t,fields:{...t.fields,"Réponse agence":nouveauTexte,"Message client non lu":false}}:t));
-    await fetch('/api/airtable/Tickets%20SAV/'+ticket.id, {
+    await fetch('/api/airtable/tenant/Tickets%20SAV/'+ticket.id, {
       method:'PATCH', headers:{'Content-Type':'application/json'},
       body:JSON.stringify({fields:{"Réponse agence": nouveauTexte, "Message client non lu": false}})
     });
@@ -2722,7 +2722,7 @@ function Dashboard({ agenceAccess, onClose }) {
 
   const updateStatus = async (id, newStatus) => {
     setTickets(prev => prev.map(t => t.id===id?{...t,fields:{...t.fields,Statut:newStatus}}:t));
-    await fetch('/api/airtable/Tickets SAV/'+id, {
+    await fetch('/api/airtable/tenant/Tickets SAV/'+id, {
       method:'PATCH', headers:{'Content-Type':'application/json'},
       body:JSON.stringify({fields:{Statut:newStatus}})
     });
@@ -2953,7 +2953,7 @@ function Dashboard({ agenceAccess, onClose }) {
       } catch(e) { console.error(e); }
     }
     setTickets(prev => prev.map(t => t.id===ticket.id?{...t,fields:{...t.fields,...fields}}:t));
-    await fetch('/api/airtable/Tickets SAV/'+ticket.id, {
+    await fetch('/api/airtable/tenant/Tickets SAV/'+ticket.id, {
       method:'PATCH', headers:{'Content-Type':'application/json'},
       body:JSON.stringify({fields})
     });
@@ -2973,7 +2973,7 @@ function Dashboard({ agenceAccess, onClose }) {
     const fields = { Statut: "Supprimé" };
     setTickets(prev => prev.map(t => t.id===ticket.id?{...t,fields:{...t.fields,...fields}}:t));
     try {
-      await fetch('/api/airtable/Tickets SAV/'+ticket.id, {
+      await fetch('/api/airtable/tenant/Tickets SAV/'+ticket.id, {
         method:'PATCH', headers:{'Content-Type':'application/json'},
         body:JSON.stringify({fields})
       });
@@ -2992,7 +2992,7 @@ function Dashboard({ agenceAccess, onClose }) {
       } catch(e) { console.error(e); }
     }
     try {
-      await fetch('/api/airtable/Tickets SAV/'+ticket.id, { method:'DELETE' });
+      await fetch('/api/airtable/tenant/Tickets SAV/'+ticket.id, { method:'DELETE' });
     } catch(e) { console.error(e); }
     setTickets(prev => prev.filter(t => t.id !== ticket.id));
     setModalSuppressionDefinitive(null);
