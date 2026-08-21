@@ -1875,14 +1875,17 @@ function ModalGestionDevis({ tickets, onClose, onRefresh }) {
    inventée : les indicateurs sans champ Airtable fiable (cause de la
    panne, nombre de passages technicien) sont explicitement marqués
    "non calculable" plutôt qu'estimés. ---- */
-function ModalAnalyticsSAV({ tickets, onClose }) {
-  const actifs = tickets; // toutes agences, tous statuts confondus (vue globale demandée)
-
+/* ---- Calcul pur des indicateurs Analytics SAV, partagé entre le panneau
+   Analytics (ModalAnalyticsSAV) et le Tableau de bord dirigeant
+   (ModalTableauBordDirigeant) : une seule source de vérité, aucune
+   duplication de logique, mêmes chiffres partout. Aucun appel réseau,
+   uniquement calculé à partir des tickets déjà chargés. ---- */
+function calculerAnalyticsSAV(tickets) {
   const parProduit = {};
   const parAgence = {};
   const parStatut = {};
   let nbUrgents = 0;
-  actifs.forEach(t => {
+  tickets.forEach(t => {
     const produit = (t.fields?.Produit || "").trim();
     if (produit) parProduit[produit] = (parProduit[produit] || 0) + 1;
     const agence = (t.fields?.Agence || "").trim();
@@ -1896,7 +1899,7 @@ function ModalAnalyticsSAV({ tickets, onClose }) {
   const totalAvecAgence = Object.values(parAgence).reduce((s, n) => s + n, 0);
   const repartitionAgences = Object.entries(parAgence).sort((a, b) => b[1] - a[1]);
   const repartitionStatuts = Object.entries(parStatut).sort((a, b) => b[1] - a[1]);
-  const tauxUrgents = actifs.length ? Math.round(nbUrgents / actifs.length * 100) : 0;
+  const tauxUrgents = tickets.length ? Math.round(nbUrgents / tickets.length * 100) : 0;
 
   // Tendance mensuelle : basée sur le champ Créneau réel (parseDateCreneau,
   // déjà utilisé partout ailleurs dans le dashboard). Regroupement AAAA-MM
@@ -1909,7 +1912,7 @@ function ModalAnalyticsSAV({ tickets, onClose }) {
     moisLabels.push({ key: d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0"), label: d.toLocaleDateString("fr-FR", { month: "short", year: "2-digit" }) });
   }
   const parMois = {};
-  actifs.forEach(t => {
+  tickets.forEach(t => {
     const d = parseDateCreneau(t.fields?.Créneau);
     if (!d || d.getFullYear() === 9999) return;
     const key = d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0");
@@ -1923,6 +1926,40 @@ function ModalAnalyticsSAV({ tickets, onClose }) {
   // tendance et non une prédiction causale (aucune cause n'est inventée).
   const derniers3 = tendance.slice(-3).map(m => m.valeur);
   const estimationMoisSuivant = derniers3.length ? Math.round(derniers3.reduce((s, v) => s + v, 0) / derniers3.length) : null;
+
+  // ---- Socle prédictif (1/3) : "produits à risque" par tendance de volume.
+  // Signal purement statistique et déterministe (aucune IA, aucune cause
+  // inventée) : compare, pour chaque produit du top, le nombre de tickets
+  // sur les 3 derniers mois vs les 3 mois précédents (fenêtre des 6 mois
+  // déjà calculée ci-dessus). Sert de brique de base pour la détection de
+  // produits à risque tant que le champ "Cause SAV" n'existe pas (cf.
+  // dépendances documentées dans api/chat-dashboard.js).
+  const parProduitParMois = {};
+  tickets.forEach(t => {
+    const produit = (t.fields?.Produit || "").trim();
+    if (!produit) return;
+    const d = parseDateCreneau(t.fields?.Créneau);
+    if (!d || d.getFullYear() === 9999) return;
+    const key = d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0");
+    if (!parProduitParMois[produit]) parProduitParMois[produit] = {};
+    parProduitParMois[produit][key] = (parProduitParMois[produit][key] || 0) + 1;
+  });
+  const clesMois = moisLabels.map(m => m.key);
+  const clesRecentes = clesMois.slice(-3);
+  const clesPrecedentes = clesMois.slice(0, 3);
+  const produitsRisque = topProduits.slice(0, 5).map(([produit, total]) => {
+    const parMoisProduit = parProduitParMois[produit] || {};
+    const recent = clesRecentes.reduce((s, k) => s + (parMoisProduit[k] || 0), 0);
+    const precedent = clesPrecedentes.reduce((s, k) => s + (parMoisProduit[k] || 0), 0);
+    const tendanceProduit = recent > precedent ? "hausse" : recent < precedent ? "baisse" : "stable";
+    return { produit, total, recent, precedent, tendanceProduit };
+  });
+
+  return { topProduits, totalAvecAgence, repartitionAgences, repartitionStatuts, tauxUrgents, nbUrgents, tendance, maxTendance, estimationMoisSuivant, produitsRisque };
+}
+
+function ModalAnalyticsSAV({ tickets, onClose }) {
+  const { topProduits, totalAvecAgence, repartitionAgences, repartitionStatuts, tauxUrgents, tendance, maxTendance, estimationMoisSuivant } = calculerAnalyticsSAV(tickets);
 
   // ---- Socle IA : synthèse direction (mode "synthese_direction") ----
   // Reutilise l'architecture existante (api/chat-dashboard.js, meme
@@ -1942,7 +1979,7 @@ function ModalAnalyticsSAV({ tickets, onClose }) {
         body: JSON.stringify({
           mode: 'synthese_direction',
           stats: {
-            total_tickets: actifs.length,
+            total_tickets: tickets.length,
             top_produits: topProduits.map(([p, n]) => ({ produit: p, nb: n })),
             repartition_agences: repartitionAgences.map(([a, n]) => ({ agence: a, nb: n })),
             repartition_statuts: repartitionStatuts.map(([s, n]) => ({ statut: s, nb: n })),
@@ -2051,6 +2088,181 @@ function ModalAnalyticsSAV({ tickets, onClose }) {
                 </ul>
               )}
               <div style={{fontSize:"9.5px",color:C.muted,marginTop:"8px",fontStyle:"italic"}}>Synthèse générée par IA à partir des chiffres ci-dessus uniquement — à valider par la direction.</div>
+            </div>
+          )}
+        </div>
+
+        <button onClick={onClose} style={{width:"100%",padding:"11px",background:"#0D0D0D",color:"#fff",border:"none",borderRadius:"10px",fontSize:"13px",fontWeight:"900",cursor:"pointer"}}>Fermer</button>
+      </div>
+    </div>
+  );
+}
+
+/* ---- Tableau de bord dirigeant : vue consolidée pour la direction,
+   réutilise calculerAnalyticsSAV (même source de vérité que le panneau
+   Analytics opérationnel) et le socle IA synthese_direction déjà validé.
+   Aucune donnée inventée : tout indicateur sans champ Airtable fiable
+   est affiché "non disponible" plutôt qu'estimé. ---- */
+function ModalTableauBordDirigeant({ tickets, stats, onClose }) {
+  const { topProduits, totalAvecAgence, repartitionAgences, repartitionStatuts, tauxUrgents, tendance, maxTendance, estimationMoisSuivant, produitsRisque } = calculerAnalyticsSAV(tickets);
+
+  const ticketsDevisPipeline = tickets.filter(t => ["Devis à faire","Devis envoyé","Devis - Suivi","Devis - Attente fournisseur"].includes(t.fields?.Statut));
+  const montantDevisEnCours = tickets
+    .filter(t => t.fields?.Statut === "Devis envoyé" && typeof t.fields?.["Montant devis"] === "number")
+    .reduce((s, t) => s + t.fields["Montant devis"], 0);
+
+  const [syntheseIA, setSyntheseIA] = React.useState(null);
+  const [chargementSynthese, setChargementSynthese] = React.useState(false);
+  const [syntheseErreur, setSyntheseErreur] = React.useState("");
+
+  const genererSynthese = async () => {
+    setChargementSynthese(true);
+    setSyntheseIA(null);
+    setSyntheseErreur("");
+    try {
+      const r = await fetch('/api/chat-dashboard', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mode: 'synthese_direction',
+          stats: {
+            total_tickets: tickets.length,
+            top_produits: topProduits.map(([p, n]) => ({ produit: p, nb: n })),
+            repartition_agences: repartitionAgences.map(([a, n]) => ({ agence: a, nb: n })),
+            repartition_statuts: repartitionStatuts.map(([s, n]) => ({ statut: s, nb: n })),
+            taux_urgents_pct: tauxUrgents,
+            tendance_mensuelle: tendance,
+            estimation_mois_suivant: estimationMoisSuivant,
+          },
+        }),
+      });
+      const data = await r.json();
+      if (r.ok && !data.erreur) setSyntheseIA(data);
+      else setSyntheseErreur(data.erreur || "Synthèse indisponible pour le moment.");
+    } catch (e) {
+      setSyntheseErreur("Synthèse indisponible pour le moment.");
+    }
+    setChargementSynthese(false);
+  };
+
+  // Génération automatique à l'ouverture : vue dirigeant pensée pour être
+  // consultée d'un coup d'œil, pas pour cliquer un bouton supplémentaire.
+  React.useEffect(() => { genererSynthese(); }, []);
+
+  const KpiCard = ({ label, value, sub, accent }) => (
+    <div style={{background:C.card,border:"1px solid "+(accent?C.orBord:C.border),borderRadius:"12px",padding:"14px 18px",flex:1,minWidth:"140px"}}>
+      <div style={{fontSize:"24px",fontWeight:"900",color:accent?C.or:C.white,fontFamily:"monospace"}}>{value}</div>
+      <div style={{fontSize:"11px",fontWeight:"700",color:C.text,marginTop:"3px"}}>{label}</div>
+      {sub && <div style={{fontSize:"10px",color:C.muted,marginTop:"2px"}}>{sub}</div>}
+    </div>
+  );
+
+  return (
+    <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="modal-box" style={{maxWidth:"720px",maxHeight:"88vh",overflow:"auto"}}>
+        <div style={{fontSize:"18px",fontWeight:"900",color:C.white,marginBottom:"2px"}}>🧭 Tableau de bord dirigeant</div>
+        <div style={{fontSize:"11px",color:C.muted,marginBottom:"18px"}}>Vue consolidée toutes agences — {tickets.length} ticket(s) chargé(s), lecture seule</div>
+
+        <div style={{display:"flex",gap:"10px",flexWrap:"wrap",marginBottom:"20px"}}>
+          <KpiCard label="Tickets actifs" value={stats.total} accent/>
+          <KpiCard label="Urgents" value={stats.urgent} sub={tauxUrgents + "% du volume total"}/>
+          <KpiCard label="Devis en attente" value={ticketsDevisPipeline.length}/>
+          <KpiCard label="Montant devis envoyés" value={montantDevisEnCours.toFixed(0) + " €"} sub="TTC, statut Devis envoyé"/>
+          <KpiCard label="Note client moyenne" value={stats.noteMoyenne ? stats.noteMoyenne.toFixed(1) + " / 5" : "—"} sub={stats.nbNotes + " avis"}/>
+        </div>
+
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"16px",marginBottom:"18px"}}>
+          <div>
+            <div style={{fontSize:"12px",fontWeight:"700",color:C.white,marginBottom:"8px"}}>Produits générant le plus de SAV</div>
+            {topProduits.length === 0 && <div style={{fontSize:"11px",color:C.muted,fontStyle:"italic"}}>Aucun produit renseigné.</div>}
+            {topProduits.length > 0 && (
+              <div style={{border:"1px solid "+C.border,borderRadius:"8px",overflow:"hidden"}}>
+                {topProduits.slice(0, 5).map(([produit, n], i) => (
+                  <div key={produit} style={{display:"flex",justifyContent:"space-between",padding:"6px 10px",borderBottom:i<4?"1px solid "+C.border:"none",fontSize:"11.5px"}}>
+                    <span>{produit}</span><b style={{color:C.or}}>{n}</b>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          <div>
+            <div style={{fontSize:"12px",fontWeight:"700",color:C.white,marginBottom:"8px"}}>Répartition par agence</div>
+            {repartitionAgences.length === 0 && <div style={{fontSize:"11px",color:C.muted,fontStyle:"italic"}}>Aucune agence renseignée.</div>}
+            {repartitionAgences.length > 0 && (
+              <div style={{border:"1px solid "+C.border,borderRadius:"8px",overflow:"hidden"}}>
+                {repartitionAgences.map(([agence, n], i) => (
+                  <div key={agence} style={{display:"flex",justifyContent:"space-between",padding:"6px 10px",borderBottom:i<repartitionAgences.length-1?"1px solid "+C.border:"none",fontSize:"11.5px"}}>
+                    <span>{agence}</span><span><b>{n}</b> <span style={{color:C.muted}}>({totalAvecAgence?Math.round(n/totalAvecAgence*100):0}%)</span></span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div style={{marginBottom:"18px"}}>
+          <div style={{fontSize:"12px",fontWeight:"700",color:C.white,marginBottom:"2px"}}>Tendance mensuelle (6 derniers mois)</div>
+          <div style={{display:"flex",alignItems:"flex-end",gap:"6px",height:"64px",marginTop:"8px"}}>
+            {tendance.map(m => (
+              <div key={m.label} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:"4px"}}>
+                <div style={{width:"100%",height:Math.max(3,Math.round(m.valeur/maxTendance*48))+"px",background:C.or,borderRadius:"3px"}} title={m.valeur+" ticket(s)"}/>
+                <div style={{fontSize:"9px",color:C.muted}}>{m.label}</div>
+              </div>
+            ))}
+          </div>
+          {estimationMoisSuivant !== null && (
+            <div style={{fontSize:"11px",color:C.muted,marginTop:"6px",fontStyle:"italic"}}>Estimation mois suivant : ≈ {estimationMoisSuivant} ticket(s) (moyenne des 3 derniers mois — tendance, pas une prédiction causale).</div>
+          )}
+        </div>
+
+        <div style={{marginBottom:"18px"}}>
+          <div style={{fontSize:"12px",fontWeight:"700",color:C.white,marginBottom:"2px"}}>Produits à risque — tendance de volume</div>
+          <div style={{fontSize:"10.5px",color:C.muted,marginBottom:"8px"}}>3 derniers mois vs 3 mois précédents (signal statistique, pas une cause identifiée).</div>
+          {produitsRisque.length === 0 && <div style={{fontSize:"11px",color:C.muted,fontStyle:"italic"}}>Pas assez de données pour établir une tendance produit.</div>}
+          {produitsRisque.length > 0 && (
+            <div style={{border:"1px solid "+C.border,borderRadius:"8px",overflow:"hidden"}}>
+              {produitsRisque.map((p, i) => (
+                <div key={p.produit} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"6px 10px",borderBottom:i<produitsRisque.length-1?"1px solid "+C.border:"none",fontSize:"11.5px"}}>
+                  <span>{p.produit}</span>
+                  <span style={{display:"flex",alignItems:"center",gap:"6px"}}>
+                    <span style={{color:C.muted}}>{p.precedent} → {p.recent}</span>
+                    <span style={{fontSize:"10px",fontWeight:"800",padding:"2px 7px",borderRadius:"10px",color:"#fff",background:p.tendanceProduit==="hausse"?C.rouge:p.tendanceProduit==="baisse"?"#16A34A":C.muted}}>
+                      {p.tendanceProduit==="hausse"?"▲ hausse":p.tendanceProduit==="baisse"?"▼ baisse":"= stable"}
+                    </span>
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"10px",marginBottom:"18px"}}>
+          <div style={{background:"#F3F4F6",border:"1px solid "+C.border,borderRadius:"8px",padding:"9px 12px",fontSize:"10.5px",color:C.muted}}>
+            ⚠️ Causes récurrentes SAV : non disponible — aucun champ de cause enregistré sur les tickets.
+          </div>
+          <div style={{background:"#F3F4F6",border:"1px solid "+C.border,borderRadius:"8px",padding:"9px 12px",fontSize:"10.5px",color:C.muted}}>
+            ⚠️ Résolution au 1er passage : non disponible — le nombre de passages technicien n'est pas tracé.
+          </div>
+        </div>
+
+        <div style={{background:"#F3F4F6",border:"1px solid "+C.border,borderRadius:"8px",padding:"9px 12px",fontSize:"10.5px",color:C.muted,marginBottom:"18px"}}>
+          ⚠️ Estimation des coûts SAV : non disponible — le coût réel d'intervention (pièces + main d'œuvre consommées) n'est pas tracé par ticket, seul le montant des devis envoyés l'est.
+        </div>
+
+        <div style={{borderTop:"1px solid "+C.border,paddingTop:"14px",marginBottom:"14px"}}>
+          <div style={{fontSize:"12px",fontWeight:"700",color:C.white,marginBottom:"8px"}}>Synthèse IA &amp; recommandations</div>
+          {chargementSynthese && <div style={{fontSize:"11px",color:C.muted,fontStyle:"italic"}}>⏳ IKO rédige la synthèse...</div>}
+          {syntheseErreur && !chargementSynthese && (
+            <div style={{fontSize:"11px",color:C.rouge,marginBottom:"8px"}}>{syntheseErreur} <span onClick={genererSynthese} style={{textDecoration:"underline",cursor:"pointer"}}>Réessayer</span></div>
+          )}
+          {syntheseIA && !chargementSynthese && (
+            <div style={{background:"rgba(0,26,66,0.05)",border:"1px solid rgba(0,26,66,0.15)",borderRadius:"10px",padding:"12px 14px"}}>
+              <div style={{fontSize:"12px",color:"#0D0D0D",marginBottom:"10px",whiteSpace:"pre-wrap"}}>{syntheseIA.synthese}</div>
+              {Array.isArray(syntheseIA.recommandations) && syntheseIA.recommandations.length > 0 && (
+                <ul style={{margin:0,paddingLeft:"18px",fontSize:"11.5px",color:"#0D0D0D"}}>
+                  {syntheseIA.recommandations.map((r, i) => <li key={i} style={{marginBottom:"4px"}}>{r}</li>)}
+                </ul>
+              )}
+              <div style={{fontSize:"9.5px",color:C.muted,marginTop:"8px",fontStyle:"italic"}}>Générée à partir des chiffres ci-dessus uniquement — à valider par la direction.</div>
             </div>
           )}
         </div>
@@ -2563,6 +2775,7 @@ function Dashboard({ agenceAccess, onClose }) {
   const [showModalBlocage, setShowModalBlocage] = React.useState(false);
   const [showModalConcepteur, setShowModalConcepteur] = React.useState(false);
   const [showModalAnalytics, setShowModalAnalytics] = React.useState(false);
+  const [showModalDirigeant, setShowModalDirigeant] = React.useState(false);
   const [debugInfo, setDebugInfo] = React.useState(null);
   const [debugOuvert, setDebugOuvert] = React.useState(false);
   const [, forcerRender] = React.useState(0);
@@ -3424,6 +3637,13 @@ function Dashboard({ agenceAccess, onClose }) {
           onClose={() => setShowModalAnalytics(false)}
         />
       )}
+      {showModalDirigeant && (
+        <ModalTableauBordDirigeant
+          tickets={tickets}
+          stats={stats}
+          onClose={() => setShowModalDirigeant(false)}
+        />
+      )}
       {showModalGestionDevis && (
         <ModalGestionDevis
           tickets={tickets}
@@ -3509,6 +3729,10 @@ function Dashboard({ agenceAccess, onClose }) {
           <button onClick={() => setShowModalAnalytics(true)}
             style={{background:"#fff",border:"1px solid "+C.border,color:C.white,borderRadius:"8px",padding:"8px 14px",fontSize:"12px",fontWeight:"900",cursor:"pointer",display:"flex",alignItems:"center",gap:"6px"}}>
             📊 Analytics
+          </button>
+          <button onClick={() => setShowModalDirigeant(true)}
+            style={{background:"#0D0D0D",border:"1px solid "+C.border,color:"#fff",borderRadius:"8px",padding:"8px 14px",fontSize:"12px",fontWeight:"900",cursor:"pointer",display:"flex",alignItems:"center",gap:"6px"}}>
+            🧭 Dirigeant
           </button>
           <button onClick={() => setShowModalRdv(true)} style={{background:C.or,border:"none",color:"#111",borderRadius:"8px",padding:"8px 16px",fontSize:"12px",fontWeight:"900",cursor:"pointer",display:"flex",alignItems:"center",gap:"6px"}}>📞 + Nouveau RDV</button>
           <button onClick={() => setShowModalBlocage(true)} style={{background:"#fff",border:"1px solid "+C.border,color:C.white,borderRadius:"8px",padding:"8px 14px",fontSize:"12px",fontWeight:"900",cursor:"pointer",display:"flex",alignItems:"center",gap:"6px"}}>🔒 Bloquer dates</button>

@@ -27,6 +27,48 @@ const STATUTS_VALIDES = ["Nouveau", "En cours", "Terminé", "Annulé", "Devis à
 const STATUTS_MODIFIABLES = STATUTS_VALIDES.filter(s => s !== "Annulé");
 const MOTIFS_BLOCAGE_VALIDES = ["Congé", "Congé payé", "Maladie", "Autre"];
 
+// ==================== Dépendances données SAV manquantes (schéma Airtable) ====================
+// Documentation, aucune modification de schéma effectuée automatiquement.
+// Ces 3 indicateurs sont demandés (Analytics SAV, Tableau de bord
+// dirigeant, socle prédictif) mais NON calculables avec le schéma actuel
+// de la table "Tickets SAV". Le code affiche explicitement
+// "non calculable" / "non disponible" plutôt que d'inventer une valeur.
+// Si Stéphane valide une évolution de schéma, voici exactement ce qu'il
+// faudrait ajouter et pourquoi :
+//
+// 1. CAUSE SAV
+//    Champ manquant : un champ "Cause SAV" (single select), catégories
+//    à définir avec Stéphane (ex: "Défaut produit", "Erreur pose",
+//    "Usure normale", "Mauvaise utilisation client", "Malfaçon
+//    fabricant", "Autre"). Aujourd'hui aucun champ ne catégorise la
+//    cause d'un ticket : "Problème" est un texte libre client, non
+//    exploitable statistiquement sans catégorisation. Utilité :
+//    "causes récurrentes" (Analytics), détection de "produits à risque"
+//    par cause réelle (socle prédictif), et le routage malfaçon
+//    fabricant/poseur déjà identifié comme point non résolu de
+//    l'architecture (cf. mémoire projet).
+//
+// 2. NOMBRE DE PASSAGES TECHNICIEN
+//    Champ manquant : un champ numérique "Nombre de passages" sur
+//    "Tickets SAV" (ou une table liée "Interventions" avec une ligne par
+//    passage, plus robuste si plusieurs techniciens/dates par ticket).
+//    Aujourd'hui rien ne distingue un ticket résolu au premier RDV d'un
+//    ticket ayant nécessité plusieurs visites. Utilité : "taux de
+//    résolution au premier passage" (Analytics + tableau de bord
+//    dirigeant).
+//
+// 3. COUT REEL SAV PAR TICKET
+//    Champ manquant : un champ numérique "Coût réel SAV" (pièces +
+//    main d'œuvre effectivement consommées), distinct du "Montant
+//    devis" existant qui ne reflète que les devis ENVOYÉS au client
+//    (donc uniquement le sous-ensemble facturé, pas le coût interne
+//    réel de toutes les interventions, y compris sous garantie).
+//    Utilité : "estimation des coûts SAV" (socle prédictif).
+//
+// Tant que ces champs n'existent pas, aucun mode API ne doit les
+// simuler : les fonctions de synthese (synthese_direction) ne reçoivent
+// et ne restituent que des chiffres réellement calculés côté serveur.
+
 // ==================== Bloc devis assisté (mode "devis_suggestion") ====================
 // Meme principe que le Bloc 2C deja livre cote technicien/Max
 // (api/chat-technicien.js, fonction traiterDevisSuggestion) : l'IA ne
