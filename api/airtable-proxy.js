@@ -791,20 +791,79 @@ export default async function handler(req, res) {
           return res.status(403).json({ error: 'Création refusée : le métré cible ne correspond pas à votre tenant.' });
         }
       } else if (req.method === 'GET') {
-        // Liste/recherche (filterByFormula par nom de fiche Métré, cf.
-        // metreur.html) : aucun filtre serveur fiable possible ici — cette
-        // table n'a pas de champ tenant direct ni de lookup dédié, et un
-        // formula Airtable ne peut pas traverser 2 sauts de lien sans champ
-        // créé à cet effet (hors périmètre : modification de schéma
-        // Airtable non autorisée dans ce jalon). Rate-limit dédié à la
-        // place, même esprit que la recherche Tickets SAV par numéro (cf.
-        // plus haut dans ce fichier) : rend un balayage systématique
-        // impraticable sans bloquer l'usage normal (ouvrir une fiche =
-        // quelques requêtes). Limitation documentée, pas une règle
-        // inventée en silence.
+        // JALON 5bis — CORRECTIF (suite audit demandé) : le rate-limit seul
+        // ne bloquait qu'un BALAYAGE massif (30 req/10min/IP) — il ne
+        // protégeait pas un accès CIBLÉ unique (un seul appel avec un nom
+        // de fiche Métré connu ou deviné suffisait à lire les ouvertures
+        // d'un autre tenant). Un filtrage FIABLE reste impossible par
+        // filterByFormula (2 sauts de lien Airtable, aucun champ lookup
+        // dédié — modification de schéma non faite, non nécessaire ici),
+        // mais un filtrage fiable EST possible par POST-FILTRAGE serveur :
+        // on connaît déjà, via le correctif Métrés de ce même jalon, quels
+        // recordId Métrés appartiennent réellement au tenant — on ne garde
+        // ensuite que les ouvertures dont le Métré lié en fait partie.
+        // Jamais de confiance dans le filterByFormula fourni par le
+        // navigateur : il est relayé (nécessaire à la recherche elle-même)
+        // mais son résultat est systématiquement revérifié ci-dessous.
         if (!verifierDebit(req, { max: 30, fenetreMs: 10 * 60 * 1000, cle: 'recherche-ouvertures-metre' })) {
           return res.status(429).json({ error: 'Trop de requêtes sur Ouvertures Métré. Réessayez dans quelques minutes.' });
         }
+
+        let nomTenantOM;
+        try {
+          const rTenantOM = await fetch('https://api.airtable.com/v0/' + baseId + '/Clients/' + session.tenantId, { headers });
+          if (!rTenantOM.ok) return res.status(403).json({ error: 'Accès refusé : tenant de session introuvable.' });
+          const recTenantOM = await rTenantOM.json();
+          nomTenantOM = (recTenantOM.fields || {})['Nom client'];
+        } catch (err) {
+          return res.status(502).json({ error: 'Erreur en résolvant le tenant de session.', details: String(err) });
+        }
+        if (!nomTenantOM) return res.status(403).json({ error: 'Accès refusé : tenant de session incomplet.' });
+
+        // Recordid Métrés appartenant réellement au tenant (même requête
+        // que le correctif liste Métrés de ce jalon — cf. plus haut).
+        let idsMetresDuTenant = [];
+        try {
+          const formuleMetresTenant = 'FIND("' + String(nomTenantOM).replace(/"/g, '\\"') + '", ARRAYJOIN({Compte client}))';
+          const rMetresOM = await fetch('https://api.airtable.com/v0/' + baseId + '/' + encodeURIComponent('Métrés') + '?filterByFormula=' + encodeURIComponent(formuleMetresTenant) + '&maxRecords=500', { headers });
+          if (rMetresOM.ok) {
+            const jsonMetresOM = await rMetresOM.json();
+            idsMetresDuTenant = (jsonMetresOM.records || []).map(r => r.id);
+          }
+        } catch (err) {
+          return res.status(502).json({ error: 'Erreur en résolvant les métrés du tenant.', details: String(err) });
+        }
+
+        // Relaie la recherche du navigateur (filterByFormula par nom de
+        // fiche, cf. metreur.html/technicien.html) telle quelle — étape
+        // nécessaire à la recherche, jamais suffisante seule (voir
+        // post-filtrage ci-dessous).
+        const paramsOM = new URLSearchParams();
+        for (const [key, value] of Object.entries(rest)) {
+          if (Array.isArray(value)) value.forEach(v => paramsOM.append(key, v));
+          else if (value !== undefined) paramsOM.append(key, value);
+        }
+        const qsOM = paramsOM.toString();
+        let dataOM;
+        try {
+          const rOM = await fetch('https://api.airtable.com/v0/' + baseId + '/' + encodedSubPath + (qsOM ? '?' + qsOM : ''), { headers });
+          dataOM = await rOM.json().catch(() => ({}));
+          if (!rOM.ok) return res.status(rOM.status).json(dataOM);
+        } catch (err) {
+          return res.status(502).json({ error: 'Erreur en contactant Airtable', details: String(err) });
+        }
+
+        // Post-filtrage — échec fermé : ne garde que les ouvertures dont
+        // le Métré lié appartient réellement au tenant. C'est la SEULE
+        // étape qui empêche une lecture ciblée inter-tenant (le
+        // filterByFormula seul ne le fait pas, cf. plus haut).
+        const ensembleMetresTenant = new Set(idsMetresDuTenant);
+        const enregistrementsFiltresOM = (dataOM.records || []).filter(rec => {
+          const metreLies = (rec.fields || {})['Métré'];
+          const idsMetreRec = Array.isArray(metreLies) ? metreLies : (metreLies ? [metreLies] : []);
+          return idsMetreRec.some(id => ensembleMetresTenant.has(id));
+        });
+        return res.status(200).json(Object.assign({}, dataOM, { records: enregistrementsFiltresOM }));
       } else {
         return res.status(400).json({ error: 'Requête invalide pour cette table.' });
       }
