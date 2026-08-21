@@ -20,7 +20,7 @@ function retirerEmojis(texte){
 }
 
 const METIERS_VALIDES = ["Menuiserie", "Plomberie & Chauffage", "Électricité", "Autre"];
-const MODULES_VALIDES = ["Dashboard", "Technicien", "SAV", "Métreur"];
+const MODULES_VALIDES = ["Dashboard", "Technicien", "SAV", "Métreur", "Commerce"];
 
 const SYSTEM_PROMPT = `
 Tu es Claude, integre au poste de pilotage d'Iko Suite (RSIA Conseil,

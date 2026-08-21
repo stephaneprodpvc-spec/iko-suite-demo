@@ -808,6 +808,7 @@
           <div class="chip" data-mod="Technicien">Technicien</div>
           <div class="chip" data-mod="SAV">SAV</div>
           <div class="chip" data-mod="Métreur">Métreur</div>
+          <div class="chip" data-mod="Commerce">Commerce</div>
         </div>
 
         <label>Nombre d'agences (1 à 10)</label>
@@ -2778,7 +2779,7 @@ function fermerDevis(){
 // (meme enregistrement que les autres reglages globaux du projet), plutot que
 // dans une nouvelle table : l'API Airtable ne permet pas de creer une table
 // dans une base existante.
-var BAREME_MODULES = ["Dashboard", "Technicien", "SAV", "Métreur"];
+var BAREME_MODULES = ["Dashboard", "Technicien", "SAV", "Métreur", "Commerce"];
 var baremeRSIA = {};
 var devisProspectListe = [];
 var dpEditingId = null; // id du devis en cours de modification dans le formulaire, null = nouveau
