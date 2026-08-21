@@ -229,7 +229,7 @@ function CreneauPickerCommercial({ agenceVille, onSelect }) {
     setDates([]);
     try {
       const f = encodeURIComponent('AND({Agence}="' + agenceVille + '",{Créneau}="' + c.valeur + '",{Statut}="Libre")');
-      const url = '/api/airtable/Planning%20Commercial?filterByFormula=' + f + '&sort[0][field]=Date&sort[0][direction]=asc&maxRecords=60';
+      const url = '/api/airtable/tenant/Planning%20Commercial?filterByFormula=' + f + '&sort[0][field]=Date&sort[0][direction]=asc&maxRecords=60';
       const r = await fetch(url, { });
       const json = await r.json();
       const auPlusTot = new Date();
@@ -249,7 +249,7 @@ function CreneauPickerCommercial({ agenceVille, onSelect }) {
 
   const choisir = async (dateInfo) => {
     try {
-      await fetch('/api/airtable/Planning%20Commercial/' + dateInfo.ids[0], {
+      await fetch('/api/airtable/tenant/Planning%20Commercial/' + dateInfo.ids[0], {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ fields: { Statut: 'Pris' } })
@@ -342,7 +342,7 @@ function RdvApp() {
   const libererCreneauSiBesoin = async () => {
     if (!planningId) return;
     try {
-      await fetch('/api/airtable/Planning%20Commercial/' + planningId, {
+      await fetch('/api/airtable/tenant/Planning%20Commercial/' + planningId, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ fields: { Statut: 'Libre' } })
@@ -362,7 +362,7 @@ function RdvApp() {
     const num = 'RDV-' + new Date().getFullYear() + '-' + (Math.floor(Math.random()*9000)+1000);
     setRdv(num);
     try {
-      const resp = await fetch('/api/airtable/RDV%20Commercial', {
+      const resp = await fetch('/api/airtable/tenant/RDV%20Commercial', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ fields: {

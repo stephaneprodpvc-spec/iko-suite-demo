@@ -295,7 +295,22 @@ export default async function handler(req, res) {
   // sans préfixe) reste strictement inchangée : routeTenantTickets est
   // false pour tout appel à cette route.
   const routeTenantTickets = cheminBrut === 'tenant/Tickets SAV' || cheminBrut.startsWith('tenant/Tickets SAV/');
-  const subPathRaw = routeTenantTickets ? cheminBrut.slice('tenant/'.length) : cheminBrut;
+
+  // JALON 3c — même mécanisme de préfixe pour "Planning Commercial" et
+  // "RDV Commercial" (AUTH #007 / AUTH #004C) : ces deux tables n'ont
+  // AUCUN usage public (contrairement à "Tickets SAV"), donc pas besoin
+  // d'une route publique séparée — mais le préfixe "tenant/" est conservé
+  // pour la même raison de clarté et de cohérence de nommage dans toute
+  // l'architecture serveur. Le préfixe reste un simple signal de ROUTAGE,
+  // jamais un signal de sécurité : la protection réelle (bloc AUTH #007
+  // plus bas) s'applique de façon identique que le préfixe soit présent
+  // ou non, puisque ces tables sont déjà protégées sur leur route brute.
+  const routeTenantPlanningCommercial = cheminBrut === 'tenant/Planning Commercial' || cheminBrut.startsWith('tenant/Planning Commercial/');
+  const routeTenantRdvCommercial = cheminBrut === 'tenant/RDV Commercial' || cheminBrut.startsWith('tenant/RDV Commercial/');
+
+  const subPathRaw = (routeTenantTickets || routeTenantPlanningCommercial || routeTenantRdvCommercial)
+    ? cheminBrut.slice('tenant/'.length)
+    : cheminBrut;
   const baseId = process.env.AIRTABLE_BASE_ID || 'appkI8RKHkYNWY86U'; // base démo Iko Suite
   const headers = { Authorization: 'Bearer ' + token };
 
@@ -567,6 +582,31 @@ export default async function handler(req, res) {
       }
     }
     // SUPER_ADMIN_IKO : accès global conservé, aucune restriction ni stamping.
+  }
+
+  // JALON 3c — correctif "RDV Commercial" : cette table est gérée par le
+  // mode de COEXISTENCE générique de TABLES_TENANT_CONFIRME ci-dessous
+  // (session optionnelle, "Compte client" validé UNIQUEMENT s'il est
+  // explicitement fourni par le navigateur — jamais stampé d'office).
+  // commerce.html (seul appelant réel de cette table, vérifié) n'envoie
+  // JAMAIS "Compte client" à la création : aucune raison de le faire, cf.
+  // principe général "jamais confiance dans une valeur du navigateur".
+  // Sans correctif, un RDV créé via commerce.html se retrouvait donc SANS
+  // tenant — et devenait illisible même par son propre créateur (échec
+  // fermé du bloc générique ci-dessous, recordId sans tenant correspondant
+  // = refus). Stampé ici, EN AMONT du mode coexistence générique (que ce
+  // bloc-ci ne modifie pas pour les 6 autres tables qui le partagent —
+  // Devis, Catalogue Produits, Grille Main d'œuvre, Mise en page Devis,
+  // Métrés, Agences), avec le même principe que le stamping AUTH #007 :
+  // tenant TOUJOURS résolu depuis session.tenantId, jamais une valeur
+  // fournie par le navigateur, écrasée si présente.
+  if (premierSegment === 'RDV Commercial' && req.method === 'POST' && session && session.role !== 'SUPER_ADMIN_IKO') {
+    if (!session.tenantId) {
+      return res.status(403).json({ error: 'Accès refusé : session sans tenant valide.' });
+    }
+    if (!req.body) req.body = {};
+    if (!req.body.fields) req.body.fields = {};
+    req.body.fields['Compte client'] = [session.tenantId];
   }
 
   // AUTH #004C : tables dont le rattachement tenant a été confirmé fiable
