@@ -12,6 +12,10 @@ import { verifierOrigine, verifierDebit, reponseBloquee } from "./_securite.js";
 // deja existantes du dashboard (memes fonctions que les boutons manuels).
 
 const MODELE = "claude-haiku-4-5-20251001";
+// Bloc synthese direction : texte redige a partir de chiffres deja
+// calcules cote client, exige Sonnet 5 (meme principe que le diagnostic
+// technicien : Haiku reste reserve a la navigation et aux taches simples).
+const MODELE_SONNET = "claude-sonnet-5";
 const MAX_CHARS_MESSAGE = 500;
 const MAX_TICKETS_CONTEXTE = 150;
 const MAX_CATALOGUE_CONTEXTE = 60;
@@ -66,6 +70,45 @@ const OUTIL_DEVIS = {
       resume_vocal: { type: "string" },
     },
     required: ["lignes", "resume_vocal"],
+  },
+};
+
+const SYSTEM_PROMPT_SYNTHESE = `
+Tu es IKO, assistant de synthese pour la direction d'Iko Suite. Tu recois
+UNIQUEMENT des chiffres deja calcules et verifies par le serveur (jamais
+les tickets bruts). Tu dois rediger une courte synthese factuelle et 2 a 4
+recommandations concretes pour la direction.
+
+REGLES ABSOLUES
+- N'utilise et ne cite QUE les chiffres, noms de produits, noms d'agences
+  et statuts presents dans les donnees fournies. N'invente jamais un
+  chiffre, une cause, une agence ou un produit absent des donnees.
+- Ne formule aucune hypothese sur une cause de panne ou de malfacon : ce
+  champ n'existe pas dans les donnees, ne le mentionne pas comme une
+  certitude. Tu peux uniquement noter qu'un produit revient souvent en
+  SAV, sans jamais dire pourquoi si ce n'est pas donne.
+- L'estimation du mois suivant, si fournie, est une simple moyenne
+  statistique : presente-la comme une tendance indicative, jamais comme
+  une prediction certaine.
+- Reste concis : synthese en 3 a 5 phrases maximum, recommandations
+  courtes et actionnables (une ligne chacune).
+- Ton professionnel, direct, vouvoiement.
+`;
+
+const OUTIL_SYNTHESE = {
+  name: "synthese_direction",
+  description: "Produit une synthese factuelle et des recommandations pour la direction, strictement basees sur les chiffres fournis.",
+  input_schema: {
+    type: "object",
+    properties: {
+      synthese: { type: "string", description: "Synthese factuelle courte (3 a 5 phrases), basee uniquement sur les chiffres fournis." },
+      recommandations: {
+        type: "array",
+        items: { type: "string" },
+        description: "2 a 4 recommandations concretes et courtes.",
+      },
+    },
+    required: ["synthese", "recommandations"],
   },
 };
 
@@ -366,6 +409,64 @@ async function traiterDevisSuggestion(req, res, body, cle) {
   }
 }
 
+// ==================== Bloc synthese direction : validation serveur ====================
+async function traiterSyntheseDirection(req, res, body, cle) {
+  try {
+    const stats = body.stats && typeof body.stats === "object" ? body.stats : {};
+    // Le serveur ne transmet a l'IA que les chiffres deja calcules cote
+    // client (aucun ticket brut) : impossible pour elle d'inventer une
+    // donnee absente de ce resume.
+    const donnees = {
+      total_tickets: Number(stats.total_tickets) || 0,
+      top_produits: Array.isArray(stats.top_produits) ? stats.top_produits.slice(0, 8) : [],
+      repartition_agences: Array.isArray(stats.repartition_agences) ? stats.repartition_agences.slice(0, 10) : [],
+      repartition_statuts: Array.isArray(stats.repartition_statuts) ? stats.repartition_statuts.slice(0, 10) : [],
+      taux_urgents_pct: Number(stats.taux_urgents_pct) || 0,
+      tendance_mensuelle: Array.isArray(stats.tendance_mensuelle) ? stats.tendance_mensuelle.slice(0, 12) : [],
+      estimation_mois_suivant: stats.estimation_mois_suivant != null ? Number(stats.estimation_mois_suivant) : null,
+    };
+
+    if (!donnees.total_tickets) {
+      return res.status(200).json({ synthese: "Aucun ticket chargé pour établir une synthèse.", recommandations: [] });
+    }
+
+    const texteContexte = "Chiffres reels calcules par le serveur (JSON, source unique de verite) :\n" + JSON.stringify(donnees);
+
+    const reponse = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-api-key": cle, "anthropic-version": "2023-06-01" },
+      body: JSON.stringify({
+        model: MODELE_SONNET,
+        max_tokens: 600,
+        temperature: 0.2,
+        system: [{ type: "text", text: SYSTEM_PROMPT_SYNTHESE, cache_control: { type: "ephemeral" } }],
+        tools: [OUTIL_SYNTHESE],
+        tool_choice: { type: "tool", name: "synthese_direction" },
+        messages: [{ role: "user", content: texteContexte }],
+      }),
+    });
+
+    if (!reponse.ok) {
+      const detail = await reponse.text();
+      console.error("Erreur API Anthropic (synthese direction):", reponse.status, detail);
+      return res.status(502).json({ erreur: "IKO est momentanément indisponible." });
+    }
+
+    const data = await reponse.json();
+    const appel = (Array.isArray(data.content) ? data.content : []).find(b => b.type === "tool_use" && b.name === "synthese_direction");
+    if (!appel) return res.status(502).json({ erreur: "Réponse de synthèse invalide." });
+
+    const recommandations = Array.isArray(appel.input?.recommandations) ? appel.input.recommandations.slice(0, 4).map(r => String(r).slice(0, 300)) : [];
+    return res.status(200).json({
+      synthese: String(appel.input?.synthese || "").slice(0, 1000),
+      recommandations,
+    });
+  } catch (e) {
+    console.error("Erreur traiterSyntheseDirection:", e);
+    return res.status(500).json({ erreur: "Une erreur est survenue." });
+  }
+}
+
 export default async function handler(req, res) {
   if (req.method !== "POST") {
     return res.status(405).json({ erreur: "Methode non autorisee" });
@@ -386,6 +487,7 @@ export default async function handler(req, res) {
     // Mode dédié, distinct de la navigation vocale par défaut. Origine et
     // débit déjà vérifiés ci-dessus pour tous les modes.
     if (body.mode === "devis_suggestion") return await traiterDevisSuggestion(req, res, body, cle);
+    if (body.mode === "synthese_direction") return await traiterSyntheseDirection(req, res, body, cle);
 
     const message = String(body.message || "").slice(0, MAX_CHARS_MESSAGE).trim();
     if (!message) {

@@ -1880,16 +1880,83 @@ function ModalAnalyticsSAV({ tickets, onClose }) {
 
   const parProduit = {};
   const parAgence = {};
+  const parStatut = {};
+  let nbUrgents = 0;
   actifs.forEach(t => {
     const produit = (t.fields?.Produit || "").trim();
     if (produit) parProduit[produit] = (parProduit[produit] || 0) + 1;
     const agence = (t.fields?.Agence || "").trim();
     if (agence) parAgence[agence] = (parAgence[agence] || 0) + 1;
+    const statut = t.fields?.Statut || "Nouveau";
+    parStatut[statut] = (parStatut[statut] || 0) + 1;
+    if (t.fields?.Qualification === "Oui") nbUrgents += 1;
   });
 
   const topProduits = Object.entries(parProduit).sort((a, b) => b[1] - a[1]).slice(0, 8);
   const totalAvecAgence = Object.values(parAgence).reduce((s, n) => s + n, 0);
   const repartitionAgences = Object.entries(parAgence).sort((a, b) => b[1] - a[1]);
+  const repartitionStatuts = Object.entries(parStatut).sort((a, b) => b[1] - a[1]);
+  const tauxUrgents = actifs.length ? Math.round(nbUrgents / actifs.length * 100) : 0;
+
+  // Tendance mensuelle : basée sur le champ Créneau réel (parseDateCreneau,
+  // déjà utilisé partout ailleurs dans le dashboard). Regroupement AAAA-MM
+  // sur les 6 derniers mois calendaires uniquement (pas d'extrapolation
+  // au-delà de ce que les tickets réels couvrent).
+  const maintenant = new Date();
+  const moisLabels = [];
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(maintenant.getFullYear(), maintenant.getMonth() - i, 1);
+    moisLabels.push({ key: d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0"), label: d.toLocaleDateString("fr-FR", { month: "short", year: "2-digit" }) });
+  }
+  const parMois = {};
+  actifs.forEach(t => {
+    const d = parseDateCreneau(t.fields?.Créneau);
+    if (!d || d.getFullYear() === 9999) return;
+    const key = d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0");
+    parMois[key] = (parMois[key] || 0) + 1;
+  });
+  const tendance = moisLabels.map(m => ({ label: m.label, valeur: parMois[m.key] || 0 }));
+  const maxTendance = Math.max(1, ...tendance.map(m => m.valeur));
+
+  // Estimation simple du mois suivant : moyenne des 3 derniers mois réels.
+  // Déterministe, sans IA, clairement présentée comme une estimation de
+  // tendance et non une prédiction causale (aucune cause n'est inventée).
+  const derniers3 = tendance.slice(-3).map(m => m.valeur);
+  const estimationMoisSuivant = derniers3.length ? Math.round(derniers3.reduce((s, v) => s + v, 0) / derniers3.length) : null;
+
+  // ---- Socle IA : synthèse direction (mode "synthese_direction") ----
+  // Reutilise l'architecture existante (api/chat-dashboard.js, meme
+  // principe que devis_suggestion) : le serveur ne recoit QUE les chiffres
+  // deja calcules ci-dessus, jamais les tickets bruts. Le prompt interdit
+  // explicitement d'inventer un chiffre ou une cause absente de ces
+  // chiffres. Aucune ecriture, generation a la demande uniquement.
+  const [syntheseIA, setSyntheseIA] = React.useState(null);
+  const [chargementSynthese, setChargementSynthese] = React.useState(false);
+
+  const genererSynthese = async () => {
+    setChargementSynthese(true);
+    setSyntheseIA(null);
+    try {
+      const r = await fetch('/api/chat-dashboard', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mode: 'synthese_direction',
+          stats: {
+            total_tickets: actifs.length,
+            top_produits: topProduits.map(([p, n]) => ({ produit: p, nb: n })),
+            repartition_agences: repartitionAgences.map(([a, n]) => ({ agence: a, nb: n })),
+            repartition_statuts: repartitionStatuts.map(([s, n]) => ({ statut: s, nb: n })),
+            taux_urgents_pct: tauxUrgents,
+            tendance_mensuelle: tendance,
+            estimation_mois_suivant: estimationMoisSuivant,
+          },
+        }),
+      });
+      const data = await r.json();
+      if (r.ok && !data.erreur) setSyntheseIA(data);
+    } catch (e) {}
+    setChargementSynthese(false);
+  };
 
   return (
     <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
@@ -1927,11 +1994,65 @@ function ModalAnalyticsSAV({ tickets, onClose }) {
           )}
         </div>
 
+        <div style={{marginBottom:"18px"}}>
+          <div style={{fontSize:"12px",fontWeight:"700",color:C.white,marginBottom:"8px"}}>Répartition par statut</div>
+          <div style={{border:"1px solid "+C.border,borderRadius:"8px",overflow:"hidden"}}>
+            {repartitionStatuts.map(([statut, n], i) => (
+              <div key={statut} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 12px",borderBottom:i<repartitionStatuts.length-1?"1px solid "+C.border:"none",fontSize:"12px"}}>
+                <span>{statut}</span>
+                <b>{n}</b>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div style={{marginBottom:"18px"}}>
+          <div style={{fontSize:"12px",fontWeight:"700",color:C.white,marginBottom:"2px"}}>Taux de tickets urgents</div>
+          <div style={{fontSize:"11px",color:C.muted,marginBottom:"8px"}}>Champ Qualification = "Oui", sur l'ensemble des tickets chargés.</div>
+          <div style={{fontSize:"22px",fontWeight:"900",color:tauxUrgents>20?C.rouge:C.or}}>{tauxUrgents}%</div>
+        </div>
+
+        <div style={{marginBottom:"18px"}}>
+          <div style={{fontSize:"12px",fontWeight:"700",color:C.white,marginBottom:"2px"}}>Tendance mensuelle (6 derniers mois)</div>
+          <div style={{fontSize:"11px",color:C.muted,marginBottom:"8px"}}>Basée sur le créneau réel de chaque ticket.</div>
+          <div style={{display:"flex",alignItems:"flex-end",gap:"6px",height:"70px"}}>
+            {tendance.map(m => (
+              <div key={m.label} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:"4px"}}>
+                <div style={{width:"100%",height:Math.max(3,Math.round(m.valeur/maxTendance*54))+"px",background:C.or,borderRadius:"3px"}} title={m.valeur+" ticket(s)"}/>
+                <div style={{fontSize:"9px",color:C.muted}}>{m.label}</div>
+              </div>
+            ))}
+          </div>
+          {estimationMoisSuivant !== null && (
+            <div style={{fontSize:"11px",color:C.muted,marginTop:"8px",fontStyle:"italic"}}>
+              Estimation du mois suivant (moyenne des 3 derniers mois) : ≈ {estimationMoisSuivant} ticket(s). Simple tendance statistique, pas une prédiction causale.
+            </div>
+          )}
+        </div>
+
         <div style={{background:"#F3F4F6",border:"1px solid "+C.border,borderRadius:"8px",padding:"10px 12px",fontSize:"11px",color:C.muted,marginBottom:"6px"}}>
           ⚠️ Causes récurrentes : non calculable — aucun champ de cause ou de malfaçon n'est actuellement enregistré sur les tickets.
         </div>
         <div style={{background:"#F3F4F6",border:"1px solid "+C.border,borderRadius:"8px",padding:"10px 12px",fontSize:"11px",color:C.muted,marginBottom:"16px"}}>
           ⚠️ Taux de résolution au premier passage : non calculable — le schéma actuel ne trace pas le nombre de passages technicien par ticket.
+        </div>
+
+        <div style={{borderTop:"1px solid "+C.border,paddingTop:"14px",marginBottom:"14px"}}>
+          <button type="button" onClick={genererSynthese} disabled={chargementSynthese}
+            style={{width:"100%",padding:"9px",borderRadius:"8px",background:"rgba(34,197,94,0.1)",border:"1px solid #22C55E",color:"#16A34A",fontSize:"12px",fontWeight:"700",cursor:chargementSynthese?"not-allowed":"pointer",marginBottom:"10px"}}>
+            {chargementSynthese ? "⏳ IKO rédige la synthèse..." : "🧭 Générer une synthèse IA pour la direction"}
+          </button>
+          {syntheseIA && (
+            <div style={{background:"rgba(0,26,66,0.05)",border:"1px solid rgba(0,26,66,0.15)",borderRadius:"10px",padding:"12px 14px"}}>
+              <div style={{fontSize:"12px",color:"#0D0D0D",marginBottom:"10px",whiteSpace:"pre-wrap"}}>{syntheseIA.synthese}</div>
+              {Array.isArray(syntheseIA.recommandations) && syntheseIA.recommandations.length > 0 && (
+                <ul style={{margin:0,paddingLeft:"18px",fontSize:"11.5px",color:"#0D0D0D"}}>
+                  {syntheseIA.recommandations.map((r, i) => <li key={i} style={{marginBottom:"4px"}}>{r}</li>)}
+                </ul>
+              )}
+              <div style={{fontSize:"9.5px",color:C.muted,marginTop:"8px",fontStyle:"italic"}}>Synthèse générée par IA à partir des chiffres ci-dessus uniquement — à valider par la direction.</div>
+            </div>
+          )}
         </div>
 
         <button onClick={onClose} style={{width:"100%",padding:"11px",background:"#0D0D0D",color:"#fff",border:"none",borderRadius:"10px",fontSize:"13px",fontWeight:"900",cursor:"pointer"}}>Fermer</button>
