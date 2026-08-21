@@ -56,11 +56,19 @@ import { verifierSession, verifierDebit, verifierOrigine } from './_securite.js'
 //     toujours exempté, créneaux réels liés à un tenant protégés par
 //     recordId, créneaux sans tenant (démo publique index.html) toujours
 //     laissés passer. Pas de filtrage de liste (cf. #004B).
-//   - "Tickets SAV", "Planning Commercial" : PAS filtrees par tenant -
-//     hors perimetre de #004C/#004D, ambiguites identifiees en #004B et
-//     confirmees en #004D (chevauchement reel avec l'usage par recordId
-//     des pages publiques pour Tickets SAV ; aucun champ de rattachement
-//     du tout pour Planning Commercial). Cf. rapport #004D pour le detail.
+//   - "Tickets SAV" : PAS filtree par tenant a ce niveau - hors perimetre
+//     de #004C/#004D, ambiguite reelle avec l'usage par recordId des pages
+//     publiques (cf. #004B). Isolee depuis via une ROUTE DEDIEE distincte,
+//     voir le bloc AUTH #006 plus bas dans ce fichier.
+//   - "Planning Commercial" : longtemps sans champ de rattachement tenant
+//     (dette structurelle documentee en #004B/#004D). Le champ "Compte
+//     client" a ete ajoute cote schema Airtable (table vide au moment de
+//     la creation, aucune donnee existante affectee) - isolation tenant
+//     serveur implementee depuis AUTH #007 (Jalon 2.5), voir le bloc dedie
+//     plus bas dans ce fichier. Session desormais OBLIGATOIRE pour cette
+//     table (echec ferme), contrairement au mode de coexistence des autres
+//     tables : commerce.html envoie deja systematiquement une session
+//     (migre Auth #003), aucun flux existant a casser.
 //
 // Bloquee INCONDITIONNELLEMENT, quelle que soit la session : la table
 // "Utilisateurs" (hash de mots de passe, tokenId de rotation). Aucune page
@@ -436,9 +444,130 @@ export default async function handler(req, res) {
   // sur la MÊME route que les pages internes). Résolu depuis le Chantier
   // Multi-Tenant #1 par une ROUTE SERVEUR DÉDIÉE (Option B), jamais par un
   // signal client — voir le bloc AUTH #006 après TABLES_TENANT_CONFIRME.
-  //   - "Planning Commercial" : aucun champ de rattachement tenant, direct
-  //     ou indirect (audit #004B). Dette structurelle — nécessiterait une
-  //     modification du modèle de données Airtable, hors périmètre ici.
+
+  // AUTH #007 (Jalon 2.5) — "Planning Commercial" : isolation tenant
+  // serveur. Contrairement aux tables de TABLES_TENANT_CONFIRME ci-dessous
+  // (mode de coexistence, session optionnelle), cette table applique un
+  // contrôle STRICT et OBLIGATOIRE :
+  //   - Session obligatoire, quel que soit le rôle — aucune session =
+  //     échec fermé (401). Sans risque de régression : commerce.html est
+  //     déjà migré Auth #003 et envoie systématiquement une session ; il
+  //     n'existe aucune page PUBLIQUE utilisant cette table (contrairement
+  //     à "Tickets SAV"/"Planning", partagées avec des pages sans session).
+  //   - tenant TOUJOURS résolu depuis session.tenantId (JWT vérifié
+  //     serveur), jamais depuis une valeur fournie par le navigateur.
+  //   - SUPER_ADMIN_IKO : accès global conservé, aucune restriction ni
+  //     stamping (comportement identique aux autres tables du fichier).
+  //   - Lecture d'un enregistrement précis (recordId) : relecture serveur
+  //     + vérification stricte de "Compte client". Contrairement au bloc
+  //     "Planning" (#004D) qui laisse passer un enregistrement SANS tenant
+  //     (créneaux démo publics légitimes), "Planning Commercial" n'a AUCUN
+  //     usage public connu : un enregistrement sans "Compte client", ou
+  //     dont la valeur ne contient pas le tenant de session, est REFUSÉ
+  //     (échec fermé, jamais de laisser-passer par défaut).
+  //   - Lecture de liste (GET sans recordId) : filtre tenant OBLIGATOIRE
+  //     injecté serveur, même limite technique que "Tickets SAV"/"RDV
+  //     Commercial" — "Compte client" est un lien Airtable brut (pas de
+  //     "Client Record ID" dédié sur cette table), ARRAYJOIN() renvoie le
+  //     NOM du client et non son recordId (piège déjà documenté sur ce
+  //     projet). Le nom du tenant est donc résolu par un appel séparé à
+  //     Clients/<tenantId> (jamais depuis une valeur fournie par le
+  //     navigateur) avant de construire le filtre — c'est la lecture liste
+  //     la plus sécurisée que ce modèle de données permette actuellement.
+  //   - Écriture (POST création, PATCH sur un enregistrement déjà vérifié
+  //     tenant) : "Compte client" est STAMPÉ CÔTÉ SERVEUR, systématiquement
+  //     écrasé avec [session.tenantId] — jamais une confiance dans une
+  //     valeur envoyée par le navigateur, même si elle semblait correcte.
+  //   - PATCH/DELETE sans recordId, ou toute autre méthode : refusé (400),
+  //     aucun usage légitime connu, pas de règle inventée.
+  //   - Module "Commerce" OBLIGATOIRE : en plus de la session et du
+  //     tenant, le champ "Modules actifs" du client (table "Clients")
+  //     doit contenir exactement "Commerce" pour un rôle non
+  //     SUPER_ADMIN_IKO — sinon refusé (403), quelle que soit la validité
+  //     de la session/du tenant par ailleurs. Résolu en un seul appel
+  //     serveur à Clients/<tenantId> (jamais une valeur fournie par le
+  //     navigateur), réutilisé pour la résolution du nom de tenant sur la
+  //     lecture de liste (évite un second appel).
+  if (premierSegment === 'Planning Commercial') {
+    if (!session) {
+      return res.status(401).json({ error: 'Authentification requise pour accéder à Planning Commercial.' });
+    }
+    if (session.role !== 'SUPER_ADMIN_IKO') {
+      if (!session.tenantId) {
+        return res.status(403).json({ error: 'Accès refusé : session sans tenant valide.' });
+      }
+      // Résolution unique du client de session : sert à la fois à vérifier
+      // le module "Commerce" (obligatoire pour cette table) et, pour une
+      // liste, à résoudre le nom du tenant (ARRAYJOIN renvoie le nom, pas
+      // le recordId — piège déjà documenté sur ce projet).
+      let recClientSessionPC;
+      try {
+        const rClientSessionPC = await fetch('https://api.airtable.com/v0/' + baseId + '/Clients/' + session.tenantId, { headers });
+        if (!rClientSessionPC.ok) return res.status(403).json({ error: 'Accès refusé : tenant de session introuvable.' });
+        recClientSessionPC = await rClientSessionPC.json();
+      } catch (err) {
+        return res.status(502).json({ error: 'Erreur en résolvant le tenant de session.', details: String(err) });
+      }
+      const modulesActifsTenantPC = (recClientSessionPC.fields || {})['Modules actifs'];
+      const listeModulesPC = Array.isArray(modulesActifsTenantPC) ? modulesActifsTenantPC : [];
+      if (!listeModulesPC.includes('Commerce')) {
+        return res.status(403).json({ error: "Accès refusé : le module Commerce n'est pas activé pour ce tenant." });
+      }
+      const segmentsPC = subPathRaw.split('/').filter(Boolean);
+      const recordIdPC = segmentsPC[1];
+
+      if (recordIdPC) {
+        // GET/PATCH/DELETE sur un enregistrement précis : relecture serveur
+        // AVANT toute opération, jamais de confiance dans un tenantId fourni
+        // par le navigateur.
+        let recPC;
+        try {
+          const rPC = await fetch('https://api.airtable.com/v0/' + baseId + '/' + encodeURIComponent(premierSegment) + '/' + recordIdPC, { headers });
+          if (!rPC.ok) {
+            const errData = await rPC.json().catch(() => ({}));
+            return res.status(rPC.status).json(errData);
+          }
+          recPC = await rPC.json();
+        } catch (err) {
+          return res.status(502).json({ error: 'Erreur en vérifiant la propriété tenant de ce créneau commercial.', details: String(err) });
+        }
+        const valeurCompteClientPC = (recPC.fields || {})['Compte client'];
+        const idsLiesPC = Array.isArray(valeurCompteClientPC) ? valeurCompteClientPC : (valeurCompteClientPC ? [valeurCompteClientPC] : []);
+        // Échec fermé : aucun laisser-passer pour un enregistrement sans
+        // tenant (contrairement au bloc "Planning" #004D) — table 100%
+        // interne, sans usage public connu.
+        if (!idsLiesPC.includes(session.tenantId)) {
+          return res.status(403).json({ error: "Accès refusé : ce créneau commercial n'appartient pas à votre tenant." });
+        }
+        // Stamping serveur en écriture : le champ n'est jamais accepté tel
+        // quel depuis le navigateur, toujours recalculé côté serveur.
+        if (req.method === 'PATCH') {
+          if (!req.body) req.body = {};
+          if (!req.body.fields) req.body.fields = {};
+          req.body.fields['Compte client'] = [session.tenantId];
+        }
+      } else if (req.method === 'GET') {
+        // Liste/recherche : filtre tenant obligatoire, résolu depuis le
+        // client de session déjà chargé ci-dessus (jamais depuis le
+        // navigateur, aucun second appel nécessaire).
+        const nomTenantPC = (recClientSessionPC.fields || {})['Nom client'];
+        if (!nomTenantPC) return res.status(403).json({ error: 'Accès refusé : tenant de session incomplet.' });
+        const formuleTenantPC = 'FIND("' + String(nomTenantPC).replace(/"/g, '\\"') + '", ARRAYJOIN({Compte client}))';
+        rest.filterByFormula = rest.filterByFormula ? 'AND(' + rest.filterByFormula + ', ' + formuleTenantPC + ')' : formuleTenantPC;
+      } else if (req.method === 'POST') {
+        // Création : stamping serveur systématique, jamais de confiance
+        // dans une valeur fournie par le navigateur (présente ou non).
+        if (!req.body) req.body = {};
+        if (!req.body.fields) req.body.fields = {};
+        req.body.fields['Compte client'] = [session.tenantId];
+      } else {
+        // PATCH/DELETE sans recordId, ou toute autre méthode : aucun usage
+        // légitime connu — refusé par prudence, pas de règle inventée.
+        return res.status(400).json({ error: 'Requête invalide pour cette table.' });
+      }
+    }
+    // SUPER_ADMIN_IKO : accès global conservé, aucune restriction ni stamping.
+  }
 
   // AUTH #004C : tables dont le rattachement tenant a été confirmé fiable
   // lors de l'audit #004B. Pour chacune, "champ" est le champ RÉELLEMENT
