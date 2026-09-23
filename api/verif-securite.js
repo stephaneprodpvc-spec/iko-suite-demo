@@ -234,20 +234,16 @@ async function gererLogout(req, res) {
   return res.status(200).json({ ok: true });
 }
 
-// --- PROVISIONING (ajout) : creation d'un compte utilisateur pour un
-// client, depuis le Poste de pilotage (admin.html). Reutilise l'infra
+// --- PROVISIONING : creation d'un compte utilisateur pour un client,
+// depuis le Poste de pilotage (admin.html). Reutilise l'infra
 // d'authentification deja validee (meme table, meme hachage bcrypt),
 // aucune nouvelle fonction Vercel. Le hachage du mot de passe reste
 // exclusivement serveur, jamais transmis ni calcule cote client.
 //
-// SECURITE : cette route n'a aujourd'hui pas de verification d'identite
-// de l'appelant au-dela de verifierOrigine/verifierDebit (memes garde-fous
-// que login), car admin.html n'a pas encore de session admin reelle
-// branchee (mot de passe code en dur, point deja documente comme en
-// attente de validation Stephane). Tant que ce point n'est pas resolu,
-// cette route offre le meme niveau de protection que le reste de
-// l'admin, pas plus : a durcir en priorite des que l'auth admin reelle
-// sera active (cf. failles documentees dans les memoires du projet).
+// SECURITE (a jour) : cette route exige une session valide avec le role
+// SUPER_ADMIN_IKO (verifiee cote serveur, cf. correctif AUTH #009
+// ci-dessous), puis verifie que le tenantId fourni correspond a un vrai
+// enregistrement Clients avant toute creation de compte.
 async function gererCreationUtilisateur(req, res) {
   // Correctif AUTH #009 : le provisioning n'avait AUCUNE verification
   // serveur (ni session, ni role) — seul admin.html masquait le formulaire
