@@ -138,6 +138,33 @@ async function ecrireConfigPush(baseId, headers, config) {
   });
 }
 
+// AUTH #010 — Contrôle centralisé "Modules actifs". Extrait du bloc
+// Planning Commercial (AUTH #007), où cette même logique existait déjà en
+// ligne pour le module "Commerce" : réutilisé ici tel quel, pas une
+// nouvelle règle. Le tenant DOIT venir d'une session déjà vérifiée par
+// l'appelant (jamais une valeur fournie par le navigateur) — cette
+// fonction ne fait que résoudre "Modules actifs" depuis le VRAI
+// enregistrement Clients/<tenantId> et vérifier que le module demandé y
+// figure. Ne s'applique qu'aux tables où le mapping module <-> route est
+// déjà certain dans le code existant (voir commentaires aux points
+// d'appel) — jamais inventé pour une table où ce lien n'est pas prouvé.
+async function verifierModuleActif(baseId, headers, tenantId, moduleRequis) {
+  let recClient;
+  try {
+    const r = await fetch('https://api.airtable.com/v0/' + baseId + '/Clients/' + tenantId, { headers });
+    if (!r.ok) return { ok: false, status: 403, error: 'Accès refusé : tenant de session introuvable.' };
+    recClient = await r.json();
+  } catch (err) {
+    return { ok: false, status: 502, error: 'Erreur en résolvant le tenant de session.', details: String(err) };
+  }
+  const modulesActifs = (recClient.fields || {})['Modules actifs'];
+  const liste = Array.isArray(modulesActifs) ? modulesActifs : [];
+  if (!liste.includes(moduleRequis)) {
+    return { ok: false, status: 403, error: "Accès refusé : le module " + moduleRequis + " n'est pas activé pour ce tenant." };
+  }
+  return { ok: true, recClient };
+}
+
 async function handlerPush(req, res, baseId, headers, session) {
   // Push n'est utilise que par des pages internes (dashboard.html,
   // technicien.html) - aucune page publique ne l'appelle. Quand une session
@@ -515,23 +542,16 @@ export default async function handler(req, res) {
       if (!session.tenantId) {
         return res.status(403).json({ error: 'Accès refusé : session sans tenant valide.' });
       }
-      // Résolution unique du client de session : sert à la fois à vérifier
-      // le module "Commerce" (obligatoire pour cette table) et, pour une
-      // liste, à résoudre le nom du tenant (ARRAYJOIN renvoie le nom, pas
-      // le recordId — piège déjà documenté sur ce projet).
-      let recClientSessionPC;
-      try {
-        const rClientSessionPC = await fetch('https://api.airtable.com/v0/' + baseId + '/Clients/' + session.tenantId, { headers });
-        if (!rClientSessionPC.ok) return res.status(403).json({ error: 'Accès refusé : tenant de session introuvable.' });
-        recClientSessionPC = await rClientSessionPC.json();
-      } catch (err) {
-        return res.status(502).json({ error: 'Erreur en résolvant le tenant de session.', details: String(err) });
+      // Résolution + vérification du module "Commerce" (obligatoire pour
+      // cette table), via la fonction centralisée AUTH #010. recClient
+      // renvoyé est réutilisé plus bas pour résoudre le nom du tenant sur
+      // une liste (ARRAYJOIN renvoie le nom, pas le recordId — piège déjà
+      // documenté sur ce projet), sans second appel serveur.
+      const controleModulePC = await verifierModuleActif(baseId, headers, session.tenantId, 'Commerce');
+      if (!controleModulePC.ok) {
+        return res.status(controleModulePC.status).json({ error: controleModulePC.error, details: controleModulePC.details });
       }
-      const modulesActifsTenantPC = (recClientSessionPC.fields || {})['Modules actifs'];
-      const listeModulesPC = Array.isArray(modulesActifsTenantPC) ? modulesActifsTenantPC : [];
-      if (!listeModulesPC.includes('Commerce')) {
-        return res.status(403).json({ error: "Accès refusé : le module Commerce n'est pas activé pour ce tenant." });
-      }
+      const recClientSessionPC = controleModulePC.recClient;
       const segmentsPC = subPathRaw.split('/').filter(Boolean);
       const recordIdPC = segmentsPC[1];
 
@@ -719,6 +739,15 @@ export default async function handler(req, res) {
   if (premierSegment === 'RDV Commercial' && req.method === 'POST' && session && session.role !== 'SUPER_ADMIN_IKO') {
     if (!session.tenantId) {
       return res.status(403).json({ error: 'Accès refusé : session sans tenant valide.' });
+    }
+    // AUTH #010 : RDV Commercial appartient à la même famille que Planning
+    // Commercial (même appelant commerce.html, même module "Commerce" —
+    // cf. commentaire AUTH #007 ci-dessus), mais ce contrôle manquait ici.
+    // Corrigé avec la fonction centralisée, comportement identique à
+    // Planning Commercial.
+    const controleModuleRDV = await verifierModuleActif(baseId, headers, session.tenantId, 'Commerce');
+    if (!controleModuleRDV.ok) {
+      return res.status(controleModuleRDV.status).json({ error: controleModuleRDV.error, details: controleModuleRDV.details });
     }
     if (!req.body) req.body = {};
     if (!req.body.fields) req.body.fields = {};
