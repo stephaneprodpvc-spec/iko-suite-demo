@@ -2066,15 +2066,35 @@ function calculerAgregatsPredictifs(interventions) {
 // Chargement à la demande des interventions SAV brutes (route tenant
 // dédiée, AUTH #008) : appelé uniquement à l'ouverture d'un panneau
 // Analytics/Dirigeant, jamais au chargement initial du dashboard —
-// économie de quota Airtable. maxRecords plafonné : suffisant pour une
-// démo/un tenant réel de taille normale, évite un appel disproportionné.
+// économie de quota Airtable.
+// A6 : pagination complète via le curseur "offset" renvoyé par Airtable
+// tant qu'il y en a un — n'est plus plafonné à 200 enregistrements.
+// Garde-fou de sécurité à 20 pages (2000 enregistrements) pour éviter un
+// appel incontrôlé en cas d'anomalie de données, sans changer le
+// comportement pour un volume normal.
+// A7 : retourne désormais un résultat explicite {ok, records|erreur} au
+// lieu d'un simple tableau, pour que l'appelant distingue "aucune
+// donnée" (ok:true, records:[]) d'une "erreur de chargement" (ok:false).
 async function chargerInterventionsSAV() {
+  const MAX_PAGES = 20;
+  let tousLesRecords = [];
+  let offset = undefined;
   try {
-    const r = await fetch('/api/airtable/tenant/Interventions%20SAV?maxRecords=200');
-    if (!r.ok) return [];
-    const data = await r.json();
-    return data.records || [];
-  } catch (e) { return []; }
+    for (let page = 0; page < MAX_PAGES; page++) {
+      const url = '/api/airtable/tenant/Interventions%20SAV?maxRecords=100' + (offset ? '&offset=' + encodeURIComponent(offset) : '');
+      const r = await fetch(url);
+      if (!r.ok) {
+        return { ok: false, erreur: "Erreur serveur (" + r.status + ") lors du chargement des interventions SAV." };
+      }
+      const data = await r.json();
+      tousLesRecords = tousLesRecords.concat(data.records || []);
+      offset = data.offset;
+      if (!offset) break;
+    }
+    return { ok: true, records: tousLesRecords };
+  } catch (e) {
+    return { ok: false, erreur: "Connexion impossible lors du chargement des interventions SAV." };
+  }
 }
 
 function ModalAnalyticsSAV({ tickets, onClose }) {
@@ -2082,8 +2102,17 @@ function ModalAnalyticsSAV({ tickets, onClose }) {
 
   // Interventions SAV brutes : chargées une fois à l'ouverture du panneau
   // (taux résolution 1er passage + performance techniciens en dépendent).
+  // A7 : interventions=null tant que le chargement est en cours ou pas
+  // encore résolu ; erreurInterventions distingue une vraie panne de
+  // chargement d'une absence réelle de données (interventions=[]).
   const [interventions, setInterventions] = React.useState(null);
-  React.useEffect(() => { chargerInterventionsSAV().then(setInterventions); }, []);
+  const [erreurInterventions, setErreurInterventions] = React.useState("");
+  React.useEffect(() => {
+    chargerInterventionsSAV().then(res => {
+      if (res.ok) setInterventions(res.records);
+      else setErreurInterventions(res.erreur);
+    });
+  }, []);
   const perfEtResolution = interventions ? calculerPerformanceEtResolution(interventions) : null;
 
   // ---- Socle IA : synthèse direction (mode "synthese_direction") ----
@@ -2242,21 +2271,24 @@ function ModalAnalyticsSAV({ tickets, onClose }) {
         <div style={{marginBottom:"18px"}}>
           <div style={{fontSize:"12px",fontWeight:"700",color:C.white,marginBottom:"2px"}}>Taux de résolution au premier passage</div>
           <div style={{fontSize:"11px",color:C.muted,marginBottom:"8px"}}>Ticket avec une seule intervention enregistrée, résolue dès ce passage.</div>
-          {!interventions && <div style={{fontSize:"11px",color:C.muted,fontStyle:"italic"}}>⏳ Chargement...</div>}
-          {interventions && perfEtResolution.tauxResolutionPremierPassage === null && (
+          {erreurInterventions && (
+            <div style={{fontSize:"11px",color:"#DC2626",fontWeight:"700"}}>⚠️ Erreur de chargement — {erreurInterventions} Cet indicateur et la performance techniciens ci-dessous sont indisponibles, pas nécessairement à zéro.</div>
+          )}
+          {!erreurInterventions && !interventions && <div style={{fontSize:"11px",color:C.muted,fontStyle:"italic"}}>⏳ Chargement...</div>}
+          {!erreurInterventions && interventions && perfEtResolution.tauxResolutionPremierPassage === null && (
             <div style={{fontSize:"11px",color:C.muted,fontStyle:"italic"}}>Non calculable pour l'instant : aucune intervention SAV enregistrée.</div>
           )}
-          {interventions && perfEtResolution.tauxResolutionPremierPassage !== null && (
+          {!erreurInterventions && interventions && perfEtResolution.tauxResolutionPremierPassage !== null && (
             <div style={{fontSize:"22px",fontWeight:"900",color:C.white}}>{perfEtResolution.tauxResolutionPremierPassage}%</div>
           )}
         </div>
 
         <div style={{marginBottom:"18px"}}>
           <div style={{fontSize:"12px",fontWeight:"700",color:C.white,marginBottom:"8px"}}>Performance techniciens</div>
-          {interventions && perfEtResolution.performanceTechniciens.length === 0 && (
+          {!erreurInterventions && interventions && perfEtResolution.performanceTechniciens.length === 0 && (
             <div style={{fontSize:"11px",color:C.muted,fontStyle:"italic"}}>Aucune intervention liée à un technicien identifié pour l'instant.</div>
           )}
-          {interventions && perfEtResolution.performanceTechniciens.length > 0 && (
+          {!erreurInterventions && interventions && perfEtResolution.performanceTechniciens.length > 0 && (
             <div style={{border:"1px solid "+C.border,borderRadius:"8px",overflow:"hidden"}}>
               {perfEtResolution.performanceTechniciens.map((p, i) => (
                 <div key={p.nom} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 12px",borderBottom:i<perfEtResolution.performanceTechniciens.length-1?"1px solid "+C.border:"none",fontSize:"12px"}}>
@@ -2310,7 +2342,13 @@ function ModalTableauBordDirigeant({ tickets, stats, onClose }) {
     .reduce((s, t) => s + t.fields["Montant devis"], 0);
 
   const [interventions, setInterventions] = React.useState(null);
-  React.useEffect(() => { chargerInterventionsSAV().then(setInterventions); }, []);
+  const [erreurInterventions, setErreurInterventions] = React.useState("");
+  React.useEffect(() => {
+    chargerInterventionsSAV().then(res => {
+      if (res.ok) setInterventions(res.records);
+      else setErreurInterventions(res.erreur);
+    });
+  }, []);
   const perfEtResolution = interventions ? calculerPerformanceEtResolution(interventions) : null;
   const agregatsPredictifs = interventions ? calculerAgregatsPredictifs(interventions) : null;
 
@@ -2374,8 +2412,14 @@ function ModalTableauBordDirigeant({ tickets, stats, onClose }) {
           <KpiCard label="Montant devis envoyés" value={montantDevisEnCours.toFixed(0) + " €"} sub="TTC, statut Devis envoyé"/>
           <KpiCard label="Note client moyenne" value={stats.noteMoyenne ? stats.noteMoyenne.toFixed(1) + " / 5" : "—"} sub={stats.nbNotes + " avis"}/>
           <KpiCard label="Coût SAV réel" value={coutSAVGlobal.toFixed(0) + " €"} sub="interventions chiffrées"/>
-          <KpiCard label="Résolution 1er passage" value={interventions && perfEtResolution.tauxResolutionPremierPassage !== null ? perfEtResolution.tauxResolutionPremierPassage + "%" : "—"} sub={interventions ? (perfEtResolution.tauxResolutionPremierPassage === null ? "aucune donnée" : "") : "chargement..."}/>
+          <KpiCard label="Résolution 1er passage" value={!erreurInterventions && interventions && perfEtResolution.tauxResolutionPremierPassage !== null ? perfEtResolution.tauxResolutionPremierPassage + "%" : "—"} sub={erreurInterventions ? "erreur de chargement" : (interventions ? (perfEtResolution.tauxResolutionPremierPassage === null ? "aucune donnée" : "") : "chargement...")}/>
         </div>
+
+        {erreurInterventions && (
+          <div style={{background:"rgba(220,38,38,0.08)",border:"1px solid #DC2626",borderRadius:"8px",padding:"9px 12px",fontSize:"10.5px",color:"#DC2626",fontWeight:"700",marginBottom:"18px"}}>
+            ⚠️ Erreur de chargement des interventions SAV — {erreurInterventions} Résolution 1er passage, performance techniciens et socle prédictif indisponibles pour l'instant (à ne pas confondre avec une absence réelle de données).
+          </div>
+        )}
 
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"16px",marginBottom:"18px"}}>
           <div>
