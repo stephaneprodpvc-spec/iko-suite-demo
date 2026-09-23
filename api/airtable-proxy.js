@@ -504,6 +504,42 @@ export default async function handler(req, res) {
       return res.status(401).json({ error: 'Authentification requise pour modifier Clients.' });
     }
   }
+  // AUTH #014 — Unicité du Slug, contrôlée SERVEUR (jamais uniquement
+  // côté admin.html). Ne s'applique que si le champ Slug est réellement
+  // présent dans la requête (une PATCH qui touche un autre champ ne doit
+  // pas être bloquée). Comparaison insensible à la casse, cohérente avec
+  // slugifier() qui normalise déjà en minuscules côté client — le
+  // serveur ne fait pas confiance à cette normalisation et revérifie
+  // lui-même avec LOWER(). Sur une modification (PATCH), le client lui-
+  // même est exclu de la recherche (RECORD_ID() différent) pour pouvoir
+  // conserver son propre slug inchangé.
+  if (premierSegment === 'Clients' && (req.method === 'POST' || req.method === 'PATCH')) {
+    const slugDemande = (req.body && req.body.fields && typeof req.body.fields.Slug === 'string') ? req.body.fields.Slug.trim() : null;
+    if (slugDemande) {
+      const segmentsSlug = subPathRaw.split('/').filter(Boolean);
+      const recordIdActuel = segmentsSlug[1];
+      const slugEchappe = slugDemande.replace(/"/g, '\\"');
+      let formuleSlug = 'LOWER({Slug})=LOWER("' + slugEchappe + '")';
+      if (recordIdActuel) {
+        formuleSlug = 'AND(' + formuleSlug + ', RECORD_ID()!="' + recordIdActuel + '")';
+      }
+      try {
+        const rSlug = await fetch(
+          'https://api.airtable.com/v0/' + baseId + '/Clients?filterByFormula=' + encodeURIComponent(formuleSlug) + '&maxRecords=1',
+          { headers }
+        );
+        if (!rSlug.ok) {
+          return res.status(502).json({ error: 'Erreur en vérifiant l\'unicité du slug.' });
+        }
+        const dataSlug = await rSlug.json();
+        if (Array.isArray(dataSlug.records) && dataSlug.records.length > 0) {
+          return res.status(409).json({ error: 'Ce slug est déjà utilisé par un autre client.' });
+        }
+      } catch (err) {
+        return res.status(502).json({ error: 'Erreur en vérifiant l\'unicité du slug.', details: String(err) });
+      }
+    }
+  }
   if (premierSegment === 'Clients' && session && session.role !== 'SUPER_ADMIN_IKO') {
     const segmentsClients = subPathRaw.split('/').filter(Boolean);
     const recordIdDemande = segmentsClients[1]; // ex: "Clients/recXXXX"
