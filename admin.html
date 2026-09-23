@@ -812,6 +812,20 @@
           <div class="chip" data-mod="Commerce">Commerce</div>
         </div>
 
+        <div id="fPremierUtilisateurBloc">
+          <label>Premier compte utilisateur (optionnel — créé automatiquement avec le client)</label>
+          <div style="display:flex;flex-direction:column;gap:6px;padding:10px;border:1px dashed var(--border);border-radius:12px;">
+            <input type="text" id="fPuIdentifiant" placeholder="Identifiant (email recommandé)" style="width:100%;padding:8px 10px;border-radius:8px;border:1px solid var(--border);background:rgba(255,255,255,0.04);color:var(--texte);font-size:12px;outline:none;">
+            <input type="password" id="fPuMotDePasse" placeholder="Mot de passe (8 caractères min.)" style="width:100%;padding:8px 10px;border-radius:8px;border:1px solid var(--border);background:rgba(255,255,255,0.04);color:var(--texte);font-size:12px;outline:none;">
+            <select id="fPuRole" style="width:100%;padding:8px 10px;border-radius:8px;border:1px solid var(--border);background:rgba(255,255,255,0.04);color:var(--texte);font-size:12px;outline:none;">
+              <option value="TENANT_ADMIN">Admin client</option>
+              <option value="TECHNICIEN">Technicien</option>
+              <option value="COMMERCIAL">Commercial</option>
+              <option value="CLIENT">Client</option>
+            </select>
+          </div>
+        </div>
+
         <label>Nombre d'agences (1 à 10)</label>
         <select id="fNbAgences">
           <option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option>
@@ -1825,6 +1839,7 @@ function chargerDansFormulaire(id){
   if (!c) return;
   var f = c.fields || {};
   editingId = id;
+  document.getElementById("fPremierUtilisateurBloc").style.display = "none";
   document.getElementById("formTitle").textContent = f["Nom client"] || "Modifier";
   document.getElementById("fNom").value = f["Nom client"] || "";
   document.getElementById("fSlug").value = f["Slug"] || "";
@@ -2274,8 +2289,12 @@ function reinitialiserFormulaire(){
   document.getElementById("fC1").value = "#22C55E";
   document.getElementById("fC2").value = "#111111";
   setModulesActifs([]);
+  document.getElementById("fPremierUtilisateurBloc").style.display = "block";
+  document.getElementById("fPuIdentifiant").value = "";
+  document.getElementById("fPuMotDePasse").value = "";
+  document.getElementById("fPuRole").value = "TENANT_ADMIN";
   document.getElementById("formTitle").textContent = "Nouveau client";
-  document.getElementById("submitBtn").textContent = "Créer le client";
+  document.getElementById("submitBtn").textContent = "Créer l'entreprise";
   document.getElementById("cancelBtn").style.display = "none";
   document.getElementById("printBtn").style.display = "none";
   document.getElementById("deleteBtn").style.display = "none";
@@ -2324,20 +2343,60 @@ document.getElementById("clientForm").addEventListener("submit", function(e){
   fetch(url, { method: method, headers: {"Content-Type":"application/json"}, body: JSON.stringify(body) })
     .then(function(r){ if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
     .then(function(data){
-      msg.className = "msg ok"; msg.textContent = "Enregistré.";
       if (editingId){
+        msg.className = "msg ok"; msg.textContent = "Enregistré.";
         chargerClients();
-      } else {
-        // Nouveau client : on reste sur sa fiche (au lieu de tout reinitialiser
-        // en vide) pour pouvoir enchainer directement sur le devis commercial,
-        // sans repasser par la liste.
-        var nouveauRec = data.records && data.records[0];
-        if (nouveauRec){
-          clients.push(nouveauRec);
-          chargerDansFormulaire(nouveauRec.id);
-        }
-        chargerClients();
+        return;
       }
+      // Nouveau client : on reste sur sa fiche (au lieu de tout reinitialiser
+      // en vide) pour pouvoir enchainer directement sur le devis commercial,
+      // sans repasser par la liste. Provisioning complet en une action :
+      // le Client vient d'etre cree ; chargerDansFormulaire() declenche deja
+      // automatiquement la creation des Agences manquantes (mecanisme
+      // existant, synchroniserAgences) ; on enchaine ici uniquement la
+      // creation du premier utilisateur si les champs ont ete remplis.
+      // Aucune etape n'invente de donnees : Catalogue/Grille MO/
+      // Questionnaire SAV restent hors de ce provisioning (constate sans
+      // template existant).
+      var nouveauRec = data.records && data.records[0];
+      if (!nouveauRec) { msg.className = "msg err"; msg.textContent = "Création échouée : réponse inattendue."; return; }
+      clients.push(nouveauRec);
+      var puIdentifiant = document.getElementById("fPuIdentifiant").value.trim();
+      var puMotDePasse = document.getElementById("fPuMotDePasse").value;
+      var puRole = document.getElementById("fPuRole").value;
+      chargerDansFormulaire(nouveauRec.id); // Agences : declenchees automatiquement (existant)
+      chargerClients();
+      if (!puIdentifiant && !puMotDePasse) {
+        msg.className = "msg ok"; msg.textContent = "Client créé, agences en cours de création. Aucun compte utilisateur demandé.";
+        return;
+      }
+      if (!puIdentifiant || !puMotDePasse) {
+        msg.className = "msg err"; msg.textContent = "Client créé, agences en cours de création. ⚠️ Compte utilisateur NON créé : identifiant et mot de passe requis ensemble.";
+        return;
+      }
+      msg.className = "msg"; msg.textContent = "Client créé, agences en cours de création. Création du premier compte utilisateur…";
+      fetch("/api/verif-securite", {
+        method: "POST", headers: {"Content-Type":"application/json"},
+        body: JSON.stringify({ action: "creer_utilisateur", identifiant: puIdentifiant, motDePasse: puMotDePasse, tenantId: nouveauRec.id, role: puRole })
+      })
+        .then(function(r){ return r.json().then(function(d){ return { ok: r.ok, data: d }; }); })
+        .then(function(res){
+          if (!res.ok) {
+            // Echec partiel explicite : le client et les agences existent
+            // deja, mais on ne pretend jamais que le provisioning est
+            // termine si cette derniere etape a echoue.
+            msg.className = "msg err";
+            msg.textContent = "Client créé, agences en cours de création. ⚠️ Compte utilisateur NON créé : " + (res.data.erreur || "erreur inconnue") + ". À créer manuellement dans « Comptes utilisateurs ».";
+            return;
+          }
+          msg.className = "msg ok";
+          msg.textContent = "Entreprise créée : client, agences et premier compte utilisateur (" + puIdentifiant + ") prêts.";
+          chargerUtilisateursClient(nouveauRec.id);
+        })
+        .catch(function(){
+          msg.className = "msg err";
+          msg.textContent = "Client créé, agences en cours de création. ⚠️ Compte utilisateur NON créé (erreur réseau). À créer manuellement dans « Comptes utilisateurs ».";
+        });
     })
     .catch(function(err){
       msg.className = "msg err"; msg.textContent = "Erreur : " + err.message;
