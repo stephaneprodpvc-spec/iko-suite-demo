@@ -898,7 +898,17 @@ function ModalConcepteur({ onClose, onSuccess }) {
       const agencesResultantes = Array.from({length:nombre}, (_,i) => "Agence "+(i+1));
       const emailsUtiles = {};
       agencesResultantes.forEach(a => { if (emails[a]) emailsUtiles[a] = emails[a]; });
-      const cfg = { emailsTechnicien: emailsUtiles, couleurAccent: couleur, logoUrl: logoUrl.trim(), techniciens };
+      // Vestige retire (ancien mecanisme de mot de passe technicien, jamais
+      // utilise par technicien.html - remplace par les comptes reels de la
+      // table Utilisateurs) : on s'assure qu'aucun "motDePasse" residuel
+      // eventuellement encore present dans l'etat charge depuis une
+      // ancienne sauvegarde ne soit jamais reecrit.
+      const techniciensSansMotDePasse = {};
+      Object.keys(techniciens).forEach(a => {
+        const { motDePasse, ...reste } = techniciens[a] || {};
+        techniciensSansMotDePasse[a] = reste;
+      });
+      const cfg = { emailsTechnicien: emailsUtiles, couleurAccent: couleur, logoUrl: logoUrl.trim(), techniciens: techniciensSansMotDePasse };
 
       if (window.IKO_CLIENT_ID) {
         // Un client precis est charge (?client=slug) : ses reglages
@@ -967,7 +977,6 @@ function ModalConcepteur({ onClose, onSuccess }) {
           const ouverte = agenceOuverte === i;
           const t = techniciens[a] || {};
           const emailRempli = !!(emails[a] || "").trim();
-          const compteRempli = !!((t.prenom||"").trim() || (t.nom||"").trim() || (t.motDePasse||"").trim());
           return (
             <div key={a} style={{border:"1px solid "+C.border,borderRadius:"10px",marginBottom:"8px",overflow:"hidden"}}>
               <button type="button" onClick={() => setAgenceOuverte(ouverte ? -1 : i)}
@@ -975,7 +984,6 @@ function ModalConcepteur({ onClose, onSuccess }) {
                 <span style={{display:"flex",alignItems:"center",gap:"8px"}}>
                   <span style={{fontSize:"12px",fontWeight:"800",color:C.white}}>{a}</span>
                   <span title={emailRempli ? "Email renseigné" : "Email non renseigné"} style={{width:"6px",height:"6px",borderRadius:"50%",background:emailRempli?C.vert:C.border,display:"inline-block"}}/>
-                  <span title={compteRempli ? "Compte technicien renseigné" : "Compte technicien non renseigné"} style={{width:"6px",height:"6px",borderRadius:"50%",background:compteRempli?C.vert:C.border,display:"inline-block"}}/>
                 </span>
                 <span style={{fontSize:"11px",color:C.muted,transform:ouverte?"rotate(90deg)":"none",transition:"transform 0.15s"}}>▸</span>
               </button>
@@ -990,7 +998,6 @@ function ModalConcepteur({ onClose, onSuccess }) {
                     <input type="text" value={t.nom || ""} onChange={e => setTech(a, "nom", e.target.value)} placeholder="Nom" style={{...inputStyle,flex:1}}/>
                   </div>
                   <div style={{display:"flex",gap:"8px",alignItems:"center"}}>
-                    <input type="text" value={t.motDePasse || ""} onChange={e => setTech(a, "motDePasse", e.target.value)} placeholder="Mot de passe d'accès" style={{...inputStyle,flex:1}}/>
                     <label style={{display:"flex",alignItems:"center",gap:"5px",fontSize:"11px",color:C.muted,whiteSpace:"nowrap"}}>
                       <input type="checkbox" checked={!!t.bloque} onChange={e => setTech(a, "bloque", e.target.checked)}/>
                       Bloqué
