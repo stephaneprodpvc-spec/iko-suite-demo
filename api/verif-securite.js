@@ -46,7 +46,7 @@
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
-import { verifierOrigine, verifierDebit, reponseBloquee } from "./_securite.js";
+import { verifierOrigine, verifierDebit, reponseBloquee, verifierSession } from "./_securite.js";
 
 const AIRTABLE_BASE = "appkI8RKHkYNWY86U";
 const CONFIG_RECORD_ID = "rec45X231n9dXnyaU";
@@ -249,6 +249,18 @@ async function gererLogout(req, res) {
 // l'admin, pas plus : a durcir en priorite des que l'auth admin reelle
 // sera active (cf. failles documentees dans les memoires du projet).
 async function gererCreationUtilisateur(req, res) {
+  // Correctif AUTH #009 : le provisioning n'avait AUCUNE verification
+  // serveur (ni session, ni role) — seul admin.html masquait le formulaire
+  // aux non-admins cote client. Un appel direct a cette action, sans
+  // session ou avec une session non-admin, pouvait creer un compte
+  // rattache a n'importe quel tenantId fourni par le navigateur. Reutilise
+  // verifierSession, deja utilise a l'identique dans api/airtable-proxy.js
+  // (AUTH #007/#008) : aucune nouvelle logique d'authentification.
+  const session = verifierSession(req);
+  if (!session || session.role !== "SUPER_ADMIN_IKO") {
+    return res.status(403).json({ erreur: "Accès refusé : droits administrateur requis pour créer un compte." });
+  }
+
   const { identifiant, motDePasse, tenantId, role } = req.body || {};
   if (!identifiant || !motDePasse || !tenantId || !role) {
     return res.status(400).json({ erreur: "Identifiant, mot de passe, client et rôle sont requis." });
@@ -258,6 +270,23 @@ async function gererCreationUtilisateur(req, res) {
   }
   if (String(motDePasse).length < 8) {
     return res.status(400).json({ erreur: "Le mot de passe doit contenir au moins 8 caractères." });
+  }
+
+  // Le tenantId reste choisi par l'admin (SUPER_ADMIN_IKO gere plusieurs
+  // clients par nature — ce n'est pas un cas a restreindre a une session
+  // mono-tenant), mais ne doit jamais etre pris pour argent comptant :
+  // on verifie qu'il correspond a un VRAI enregistrement Clients avant de
+  // rattacher un compte a ce tenant.
+  try {
+    const rTenant = await fetch(
+      "https://api.airtable.com/v0/" + AIRTABLE_BASE + "/Clients/" + tenantId,
+      { headers: airtableHeaders() }
+    );
+    if (!rTenant.ok) {
+      return res.status(400).json({ erreur: "Client (tenant) introuvable." });
+    }
+  } catch (e) {
+    return res.status(502).json({ erreur: "Erreur en vérifiant le client (tenant)." });
   }
 
   const existant = await lireUtilisateurParIdentifiant(identifiant);
