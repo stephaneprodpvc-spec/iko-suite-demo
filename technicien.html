@@ -850,6 +850,7 @@ function ModalAction({ ticket, onClose, onDone }) {
   const [newDate, setNewDate] = React.useState("");
   const [newCreneau, setNewCreneau] = React.useState("Matin (8h30 — 12h00)");
   const [saving, setSaving] = React.useState(false);
+  const [erreurFermeture, setErreurFermeture] = React.useState("");
   const [tags, setTags] = React.useState([]);
   const [explication, setExplication] = React.useState("");
   const today = new Date().toISOString().split('T')[0];
@@ -1122,7 +1123,7 @@ function ModalAction({ ticket, onClose, onDone }) {
       devis: "Non résolu - pièce à commander",
     };
     const statutIntervention = STATUT_PAR_MODE[mode];
-    if (!statutIntervention) return;
+    if (!statutIntervention) return { ok: true, skip: true }; // mode sans intervention (annuler, debloquer) : rien à créer, pas une erreur
     // Name (champ primaire d'Interventions SAV) doit TOUJOURS etre rempli :
     // le rollup "Nb Passages Technicien" sur Tickets SAV est un
     // COUNTA(Name) - un Name vide n'est pas compte par COUNTA, ce qui
@@ -1148,12 +1149,30 @@ function ModalAction({ ticket, onClose, onDone }) {
     // Airtable si le detail est necessaire, ou par une evolution future
     // qui typera chaque ligne a la source.
     try {
-      await fetch('/api/airtable/tenant/Interventions%20SAV', {
+      const r = await fetch('/api/airtable/tenant/Interventions%20SAV', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ fields: fieldsIntervention }),
       });
-    } catch (e) { console.error('Erreur création intervention SAV', e); }
+      if (!r.ok) {
+        // Correctif A4 : une reponse HTTP 4xx/5xx ne leve PAS d'exception
+        // avec fetch — sans cette verification explicite, une intervention
+        // refusee cote serveur (ticket introuvable, tenant invalide, erreur
+        // Airtable...) passait totalement inapercue. On journalise le
+        // detail retourne par le serveur et on remonte un resultat clair
+        // a confirmer(), qui decide de l'affichage.
+        let detail = "";
+        try { const data = await r.json(); detail = data?.error || ""; } catch (e) { /* corps non-JSON, ignore */ }
+        console.error('Échec création intervention SAV — HTTP ' + r.status + (detail ? ' : ' + detail : ''));
+        return { ok: false, statut: r.status, detail };
+      }
+      return { ok: true };
+    } catch (e) {
+      // Erreur reseau (pas de reponse HTTP du tout) : distincte du cas
+      // ci-dessus, journalisee separement mais remontee de la meme facon.
+      console.error('Erreur réseau lors de la création de l’intervention SAV', e);
+      return { ok: false, statut: null, detail: String(e) };
+    }
   };
 
   const confirmer = async () => {
@@ -1162,7 +1181,7 @@ function ModalAction({ ticket, onClose, onDone }) {
     if (mode === "annuler" && !commentaire.trim()) return;
     if (mode === "devis" && !explication.trim()) return;
     if (mode === "devis_place" && (!lignesAuto.length || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailAuto.trim()) || !modePaiementPlace)) return;
-    setSaving(true);
+    setSaving(true); setErreurFermeture("");
     try {
       const fields = {};
       let dateLabelDeblocage = "";
@@ -1222,25 +1241,51 @@ function ModalAction({ ticket, onClose, onDone }) {
         fields["IKO Diagnostic Date"] = new Date().toISOString();
         fields["IKO Utilisé"] = true;
       }
-      await fetch('/api/airtable/tenant/Tickets%20SAV/'+ticket.id, {
+      const rFermeture = await fetch('/api/airtable/tenant/Tickets%20SAV/'+ticket.id, {
         method:'PATCH',
         headers:{'Content-Type':'application/json'},
         body:JSON.stringify({fields})
       });
+      if (!rFermeture.ok) {
+        // Correctif A5 : si le PATCH de fermeture du ticket lui-même
+        // échoue côté serveur, on doit s'arrêter ici — ni créer
+        // d'intervention (le ticket n'est pas réellement fermé), ni
+        // appeler onDone (qui fermerait la modale en laissant croire à
+        // une fermeture réussie). Le technicien reste sur l'écran, voit
+        // l'erreur, et peut réessayer.
+        let detailFermeture = "";
+        try { const dataFermeture = await rFermeture.json(); detailFermeture = dataFermeture?.error || ""; } catch (e) { /* corps non-JSON, ignore */ }
+        console.error('Échec fermeture ticket SAV — HTTP ' + rFermeture.status + (detailFermeture ? ' : ' + detailFermeture : ''));
+        setErreurFermeture("La fermeture du ticket a échoué (" + rFermeture.status + "). Réessayez." + (detailFermeture ? " — " + detailFermeture : ""));
+        setSaving(false);
+        return;
+      }
       // Creation de l'intervention SAV (passage technicien) : apres le
       // PATCH du ticket, avant les effets secondaires (email, webhook),
       // pour ne pas retarder la fermeture du ticket si Airtable est lent.
-      try {
-        let diagnosticTexte = "";
-        if (mode === "terminer" || mode === "devis_place") {
-          diagnosticTexte = resultatDiagnostic ? formaterTexteDiagnosticMax(resultatDiagnostic) : (commentaire || "");
-        } else if (mode === "replanifier") {
-          diagnosticTexte = commentaire || "";
-        } else if (mode === "devis") {
-          diagnosticTexte = fields.Diagnostic || "";
-        }
-        await creerInterventionAuto(mode, diagnosticTexte);
-      } catch (e) { console.error('Erreur création intervention SAV', e); }
+      let diagnosticTexte = "";
+      if (mode === "terminer" || mode === "devis_place") {
+        diagnosticTexte = resultatDiagnostic ? formaterTexteDiagnosticMax(resultatDiagnostic) : (commentaire || "");
+      } else if (mode === "replanifier") {
+        diagnosticTexte = commentaire || "";
+      } else if (mode === "devis") {
+        diagnosticTexte = fields.Diagnostic || "";
+      }
+      const resultatIntervention = await creerInterventionAuto(mode, diagnosticTexte);
+      if (!resultatIntervention.ok) {
+        // Correctif A4 : le ticket EST fermé avec succès a ce stade — on ne
+        // bloque donc pas le technicien, mais on ne doit surtout pas lui
+        // laisser croire que l'intervention a été enregistrée. La modale
+        // se ferme juste après (onDone), donc un state React ne serait pas
+        // vu à temps : window.alert garantit que le technicien voit
+        // l'avertissement avant de passer au ticket suivant.
+        window.alert(
+          "Le ticket est fermé, mais l'enregistrement de l'intervention (passage technicien) a échoué" +
+          (resultatIntervention.statut ? " (erreur " + resultatIntervention.statut + ")" : " (erreur réseau)") +
+          (resultatIntervention.detail ? " : " + resultatIntervention.detail : "") +
+          ". Signalez-le si besoin — les statistiques SAV de ce ticket seront incomplètes."
+        );
+      }
       if (mode === "replanifier" && ticket.fields?.Email) {
         try {
           await fetch(WEBHOOK, {
@@ -1297,6 +1342,11 @@ function ModalAction({ ticket, onClose, onDone }) {
           <div style={{fontSize:"12px",color:C.muted,marginTop:"3px"}}>{ticket.fields?.Produit} · {ticket.fields?.["Problème"]}</div>
           <div style={{fontSize:"12px",color:C.text,marginTop:"6px"}}>📅 {ticket.fields?.["Créneau"]}</div>
           {ticket.fields?.Adresse && <div style={{fontSize:"12px",color:C.muted,marginTop:"2px"}}>📍 {ticket.fields?.Adresse}</div>}
+          {erreurFermeture && (
+            <div style={{marginTop:"8px",padding:"8px 10px",background:"rgba(220,38,38,0.1)",border:"1px solid #DC2626",borderRadius:"8px",fontSize:"11px",color:"#DC2626",fontWeight:"700"}}>
+              ⚠️ {erreurFermeture}
+            </div>
+          )}
           <div style={{display:"flex",alignItems:"center",gap:"8px",marginTop:"8px"}}>
             <input id={"photoTerrain-" + ticket.id} type="file" accept="image/*" capture="environment" style={{display:"none"}}
               onChange={e => { const f = e.target.files?.[0]; e.target.value = ""; if (f) ajouterPhotoTerrain(f); }}/>

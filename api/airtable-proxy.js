@@ -645,23 +645,51 @@ export default async function handler(req, res) {
       } else if (req.method === 'POST') {
         if (!req.body) req.body = {};
         if (!req.body.fields) req.body.fields = {};
+        // AUTH #008 correctif A1 : Ticket SAV obligatoire. Sans lui, aucun
+        // moyen de garantir qu'une intervention se rattache reellement a un
+        // dossier existant du tenant appelant - on refuse plutot que de
+        // creer un enregistrement orphelin (fausserait Nb Passages
+        // Technicien / Cout SAV Reel sans que rien ne le signale).
+        const ticketLieId = Array.isArray(req.body.fields['Ticket SAV']) ? req.body.fields['Ticket SAV'][0] : null;
+        if (!ticketLieId) {
+          return res.status(400).json({ error: "Ticket SAV obligatoire pour créer une intervention." });
+        }
         // Verification que le ticket lie appartient au meme tenant AVANT
         // toute creation : sans ca, un ticket_id fourni par erreur (ou de
         // mauvaise foi) pourrait rattacher une intervention au dossier
         // d'un autre client.
-        const ticketLieId = Array.isArray(req.body.fields['Ticket SAV']) ? req.body.fields['Ticket SAV'][0] : null;
-        if (ticketLieId) {
+        try {
+          const rTicketCheck = await fetch('https://api.airtable.com/v0/' + baseId + '/Tickets%20SAV/' + ticketLieId, { headers });
+          if (!rTicketCheck.ok) return res.status(403).json({ error: 'Ticket SAV lié introuvable.' });
+          const recTicketCheck = await rTicketCheck.json();
+          const compteClientTicket = (recTicketCheck.fields || {})['Compte client'];
+          const idsTicket = Array.isArray(compteClientTicket) ? compteClientTicket : (compteClientTicket ? [compteClientTicket] : []);
+          if (!idsTicket.includes(session.tenantId)) {
+            return res.status(403).json({ error: "Accès refusé : ce ticket n'appartient pas à votre tenant." });
+          }
+        } catch (err) {
+          return res.status(502).json({ error: 'Erreur en vérifiant le ticket lié.', details: String(err) });
+        }
+        // AUTH #008 correctif A2 : meme principe pour le Technicien fourni,
+        // si present. Sans ce controle, un appel API forge (session valide
+        // mais payload trafique) pourrait lier l'intervention a un compte
+        // Utilisateurs d'un AUTRE tenant - jamais atteignable en usage
+        // normal (IKO_USER_ID vient du JWT du technicien lui-meme, non
+        // falsifiable sans le secret de signature), mais le serveur ne doit
+        // jamais faire confiance a une valeur fournie par le navigateur.
+        const technicienId = Array.isArray(req.body.fields['Technicien']) ? req.body.fields['Technicien'][0] : null;
+        if (technicienId) {
           try {
-            const rTicketCheck = await fetch('https://api.airtable.com/v0/' + baseId + '/Tickets%20SAV/' + ticketLieId, { headers });
-            if (!rTicketCheck.ok) return res.status(403).json({ error: 'Ticket SAV lié introuvable.' });
-            const recTicketCheck = await rTicketCheck.json();
-            const compteClientTicket = (recTicketCheck.fields || {})['Compte client'];
-            const idsTicket = Array.isArray(compteClientTicket) ? compteClientTicket : (compteClientTicket ? [compteClientTicket] : []);
-            if (!idsTicket.includes(session.tenantId)) {
-              return res.status(403).json({ error: "Accès refusé : ce ticket n'appartient pas à votre tenant." });
+            const rTechCheck = await fetch('https://api.airtable.com/v0/' + baseId + '/Utilisateurs/' + technicienId, { headers });
+            if (!rTechCheck.ok) return res.status(403).json({ error: 'Technicien introuvable.' });
+            const recTechCheck = await rTechCheck.json();
+            const tenantTech = (recTechCheck.fields || {})['tenantId'];
+            const idsTech = Array.isArray(tenantTech) ? tenantTech : (tenantTech ? [tenantTech] : []);
+            if (!idsTech.includes(session.tenantId)) {
+              return res.status(403).json({ error: "Accès refusé : ce technicien n'appartient pas à votre tenant." });
             }
           } catch (err) {
-            return res.status(502).json({ error: 'Erreur en vérifiant le ticket lié.', details: String(err) });
+            return res.status(502).json({ error: 'Erreur en vérifiant le technicien lié.', details: String(err) });
           }
         }
         req.body.fields['Compte client'] = [session.tenantId];
