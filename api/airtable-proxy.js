@@ -348,6 +348,58 @@ export default async function handler(req, res) {
   // Bloque inconditionnellement l'acces a la table Utilisateurs via ce
   // proxy, quelle que soit la session (voir commentaire de tete de fichier).
   const premierSegment = subPathRaw.split('/').filter(Boolean)[0] || '';
+
+  // AUTH #013 — Exception étroite au blocage générique ci-dessous (qui
+  // reste inchangé pour tout le reste : autre rôle, autre méthode, pas de
+  // session). Seul un SUPER_ADMIN_IKO peut GET (liste) ou PATCH (Statut
+  // uniquement) sur Utilisateurs — jamais "Hash mot de passe" ni
+  // "Dernier tokenId refresh valide", ni aucun autre champ, ni en lecture
+  // ni en écriture. admin.html appelle déjà /api/airtable/Utilisateurs
+  // (inchangé, non modifié) : c'est cette route exacte qui est ici
+  // autorisée, à la marge, pour ce seul rôle et ces deux méthodes.
+  if (premierSegment.toLowerCase() === 'utilisateurs' && session && session.role === 'SUPER_ADMIN_IKO') {
+    const CHAMPS_UTILISATEURS_SURS = ['Identifiant', 'tenantId', 'Rôle', 'Statut', 'Échecs de connexion', 'Bloqué jusqu\'à', 'Dernière connexion'];
+    const segmentsAU = subPathRaw.split('/').filter(Boolean);
+    const recordIdAU = segmentsAU[1];
+
+    if (req.method === 'GET' && !recordIdAU) {
+      const qs = new URLSearchParams(rest);
+      CHAMPS_UTILISATEURS_SURS.forEach(c => qs.append('fields[]', c));
+      try {
+        const rAU = await fetch('https://api.airtable.com/v0/' + baseId + '/Utilisateurs?' + qs.toString(), { headers });
+        const dataAU = await rAU.json();
+        return res.status(rAU.status).json(dataAU);
+      } catch (err) {
+        return res.status(502).json({ error: 'Erreur en contactant Airtable', details: String(err) });
+      }
+    }
+    if (req.method === 'PATCH' && recordIdAU) {
+      const champsRecus = Object.keys((req.body || {}).fields || {});
+      const champsIllegaux = champsRecus.filter(c => c !== 'Statut');
+      if (champsIllegaux.length > 0) {
+        return res.status(400).json({ error: 'Seul le champ Statut est modifiable via cette route.' });
+      }
+      try {
+        const rAU = await fetch('https://api.airtable.com/v0/' + baseId + '/Utilisateurs/' + recordIdAU, {
+          method: 'PATCH',
+          headers: { ...headers, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fields: { Statut: req.body.fields.Statut } }),
+        });
+        const dataAU = await rAU.json();
+        if (dataAU && dataAU.fields) {
+          const filtre = {};
+          CHAMPS_UTILISATEURS_SURS.forEach(c => { if (c in dataAU.fields) filtre[c] = dataAU.fields[c]; });
+          dataAU.fields = filtre;
+        }
+        return res.status(rAU.status).json(dataAU);
+      } catch (err) {
+        return res.status(502).json({ error: 'Erreur en contactant Airtable', details: String(err) });
+      }
+    }
+    // Autre méthode (POST/DELETE) ou GET avec recordId : hors périmètre
+    // de cette exception, retombe sur le blocage générique ci-dessous.
+  }
+
   if (premierSegment.toLowerCase() === 'utilisateurs') {
     return res.status(403).json({ error: 'Accès à cette ressource non autorisé via ce proxy.' });
   }
