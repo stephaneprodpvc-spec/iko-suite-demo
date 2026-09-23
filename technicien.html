@@ -47,6 +47,7 @@ input:focus, select:focus, textarea:focus { border-color:rgba(218,178,57,0.5); }
 window.IKO_CLIENT_ID = null;
 window.IKO_CLIENT_INFO = null;
 window.IKO_ROLE = null;
+window.IKO_USER_ID = null;
 window.IKO_ACCES_REFUSE = false;
 window.IKO_CLIENT_READY = (async function () {
   try {
@@ -57,6 +58,13 @@ window.IKO_CLIENT_READY = (async function () {
     }
     var session = await resSession.json();
     window.IKO_ROLE = session.role;
+    // session.userId = ID Airtable de l'utilisateur connecte (table
+    // Utilisateurs), directement exploitable comme valeur du champ lien
+    // "Technicien" sur Interventions SAV. Absent pour SUPER_ADMIN_IKO en
+    // navigation ?client=slug (pas de compte technicien associe) : les
+    // interventions crees dans ce cas n'auront pas de technicien lie,
+    // gere plus bas (creerInterventionAuto).
+    window.IKO_USER_ID = session.userId || null;
     if (session.role !== "SUPER_ADMIN_IKO" && session.role !== "TECHNICIEN") {
       window.IKO_ACCES_REFUSE = true;
       return null;
@@ -1099,6 +1107,55 @@ function ModalAction({ ticket, onClose, onDone }) {
     });
   };
 
+  // Bloc Interventions SAV : cree automatiquement une ligne "passage
+  // technicien" pour les modes qui representent une visite reelle. Exclu
+  // volontairement : "annuler" (pas de passage garanti) et "debloquer"
+  // (changement administratif de creneau, pas une visite). Aucune
+  // donnee inventee : duree et couts restent vides quand ils ne sont pas
+  // reellement connus (seul devis_place a des couts reels, via les
+  // lignes du devis sur place deja saisies).
+  const creerInterventionAuto = async (mode, diagnosticTexte) => {
+    const STATUT_PAR_MODE = {
+      terminer: "Résolu",
+      devis_place: "Résolu",
+      replanifier: "Non résolu - RDV à reprogrammer",
+      devis: "Non résolu - pièce à commander",
+    };
+    const statutIntervention = STATUT_PAR_MODE[mode];
+    if (!statutIntervention) return;
+    // Name (champ primaire d'Interventions SAV) doit TOUJOURS etre rempli :
+    // le rollup "Nb Passages Technicien" sur Tickets SAV est un
+    // COUNTA(Name) - un Name vide n'est pas compte par COUNTA, ce qui
+    // laisserait le compteur bloque a 0 meme avec des interventions
+    // reelles. Verifie en conditions reelles sur Airtable avant ce
+    // correctif (creation + suppression d'un enregistrement de test).
+    const fieldsIntervention = {
+      "Name": "INT-" + (ticket.fields?.Name || ticket.id) + "-" + Date.now().toString(36).toUpperCase(),
+      "Ticket SAV": [ticket.id],
+      "Date intervention": new Date().toISOString().slice(0, 10),
+      "Statut intervention": statutIntervention,
+    };
+    if (window.IKO_USER_ID) fieldsIntervention["Technicien"] = [window.IKO_USER_ID];
+    if (diagnosticTexte) fieldsIntervention["Constat / Diagnostic"] = diagnosticTexte;
+    // Compte client est stampe cote serveur (AUTH #008) : jamais envoye
+    // depuis le navigateur.
+    // NB : lignesAuto (devis sur place) ne conserve pas la distinction
+    // produit / main d'oeuvre a ce stade du code (deja agregees en
+    // lignes de devis) : impossible de repartir Coût pièces / Coût main
+    // d'oeuvre de facon fiable sans inventer une regle absente du modele
+    // de donnees. On laisse volontairement ces deux champs vides plutot
+    // que de deviner une repartition — a completer manuellement dans
+    // Airtable si le detail est necessaire, ou par une evolution future
+    // qui typera chaque ligne a la source.
+    try {
+      await fetch('/api/airtable/tenant/Interventions%20SAV', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fields: fieldsIntervention }),
+      });
+    } catch (e) { console.error('Erreur création intervention SAV', e); }
+  };
+
   const confirmer = async () => {
     if (mode === "replanifier" && !newDate) return;
     if (mode === "debloquer" && !newDate) return;
@@ -1170,6 +1227,20 @@ function ModalAction({ ticket, onClose, onDone }) {
         headers:{'Content-Type':'application/json'},
         body:JSON.stringify({fields})
       });
+      // Creation de l'intervention SAV (passage technicien) : apres le
+      // PATCH du ticket, avant les effets secondaires (email, webhook),
+      // pour ne pas retarder la fermeture du ticket si Airtable est lent.
+      try {
+        let diagnosticTexte = "";
+        if (mode === "terminer" || mode === "devis_place") {
+          diagnosticTexte = resultatDiagnostic ? formaterTexteDiagnosticMax(resultatDiagnostic) : (commentaire || "");
+        } else if (mode === "replanifier") {
+          diagnosticTexte = commentaire || "";
+        } else if (mode === "devis") {
+          diagnosticTexte = fields.Diagnostic || "";
+        }
+        await creerInterventionAuto(mode, diagnosticTexte);
+      } catch (e) { console.error('Erreur création intervention SAV', e); }
       if (mode === "replanifier" && ticket.fields?.Email) {
         try {
           await fetch(WEBHOOK, {

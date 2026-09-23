@@ -1884,7 +1884,11 @@ function calculerAnalyticsSAV(tickets) {
   const parProduit = {};
   const parAgence = {};
   const parStatut = {};
+  const parCause = {};
+  const coutParProduit = {};
+  const coutParAgence = {};
   let nbUrgents = 0;
+  let coutSAVGlobal = 0;
   tickets.forEach(t => {
     const produit = (t.fields?.Produit || "").trim();
     if (produit) parProduit[produit] = (parProduit[produit] || 0) + 1;
@@ -1893,6 +1897,18 @@ function calculerAnalyticsSAV(tickets) {
     const statut = t.fields?.Statut || "Nouveau";
     parStatut[statut] = (parStatut[statut] || 0) + 1;
     if (t.fields?.Qualification === "Oui") nbUrgents += 1;
+    const cause = t.fields?.["Cause SAV"];
+    if (cause) parCause[cause] = (parCause[cause] || 0) + 1;
+    // Coût SAV Réel : rollup Airtable (somme des interventions liées à ce
+    // ticket), déjà présent dans t.fields sans appel supplémentaire — 0/
+    // absent tant qu'aucune intervention n'a de coût saisi (honnête, pas
+    // une absence de données à combler).
+    const cout = Number(t.fields?.["Coût SAV Réel"]) || 0;
+    if (cout > 0) {
+      coutSAVGlobal += cout;
+      if (produit) coutParProduit[produit] = (coutParProduit[produit] || 0) + cout;
+      if (agence) coutParAgence[agence] = (coutParAgence[agence] || 0) + cout;
+    }
   });
 
   const topProduits = Object.entries(parProduit).sort((a, b) => b[1] - a[1]).slice(0, 8);
@@ -1900,6 +1916,12 @@ function calculerAnalyticsSAV(tickets) {
   const repartitionAgences = Object.entries(parAgence).sort((a, b) => b[1] - a[1]);
   const repartitionStatuts = Object.entries(parStatut).sort((a, b) => b[1] - a[1]);
   const tauxUrgents = tickets.length ? Math.round(nbUrgents / tickets.length * 100) : 0;
+  // Top causes SAV : uniquement sur les tickets où Cause SAV a été
+  // renseignée (champ facultatif, saisi manuellement) — pas de "Non
+  // renseigné" comptabilisé comme une cause.
+  const topCauses = Object.entries(parCause).sort((a, b) => b[1] - a[1]);
+  const coutSAVParProduit = Object.entries(coutParProduit).sort((a, b) => b[1] - a[1]).slice(0, 8);
+  const coutSAVParAgence = Object.entries(coutParAgence).sort((a, b) => b[1] - a[1]);
 
   // Tendance mensuelle : basée sur le champ Créneau réel (parseDateCreneau,
   // déjà utilisé partout ailleurs dans le dashboard). Regroupement AAAA-MM
@@ -1955,11 +1977,114 @@ function calculerAnalyticsSAV(tickets) {
     return { produit, total, recent, precedent, tendanceProduit };
   });
 
-  return { topProduits, totalAvecAgence, repartitionAgences, repartitionStatuts, tauxUrgents, nbUrgents, tendance, maxTendance, estimationMoisSuivant, produitsRisque };
+  return { topProduits, totalAvecAgence, repartitionAgences, repartitionStatuts, tauxUrgents, nbUrgents, tendance, maxTendance, estimationMoisSuivant, produitsRisque, topCauses, coutSAVGlobal, coutSAVParProduit, coutSAVParAgence };
+}
+
+// ---- Bloc Interventions SAV (taux résolution 1er passage + performance
+// techniciens) : contrairement au reste de calculerAnalyticsSAV, ces deux
+// indicateurs ne sont PAS lisibles depuis les rollups au niveau ticket
+// (ceux-ci donnent un total/compte, pas le détail par passage ni par
+// technicien) — nécessite les enregistrements bruts de la table
+// Interventions SAV, chargés à la demande (voir chargerInterventionsSAV)
+// pour ne pas alourdir le chargement initial du dashboard.
+function calculerPerformanceEtResolution(interventions) {
+  const parTicket = {};
+  interventions.forEach(iv => {
+    const ticketId = Array.isArray(iv.fields?.["Ticket SAV"]) ? iv.fields["Ticket SAV"][0] : null;
+    if (!ticketId) return;
+    if (!parTicket[ticketId]) parTicket[ticketId] = [];
+    parTicket[ticketId].push(iv);
+  });
+  // Définition retenue, explicite : un ticket compte comme "résolu au
+  // premier passage" s'il n'a QU'UNE SEULE intervention enregistrée et
+  // que celle-ci a le statut "Résolu". Un ticket avec 2+ interventions
+  // n'est jamais compté, même si la dernière est résolue.
+  const ticketsAvecIntervention = Object.keys(parTicket);
+  let ticketsResolusPremierPassage = 0;
+  ticketsAvecIntervention.forEach(id => {
+    const ivs = parTicket[id];
+    if (ivs.length === 1 && ivs[0].fields?.["Statut intervention"] === "Résolu") {
+      ticketsResolusPremierPassage += 1;
+    }
+  });
+  const tauxResolutionPremierPassage = ticketsAvecIntervention.length
+    ? Math.round(ticketsResolusPremierPassage / ticketsAvecIntervention.length * 100)
+    : null; // null = non calculable, aucune intervention enregistrée
+
+  const parTechnicien = {};
+  interventions.forEach(iv => {
+    const idTech = Array.isArray(iv.fields?.["Technicien"]) ? iv.fields["Technicien"][0] : null;
+    if (!idTech) return; // intervention sans technicien lié (ex. créée par SUPER_ADMIN_IKO en test) : exclue du classement, pas inventée
+    const nom = iv.fields?.["_technicienIdentifiant"] || idTech;
+    if (!parTechnicien[idTech]) parTechnicien[idTech] = { nom, total: 0, resolus: 0, cout: 0 };
+    parTechnicien[idTech].total += 1;
+    if (iv.fields?.["Statut intervention"] === "Résolu") parTechnicien[idTech].resolus += 1;
+    parTechnicien[idTech].cout += Number(iv.fields?.["Coût total intervention"]) || 0;
+  });
+  const performanceTechniciens = Object.values(parTechnicien)
+    .map(p => ({ ...p, tauxResolution: p.total ? Math.round(p.resolus / p.total * 100) : 0 }))
+    .sort((a, b) => b.total - a.total);
+
+  return { tauxResolutionPremierPassage, performanceTechniciens, totalInterventions: interventions.length };
+}
+
+// ---- Socle prédictif (2/3) : agrégats prêts pour de futures
+// fonctionnalités (évolution des coûts SAV, estimation de durée
+// d'intervention pour le planning IA) — calculés dès maintenant à partir
+// des VRAIES interventions déjà enregistrées, mais qui resteront vides/
+// nulles tant que peu ou pas de données réelles n'existent (Durée (min)
+// n'est pas encore saisie par technicien.html — aucun minuteur
+// d'intervention implémenté à ce jour). Rien n'est estimé ni inventé ici :
+// une valeur nulle ou un tableau vide signifie honnêtement "pas encore
+// assez de données", jamais une approximation.
+function calculerAgregatsPredictifs(interventions) {
+  const maintenant = new Date();
+  const moisLabels = [];
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(maintenant.getFullYear(), maintenant.getMonth() - i, 1);
+    moisLabels.push({ key: d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0"), label: d.toLocaleDateString("fr-FR", { month: "short", year: "2-digit" }) });
+  }
+  const coutParMois = {};
+  const durees = [];
+  interventions.forEach(iv => {
+    const dateStr = iv.fields?.["Date intervention"];
+    if (dateStr) {
+      const d = new Date(dateStr + "T12:00:00");
+      const key = d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0");
+      const cout = Number(iv.fields?.["Coût total intervention"]) || 0;
+      coutParMois[key] = (coutParMois[key] || 0) + cout;
+    }
+    const duree = Number(iv.fields?.["Durée (min)"]);
+    if (duree > 0) durees.push(duree);
+  });
+  const evolutionCoutSAVMensuel = moisLabels.map(m => ({ label: m.label, valeur: coutParMois[m.key] || 0 }));
+  const dureeMoyenneMin = durees.length ? Math.round(durees.reduce((s, v) => s + v, 0) / durees.length) : null;
+
+  return { evolutionCoutSAVMensuel, dureeMoyenneMin, nbEchantillonsDuree: durees.length };
+}
+
+// Chargement à la demande des interventions SAV brutes (route tenant
+// dédiée, AUTH #008) : appelé uniquement à l'ouverture d'un panneau
+// Analytics/Dirigeant, jamais au chargement initial du dashboard —
+// économie de quota Airtable. maxRecords plafonné : suffisant pour une
+// démo/un tenant réel de taille normale, évite un appel disproportionné.
+async function chargerInterventionsSAV() {
+  try {
+    const r = await fetch('/api/airtable/tenant/Interventions%20SAV?maxRecords=200');
+    if (!r.ok) return [];
+    const data = await r.json();
+    return data.records || [];
+  } catch (e) { return []; }
 }
 
 function ModalAnalyticsSAV({ tickets, onClose }) {
-  const { topProduits, totalAvecAgence, repartitionAgences, repartitionStatuts, tauxUrgents, tendance, maxTendance, estimationMoisSuivant } = calculerAnalyticsSAV(tickets);
+  const { topProduits, totalAvecAgence, repartitionAgences, repartitionStatuts, tauxUrgents, tendance, maxTendance, estimationMoisSuivant, topCauses, coutSAVGlobal, coutSAVParProduit, coutSAVParAgence } = calculerAnalyticsSAV(tickets);
+
+  // Interventions SAV brutes : chargées une fois à l'ouverture du panneau
+  // (taux résolution 1er passage + performance techniciens en dépendent).
+  const [interventions, setInterventions] = React.useState(null);
+  React.useEffect(() => { chargerInterventionsSAV().then(setInterventions); }, []);
+  const perfEtResolution = interventions ? calculerPerformanceEtResolution(interventions) : null;
 
   // ---- Socle IA : synthèse direction (mode "synthese_direction") ----
   // Reutilise l'architecture existante (api/chat-dashboard.js, meme
@@ -1986,6 +2111,9 @@ function ModalAnalyticsSAV({ tickets, onClose }) {
             taux_urgents_pct: tauxUrgents,
             tendance_mensuelle: tendance,
             estimation_mois_suivant: estimationMoisSuivant,
+            top_causes_sav: topCauses.map(([c, n]) => ({ cause: c, nb: n })),
+            cout_sav_global: coutSAVGlobal,
+            taux_resolution_premier_passage: perfEtResolution ? perfEtResolution.tauxResolutionPremierPassage : null,
           },
         }),
       });
@@ -2067,11 +2195,81 @@ function ModalAnalyticsSAV({ tickets, onClose }) {
           )}
         </div>
 
-        <div style={{background:"#F3F4F6",border:"1px solid "+C.border,borderRadius:"8px",padding:"10px 12px",fontSize:"11px",color:C.muted,marginBottom:"6px"}}>
-          ⚠️ Causes récurrentes : non calculable — aucun champ de cause ou de malfaçon n'est actuellement enregistré sur les tickets.
+        <div style={{marginBottom:"18px"}}>
+          <div style={{fontSize:"12px",fontWeight:"700",color:C.white,marginBottom:"8px"}}>Top causes SAV</div>
+          {topCauses.length === 0 && <div style={{fontSize:"11px",color:C.muted,fontStyle:"italic"}}>Aucune cause renseignée pour l'instant (champ Cause SAV facultatif, à remplir au fil des tickets).</div>}
+          {topCauses.length > 0 && (
+            <div style={{border:"1px solid "+C.border,borderRadius:"8px",overflow:"hidden"}}>
+              {topCauses.map(([cause, n], i) => (
+                <div key={cause} style={{display:"flex",justifyContent:"space-between",padding:"7px 12px",borderBottom:i<topCauses.length-1?"1px solid "+C.border:"none",fontSize:"12px"}}>
+                  <span>{cause}</span><b style={{color:C.or}}>{n}</b>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
+
+        <div style={{marginBottom:"18px"}}>
+          <div style={{fontSize:"12px",fontWeight:"700",color:C.white,marginBottom:"2px"}}>Coût SAV réel</div>
+          <div style={{fontSize:"11px",color:C.muted,marginBottom:"8px"}}>Somme des interventions chiffrées (Coût pièces + main d'œuvre). 0 tant qu'aucun coût n'est saisi sur une intervention.</div>
+          <div style={{fontSize:"22px",fontWeight:"900",color:C.white,marginBottom:"8px"}}>{coutSAVGlobal.toFixed(2)} €</div>
+          {coutSAVParProduit.length > 0 && (
+            <>
+              <div style={{fontSize:"11px",fontWeight:"700",color:C.text,marginBottom:"4px"}}>Par produit</div>
+              <div style={{border:"1px solid "+C.border,borderRadius:"8px",overflow:"hidden",marginBottom:"8px"}}>
+                {coutSAVParProduit.map(([p, c], i) => (
+                  <div key={p} style={{display:"flex",justifyContent:"space-between",padding:"6px 10px",borderBottom:i<coutSAVParProduit.length-1?"1px solid "+C.border:"none",fontSize:"11.5px"}}>
+                    <span>{p}</span><b>{c.toFixed(2)} €</b>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+          {coutSAVParAgence.length > 0 && (
+            <>
+              <div style={{fontSize:"11px",fontWeight:"700",color:C.text,marginBottom:"4px"}}>Par agence</div>
+              <div style={{border:"1px solid "+C.border,borderRadius:"8px",overflow:"hidden"}}>
+                {coutSAVParAgence.map(([a, c], i) => (
+                  <div key={a} style={{display:"flex",justifyContent:"space-between",padding:"6px 10px",borderBottom:i<coutSAVParAgence.length-1?"1px solid "+C.border:"none",fontSize:"11.5px"}}>
+                    <span>{a}</span><b>{c.toFixed(2)} €</b>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+
+        <div style={{marginBottom:"18px"}}>
+          <div style={{fontSize:"12px",fontWeight:"700",color:C.white,marginBottom:"2px"}}>Taux de résolution au premier passage</div>
+          <div style={{fontSize:"11px",color:C.muted,marginBottom:"8px"}}>Ticket avec une seule intervention enregistrée, résolue dès ce passage.</div>
+          {!interventions && <div style={{fontSize:"11px",color:C.muted,fontStyle:"italic"}}>⏳ Chargement...</div>}
+          {interventions && perfEtResolution.tauxResolutionPremierPassage === null && (
+            <div style={{fontSize:"11px",color:C.muted,fontStyle:"italic"}}>Non calculable pour l'instant : aucune intervention SAV enregistrée.</div>
+          )}
+          {interventions && perfEtResolution.tauxResolutionPremierPassage !== null && (
+            <div style={{fontSize:"22px",fontWeight:"900",color:C.white}}>{perfEtResolution.tauxResolutionPremierPassage}%</div>
+          )}
+        </div>
+
+        <div style={{marginBottom:"18px"}}>
+          <div style={{fontSize:"12px",fontWeight:"700",color:C.white,marginBottom:"8px"}}>Performance techniciens</div>
+          {interventions && perfEtResolution.performanceTechniciens.length === 0 && (
+            <div style={{fontSize:"11px",color:C.muted,fontStyle:"italic"}}>Aucune intervention liée à un technicien identifié pour l'instant.</div>
+          )}
+          {interventions && perfEtResolution.performanceTechniciens.length > 0 && (
+            <div style={{border:"1px solid "+C.border,borderRadius:"8px",overflow:"hidden"}}>
+              {perfEtResolution.performanceTechniciens.map((p, i) => (
+                <div key={p.nom} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 12px",borderBottom:i<perfEtResolution.performanceTechniciens.length-1?"1px solid "+C.border:"none",fontSize:"12px"}}>
+                  <span>{p.nom}</span>
+                  <span style={{color:C.muted}}>{p.total} intervention(s) · {p.tauxResolution}% résolu · {p.cout.toFixed(2)} €</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
         <div style={{background:"#F3F4F6",border:"1px solid "+C.border,borderRadius:"8px",padding:"10px 12px",fontSize:"11px",color:C.muted,marginBottom:"16px"}}>
-          ⚠️ Taux de résolution au premier passage : non calculable — le schéma actuel ne trace pas le nombre de passages technicien par ticket.
+          ℹ️ Ces indicateurs se remplissent progressivement au fil des interventions saisies par les techniciens depuis le module Max — les chiffres à 0 ou "non calculable" reflètent simplement l'absence de données pour l'instant, jamais une estimation.
         </div>
 
         <div style={{borderTop:"1px solid "+C.border,paddingTop:"14px",marginBottom:"14px"}}>
@@ -2104,12 +2302,17 @@ function ModalAnalyticsSAV({ tickets, onClose }) {
    Aucune donnée inventée : tout indicateur sans champ Airtable fiable
    est affiché "non disponible" plutôt qu'estimé. ---- */
 function ModalTableauBordDirigeant({ tickets, stats, onClose }) {
-  const { topProduits, totalAvecAgence, repartitionAgences, repartitionStatuts, tauxUrgents, tendance, maxTendance, estimationMoisSuivant, produitsRisque } = calculerAnalyticsSAV(tickets);
+  const { topProduits, totalAvecAgence, repartitionAgences, repartitionStatuts, tauxUrgents, tendance, maxTendance, estimationMoisSuivant, produitsRisque, topCauses, coutSAVGlobal } = calculerAnalyticsSAV(tickets);
 
   const ticketsDevisPipeline = tickets.filter(t => ["Devis à faire","Devis envoyé","Devis - Suivi","Devis - Attente fournisseur"].includes(t.fields?.Statut));
   const montantDevisEnCours = tickets
     .filter(t => t.fields?.Statut === "Devis envoyé" && typeof t.fields?.["Montant devis"] === "number")
     .reduce((s, t) => s + t.fields["Montant devis"], 0);
+
+  const [interventions, setInterventions] = React.useState(null);
+  React.useEffect(() => { chargerInterventionsSAV().then(setInterventions); }, []);
+  const perfEtResolution = interventions ? calculerPerformanceEtResolution(interventions) : null;
+  const agregatsPredictifs = interventions ? calculerAgregatsPredictifs(interventions) : null;
 
   const [syntheseIA, setSyntheseIA] = React.useState(null);
   const [chargementSynthese, setChargementSynthese] = React.useState(false);
@@ -2132,6 +2335,8 @@ function ModalTableauBordDirigeant({ tickets, stats, onClose }) {
             taux_urgents_pct: tauxUrgents,
             tendance_mensuelle: tendance,
             estimation_mois_suivant: estimationMoisSuivant,
+            top_causes_sav: topCauses.map(([c, n]) => ({ cause: c, nb: n })),
+            cout_sav_global: coutSAVGlobal,
           },
         }),
       });
@@ -2168,6 +2373,8 @@ function ModalTableauBordDirigeant({ tickets, stats, onClose }) {
           <KpiCard label="Devis en attente" value={ticketsDevisPipeline.length}/>
           <KpiCard label="Montant devis envoyés" value={montantDevisEnCours.toFixed(0) + " €"} sub="TTC, statut Devis envoyé"/>
           <KpiCard label="Note client moyenne" value={stats.noteMoyenne ? stats.noteMoyenne.toFixed(1) + " / 5" : "—"} sub={stats.nbNotes + " avis"}/>
+          <KpiCard label="Coût SAV réel" value={coutSAVGlobal.toFixed(0) + " €"} sub="interventions chiffrées"/>
+          <KpiCard label="Résolution 1er passage" value={interventions && perfEtResolution.tauxResolutionPremierPassage !== null ? perfEtResolution.tauxResolutionPremierPassage + "%" : "—"} sub={interventions ? (perfEtResolution.tauxResolutionPremierPassage === null ? "aucune donnée" : "") : "chargement..."}/>
         </div>
 
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"16px",marginBottom:"18px"}}>
@@ -2235,18 +2442,28 @@ function ModalTableauBordDirigeant({ tickets, stats, onClose }) {
           )}
         </div>
 
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"10px",marginBottom:"18px"}}>
-          <div style={{background:"#F3F4F6",border:"1px solid "+C.border,borderRadius:"8px",padding:"9px 12px",fontSize:"10.5px",color:C.muted}}>
-            ⚠️ Causes récurrentes SAV : non disponible — aucun champ de cause enregistré sur les tickets.
-          </div>
-          <div style={{background:"#F3F4F6",border:"1px solid "+C.border,borderRadius:"8px",padding:"9px 12px",fontSize:"10.5px",color:C.muted}}>
-            ⚠️ Résolution au 1er passage : non disponible — le nombre de passages technicien n'est pas tracé.
-          </div>
+        <div style={{marginBottom:"18px"}}>
+          <div style={{fontSize:"12px",fontWeight:"700",color:C.white,marginBottom:"8px"}}>Top causes SAV</div>
+          {topCauses.length === 0 && <div style={{fontSize:"11px",color:C.muted,fontStyle:"italic"}}>Aucune cause renseignée pour l'instant.</div>}
+          {topCauses.length > 0 && (
+            <div style={{border:"1px solid "+C.border,borderRadius:"8px",overflow:"hidden"}}>
+              {topCauses.slice(0, 5).map(([cause, n], i) => (
+                <div key={cause} style={{display:"flex",justifyContent:"space-between",padding:"6px 10px",borderBottom:i<4?"1px solid "+C.border:"none",fontSize:"11.5px"}}>
+                  <span>{cause}</span><b style={{color:C.or}}>{n}</b>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
-        <div style={{background:"#F3F4F6",border:"1px solid "+C.border,borderRadius:"8px",padding:"9px 12px",fontSize:"10.5px",color:C.muted,marginBottom:"18px"}}>
-          ⚠️ Estimation des coûts SAV : non disponible — le coût réel d'intervention (pièces + main d'œuvre consommées) n'est pas tracé par ticket, seul le montant des devis envoyés l'est.
-        </div>
+        {agregatsPredictifs && (
+          <div style={{background:"#F3F4F6",border:"1px solid "+C.border,borderRadius:"8px",padding:"9px 12px",fontSize:"10.5px",color:C.muted,marginBottom:"18px"}}>
+            📈 Socle prédictif : {agregatsPredictifs.nbEchantillonsDuree > 0
+              ? "durée moyenne d'intervention ≈ " + agregatsPredictifs.dureeMoyenneMin + " min (sur " + agregatsPredictifs.nbEchantillonsDuree + " intervention(s) chronométrée(s))"
+              : "durée moyenne d'intervention non disponible — aucune intervention chronométrée pour l'instant (prêt à se remplir dès qu'un suivi de durée sera saisi)."}
+            {" "}Évolution du coût SAV sur {agregatsPredictifs.evolutionCoutSAVMensuel.filter(m => m.valeur > 0).length} des 6 derniers mois — historique en cours de constitution.
+          </div>
+        )}
 
         <div style={{borderTop:"1px solid "+C.border,paddingTop:"14px",marginBottom:"14px"}}>
           <div style={{fontSize:"12px",fontWeight:"700",color:C.white,marginBottom:"8px"}}>Synthèse IA &amp; recommandations</div>

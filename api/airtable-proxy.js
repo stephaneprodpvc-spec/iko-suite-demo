@@ -307,8 +307,12 @@ export default async function handler(req, res) {
   // ou non, puisque ces tables sont déjà protégées sur leur route brute.
   const routeTenantPlanningCommercial = cheminBrut === 'tenant/Planning Commercial' || cheminBrut.startsWith('tenant/Planning Commercial/');
   const routeTenantRdvCommercial = cheminBrut === 'tenant/RDV Commercial' || cheminBrut.startsWith('tenant/RDV Commercial/');
+  // AUTH #008 — même principe de préfixe pour "Interventions SAV" : table
+  // 100% interne (technicien.html), aucun usage public, protection réelle
+  // dans le bloc AUTH #008 plus bas.
+  const routeTenantInterventionsSAV = cheminBrut === 'tenant/Interventions SAV' || cheminBrut.startsWith('tenant/Interventions SAV/');
 
-  const subPathRaw = (routeTenantTickets || routeTenantPlanningCommercial || routeTenantRdvCommercial)
+  const subPathRaw = (routeTenantTickets || routeTenantPlanningCommercial || routeTenantRdvCommercial || routeTenantInterventionsSAV)
     ? cheminBrut.slice('tenant/'.length)
     : cheminBrut;
   const baseId = process.env.AIRTABLE_BASE_ID || 'appkI8RKHkYNWY86U'; // base démo Iko Suite
@@ -578,6 +582,90 @@ export default async function handler(req, res) {
       } else {
         // PATCH/DELETE sans recordId, ou toute autre méthode : aucun usage
         // légitime connu — refusé par prudence, pas de règle inventée.
+        return res.status(400).json({ error: 'Requête invalide pour cette table.' });
+      }
+    }
+    // SUPER_ADMIN_IKO : accès global conservé, aucune restriction ni stamping.
+  }
+
+  // AUTH #008 (Chantier Interventions SAV) — "Interventions SAV" : même
+  // modèle STRICT que AUTH #007 (Planning Commercial) ci-dessus — session
+  // obligatoire, tenant résolu uniquement depuis session.tenantId, échec
+  // fermé sur tout enregistrement sans tenant. Différences : pas de
+  // vérification de module (fonctionnalité SAV cœur, pas un module
+  // optionnel), et vérification supplémentaire que le "Ticket SAV" lié
+  // (en écriture) appartient bien au même tenant — une intervention ne
+  // doit jamais pouvoir être rattachée au ticket d'un autre client.
+  if (premierSegment === 'Interventions SAV') {
+    if (!session) {
+      return res.status(401).json({ error: 'Authentification requise pour accéder à Interventions SAV.' });
+    }
+    if (session.role !== 'SUPER_ADMIN_IKO') {
+      if (!session.tenantId) {
+        return res.status(403).json({ error: 'Accès refusé : session sans tenant valide.' });
+      }
+      let recClientSessionISAV;
+      try {
+        const rClientSessionISAV = await fetch('https://api.airtable.com/v0/' + baseId + '/Clients/' + session.tenantId, { headers });
+        if (!rClientSessionISAV.ok) return res.status(403).json({ error: 'Accès refusé : tenant de session introuvable.' });
+        recClientSessionISAV = await rClientSessionISAV.json();
+      } catch (err) {
+        return res.status(502).json({ error: 'Erreur en résolvant le tenant de session.', details: String(err) });
+      }
+      const segmentsISAV = subPathRaw.split('/').filter(Boolean);
+      const recordIdISAV = segmentsISAV[1];
+
+      if (recordIdISAV) {
+        let recISAV;
+        try {
+          const rISAV = await fetch('https://api.airtable.com/v0/' + baseId + '/' + encodeURIComponent(premierSegment) + '/' + recordIdISAV, { headers });
+          if (!rISAV.ok) {
+            const errData = await rISAV.json().catch(() => ({}));
+            return res.status(rISAV.status).json(errData);
+          }
+          recISAV = await rISAV.json();
+        } catch (err) {
+          return res.status(502).json({ error: 'Erreur en vérifiant la propriété tenant de cette intervention.', details: String(err) });
+        }
+        const valeurCompteClientISAV = (recISAV.fields || {})['Compte client'];
+        const idsLiesISAV = Array.isArray(valeurCompteClientISAV) ? valeurCompteClientISAV : (valeurCompteClientISAV ? [valeurCompteClientISAV] : []);
+        if (!idsLiesISAV.includes(session.tenantId)) {
+          return res.status(403).json({ error: "Accès refusé : cette intervention n'appartient pas à votre tenant." });
+        }
+        if (req.method === 'PATCH') {
+          if (!req.body) req.body = {};
+          if (!req.body.fields) req.body.fields = {};
+          req.body.fields['Compte client'] = [session.tenantId];
+        }
+      } else if (req.method === 'GET') {
+        const nomTenantISAV = (recClientSessionISAV.fields || {})['Nom client'];
+        if (!nomTenantISAV) return res.status(403).json({ error: 'Accès refusé : tenant de session incomplet.' });
+        const formuleTenantISAV = 'FIND("' + String(nomTenantISAV).replace(/"/g, '\\"') + '", ARRAYJOIN({Compte client}))';
+        rest.filterByFormula = rest.filterByFormula ? 'AND(' + rest.filterByFormula + ', ' + formuleTenantISAV + ')' : formuleTenantISAV;
+      } else if (req.method === 'POST') {
+        if (!req.body) req.body = {};
+        if (!req.body.fields) req.body.fields = {};
+        // Verification que le ticket lie appartient au meme tenant AVANT
+        // toute creation : sans ca, un ticket_id fourni par erreur (ou de
+        // mauvaise foi) pourrait rattacher une intervention au dossier
+        // d'un autre client.
+        const ticketLieId = Array.isArray(req.body.fields['Ticket SAV']) ? req.body.fields['Ticket SAV'][0] : null;
+        if (ticketLieId) {
+          try {
+            const rTicketCheck = await fetch('https://api.airtable.com/v0/' + baseId + '/Tickets%20SAV/' + ticketLieId, { headers });
+            if (!rTicketCheck.ok) return res.status(403).json({ error: 'Ticket SAV lié introuvable.' });
+            const recTicketCheck = await rTicketCheck.json();
+            const compteClientTicket = (recTicketCheck.fields || {})['Compte client'];
+            const idsTicket = Array.isArray(compteClientTicket) ? compteClientTicket : (compteClientTicket ? [compteClientTicket] : []);
+            if (!idsTicket.includes(session.tenantId)) {
+              return res.status(403).json({ error: "Accès refusé : ce ticket n'appartient pas à votre tenant." });
+            }
+          } catch (err) {
+            return res.status(502).json({ error: 'Erreur en vérifiant le ticket lié.', details: String(err) });
+          }
+        }
+        req.body.fields['Compte client'] = [session.tenantId];
+      } else {
         return res.status(400).json({ error: 'Requête invalide pour cette table.' });
       }
     }
@@ -998,6 +1086,45 @@ export default async function handler(req, res) {
   try {
     const airtableRes = await fetch(airtableUrl, init);
     const data = await airtableRes.json().catch(() => ({}));
+    // Enrichissement serveur (AUTH #008 suite) : pour une LISTE
+    // d'Interventions SAV, on resout le nom affichable ("Identifiant") de
+    // chaque technicien lie, uniquement pour cette reponse JSON (jamais
+    // ecrit dans Airtable, jamais expose comme un champ "Nom technicien"
+    // duplique - decision deja prise de ne pas creer ce champ). Ceci ne
+    // rouvre PAS l'acces a la table Utilisateurs pour le client : c'est
+    // un appel serveur-a-serveur, cible sur des IDs deja connus et
+    // deja verifies appartenir au tenant de la session (records
+    // Interventions SAV filtres tenant juste au-dessus). Plafonne a 20
+    // techniciens distincts par reponse (largement suffisant pour une
+    // page d'analytics, evite tout risque de derive de quota).
+    if (
+      premierSegment === 'Interventions SAV' &&
+      req.method === 'GET' &&
+      Array.isArray(data.records)
+    ) {
+      const idsTechniciens = Array.from(new Set(
+        data.records
+          .map(r => Array.isArray(r.fields?.['Technicien']) ? r.fields['Technicien'][0] : null)
+          .filter(Boolean)
+      )).slice(0, 20);
+      if (idsTechniciens.length) {
+        const nomsParId = {};
+        await Promise.all(idsTechniciens.map(async (idTech) => {
+          try {
+            const rTech = await fetch('https://api.airtable.com/v0/' + baseId + '/Utilisateurs/' + idTech, { headers });
+            if (!rTech.ok) return;
+            const recTech = await rTech.json();
+            nomsParId[idTech] = (recTech.fields || {})['Identifiant'] || null;
+          } catch (e) { /* silencieux : enrichissement best-effort, jamais bloquant */ }
+        }));
+        data.records.forEach(r => {
+          const idTech = Array.isArray(r.fields?.['Technicien']) ? r.fields['Technicien'][0] : null;
+          if (idTech && nomsParId[idTech]) {
+            r.fields['_technicienIdentifiant'] = nomsParId[idTech];
+          }
+        });
+      }
+    }
     res.status(airtableRes.status).json(data);
   } catch (err) {
     res.status(502).json({ error: 'Erreur en contactant Airtable', details: String(err) });
