@@ -434,6 +434,24 @@ export default async function handler(req, res) {
   // ensuite amandine.html). Bloquer ce cas casserait ces pages publiques —
   // cf. règle 5, à ne pas casser. Traité comme cas ambigu, pas de règle
   // inventée ici.
+  // AUTH #011 — Écriture sur Clients : session obligatoire. Le bloc
+  // ci-dessous (déjà existant) ne s'exécute que si "session" est déjà
+  // vrai — sans session, RIEN ne bloquait un POST/PATCH sur Clients, qui
+  // atteignait Airtable directement (le X-App-Secret vérifié plus haut
+  // n'est pas une authentification par utilisateur, seulement un filtre
+  // anti-accès direct/automatisé, déjà documenté comme tel). Corrigé ici,
+  // AVANT le bloc existant, uniquement pour les méthodes d'écriture — les
+  // LECTURES ne sont pas concernées : les pages publiques (amandine.html,
+  // devis.html, avis.html, suivi.html) lisent Clients par slug SANS
+  // session, comportement volontaire et inchangé (cf. commentaire
+  // ci-dessus). verifierSession() renvoie null aussi bien pour une
+  // session absente qu'expirée/invalide (jwt.verify échoué) : les deux
+  // cas sont donc couverts par ce seul contrôle.
+  if (premierSegment === 'Clients' && (req.method === 'POST' || req.method === 'PATCH')) {
+    if (!session) {
+      return res.status(401).json({ error: 'Authentification requise pour modifier Clients.' });
+    }
+  }
   if (premierSegment === 'Clients' && session && session.role !== 'SUPER_ADMIN_IKO') {
     const segmentsClients = subPathRaw.split('/').filter(Boolean);
     const recordIdDemande = segmentsClients[1]; // ex: "Clients/recXXXX"
