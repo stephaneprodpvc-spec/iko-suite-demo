@@ -884,16 +884,30 @@ function ModalAction({ ticket, onClose, onDone }) {
   // Concatène simplement la nouvelle URL au champ "Photos" existant, comme
   // le fait déjà le portail client.
   const [photoEnCoursUpload, setPhotoEnCoursUpload] = React.useState(false);
+  const [progressionPhotos, setProgressionPhotos] = React.useState(null);
   const [erreurPhoto, setErreurPhoto] = React.useState("");
   const [photosTicket, setPhotosTicket] = React.useState(ticket.fields?.Photos || "");
 
-  const ajouterPhotoTerrain = async (fichier) => {
-    if (!fichier) return;
+  // Amélioration UX terrain : plusieurs photos en un seul tap (au lieu de
+  // répéter "Ajouter une photo" une fois par photo). Réutilise telle
+  // quelle uploadCloudinaryTech (inchangée) pour chaque fichier, puis fait
+  // UNE SEULE écriture Airtable groupée à la fin — pas d'écriture en
+  // parallèle qui s'écraseraient entre elles (chaque PATCH remplacerait
+  // Photos en entier avec une valeur de base déjà obsolète).
+  const ajouterPhotosTerrain = async (fichiers) => {
+    const liste = Array.from(fichiers || []).filter(Boolean);
+    if (!liste.length) return;
     setErreurPhoto(""); setPhotoEnCoursUpload(true);
     try {
-      const url = await uploadCloudinaryTech(fichier);
-      if (!url) throw new Error("upload échoué");
-      const nouvelleValeur = photosTicket ? photosTicket + ',' + url : url;
+      const urls = [];
+      for (let i = 0; i < liste.length; i++) {
+        setProgressionPhotos(liste.length > 1 ? { fait: i, total: liste.length } : null);
+        const url = await uploadCloudinaryTech(liste[i]);
+        if (url) urls.push(url);
+      }
+      setProgressionPhotos(null);
+      if (!urls.length) throw new Error("upload échoué");
+      const nouvelleValeur = photosTicket ? photosTicket + ',' + urls.join(',') : urls.join(',');
       const r = await fetch('/api/airtable/tenant/Tickets%20SAV/' + ticket.id, {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ fields: { Photos: nouvelleValeur } }),
@@ -902,7 +916,8 @@ function ModalAction({ ticket, onClose, onDone }) {
       setPhotosTicket(nouvelleValeur);
       ticket.fields.Photos = nouvelleValeur; // reflet immédiat pour DiagnosticMaxCard, sans re-fetch du ticket
     } catch (e) {
-      setErreurPhoto("Envoi de la photo impossible. Réessayez.");
+      setErreurPhoto("Envoi de la ou des photo(s) impossible. Réessayez.");
+      setProgressionPhotos(null);
     }
     setPhotoEnCoursUpload(false);
   };
@@ -1348,11 +1363,11 @@ function ModalAction({ ticket, onClose, onDone }) {
             </div>
           )}
           <div style={{display:"flex",alignItems:"center",gap:"8px",marginTop:"8px"}}>
-            <input id={"photoTerrain-" + ticket.id} type="file" accept="image/*" capture="environment" style={{display:"none"}}
-              onChange={e => { const f = e.target.files?.[0]; e.target.value = ""; if (f) ajouterPhotoTerrain(f); }}/>
+            <input id={"photoTerrain-" + ticket.id} type="file" accept="image/*" capture="environment" multiple style={{display:"none"}}
+              onChange={e => { const f = Array.from(e.target.files || []); e.target.value = ""; if (f.length) ajouterPhotosTerrain(f); }}/>
             <label htmlFor={"photoTerrain-" + ticket.id}
               style={{padding:"6px 10px",borderRadius:"8px",background:photoEnCoursUpload?"#D1D5DB":"rgba(34,197,94,0.1)",border:"1px solid #22C55E",color:"#16A34A",fontSize:"11px",fontWeight:"700",cursor:photoEnCoursUpload?"not-allowed":"pointer"}}>
-              {photoEnCoursUpload ? "⏳ Envoi..." : "📷 Ajouter une photo"}
+              {photoEnCoursUpload ? (progressionPhotos ? "⏳ Envoi " + (progressionPhotos.fait + 1) + "/" + progressionPhotos.total + "..." : "⏳ Envoi...") : "📷 Ajouter des photos"}
             </label>
             {photosTicket && <span style={{fontSize:"10px",color:C.muted}}>{photosTicket.split(",").filter(Boolean).length} photo(s) sur ce ticket</span>}
           </div>
