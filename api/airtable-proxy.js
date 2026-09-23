@@ -772,6 +772,34 @@ export default async function handler(req, res) {
     req.body.fields['Compte client'] = [session.tenantId];
   }
 
+  // AUTH #012 — RDV Commercial GET/PATCH/DELETE : jusqu'ici, ces méthodes
+  // dépendaient entièrement du mode de coexistence de TABLES_TENANT_CONFIRME
+  // ci-dessous, qui ne s'applique QUE si une session non-admin est déjà
+  // présente — sans session du tout, aucun filtre tenant n'était appliqué
+  // (accès anonyme possible à la liste ou à un enregistrement précis).
+  // Le module "Commerce" n'était pas non plus vérifié sur ces méthodes
+  // (déjà fait sur POST via AUTH #010). Corrigé ici : session obligatoire,
+  // SUPER_ADMIN_IKO inchangé, sinon module "Commerce" vérifié AVANT de
+  // laisser le contrôle tenant existant (bloc TABLES_TENANT_CONFIRME juste
+  // après) s'exécuter normalement — pas de duplication de cette logique
+  // tenant, seulement l'ajout du préalable session+module manquant.
+  // session.tenantId (jamais req.body, localStorage ou query string) est
+  // la seule source utilisée pour l'autorisation.
+  if (premierSegment === 'RDV Commercial' && (req.method === 'GET' || req.method === 'PATCH' || req.method === 'DELETE')) {
+    if (!session) {
+      return res.status(401).json({ error: 'Authentification requise pour accéder à RDV Commercial.' });
+    }
+    if (session.role !== 'SUPER_ADMIN_IKO') {
+      if (!session.tenantId) {
+        return res.status(403).json({ error: 'Accès refusé : session sans tenant valide.' });
+      }
+      const controleModuleRDVLecture = await verifierModuleActif(baseId, headers, session.tenantId, 'Commerce');
+      if (!controleModuleRDVLecture.ok) {
+        return res.status(controleModuleRDVLecture.status).json({ error: controleModuleRDVLecture.error, details: controleModuleRDVLecture.details });
+      }
+    }
+  }
+
   // AUTH #004C : tables dont le rattachement tenant a été confirmé fiable
   // lors de l'audit #004B. Pour chacune, "champ" est le champ RÉELLEMENT
   // identifié dans le schéma Airtable (jamais supposé) :
