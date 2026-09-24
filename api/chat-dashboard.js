@@ -78,24 +78,36 @@ const MOTIFS_BLOCAGE_VALIDES = ["Congé", "Congé payé", "Maladie", "Autre"];
 // jamais de prix ni de designation. Le serveur revalide integralement
 // chaque ligne avant de la renvoyer au dashboard.
 const SYSTEM_PROMPT_DEVIS = `
-Tu es IKO, assistant du responsable pour preparer un devis depuis le
-dashboard SAV de l'application Iko Suite. Tu recois le probleme du
-ticket et le catalogue REEL du client (produits et main d'oeuvre, avec
-leurs identifiants exacts).
+Tu es IKO, assistant du responsable pour preparer une PROPOSITION de devis
+depuis le dashboard SAV de l'application Iko Suite, a partir d'un SAV deja
+ouvert. Tu recois le probleme (et, si disponible, le diagnostic technicien
+deja enregistre) du ticket, et le catalogue REEL du client (produits et
+main d'oeuvre, avec leurs identifiants exacts).
 
 REGLES ABSOLUES
 - Tu ne peux proposer QUE des lignes dont le catalogue_id existe
   EXACTEMENT dans le catalogue fourni. N'invente jamais un identifiant.
 - Ne propose jamais de prix, reference ou designation : le serveur les
   recalcule depuis le catalogue reel, tu n'as qu'a choisir le bon
-  catalogue_id et une quantite raisonnable.
-- Justifie chaque ligne brievement en lien avec le probleme decrit.
-- Si aucune ligne du catalogue ne correspond, renvoie un tableau vide.
+  catalogue_id.
+- Ne renseigne "quantite" QUE si elle est clairement deductible du
+  probleme/diagnostic fourni (ex. "2 fenetres", "les 3 volets du
+  rez-de-chaussee"). Si elle n'est pas connue, NE METS PAS ce champ :
+  elle sera affichee "A confirmer" au responsable, jamais une valeur
+  inventee (1 n'est pas une valeur par defaut acceptable si elle n'est
+  pas reellement etablie).
+- Si une prestation ou une piece semble necessaire d'apres le probleme ou
+  le diagnostic mais qu'AUCUN element du catalogue ne correspond
+  vraiment, ne force jamais un catalogue_id approximatif : decris-la
+  brievement dans "elements_sans_correspondance" a la place (jamais de
+  prix invente pour elle).
+- Justifie chaque ligne brievement en lien avec le probleme/diagnostic.
+- Si rien de pertinent ne se degage, renvoie deux tableaux vides.
 `;
 
 const OUTIL_DEVIS = {
   name: "suggerer_lignes_devis",
-  description: "Suggere des lignes de devis en piochant EXCLUSIVEMENT dans le catalogue reel fourni.",
+  description: "Suggere une proposition de lignes de devis en piochant EXCLUSIVEMENT dans le catalogue reel fourni, et signale les prestations sans correspondance catalogue.",
   input_schema: {
     type: "object",
     properties: {
@@ -105,15 +117,20 @@ const OUTIL_DEVIS = {
           type: "object",
           properties: {
             catalogue_id: { type: "string", description: "Identifiant exact d'un element du catalogue fourni (jamais invente)." },
-            quantite: { type: "number" },
-            justification: { type: "string", description: "Courte justification en lien avec le probleme du ticket." },
+            quantite: { type: "number", description: "Quantite UNIQUEMENT si elle est clairement deductible du contexte fourni. Ne pas renseigner ce champ sinon (jamais une valeur par defaut)." },
+            justification: { type: "string", description: "Courte justification en lien avec le probleme/diagnostic du ticket." },
           },
-          required: ["catalogue_id", "quantite", "justification"],
+          required: ["catalogue_id", "justification"],
         },
+      },
+      elements_sans_correspondance: {
+        type: "array",
+        items: { type: "string" },
+        description: "Prestations/pieces evoquees par le probleme ou le diagnostic mais SANS element correspondant dans le catalogue fourni. Jamais de prix ni de quantite ici. Tableau vide si rien a signaler.",
       },
       resume_vocal: { type: "string" },
     },
-    required: ["lignes", "resume_vocal"],
+    required: ["lignes", "elements_sans_correspondance", "resume_vocal"],
   },
 };
 
@@ -416,6 +433,10 @@ async function traiterDevisSuggestion(req, res, body, cle) {
       "Ticket (JSON) :\n" + JSON.stringify({
         produit: String(ticket.produit || "").slice(0, 200),
         probleme: String(ticket.probleme || "").slice(0, 500),
+        // Devis assisté depuis SAV V1 : diagnostic technicien déjà enregistré
+        // sur le ticket, transmis tel quel — aucun recalcul, aucun nouvel
+        // appel Airtable (déjà chargé côté client dans ticket.fields.Diagnostic).
+        diagnostic: String(ticket.diagnostic || "").slice(0, 500),
       }) +
       "\n\nCatalogue reel disponible (JSON, catalogue_id exact a reutiliser) :\n" +
       JSON.stringify(catalogueValide.map(c => ({ catalogue_id: c.id, type: c.type, designation: c.designation }))) +
@@ -451,7 +472,11 @@ async function traiterDevisSuggestion(req, res, body, cle) {
     for (const ligne of lignesBrutes) {
       const ref = indexCatalogue.get(String(ligne?.catalogue_id || ""));
       if (!ref) { rejets += 1; continue; } // catalogue_id halluciné : rejeté côté serveur
-      const quantite = Math.max(1, Math.round(Number(ligne.quantite) || 1));
+      // Devis assisté depuis SAV V1 : une quantité non fournie par le modèle
+      // n'est JAMAIS remplacée par une valeur par défaut — elle reste "à
+      // confirmer" (null) pour le responsable, qui la renseigne lui-même.
+      const quantiteBrute = Number(ligne.quantite);
+      const quantite = Number.isFinite(quantiteBrute) && quantiteBrute > 0 ? Math.round(quantiteBrute) : null;
       lignesValidees.push({
         catalogue_id: ref.id,
         type: ref.type,
@@ -462,8 +487,16 @@ async function traiterDevisSuggestion(req, res, body, cle) {
       });
     }
 
+    const elementsSansCorrespondance = Array.isArray(appel.input?.elements_sans_correspondance)
+      ? appel.input.elements_sans_correspondance
+          .filter(e => typeof e === "string" && e.trim())
+          .slice(0, 10)
+          .map(e => e.slice(0, 200))
+      : [];
+
     return res.status(200).json({
       lignes: lignesValidees,
+      elements_sans_correspondance: elementsSansCorrespondance,
       resume_vocal: String(appel.input?.resume_vocal || ""),
       rejets,
     });

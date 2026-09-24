@@ -1403,12 +1403,19 @@ function LigneDevisEditeur({ produits, mo, lignes, ticket, onAjouter, onSupprime
   // catalogue_id renvoye par l'IA. Ajout ligne par ligne apres validation
   // manuelle, jamais d'ecriture automatique.
   const [suggestionsDevis, setSuggestionsDevis] = React.useState(null);
+  const [elementsSansCorrespondance, setElementsSansCorrespondance] = React.useState([]);
   const [chargementSuggestions, setChargementSuggestions] = React.useState(false);
+  // Devis assisté depuis SAV V1 : quantité "à confirmer" (l.quantite === null,
+  // jamais inventée côté serveur) saisie ici par le responsable avant de
+  // pouvoir ajouter la ligne — jamais de valeur par défaut silencieuse.
+  const [qteAConfirmer, setQteAConfirmer] = React.useState({});
 
   const demanderSuggestionsDevis = async () => {
     if (!produits.length && !mo.length) return;
     setChargementSuggestions(true);
     setSuggestionsDevis(null);
+    setElementsSansCorrespondance([]);
+    setQteAConfirmer({});
     try {
       const catalogueEnvoye = [
         ...produits.map(p => ({ id: p.id, type: 'produit', designation: p.fields?.["Désignation"] || '', prix: p.fields?.["Prix unitaire HT"] || 0 })),
@@ -1418,21 +1425,31 @@ function LigneDevisEditeur({ produits, mo, lignes, ticket, onAjouter, onSupprime
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           mode: 'devis_suggestion',
-          ticket: { produit: ticket?.fields?.Produit || '', probleme: ticket?.fields?.Problème || '' },
+          // Diagnostic technicien déjà enregistré sur le ticket (si présent) :
+          // réutilisé tel quel, aucun nouvel appel Airtable.
+          ticket: { produit: ticket?.fields?.Produit || '', probleme: ticket?.fields?.Problème || '', diagnostic: ticket?.fields?.Diagnostic || '' },
           catalogue: catalogueEnvoye,
         }),
       });
       const data = await r.json();
-      if (r.ok && !data.erreur) setSuggestionsDevis(data.lignes || []);
+      if (r.ok && !data.erreur) {
+        setSuggestionsDevis(data.lignes || []);
+        setElementsSansCorrespondance(data.elements_sans_correspondance || []);
+      }
     } catch (e) {}
     setChargementSuggestions(false);
   };
 
   const ajouterLigneSuggeree = (l) => {
+    // Quantité connue (fournie par IKO à partir du contexte) OU confirmée
+    // manuellement ci-dessous par le responsable : jamais une valeur
+    // par défaut inventée si elle n'a jamais été renseignée.
+    const quantiteFinale = l.quantite != null ? l.quantite : Number(qteAConfirmer[l.catalogue_id]);
+    if (!quantiteFinale || quantiteFinale <= 0) return;
     const produitSource = produits.find(p => p.id === l.catalogue_id);
     const tauxTva = l.type === 'produit' ? tauxTvaVersDecimal(produitSource?.fields?.["Taux TVA"]) : 0.20;
-    const totalHT = (l.quantite || 1) * l.prix;
-    onAjouter({ designation: l.designation, qte: l.quantite || 1, puHT: l.prix, tauxTva, totalHT, totalTTC: totalHT * (1 + tauxTva) });
+    const totalHT = quantiteFinale * l.prix;
+    onAjouter({ designation: l.designation, qte: quantiteFinale, puHT: l.prix, tauxTva, totalHT, totalTTC: totalHT * (1 + tauxTva) });
     setSuggestionsDevis(prev => (prev || []).filter(x => x.catalogue_id !== l.catalogue_id));
   };
 
@@ -1459,24 +1476,49 @@ function LigneDevisEditeur({ produits, mo, lignes, ticket, onAjouter, onSupprime
         <>
           <button type="button" onClick={demanderSuggestionsDevis} disabled={chargementSuggestions}
             style={{width:"100%",padding:"8px",marginBottom:"8px",borderRadius:"8px",background:"rgba(34,197,94,0.1)",border:"1px solid #22C55E",color:"#16A34A",fontSize:"11px",fontWeight:"700",cursor:chargementSuggestions?"not-allowed":"pointer"}}>
-            {chargementSuggestions ? "⏳ IKO réfléchit..." : "🧠 Suggestion IA"}
+            {chargementSuggestions ? "⏳ IKO prépare la proposition..." : "🧾 Préparer un devis avec IKO"}
           </button>
-          {suggestionsDevis && suggestionsDevis.length === 0 && (
-            <div style={{fontSize:"10px",color:C.muted,marginBottom:"8px",fontStyle:"italic"}}>Aucune suggestion pertinente pour ce ticket.</div>
+          {suggestionsDevis && (
+            <div style={{marginBottom:"8px",fontSize:"10px",color:C.muted}}>
+              🔎 Éléments identifiés : {ticket?.fields?.Produit || "produit non précisé"} — {ticket?.fields?.Problème || "problème non précisé"}
+              {ticket?.fields?.Diagnostic && " — diagnostic déjà enregistré"}
+            </div>
+          )}
+          {suggestionsDevis && suggestionsDevis.length === 0 && elementsSansCorrespondance.length === 0 && (
+            <div style={{fontSize:"10px",color:C.muted,marginBottom:"8px",fontStyle:"italic"}}>Informations insuffisantes pour proposer une ligne de devis sur ce ticket.</div>
           )}
           {suggestionsDevis && suggestionsDevis.length > 0 && (
             <div style={{marginBottom:"8px",display:"flex",flexDirection:"column",gap:"5px"}}>
-              {suggestionsDevis.map(l => (
-                <div key={l.catalogue_id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:"6px",fontSize:"10px",background:"rgba(34,197,94,0.06)",borderRadius:"6px",padding:"6px 8px"}}>
-                  <div>
-                    <b>{l.designation}</b> ×{l.quantite} — {Number(l.prix).toFixed(2)} €
-                    {l.justification && <div style={{color:C.muted,fontStyle:"italic",marginTop:"2px"}}>{l.justification}</div>}
+              <div style={{fontSize:"10px",fontWeight:"700",color:C.muted}}>Lignes proposées :</div>
+              {suggestionsDevis.map(l => {
+                const quantiteInconnue = l.quantite == null;
+                const quantiteSaisie = Number(qteAConfirmer[l.catalogue_id]);
+                const ajoutPossible = !quantiteInconnue || quantiteSaisie > 0;
+                return (
+                  <div key={l.catalogue_id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:"6px",fontSize:"10px",background:"rgba(34,197,94,0.06)",borderRadius:"6px",padding:"6px 8px"}}>
+                    <div>
+                      <b>{l.designation}</b> ×{quantiteInconnue ? (
+                        <input type="number" min="1" placeholder="?" value={qteAConfirmer[l.catalogue_id] || ""}
+                          onChange={e => setQteAConfirmer(prev => ({...prev, [l.catalogue_id]: e.target.value}))}
+                          style={{width:"46px",fontSize:"10px",padding:"2px 4px",marginLeft:"2px"}}/>
+                      ) : l.quantite} — {Number(l.prix).toFixed(2)} €
+                      {quantiteInconnue && <span style={{color:"#DAB239",fontWeight:"700",marginLeft:"4px"}}>Quantité à confirmer</span>}
+                      {l.justification && <div style={{color:C.muted,fontStyle:"italic",marginTop:"2px"}}>{l.justification}</div>}
+                    </div>
+                    <button type="button" onClick={() => ajouterLigneSuggeree(l)} disabled={!ajoutPossible}
+                      style={{flexShrink:0,padding:"5px 10px",borderRadius:"6px",background:ajoutPossible?"#22C55E":"#D1D5DB",color:"#111",border:"none",fontWeight:"800",cursor:ajoutPossible?"pointer":"not-allowed",fontSize:"10px"}}>
+                      + Ajouter au devis
+                    </button>
                   </div>
-                  <button type="button" onClick={() => ajouterLigneSuggeree(l)}
-                    style={{flexShrink:0,padding:"5px 10px",borderRadius:"6px",background:"#22C55E",color:"#111",border:"none",fontWeight:"800",cursor:"pointer",fontSize:"10px"}}>
-                    + Ajouter
-                  </button>
-                </div>
+                );
+              })}
+            </div>
+          )}
+          {elementsSansCorrespondance.length > 0 && (
+            <div style={{marginBottom:"8px",background:"rgba(218,178,57,0.1)",border:"1px solid #DAB239",borderRadius:"6px",padding:"6px 8px"}}>
+              <div style={{fontSize:"10px",fontWeight:"700",color:"#8a6d1f",marginBottom:"3px"}}>⚠️ Éléments à confirmer (hors catalogue)</div>
+              {elementsSansCorrespondance.map((e, i) => (
+                <div key={i} style={{fontSize:"10px",color:"#8a6d1f"}}>· {e}</div>
               ))}
             </div>
           )}
