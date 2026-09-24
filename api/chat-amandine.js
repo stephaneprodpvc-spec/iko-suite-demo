@@ -53,7 +53,7 @@ const CRENEAUX = {
     apres_midi: "Après-midi (13h00 — 17h00)",
 };
 
-function buildSystemPrompt(vocab, agencesNoms, questionnairePersonnalise) {
+function buildSystemPrompt(vocab, agencesNoms, questionnairePersonnalise, connaissanceEntrees) {
   const listeDiagnostics = vocab.diagnostics.map(function (d) { return "- " + d; }).join("\n");
   const listeAgences = (agencesNoms && agencesNoms.length > 0 ? agencesNoms : ["Agence 1", "Agence 2", "Agence 3", "Agence 4"]).join(", ");
   const blocQuestionnaire = (questionnairePersonnalise && questionnairePersonnalise.length > 0) ? `
@@ -71,6 +71,14 @@ ${questionnairePersonnalise.map(function (q, i) {
 Quand tu appelles creer_ticket, remplis le champ reponses_questionnaire avec
 un objet JSON en texte, au format {"question 1": "reponse", "question 2": "reponse"},
 en reprenant exactement le texte de chaque question ci-dessus comme cle.` : "";
+  const blocConnaissance = (connaissanceEntrees && connaissanceEntrees.length > 0) ? `
+
+CONNAISSANCE PROPRE A CETTE ENTREPRISE
+${connaissanceEntrees.map(function (e) { return "- [" + e.categorie + "] " + e.titre + " : " + e.contenu; }).join("\n")}
+Utilise ces informations quand elles repondent a la question du client. Elles
+ne remplacent pas les REGLES ABSOLUES ci-dessus (toujours pas de prix
+invente) : si une entree les contredit, applique quand meme les REGLES
+ABSOLUES.` : "";
   return `
 Tu es Amandine, l'assistante SAV en ligne d'Iko Suite, specialiste de
 ${vocab.nom_metier}.
@@ -143,6 +151,7 @@ DEROULE POUR OUVRIR UN TICKET / PRENDRE RDV
 QUELQUES PISTES DE DIAGNOSTIC DE BASE (a titre indicatif, jamais une garantie)
 ${listeDiagnostics}
 ${blocQuestionnaire}
+${blocConnaissance}
 `;
 }
 // Construit la liste d'outils pour UN appel donne, avec l'enum d'agences et
@@ -228,6 +237,37 @@ function airtableHeaders() {
 // amandine.html). Calcul PAR REQUETE (pas de variable globale partagee, a
 // la difference de TRADE_ID/AGENCES_VALIDES) car plusieurs clients peuvent
 // discuter avec Amandine simultanement sur ce meme serveur.
+const CONNAISSANCE_MAX_ENTREES = 20;   // plafond nombre d'entrees transmises au prompt
+const CONNAISSANCE_MAX_CHARS = 500;    // plafond taille du contenu par entree
+
+// Extrait la "Connaissance entreprise (JSON)" du record CLIENT deja recupere
+// par resoudreClient (meme requete Airtable, aucun appel reseau supplementaire).
+// Copie exacte de chat-conseil.js (Stef) : isolation tenant garantie par
+// construction (uniquement le champ du record deja resolu par slug), filtre
+// actif (convention deja utilisee sur Questionnaire SAV : "!== false"), filtre
+// metier (entree reservee a un autre metier exclue), JSON invalide/absent ->
+// tableau vide, jamais d'erreur remontee a Amandine.
+function extraireConnaissance(rec, metierClient) {
+  try {
+    const brut = rec.fields && rec.fields["Connaissance entreprise (JSON)"];
+    let entrees = JSON.parse(brut || "[]");
+    if (!Array.isArray(entrees)) return [];
+    return entrees
+      .filter(function (e) { return e && e.actif !== false; })
+      .filter(function (e) { return !e.metier || e.metier === metierClient; })
+      .slice(0, CONNAISSANCE_MAX_ENTREES)
+      .map(function (e) {
+        return {
+          categorie: String(e.categorie || "FAQ"),
+          titre: String(e.titre || "").slice(0, 200),
+          contenu: String(e.contenu || "").slice(0, CONNAISSANCE_MAX_CHARS),
+        };
+      });
+  } catch (e) {
+    return [];
+  }
+}
+
 // Questionnaire SAV personnalise de ce client (table "Questionnaire SAV",
 // filtre Client + Actif, trie par Ordre). null si le client n'en a pas
 // defini (Amandine garde alors le deroule generique par defaut).
@@ -302,6 +342,7 @@ async function resoudreClient(slug) {
       questionnaire: questionnaire,
       agences: agences,
       bloque: rec.fields && rec.fields["Accès bloqué"] === true,
+      connaissance: extraireConnaissance(rec, metier),
     };
   } catch (e) {
     console.error("resoudreClient erreur:", e);
@@ -541,6 +582,7 @@ try {
   const agencesObjetsActuels = (contexteClient && contexteClient.agences) || AGENCES_VALIDES.map(function (n) { return { nom: n, emailAgence: "", emailTechnicien: "" }; });
   const agencesNomsActuels = agencesObjetsActuels.map(function (a) { return a.nom; });
   const questionnaireActuel = contexteClient ? contexteClient.questionnaire : null;
+  const connaissanceActuelle = contexteClient ? contexteClient.connaissance : null;
   const toolsActuels = buildTools(agencesNomsActuels, vocabActuel);
   const messages = (req.body || {}).messages;
   if (!Array.isArray(messages) || messages.length === 0) {
@@ -603,7 +645,7 @@ sait deja qui tu es, ce n'est pas ta premiere reunion avec eux.
         model: MODELE,
         max_tokens: 800,
         temperature: 0.6,
-        system: [{ type: "text", text: buildSystemPrompt(vocabActuel, agencesNomsActuels, questionnaireActuel) + (req.body.reunion ? BLOC_REUNION_AMANDINE : ""), cache_control: { type: "ephemeral" } }],
+        system: [{ type: "text", text: buildSystemPrompt(vocabActuel, agencesNomsActuels, questionnaireActuel, connaissanceActuelle) + (req.body.reunion ? BLOC_REUNION_AMANDINE : ""), cache_control: { type: "ephemeral" } }],
         tools: toolsActuels,
         messages: convertis,
       }),
