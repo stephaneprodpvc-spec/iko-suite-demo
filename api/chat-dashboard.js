@@ -1,6 +1,6 @@
 import { verifierOrigine, verifierDebit, reponseBloquee } from "./_securite.js";
 import { normaliserConnaissance, blocPromptConnaissance, affinerPourPrompt } from "./_connaissance.js";
-import { blocPromptAnalyticsSAV } from "../analytics-sav.js";
+import { blocPromptAnalyticsSAV, genererRecommandationsSAV, blocPromptRecommandationsSAV } from "../analytics-sav.js";
 
 // api/chat-dashboard.js
 // Relais serveur entre le widget vocal Amandine (dashboard.html) et l'API
@@ -221,8 +221,12 @@ REGLES
 function buildSystemPrompt(connaissanceEntrees, analyticsSAVResume) {
   // Connaissance entreprise et Analytics SAV restent deux blocs distincts
   // (natures differentes : texte libre saisi par l'admin vs chiffres
-  // calcules a partir des tickets) - jamais fusionnes.
-  return SYSTEM_PROMPT_BASE + blocPromptConnaissance(connaissanceEntrees) + blocPromptAnalyticsSAV(analyticsSAVResume);
+  // calcules a partir des tickets) - jamais fusionnes. Les recommandations
+  // sont un 3e bloc, deduites des deux precedents (aucun nouveau calcul de
+  // donnees, uniquement une lecture croisee de ce qui est deja calcule) -
+  // voir genererRecommandationsSAV dans analytics-sav.js.
+  const recommandationsSAV = genererRecommandationsSAV(analyticsSAVResume, connaissanceEntrees);
+  return SYSTEM_PROMPT_BASE + blocPromptConnaissance(connaissanceEntrees) + blocPromptAnalyticsSAV(analyticsSAVResume) + blocPromptRecommandationsSAV(recommandationsSAV);
 }
 
 const TOOLS = [

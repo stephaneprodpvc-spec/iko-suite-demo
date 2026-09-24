@@ -51,6 +51,19 @@
 // façon pas importer ce fichier — voir section 4 du rapport). Les deux
 // copies doivent être maintenues identiques si ce format de date évolue.
 const MOIS = { janvier: 1, février: 2, mars: 3, avril: 4, mai: 5, juin: 6, juillet: 7, août: 8, septembre: 9, octobre: 10, novembre: 11, décembre: 12 };
+
+// Retire les accents et met en minuscule, pour comparer deux textes sans
+// tenir compte de la casse/des accents (utilisé par
+// genererRecommandationsSAV pour le rapprochement textuel avec la
+// Connaissance entreprise). Copie volontaire du même utilitaire présent
+// dans _connaissance.js : trivial (4 lignes), pas d'import croisé entre
+// modules pour ça, chaque module reste autonome.
+function normaliserTexte(s) {
+  return String(s == null ? "" : s)
+    .toLowerCase()
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .trim();
+}
 function parseDateCreneau(creneau) {
   if (!creneau) return new Date(9999, 0, 1);
   const match = creneau.match(/(\d+)\s+(\p{L}+)(?:\s+(\d{4}))?/gu);
@@ -527,4 +540,102 @@ ${lignes.map(l => "- " + l).join("\n")}`;
   } catch (e) {
     return "";
   }
+}
+
+// ---- Intelligence entreprise V3 : recommandations métier factuelles,
+// déduites du résumé déjà calculé (resumerAnalyticsSAV) et, si fournie, de
+// la connaissance entreprise déjà normalisée (voir _connaissance.js —
+// aucun import croisé ici : ce module reçoit un tableau simple, il ne
+// connaît rien de la façon dont il a été produit, pour rester découplé).
+// Fonction pure, 0 appel réseau, 0 nouvelle donnée : uniquement du texte
+// dérivé des chiffres déjà présents dans resume.
+//
+// RÈGLE CENTRALE (voir mission) : chaque recommandation énonce un FAIT
+// déjà calculé puis propose une VÉRIFICATION ("vérifier X peut être
+// pertinent"), jamais une causalité affirmée ("X est responsable de Y").
+// Aucune recommandation n'est produite si la donnée sous-jacente est
+// absente ou insuffisante pour être significative (mêmes seuils de
+// significativité que detecterAlertesSAV : au moins 3 éléments comparables
+// pour une comparaison statistique, jamais un chiffre inventé).
+export function genererRecommandationsSAV(resume, connaissanceEntrees) {
+  if (!resume) return [];
+  const recommandations = [];
+
+  // 1. Produit générant le plus de coûts SAV — fait direct, toujours
+  // significatif dès qu'un coût réel existe (pas de seuil arbitraire
+  // nécessaire : c'est déjà LE plus coûteux parmi ceux calculés).
+  if (resume.topProduitsCouteux && resume.topProduitsCouteux.length > 0 && resume.topProduitsCouteux[0].cout > 0) {
+    const top = resume.topProduitsCouteux[0];
+    recommandations.push({
+      type: "cout",
+      texte: `Le produit "${top.produit}" représente la part la plus importante des coûts SAV connus (${top.cout} €) ; vérifier sa procédure de pose/installation peut être pertinent.`,
+    });
+  }
+
+  // 2. Concentration produit × agence anormale — détection statistique
+  // (moyenne + 1 écart-type), même méthode et même seuil (≥3 éléments)
+  // que detecterAlertesSAV : pas de nouveau seuil inventé.
+  if (resume.concentrationsProduitAgence && resume.concentrationsProduitAgence.length >= 3) {
+    const { moyenne, ecartType } = ecartTypeMoyenne(resume.concentrationsProduitAgence.map(c => c.tickets));
+    const top = resume.concentrationsProduitAgence[0];
+    if (ecartType > 0 && top.tickets > moyenne + ecartType) {
+      recommandations.push({
+        type: "concentration",
+        texte: `Le produit "${top.produit}" est nettement plus représenté en SAV chez l'agence "${top.agence}" (${top.tickets} tickets) que la moyenne des autres associations produit/agence connues ; vérifier un facteur local (pose, stock, formation) peut être pertinent.`,
+      });
+    }
+  }
+
+  // 3. Cause dominante d'une agence — seuil minimal de 3 tickets avec
+  // cause connue dans cette agence pour que "dominante" ait un sens (sinon
+  // 1 ticket sur 1 serait toujours "100% dominant", trompeur).
+  if (resume.causesDominantesParAgence && resume.causesDominantesParAgence.length > 0) {
+    const top = resume.causesDominantesParAgence[0];
+    if (top.totalCausesAgence >= 3) {
+      recommandations.push({
+        type: "cause_agence",
+        texte: `Chez l'agence "${top.agence}", la cause SAV la plus fréquente est "${top.causeDominante}" (${top.tickets}/${top.totalCausesAgence} tickets avec cause connue) ; vérifier si une procédure existe déjà pour ce cas peut être pertinent.`,
+      });
+    }
+  }
+
+  // 4. Lien textuel avec la Connaissance entreprise — correspondance de
+  // mots UNIQUEMENT (jamais une causalité), sur les sujets déjà identifiés
+  // ci-dessus (produit le plus coûteux, cause dominante). Sujet trop court
+  // (<3 caractères utiles) ignoré pour éviter un faux rapprochement.
+  if (Array.isArray(connaissanceEntrees) && connaissanceEntrees.length > 0) {
+    const sujets = [];
+    if (resume.topProduitsCouteux && resume.topProduitsCouteux[0]) sujets.push(resume.topProduitsCouteux[0].produit);
+    if (resume.causesDominantesParAgence && resume.causesDominantesParAgence[0]) sujets.push(resume.causesDominantesParAgence[0].causeDominante);
+    sujets.forEach(sujet => {
+      const sujetNorm = normaliserTexte(sujet);
+      if (sujetNorm.length < 3) return;
+      const trouve = connaissanceEntrees.find(e =>
+        (e.categorie === "Procédure" || e.categorie === "Règle interne") &&
+        (normaliserTexte(e.titre).includes(sujetNorm) || normaliserTexte(e.contenu).includes(sujetNorm))
+      );
+      if (trouve) {
+        recommandations.push({
+          type: "connaissance",
+          texte: `Une entrée de connaissance interne existe déjà en lien avec "${sujet}" ([${trouve.categorie}] ${trouve.titre}) ; s'y référer peut être pertinent avant d'agir.`,
+        });
+      }
+    });
+  }
+
+  // Plafond compact : jamais plus de 4 recommandations dans le prompt.
+  return recommandations.slice(0, 4);
+}
+
+// Formate genererRecommandationsSAV() en bloc de prompt distinct des
+// Analytics SAV et de la Connaissance entreprise (jamais fusionnés).
+export function blocPromptRecommandationsSAV(recommandations) {
+  if (!recommandations || recommandations.length === 0) return "";
+  return `
+
+RECOMMANDATIONS MÉTIER (déduites des faits ci-dessus, jamais une causalité certaine)
+Ce sont des pistes à vérifier, pas des conclusions. Si on te les demande,
+présente-les comme telles ("il pourrait être utile de vérifier...", jamais
+"c'est la cause de...") :
+${recommandations.map(r => "- " + r.texte).join("\n")}`;
 }

@@ -1,6 +1,6 @@
 import { verifierOrigine, verifierDebit, reponseBloquee } from "./_securite.js";
 import { normaliserConnaissance, blocPromptConnaissance, affinerPourPrompt } from "./_connaissance.js";
-import { blocPromptAnalyticsSAV } from "../analytics-sav.js";
+import { blocPromptAnalyticsSAV, genererRecommandationsSAV, blocPromptRecommandationsSAV } from "../analytics-sav.js";
 
 // api/chat-technicien.js
 // Relais serveur entre le widget vocal Max (technicien.html) et l'API
@@ -78,8 +78,10 @@ REGLES
 // (verif-securite.js), jamais par le contenu du body.
 function buildSystemPrompt(connaissanceEntrees, analyticsSAVResume) {
   // Connaissance entreprise et Analytics SAV restent deux blocs distincts
-  // (natures differentes) - jamais fusionnes.
-  return SYSTEM_PROMPT_BASE + blocPromptConnaissance(connaissanceEntrees) + blocPromptAnalyticsSAV(analyticsSAVResume);
+  // (natures differentes) - jamais fusionnes. Recommandations = 3e bloc,
+  // deduit des deux precedents (voir chat-dashboard.js pour le detail).
+  const recommandationsSAV = genererRecommandationsSAV(analyticsSAVResume, connaissanceEntrees);
+  return SYSTEM_PROMPT_BASE + blocPromptConnaissance(connaissanceEntrees) + blocPromptAnalyticsSAV(analyticsSAVResume) + blocPromptRecommandationsSAV(recommandationsSAV);
 }
 
 // ==================== Bloc 1 : diagnostic assisté ====================
