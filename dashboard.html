@@ -2035,7 +2035,7 @@ function calculerAnalyticsSAV(tickets) {
 // technicien) — nécessite les enregistrements bruts de la table
 // Interventions SAV, chargés à la demande (voir chargerInterventionsSAV)
 // pour ne pas alourdir le chargement initial du dashboard.
-function calculerPerformanceEtResolution(interventions) {
+function calculerPerformanceEtResolution(interventions, tickets) {
   const parTicket = {};
   interventions.forEach(iv => {
     const ticketId = Array.isArray(iv.fields?.["Ticket SAV"]) ? iv.fields["Ticket SAV"][0] : null;
@@ -2055,9 +2055,41 @@ function calculerPerformanceEtResolution(interventions) {
       ticketsResolusPremierPassage += 1;
     }
   });
-  const tauxResolutionPremierPassage = ticketsAvecIntervention.length
-    ? Math.round(ticketsResolusPremierPassage / ticketsAvecIntervention.length * 100)
+  const nbTicketsAvecIntervention = ticketsAvecIntervention.length;
+  // "Nécessitant un retour" = complément exact de la définition ci-dessus
+  // (2+ interventions, OU 1 seule intervention non "Résolu") — pas une
+  // notion distincte inventée à côté.
+  const ticketsNecessitantRetour = nbTicketsAvecIntervention - ticketsResolusPremierPassage;
+  const tauxResolutionPremierPassage = nbTicketsAvecIntervention
+    ? Math.round(ticketsResolusPremierPassage / nbTicketsAvecIntervention * 100)
     : null; // null = non calculable, aucune intervention enregistrée
+
+  // Détail par agence : réutilise les tickets déjà chargés (prop tickets de
+  // ModalAnalyticsSAV/ModalTableauBordDirigeant — aucun nouvel appel
+  // réseau) pour retrouver l'agence de chaque ticket ayant une
+  // intervention. Un ticket dont l'id n'est plus dans les tickets
+  // actuellement chargés, ou sans Agence renseignée, est simplement exclu
+  // du détail par agence (jamais rattaché à une agence inventée) — il
+  // reste comptabilisé dans le taux global ci-dessus.
+  const agenceParTicket = {};
+  (tickets || []).forEach(t => {
+    const agence = (t.fields?.Agence || "").trim();
+    if (agence) agenceParTicket[t.id] = agence;
+  });
+  const parAgenceStats = {};
+  ticketsAvecIntervention.forEach(id => {
+    const agence = agenceParTicket[id];
+    if (!agence) return;
+    if (!parAgenceStats[agence]) parAgenceStats[agence] = { total: 0, resolus: 0 };
+    parAgenceStats[agence].total += 1;
+    const ivs = parTicket[id];
+    if (ivs.length === 1 && ivs[0].fields?.["Statut intervention"] === "Résolu") {
+      parAgenceStats[agence].resolus += 1;
+    }
+  });
+  const resolutionParAgence = Object.entries(parAgenceStats)
+    .map(([agence, s]) => ({ agence, total: s.total, resolus: s.resolus, taux: Math.round(s.resolus / s.total * 100) }))
+    .sort((a, b) => b.total - a.total);
 
   const parTechnicien = {};
   interventions.forEach(iv => {
@@ -2073,7 +2105,7 @@ function calculerPerformanceEtResolution(interventions) {
     .map(p => ({ ...p, tauxResolution: p.total ? Math.round(p.resolus / p.total * 100) : 0 }))
     .sort((a, b) => b.total - a.total);
 
-  return { tauxResolutionPremierPassage, performanceTechniciens, totalInterventions: interventions.length };
+  return { tauxResolutionPremierPassage, ticketsResolusPremierPassage, ticketsNecessitantRetour, nbTicketsAvecIntervention, resolutionParAgence, performanceTechniciens, totalInterventions: interventions.length };
 }
 
 // ---- Socle prédictif (2/3) : agrégats prêts pour de futures
@@ -2161,7 +2193,7 @@ function ModalAnalyticsSAV({ tickets, onClose }) {
       else setErreurInterventions(res.erreur);
     });
   }, []);
-  const perfEtResolution = interventions ? calculerPerformanceEtResolution(interventions) : null;
+  const perfEtResolution = interventions ? calculerPerformanceEtResolution(interventions, tickets) : null;
 
   // ---- Socle IA : synthèse direction (mode "synthese_direction") ----
   // Reutilise l'architecture existante (api/chat-dashboard.js, meme
@@ -2338,17 +2370,32 @@ function ModalAnalyticsSAV({ tickets, onClose }) {
         </div>
 
         <div style={{marginBottom:"18px"}}>
-          <div style={{fontSize:"12px",fontWeight:"700",color:C.white,marginBottom:"2px"}}>Taux de résolution au premier passage</div>
+          <div style={{fontSize:"12px",fontWeight:"700",color:C.white,marginBottom:"2px"}}>Résolution au premier passage</div>
           <div style={{fontSize:"11px",color:C.muted,marginBottom:"8px"}}>Ticket avec une seule intervention enregistrée, résolue dès ce passage.</div>
           {erreurInterventions && (
             <div style={{fontSize:"11px",color:"#DC2626",fontWeight:"700"}}>⚠️ Erreur de chargement — {erreurInterventions} Cet indicateur et la performance techniciens ci-dessous sont indisponibles, pas nécessairement à zéro.</div>
           )}
           {!erreurInterventions && !interventions && <div style={{fontSize:"11px",color:C.muted,fontStyle:"italic"}}>⏳ Chargement...</div>}
           {!erreurInterventions && interventions && perfEtResolution.tauxResolutionPremierPassage === null && (
-            <div style={{fontSize:"11px",color:C.muted,fontStyle:"italic"}}>Non calculable pour l'instant : aucune intervention SAV enregistrée.</div>
+            <div style={{fontSize:"11px",color:C.muted,fontStyle:"italic"}}>Données insuffisantes : aucune intervention SAV enregistrée pour l'instant.</div>
           )}
           {!erreurInterventions && interventions && perfEtResolution.tauxResolutionPremierPassage !== null && (
-            <div style={{fontSize:"22px",fontWeight:"900",color:C.white}}>{perfEtResolution.tauxResolutionPremierPassage}%</div>
+            <div style={{border:"1px solid "+C.border,borderRadius:"8px",padding:"12px 14px"}}>
+              <div style={{fontSize:"26px",fontWeight:"900",color:C.white,marginBottom:"6px"}}>{perfEtResolution.tauxResolutionPremierPassage}%</div>
+              <div style={{fontSize:"11.5px",color:C.text}}>✅ {perfEtResolution.ticketsResolusPremierPassage} résolue(s) au premier passage</div>
+              <div style={{fontSize:"11.5px",color:C.text}}>↩️ {perfEtResolution.ticketsNecessitantRetour} nécessitant un retour</div>
+              {perfEtResolution.resolutionParAgence.length > 0 && (
+                <div style={{marginTop:"10px",paddingTop:"10px",borderTop:"1px solid "+C.border}}>
+                  <div style={{fontSize:"10.5px",fontWeight:"700",color:C.muted,marginBottom:"6px",textTransform:"uppercase"}}>Par agence</div>
+                  {perfEtResolution.resolutionParAgence.map((a, i) => (
+                    <div key={a.agence} style={{display:"flex",justifyContent:"space-between",padding:"5px 0",borderBottom:i<perfEtResolution.resolutionParAgence.length-1?"1px solid "+C.border:"none",fontSize:"11.5px"}}>
+                      <span>{a.agence}</span>
+                      <span><b>{a.taux}%</b> <span style={{color:C.muted}}>({a.resolus}/{a.total})</span></span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           )}
         </div>
 
@@ -2418,7 +2465,7 @@ function ModalTableauBordDirigeant({ tickets, stats, onClose }) {
       else setErreurInterventions(res.erreur);
     });
   }, []);
-  const perfEtResolution = interventions ? calculerPerformanceEtResolution(interventions) : null;
+  const perfEtResolution = interventions ? calculerPerformanceEtResolution(interventions, tickets) : null;
   const agregatsPredictifs = interventions ? calculerAgregatsPredictifs(interventions) : null;
 
   const [syntheseIA, setSyntheseIA] = React.useState(null);
