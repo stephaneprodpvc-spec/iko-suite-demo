@@ -193,8 +193,10 @@ const OUTIL_DEVIS = {
 
 const SYSTEM_PROMPT_COMPTE_RENDU = `
 Tu structures un compte-rendu d'intervention dicté par un technicien
-menuiserie/BTP, dans l'application Iko Suite, en 4 rubriques :
-fait_constate, intervention_realisee, piece_action_necessaire, suite_a_donner.
+menuiserie/BTP, dans l'application Iko Suite, en 6 rubriques :
+fait_constate (constat / problème), diagnostic, intervention_realisee,
+piece_action_necessaire (pièces utilisées ou à prévoir), resultat,
+suite_a_donner.
 
 RÈGLES ABSOLUES
 - N'invente jamais une rubrique ou une information absente du texte
@@ -210,12 +212,14 @@ const OUTIL_COMPTE_RENDU = {
   input_schema: {
     type: "object",
     properties: {
-      fait_constate: { type: "string" },
+      fait_constate: { type: "string", description: "Constat / problème rapporté par le client ou observé." },
+      diagnostic: { type: "string", description: "Cause identifiée par le technicien, si mentionnée dans la dictée." },
       intervention_realisee: { type: "string" },
-      piece_action_necessaire: { type: "string" },
+      piece_action_necessaire: { type: "string", description: "Pièces utilisées pendant l'intervention, ou pièces/actions à prévoir plus tard." },
+      resultat: { type: "string", description: "Résultat de l'intervention (fonctionne, à revoir, partiellement résolu, etc.), si mentionné." },
       suite_a_donner: { type: "string" },
     },
-    required: ["fait_constate", "intervention_realisee", "piece_action_necessaire", "suite_a_donner"],
+    required: ["fait_constate", "diagnostic", "intervention_realisee", "piece_action_necessaire", "resultat", "suite_a_donner"],
   },
 };
 
@@ -658,8 +662,10 @@ async function traiterCompteRendu(req, res, body, cle) {
     const sortie = appel.input || {};
     return res.status(200).json({
       fait_constate: String(sortie.fait_constate || ""),
+      diagnostic: String(sortie.diagnostic || ""),
       intervention_realisee: String(sortie.intervention_realisee || ""),
       piece_action_necessaire: String(sortie.piece_action_necessaire || ""),
+      resultat: String(sortie.resultat || ""),
       suite_a_donner: String(sortie.suite_a_donner || ""),
       texte_original: texteDicte,
     });
