@@ -378,6 +378,57 @@ export function detecterAlertesSAV({ tauxUrgents, topCauses, topProduitsDetail, 
   return alertes;
 }
 
+// ---- Intelligence entreprise V2 : croisements SAV, calculés à partir des
+// mêmes tickets déjà chargés (aucun nouveau fetch, aucune nouvelle donnée
+// Airtable). Fonction pure séparée de calculerAnalyticsSAV (qui reste
+// inchangée) pour ne pas alourdir son résultat déjà volumineux quand ces
+// croisements ne sont pas nécessaires (ex. panneau Analytics classique).
+// - Produit × Agence : les paires les plus fréquentes, pour repérer une
+//   concentration de SAV sur un produit dans UNE agence en particulier
+//   (piste "problème de pose/agence" plutôt que "problème de produit").
+// - Agence × Cause dominante : pour chaque agence ayant au moins une cause
+//   SAV renseignée, la cause la plus fréquente chez elle — jamais une
+//   cause "moyenne" ou inventée, uniquement celle réellement la plus
+//   citée sur les tickets de cette agence.
+// Le troisième croisement demandé (Produit × Coût) n'a pas besoin de cette
+// fonction : coutSAVParProduit existe déjà dans calculerAnalyticsSAV,
+// réutilisé tel quel par resumerAnalyticsSAV ci-dessous (pas de nouveau
+// calcul, pas de duplication).
+export function calculerCroisementsSAV(tickets) {
+  const parProduitAgence = {};
+  const parAgenceCause = {};
+  (tickets || []).forEach(t => {
+    const produit = (t.fields?.Produit || "").trim();
+    const agence = (t.fields?.Agence || "").trim();
+    const cause = t.fields?.["Cause SAV"];
+    if (produit && agence) {
+      if (!parProduitAgence[produit]) parProduitAgence[produit] = {};
+      parProduitAgence[produit][agence] = (parProduitAgence[produit][agence] || 0) + 1;
+    }
+    if (agence && cause) {
+      if (!parAgenceCause[agence]) parAgenceCause[agence] = {};
+      parAgenceCause[agence][cause] = (parAgenceCause[agence][cause] || 0) + 1;
+    }
+  });
+
+  const topProduitAgence = [];
+  Object.entries(parProduitAgence).forEach(([produit, agences]) => {
+    Object.entries(agences).forEach(([agence, n]) => {
+      topProduitAgence.push({ produit, agence, tickets: n });
+    });
+  });
+  topProduitAgence.sort((a, b) => b.tickets - a.tickets);
+
+  const causeDominanteParAgence = Object.entries(parAgenceCause).map(([agence, causes]) => {
+    const [causeDominante, n] = Object.entries(causes).sort((a, b) => b[1] - a[1])[0];
+    const totalCausesAgence = Object.values(causes).reduce((s, v) => s + v, 0);
+    return { agence, causeDominante, tickets: n, totalCausesAgence };
+  });
+  causeDominanteParAgence.sort((a, b) => b.tickets - a.tickets);
+
+  return { topProduitAgence, causeDominanteParAgence };
+}
+
 // ---- Intelligence entreprise V1 : résumé compact pour injection dans le
 // prompt d'un assistant conversationnel (IKO/Dashboard, Max/Technicien).
 // Ne garde que les indicateurs les plus utiles pour répondre à une
@@ -393,20 +444,42 @@ export function detecterAlertesSAV({ tauxUrgents, topCauses, topProduitsDetail, 
 // donnée chargée" — retourne null si absent/nul, pour que
 // blocPromptAnalyticsSAV n'affiche jamais un "0%" trompeur en l'absence
 // réelle de données.
-export function resumerAnalyticsSAV(analytics, nbTickets) {
+// V2 : croisements (résultat optionnel de calculerCroisementsSAV) est un
+// 3e paramètre OPTIONNEL — omis, le comportement est strictement celui de
+// la V1 (non-régression garantie, aucune fonction/signature existante
+// cassée) ; fourni, ajoute au résumé les produits les plus coûteux
+// (réutilise coutSAVParProduit déjà calculé, aucun nouveau calcul) et les
+// concentrations produit×agence / agence×cause, toujours plafonnées à 3
+// pour garder le résumé compact.
+export function resumerAnalyticsSAV(analytics, nbTickets, croisements) {
   if (!analytics || !nbTickets) return null;
   const dernierMois = analytics.tendance[analytics.tendance.length - 1];
   const moisPrecedent = analytics.tendance[analytics.tendance.length - 2];
   const tendanceRecente = (dernierMois && moisPrecedent)
     ? (dernierMois.valeur > moisPrecedent.valeur ? "hausse" : dernierMois.valeur < moisPrecedent.valeur ? "baisse" : "stable")
     : null;
-  return {
+  const resume = {
     topProduits: analytics.topProduits.slice(0, 3).map(([produit, n]) => ({ produit, tickets: n })),
     topCauses: analytics.topCauses.slice(0, 3).map(([cause, n]) => ({ cause, tickets: n })),
     tauxUrgents: analytics.tauxUrgents,
     coutSAVGlobal: Math.round(analytics.coutSAVGlobal),
     tendanceRecente,
+    // V2 : produits les plus coûteux — réutilise coutSAVParProduit déjà
+    // calculé par calculerAnalyticsSAV (aucun nouveau calcul), disponible
+    // même sans passer croisements (pas besoin de calculerCroisementsSAV
+    // pour celui-ci).
+    topProduitsCouteux: (analytics.coutSAVParProduit || []).slice(0, 3).map(([produit, cout]) => ({ produit, cout: Math.round(cout) })),
   };
+  // V2 : concentrations produit×agence et cause dominante par agence —
+  // uniquement si l'appelant fournit croisements (calculerCroisementsSAV(tickets)
+  // déjà exécuté à côté). Absent, le résumé reste strictement celui de la V1
+  // (mêmes champs qu'avant + topProduitsCouteux), aucune régression pour un
+  // appelant qui n'a pas encore été mis à jour.
+  if (croisements) {
+    resume.concentrationsProduitAgence = (croisements.topProduitAgence || []).slice(0, 3);
+    resume.causesDominantesParAgence = (croisements.causeDominanteParAgence || []).slice(0, 3);
+  }
+  return resume;
 }
 
 // Formate resumerAnalyticsSAV() en bloc de prompt, identique pour tous les
@@ -429,6 +502,15 @@ export function blocPromptAnalyticsSAV(resume) {
     }
     if (resume.coutSAVGlobal > 0) {
       lignes.push("Coût SAV total sur les interventions chiffrées : " + resume.coutSAVGlobal + " €.");
+    }
+    if (resume.topProduitsCouteux && resume.topProduitsCouteux.length) {
+      lignes.push("Produits les plus coûteux en SAV : " + resume.topProduitsCouteux.map(p => p.produit + " (" + p.cout + " €)").join(", ") + ".");
+    }
+    if (resume.concentrationsProduitAgence && resume.concentrationsProduitAgence.length) {
+      lignes.push("Concentrations produit × agence : " + resume.concentrationsProduitAgence.map(c => c.produit + " chez " + c.agence + " (" + c.tickets + " tickets)").join(", ") + ".");
+    }
+    if (resume.causesDominantesParAgence && resume.causesDominantesParAgence.length) {
+      lignes.push("Cause SAV dominante par agence : " + resume.causesDominantesParAgence.map(c => c.agence + " → " + c.causeDominante + " (" + c.tickets + "/" + c.totalCausesAgence + ")").join(", ") + ".");
     }
     if (resume.tendanceRecente) {
       lignes.push("Tendance du volume SAV sur le dernier mois : " + resume.tendanceRecente + ".");
