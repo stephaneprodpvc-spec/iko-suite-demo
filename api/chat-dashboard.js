@@ -154,7 +154,7 @@ const OUTIL_SYNTHESE = {
   },
 };
 
-const SYSTEM_PROMPT = `
+const SYSTEM_PROMPT_BASE = `
 Tu es IKO, l'assistant vocal integre au dashboard SAV d'Iko Suite.
 La personne qui te parle est un responsable ou une personne d'agence en
 train de travailler sur le dashboard. Elle te donne des commandes ou
@@ -206,6 +206,47 @@ REGLES
   une demande de precision, jamais pour confirmer une action non
   executee.
 `;
+
+// Plafond nombre d'entrees / taille contenu transmises au prompt - meme
+// convention que chat-conseil.js et chat-amandine.js.
+const CONNAISSANCE_MAX_ENTREES = 20;
+const CONNAISSANCE_MAX_CHARS = 500;
+
+// Filtre server-side la "Connaissance entreprise" transmise par le client
+// (deja extraite du record Clients qu'il a lui-meme charge au demarrage,
+// voir window.IKO_CLIENT_INFO dans dashboard.html - aucun appel Airtable
+// ici). Meme logique que extraireConnaissance() dans chat-conseil.js /
+// chat-amandine.js, adaptee a un tableau deja en JS (pas de JSON.parse
+// d'un champ brut) puisque le tri actif/metier reste une responsabilite
+// serveur, jamais confiee au client. IMPORTANT (isolation tenant) : cette
+// fonction ne fait que filtrer/formater du TEXTE pour le prompt - elle ne
+// lit et n'utilise JAMAIS un identifiant de tenant depuis la connaissance
+// recue ; le perimetre tenant reste exclusivement determine par le JWT/
+// session existant (verif-securite.js), jamais par le contenu du body.
+function filtrerConnaissance(entrees, metierClient) {
+  if (!Array.isArray(entrees)) return [];
+  return entrees
+    .filter(function (e) { return e && typeof e === "object" && e.actif !== false; })
+    .filter(function (e) { return !e.metier || e.metier === metierClient; })
+    .slice(0, CONNAISSANCE_MAX_ENTREES)
+    .map(function (e) {
+      return {
+        categorie: String(e.categorie || "FAQ"),
+        titre: String(e.titre || "").slice(0, 200),
+        contenu: String(e.contenu || "").slice(0, CONNAISSANCE_MAX_CHARS),
+      };
+    });
+}
+
+function buildSystemPrompt(connaissanceEntrees) {
+  const blocConnaissance = (connaissanceEntrees && connaissanceEntrees.length > 0) ? `
+
+CONNAISSANCE PROPRE A CETTE ENTREPRISE
+${connaissanceEntrees.map(function (e) { return "- [" + e.categorie + "] " + e.titre + " : " + e.contenu; }).join("\n")}
+Utilise ces informations quand elles repondent a la question posee. Elles ne
+changent rien aux REGLES ci-dessus sur les actions du dashboard.` : "";
+  return SYSTEM_PROMPT_BASE + blocConnaissance;
+}
 
 const TOOLS = [
   {
@@ -538,6 +579,11 @@ export default async function handler(req, res) {
     const ticketsContexte = Array.isArray(body.tickets) ? body.tickets.slice(0, MAX_TICKETS_CONTEXTE) : [];
     const agenceActuelle = String(body.agenceActuelle || "global").slice(0, 40);
     const historique = Array.isArray(body.historique) ? body.historique.slice(-6) : [];
+    // Connaissance entreprise transmise par le client (deja extraite du
+    // record Clients qu'il a lui-meme charge - voir dashboard.html). Filtree
+    // ici uniquement (actif/metier), jamais utilisee pour determiner un
+    // perimetre tenant : voir commentaire de filtrerConnaissance ci-dessus.
+    const connaissanceActuelle = filtrerConnaissance(body.connaissance, String(body.metier || "").slice(0, 60));
 
     const blocHistorique = historique.length
       ? "\n\nEchanges precedents de cette session (le plus recent en dernier) :\n" +
@@ -598,7 +644,7 @@ precis :
         model: MODELE,
         max_tokens: 500,
         temperature: 0.1,
-        system: [{ type: "text", text: SYSTEM_PROMPT + (body.reunion ? BLOC_REUNION_IKO : ""), cache_control: { type: "ephemeral" } }],
+        system: [{ type: "text", text: buildSystemPrompt(connaissanceActuelle) + (body.reunion ? BLOC_REUNION_IKO : ""), cache_control: { type: "ephemeral" } }],
         tools: TOOLS,
         tool_choice: { type: "any" },
         messages: [{ role: "user", content: messageUtilisateur }],

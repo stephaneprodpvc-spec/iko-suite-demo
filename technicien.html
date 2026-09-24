@@ -105,6 +105,22 @@ const IKO_LOGO = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAZAAAACgCAYAAAAi
 
 const WEBHOOK = '/api/airtable/webhook';
 
+// Connaissance entreprise (FAQ/procedures/regles internes) : deja presente
+// dans window.IKO_CLIENT_INFO, recupere au demarrage avec le reste du
+// record Clients (voir IIFE plus haut) - aucun appel reseau supplementaire
+// ici. Le filtrage (actif/metier) est fait cote serveur (chat-technicien.js),
+// jamais cote client : cette fonction se contente d'extraire le tableau brut.
+function connaissanceEntrepriseLocale() {
+  try {
+    const brut = (window.IKO_CLIENT_INFO && window.IKO_CLIENT_INFO["Connaissance entreprise (JSON)"]) || "[]";
+    const arr = JSON.parse(brut);
+    return Array.isArray(arr) ? arr : [];
+  } catch (e) { return []; }
+}
+function metierEntrepriseLocal() {
+  return (window.IKO_CLIENT_INFO && window.IKO_CLIENT_INFO["Métier"]) || "";
+}
+
 // ==================== Bloc 3 - axe B : photo terrain (Cloudinary) ====================
 // Même compte/preset Cloudinary que index.html (dvbh3llqq / rsia_sav_unsigned,
 // dossier iko-suite-sav) : infrastructure réutilisée à l'identique, pas un
@@ -2288,7 +2304,7 @@ function Technicien({ agence, onClose }) {
       const historiqueClient = selectedTicket ? await chercherHistoriqueClientMax(selectedTicket.fields?.Client) : null;
       const r = await fetch('/api/chat-technicien', {
         method: 'POST', headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({ message: transcript, tickets: contexteTickets, ongletActuel: onglet, historique: maxHistorique.slice(-6), historiqueClient })
+        body: JSON.stringify({ message: transcript, tickets: contexteTickets, ongletActuel: onglet, historique: maxHistorique.slice(-6), historiqueClient, connaissance: connaissanceEntrepriseLocale(), metier: metierEntrepriseLocal() })
       });
       const data = await r.json();
       if (data.erreur) { setMaxErreur(data.erreur); setMaxEnCours(false); return; }

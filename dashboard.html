@@ -109,6 +109,22 @@ const IKO_LOGO = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAZAAAACgCAYAAAAi
 
 const WEBHOOK = '/api/airtable/webhook';
 
+// Connaissance entreprise (FAQ/procedures/regles internes) : deja presente
+// dans window.IKO_CLIENT_INFO, recupere au demarrage avec le reste du
+// record Clients (voir IIFE plus haut) - aucun appel reseau supplementaire
+// ici. Le filtrage (actif/metier) est fait cote serveur (chat-dashboard.js),
+// jamais cote client : cette fonction se contente d'extraire le tableau brut.
+function connaissanceEntrepriseLocale() {
+  try {
+    const brut = (window.IKO_CLIENT_INFO && window.IKO_CLIENT_INFO["Connaissance entreprise (JSON)"]) || "[]";
+    const arr = JSON.parse(brut);
+    return Array.isArray(arr) ? arr : [];
+  } catch (e) { return []; }
+}
+function metierEntrepriseLocal() {
+  return (window.IKO_CLIENT_INFO && window.IKO_CLIENT_INFO["Métier"]) || "";
+}
+
 let AGENCES = ["Agence 1", "Agence 2", "Agence 3", "Agence 4"];
 
 // Agences generiques et paramétrables (1 à 10), configurables par mode concepteur.
@@ -3776,7 +3792,7 @@ function Dashboard({ agenceAccess, onClose }) {
       }));
       const r = await fetch('/api/chat-dashboard', {
         method: 'POST', headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({ message: transcript, tickets: contexteTickets, agenceActuelle: agenceFilter, historique: ikoHistorique.slice(-6) })
+        body: JSON.stringify({ message: transcript, tickets: contexteTickets, agenceActuelle: agenceFilter, historique: ikoHistorique.slice(-6), connaissance: connaissanceEntrepriseLocale(), metier: metierEntrepriseLocal() })
       });
       const data = await r.json();
       if (data.erreur) { setAmandineErreur(data.erreur); setAmandineEnCours(false); return; }
