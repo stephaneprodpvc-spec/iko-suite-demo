@@ -2,6 +2,10 @@ import { verifierOrigine, verifierDebit, reponseBloquee } from "./_securite.js";
 import { normaliserConnaissance, blocPromptConnaissance, affinerPourPrompt } from "./_connaissance.js";
 import { blocPromptAnalyticsSAV, genererRecommandationsSAV, blocPromptRecommandationsSAV } from "../analytics-sav.js";
 import { nomAssistantDepuisEntree } from "./_assistants.js";
+// Diagnostic IA métier V1 : mêmes modules de vocabulaire métier que
+// chat-amandine.js (aucun nouveau fichier, aucune donnée dupliquée).
+import vocabMenuiserie from "./_trades/menuiserie.js";
+import vocabPlomberieChauffage from "./_trades/plomberie_chauffage.js";
 
 // api/chat-technicien.js
 // Relais serveur entre le widget vocal Max (technicien.html) et l'API
@@ -91,6 +95,18 @@ function buildSystemPrompt(connaissanceEntrees, analyticsSAVResume, nomAssistant
 
 // ==================== Bloc 1 : diagnostic assisté ====================
 
+// Diagnostic IA métier V1 : même mapping "Métier" Airtable -> vocabulaire
+// métier que chat-amandine.js (TRADE_ID/metierId), volontairement dupliqué
+// ici en 3 lignes plutôt que factorisé dans un nouveau module partagé — les
+// deux fichiers restent indépendants comme le reste du repo (convention
+// déjà en place, voir _connaissance.js qui lui EST partagé car plus gros).
+const TRADES_DIAGNOSTIC = { menuiserie: vocabMenuiserie, plomberie_chauffage: vocabPlomberieChauffage };
+function resoudreTradeIdDiagnostic(metier) {
+  if (metier === "Menuiserie") return "menuiserie";
+  if (metier === "Plomberie & Chauffage") return "plomberie_chauffage";
+  return null;
+}
+
 const SYSTEM_PROMPT_DIAGNOSTIC = `
 Tu es Max, copilote de diagnostic pour un technicien menuiserie/BTP sur le
 terrain, dans l'application Iko Suite. Le technicien a ouvert un ticket
@@ -116,6 +132,24 @@ RÈGLES ABSOLUES
   PUREMENT INFORMATIF (contexte passé) : ne le confonds jamais avec l'état
   actuel du ticket ouvert. Utilise-le seulement s'il éclaire réellement le
   diagnostic (ex. panne récurrente au même endroit).
+- Un contexte métier (nom du métier, produits typiques, pistes de
+  diagnostic de base) peut être fourni : utilise-le UNIQUEMENT pour mieux
+  INTERPRÉTER les informations réellement présentes sur CE ticket (le bon
+  vocabulaire, les bonnes questions à se poser). Ne t'en sers JAMAIS pour
+  fabriquer un fait, un produit ou une panne qui ne provient pas du ticket,
+  des photos ou de la connaissance entreprise. Sans contexte métier fourni,
+  raisonne normalement à partir des seules données du ticket.
+- Si une connaissance propre à l'entreprise (FAQ/procédures/règles) est
+  fournie, utilise-la comme le reste du contexte, avec les mêmes limites.
+- Si une analyse de photo a déjà été faite plus tôt sur ce ticket (fournie
+  dans le contexte), elle est complémentaire et déjà disponible : ne la
+  redemande jamais, ne dis jamais que tu vas "regarder la photo" toi-même,
+  utilise-la simplement comme un élément de FAIT ou de SIGNAL supplémentaire.
+- Si les informations disponibles (texte du ticket + photos + connaissance
+  entreprise) sont vraiment insuffisantes pour une PISTE fiable, dis-le
+  clairement (FAIT/SIGNAL courts, PISTE vide ou explicitement incertaine) et
+  utilise PROPOSITION pour demander la vérification concrète la plus utile
+  à faire sur place, plutôt que de forcer une hypothèse peu fiable.
 - resume_vocal : 1 à 2 phrases courtes, ton naturel de collègue, sans
   markdown ni emoji, utilisables telles quelles à l'oral.
 - action_suggeree : uniquement si une action du parcours technicien
@@ -589,6 +623,32 @@ async function traiterDiagnostic(req, res, body, cle) {
       : [];
     if (historiqueTickets.length) contexteTicket.historiqueTicketsClient = historiqueTickets;
 
+    // Diagnostic IA métier V1 : métier + connaissance entreprise déjà
+    // chargés côté client (window.IKO_CLIENT_INFO), transmis tels quels par
+    // technicien.html — aucun nouvel appel Airtable ici, mêmes fonctions de
+    // filtrage que le chat Max principal (_connaissance.js, déjà importé).
+    const metierRecu = String(body.metier || "").slice(0, 60);
+    const tradeIdDiagnostic = resoudreTradeIdDiagnostic(metierRecu);
+    const vocabMetierDiagnostic = tradeIdDiagnostic ? TRADES_DIAGNOSTIC[tradeIdDiagnostic] : null;
+    const connaissanceDiagnostic = affinerPourPrompt(
+      normaliserConnaissance(body.connaissance, metierRecu),
+      message || contexteTicket.probleme
+    );
+
+    // Analyse photo V1 (Bloc 2D) : lue si déjà présente côté client, jamais
+    // relancée ici (pas de nouvel appel Anthropic Vision, pas de second
+    // déclenchement) — purement complémentaire au diagnostic.
+    const analysePhotoRecue = body.analysePhotoExistante && typeof body.analysePhotoExistante === "object"
+      ? {
+          elements_visibles: String(body.analysePhotoExistante.elements_visibles || "").slice(0, 500),
+          anomalie_dommage: String(body.analysePhotoExistante.anomalie_dommage || "").slice(0, 500),
+          zone_concernee: String(body.analysePhotoExistante.zone_concernee || "").slice(0, 200),
+          indices_diagnostic: String(body.analysePhotoExistante.indices_diagnostic || "").slice(0, 500),
+          confiance: String(body.analysePhotoExistante.confiance || "").slice(0, 20),
+          limites: String(body.analysePhotoExistante.limites || "").slice(0, 300),
+        }
+      : null;
+
     const blocsContenu = [];
     let nbPhotosAnalysees = 0;
     if (demanderPhotos) {
@@ -602,12 +662,28 @@ async function traiterDiagnostic(req, res, body, cle) {
       }
     }
 
+    const blocMetierDiagnostic = vocabMetierDiagnostic
+      ? "\n\nContexte metier de l'entreprise (a utiliser pour interpreter, jamais pour inventer) :\n" +
+        "Metier : " + vocabMetierDiagnostic.nom_metier + "\n" +
+        "Produits typiques : " + vocabMetierDiagnostic.produits.join(", ") + "\n" +
+        "Pistes de diagnostic de base pour ce metier (reperes generaux, pas un diagnostic sur ce ticket) :\n" +
+        vocabMetierDiagnostic.diagnostics.map(d => "- " + d).join("\n")
+      : "";
+
+    const blocAnalysePhotoDiagnostic = analysePhotoRecue
+      ? "\n\nAnalyse deja faite de la derniere photo ajoutee sur ce ticket (NE PAS la redemander, deja disponible) :\n" +
+        JSON.stringify(analysePhotoRecue)
+      : "";
+
     const texteContexte =
       "Ticket ouvert (JSON) :\n" + JSON.stringify(contexteTicket) +
       (historique.length
         ? "\n\nEchanges precedents de cette session :\n" +
           historique.map(h => (h.role === "user" ? "Technicien: " : "Toi: ") + String(h.texte || "").slice(0, 300)).join("\n")
         : "") +
+      blocMetierDiagnostic +
+      blocPromptConnaissance(connaissanceDiagnostic) +
+      blocAnalysePhotoDiagnostic +
       "\n\nDemande du technicien : \"" + (message || "Aide-moi a diagnostiquer ce ticket.") + "\"" +
       (demanderPhotos
         ? "\n\n" + nbPhotosAnalysees + " photo(s) jointe(s) ci-dessus a analyser."
