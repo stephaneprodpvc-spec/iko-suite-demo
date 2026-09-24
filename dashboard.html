@@ -2177,6 +2177,68 @@ async function chargerInterventionsSAV() {
   }
 }
 
+// ---- Alertes SAV : détection purement déterministe à partir des
+// agrégats déjà calculés (calculerAnalyticsSAV / calculerPerformanceEtResolution).
+// Aucune IA, aucune prédiction, aucun appel réseau, aucun seuil inventé au
+// hasard :
+// - Taux urgent élevé : réutilise le seuil déjà en place ailleurs dans le
+//   dashboard (tauxUrgents>20, cf. carte "Taux de tickets urgents").
+// - Évolution récente : réutilise topProduitsDetail.evolution déjà calculé
+//   (seuil >=3 tickets datés sur la fenêtre 6 mois, déjà en place).
+// - Cause / produit / agence "anormalement élevé(e)" : aucun seuil de ce
+//   type n'existait dans le code. Faute de seuil réutilisable, détection
+//   statistique explicite (moyenne + 1 écart-type de la distribution
+//   concernée) — méthode standard, pas un pourcentage choisi au hasard.
+//   Nécessite au moins 3 éléments distincts pour être significative,
+//   sinon l'alerte correspondante est simplement absente (pas de faux
+//   positif sur un jeu de données trop petit).
+function ecartTypeMoyenne(valeurs) {
+  const moyenne = valeurs.reduce((s, v) => s + v, 0) / valeurs.length;
+  const variance = valeurs.reduce((s, v) => s + (v - moyenne) ** 2, 0) / valeurs.length;
+  return { moyenne, ecartType: Math.sqrt(variance) };
+}
+
+function detecterAlertesSAV({ tauxUrgents, topCauses, topProduitsDetail, resolutionParAgence }) {
+  const alertes = [];
+
+  if (tauxUrgents > 20) {
+    alertes.push({ type: "urgent", texte: `Taux de tickets urgents élevé : ${tauxUrgents}%.` });
+  }
+
+  if (topCauses.length >= 3) {
+    const { moyenne, ecartType } = ecartTypeMoyenne(topCauses.map(([, n]) => n));
+    const [causeTop, nTop] = topCauses[0];
+    if (ecartType > 0 && nTop > moyenne + ecartType) {
+      alertes.push({ type: "cause", texte: `Cause SAV en forte récurrence : "${causeTop}" (${nTop} tickets, nettement au-dessus de la moyenne des causes).` });
+    }
+  }
+
+  if (topProduitsDetail.length >= 3) {
+    const { moyenne, ecartType } = ecartTypeMoyenne(topProduitsDetail.map(p => p.total));
+    const top = topProduitsDetail[0];
+    if (ecartType > 0 && top.total > moyenne + ecartType) {
+      alertes.push({ type: "produit", texte: `Volume SAV anormalement élevé sur "${top.produit}" (${top.total} tickets, nettement au-dessus de la moyenne des produits).` });
+    }
+  }
+
+  if (resolutionParAgence && resolutionParAgence.length >= 3) {
+    const tauxRetourParAgence = resolutionParAgence.map(a => ({ agence: a.agence, tauxRetour: 100 - a.taux }));
+    const { moyenne, ecartType } = ecartTypeMoyenne(tauxRetourParAgence.map(a => a.tauxRetour));
+    const pire = [...tauxRetourParAgence].sort((a, b) => b.tauxRetour - a.tauxRetour)[0];
+    if (ecartType > 0 && pire.tauxRetour > moyenne + ecartType) {
+      alertes.push({ type: "agence", texte: `Taux de retour élevé pour l'agence ${pire.agence} (${pire.tauxRetour}%, nettement au-dessus de la moyenne des agences).` });
+    }
+  }
+
+  topProduitsDetail.forEach(p => {
+    if (p.evolution === "hausse") {
+      alertes.push({ type: "evolution", texte: `Évolution en hausse récente pour "${p.produit}".` });
+    }
+  });
+
+  return alertes;
+}
+
 function ModalAnalyticsSAV({ tickets, onClose }) {
   const { topProduits, topProduitsDetail, erreurTopProduitsDetail, totalAvecAgence, repartitionAgences, repartitionStatuts, tauxUrgents, tendance, maxTendance, estimationMoisSuivant, topCauses, coutSAVGlobal, coutSAVParProduit, coutSAVParAgence } = calculerAnalyticsSAV(tickets);
 
@@ -2194,6 +2256,7 @@ function ModalAnalyticsSAV({ tickets, onClose }) {
     });
   }, []);
   const perfEtResolution = interventions ? calculerPerformanceEtResolution(interventions, tickets) : null;
+  const alertesSAV = detecterAlertesSAV({ tauxUrgents, topCauses, topProduitsDetail, resolutionParAgence: perfEtResolution ? perfEtResolution.resolutionParAgence : [] });
 
   // ---- Socle IA : synthèse direction (mode "synthese_direction") ----
   // Reutilise l'architecture existante (api/chat-dashboard.js, meme
@@ -2237,6 +2300,15 @@ function ModalAnalyticsSAV({ tickets, onClose }) {
       <div className="modal-box" style={{maxWidth:"560px"}}>
         <div style={{fontSize:"16px",fontWeight:"900",color:C.white,marginBottom:"4px"}}>📊 Analytics SAV</div>
         <div style={{fontSize:"11px",color:C.muted,marginBottom:"16px"}}>{tickets.length} ticket(s) chargé(s) — lecture seule</div>
+
+        {alertesSAV.length > 0 && (
+          <div style={{marginBottom:"18px",border:"1px solid rgba(220,38,38,0.3)",background:"rgba(220,38,38,0.06)",borderRadius:"8px",padding:"10px 12px"}}>
+            <div style={{fontSize:"12px",fontWeight:"700",color:C.rouge,marginBottom:"6px"}}>🔔 Alertes SAV</div>
+            {alertesSAV.map((a, i) => (
+              <div key={i} style={{fontSize:"11.5px",color:C.text,marginBottom:i<alertesSAV.length-1?"4px":0}}>• {a.texte}</div>
+            ))}
+          </div>
+        )}
 
         <div style={{marginBottom:"18px"}}>
           <div style={{fontSize:"12px",fontWeight:"700",color:C.white,marginBottom:"8px"}}>Produits générant le plus de SAV</div>
