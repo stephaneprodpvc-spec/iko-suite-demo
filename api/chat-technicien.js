@@ -1,5 +1,5 @@
 import { verifierOrigine, verifierDebit, reponseBloquee } from "./_securite.js";
-import { normaliserConnaissance, blocPromptConnaissance } from "./_connaissance.js";
+import { normaliserConnaissance, blocPromptConnaissance, affinerPourPrompt } from "./_connaissance.js";
 
 // api/chat-technicien.js
 // Relais serveur entre le widget vocal Max (technicien.html) et l'API
@@ -321,9 +321,9 @@ export default async function handler(req, res) {
     // Connaissance entreprise transmise par le client (deja extraite du
     // record Clients qu'il a lui-meme charge - voir technicien.html).
     // Filtree ici uniquement (actif/metier), jamais utilisee pour
-    // determiner un perimetre tenant : voir commentaire de
-    // filtrerConnaissance ci-dessus.
-    const connaissanceActuelle = normaliserConnaissance(body.connaissance, String(body.metier || "").slice(0, 60));
+    // determiner un perimetre tenant : voir commentaire ci-dessus.
+    // Priorisee ensuite selon la commande vocale en cours (affinerPourPrompt).
+    const connaissanceActuelle = affinerPourPrompt(normaliserConnaissance(body.connaissance, String(body.metier || "").slice(0, 60)), message);
 
     const blocHistorique = historique.length
       ? "\n\nEchanges precedents de cette session (le plus recent en dernier) :\n" +

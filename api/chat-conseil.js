@@ -6,7 +6,7 @@
 import { verifierOrigine, verifierDebit } from "./_securite.js";
 import vocabMenuiserie from "./_trades/menuiserie.js";
 import vocabPlomberieChauffage from "./_trades/plomberie_chauffage.js";
-import { extraireConnaissanceDuRecord, blocPromptConnaissance } from "./_connaissance.js";
+import { extraireConnaissanceDuRecord, blocPromptConnaissance, affinerPourPrompt } from "./_connaissance.js";
 
 const MODELE = "claude-haiku-4-5-20251001"; // le plus economique, largement suffisant ici
 const MAX_MESSAGES = 30;        // garde-fou : longueur max d'une conversation
@@ -181,7 +181,13 @@ export default async function handler(req, res) {
     const vocabActuel = loadTradeVocab(contexteClient ? contexteClient.tradeId : null);
     const nomEntrepriseActuel = contexteClient ? contexteClient.nom : null;
     const agencesActuelles = contexteClient ? contexteClient.agences : null;
-    const connaissanceActuelle = contexteClient ? contexteClient.connaissance : null;
+    // Dernier message du visiteur (déjà dans req.body, aucun appel
+    // supplémentaire) : sert uniquement à prioriser la connaissance la plus
+    // pertinente pour SA question dans le budget de contexte transmis.
+    const dernierMessageVisiteur = [...messages].reverse().find(function (m) { return m && m.role !== "assistant" && m.texte; });
+    const connaissanceActuelle = contexteClient
+      ? affinerPourPrompt(contexteClient.connaissance, dernierMessageVisiteur ? dernierMessageVisiteur.texte : "")
+      : null;
     const systemPromptActuel = buildSystemPrompt(vocabActuel, nomEntrepriseActuel, agencesActuelles, connaissanceActuelle);
 
     // Conversion au format attendu par l'API Messages + validation.

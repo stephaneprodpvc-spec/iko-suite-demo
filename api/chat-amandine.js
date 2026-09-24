@@ -13,7 +13,7 @@
 import { verifierOrigine, verifierDebit } from "./_securite.js";
 import vocabMenuiserie from "./_trades/menuiserie.js";
 import vocabPlomberieChauffage from "./_trades/plomberie_chauffage.js";
-import { extraireConnaissanceDuRecord, blocPromptConnaissance } from "./_connaissance.js";
+import { extraireConnaissanceDuRecord, blocPromptConnaissance, affinerPourPrompt } from "./_connaissance.js";
 
 // Vocabulaire parametrable par metier (voir trades/*.js). Menuiserie reste
 // le repli par defaut pour ne rien casser sur les clients demo existants.
@@ -548,13 +548,19 @@ try {
   const agencesObjetsActuels = (contexteClient && contexteClient.agences) || AGENCES_VALIDES.map(function (n) { return { nom: n, emailAgence: "", emailTechnicien: "" }; });
   const agencesNomsActuels = agencesObjetsActuels.map(function (a) { return a.nom; });
   const questionnaireActuel = contexteClient ? contexteClient.questionnaire : null;
-  const connaissanceActuelle = contexteClient ? contexteClient.connaissance : null;
   const toolsActuels = buildTools(agencesNomsActuels, vocabActuel);
   const messages = (req.body || {}).messages;
   if (!Array.isArray(messages) || messages.length === 0) {
     return res.status(400).json({ error: "Aucun message recu" });
   }
   const messagesUtiles = messages.length > MAX_MESSAGES ? messages.slice(-MAX_MESSAGES) : messages;
+  // Dernier message du client (deja dans req.body, aucun appel
+  // supplementaire) : sert uniquement a prioriser la connaissance la plus
+  // pertinente pour SA question dans le budget de contexte transmis.
+  const dernierMessageClient = [...messagesUtiles].reverse().find(function (m) { return m && m.role !== "assistant" && m.texte; });
+  const connaissanceActuelle = contexteClient
+    ? affinerPourPrompt(contexteClient.connaissance, dernierMessageClient ? dernierMessageClient.texte : "")
+    : null;
 
   const convertis = [];
   for (const m of messagesUtiles) {
