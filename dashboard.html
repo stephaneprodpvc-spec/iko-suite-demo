@@ -1894,11 +1894,29 @@ function calculerAnalyticsSAV(tickets) {
   const parCause = {};
   const coutParProduit = {};
   const coutParAgence = {};
+  // Détail "Produits générant le plus de SAV" (clients/causes distincts) :
+  // Sets indexés par produit, alimentés dans la même boucle que parProduit
+  // pour ne rien recalculer en plus (aucun nouvel appel réseau, aucune
+  // boucle supplémentaire sur tickets).
+  const clientsParProduit = {};
+  const causesParProduit = {};
   let nbUrgents = 0;
   let coutSAVGlobal = 0;
   tickets.forEach(t => {
     const produit = (t.fields?.Produit || "").trim();
-    if (produit) parProduit[produit] = (parProduit[produit] || 0) + 1;
+    if (produit) {
+      parProduit[produit] = (parProduit[produit] || 0) + 1;
+      const clientNom = (t.fields?.Client || "").trim();
+      if (clientNom) {
+        if (!clientsParProduit[produit]) clientsParProduit[produit] = new Set();
+        clientsParProduit[produit].add(clientNom);
+      }
+      const causeProduit = t.fields?.["Cause SAV"];
+      if (causeProduit) {
+        if (!causesParProduit[produit]) causesParProduit[produit] = new Set();
+        causesParProduit[produit].add(causeProduit);
+      }
+    }
     const agence = (t.fields?.Agence || "").trim();
     if (agence) parAgence[agence] = (parAgence[agence] || 0) + 1;
     const statut = t.fields?.Statut || "Nouveau";
@@ -1984,7 +2002,30 @@ function calculerAnalyticsSAV(tickets) {
     return { produit, total, recent, precedent, tendanceProduit };
   });
 
-  return { topProduits, totalAvecAgence, repartitionAgences, repartitionStatuts, tauxUrgents, nbUrgents, tendance, maxTendance, estimationMoisSuivant, produitsRisque, topCauses, coutSAVGlobal, coutSAVParProduit, coutSAVParAgence };
+  // Détail table "Produits générant le plus de SAV" (ModalAnalyticsSAV) :
+  // tickets/clients/causes distincts + tendance, réutilisée sans invention —
+  // évolution affichée seulement si assez de tickets datés fiables sur la
+  // fenêtre 6 mois (seuil bas pour éviter un "hausse/baisse" trompeur sur
+  // 1-2 tickets), sinon non affichée plutôt qu'estimée. Try/catch : section
+  // purement locale (aucun appel réseau), mais protégée pour ne jamais faire
+  // planter tout le panneau Analytics sur un cas de champ inattendu.
+  let topProduitsDetail = [];
+  let erreurTopProduitsDetail = "";
+  try {
+    topProduitsDetail = topProduits.map(([produit, total]) => {
+      const nbClients = clientsParProduit[produit] ? clientsParProduit[produit].size : 0;
+      const nbCauses = causesParProduit[produit] ? causesParProduit[produit].size : 0;
+      const parMoisProduit = parProduitParMois[produit] || {};
+      const recent = clesRecentes.reduce((s, k) => s + (parMoisProduit[k] || 0), 0);
+      const precedent = clesPrecedentes.reduce((s, k) => s + (parMoisProduit[k] || 0), 0);
+      const evolution = (recent + precedent) >= 3 ? (recent > precedent ? "hausse" : recent < precedent ? "baisse" : "stable") : null;
+      return { produit, total, nbClients, nbCauses, evolution };
+    });
+  } catch (e) {
+    erreurTopProduitsDetail = "Erreur de calcul — section indisponible pour l'instant.";
+  }
+
+  return { topProduits, topProduitsDetail, erreurTopProduitsDetail, totalAvecAgence, repartitionAgences, repartitionStatuts, tauxUrgents, nbUrgents, tendance, maxTendance, estimationMoisSuivant, produitsRisque, topCauses, coutSAVGlobal, coutSAVParProduit, coutSAVParAgence };
 }
 
 // ---- Bloc Interventions SAV (taux résolution 1er passage + performance
@@ -2105,7 +2146,7 @@ async function chargerInterventionsSAV() {
 }
 
 function ModalAnalyticsSAV({ tickets, onClose }) {
-  const { topProduits, totalAvecAgence, repartitionAgences, repartitionStatuts, tauxUrgents, tendance, maxTendance, estimationMoisSuivant, topCauses, coutSAVGlobal, coutSAVParProduit, coutSAVParAgence } = calculerAnalyticsSAV(tickets);
+  const { topProduits, topProduitsDetail, erreurTopProduitsDetail, totalAvecAgence, repartitionAgences, repartitionStatuts, tauxUrgents, tendance, maxTendance, estimationMoisSuivant, topCauses, coutSAVGlobal, coutSAVParProduit, coutSAVParAgence } = calculerAnalyticsSAV(tickets);
 
   // Interventions SAV brutes : chargées une fois à l'ouverture du panneau
   // (taux résolution 1er passage + performance techniciens en dépendent).
@@ -2167,13 +2208,34 @@ function ModalAnalyticsSAV({ tickets, onClose }) {
 
         <div style={{marginBottom:"18px"}}>
           <div style={{fontSize:"12px",fontWeight:"700",color:C.white,marginBottom:"8px"}}>Produits générant le plus de SAV</div>
-          {topProduits.length === 0 && <div style={{fontSize:"11px",color:C.muted,fontStyle:"italic"}}>Aucun produit renseigné sur les tickets chargés.</div>}
-          {topProduits.length > 0 && (
+          {erreurTopProduitsDetail && (
+            <div style={{fontSize:"11px",color:"#DC2626",fontWeight:"700"}}>⚠️ {erreurTopProduitsDetail}</div>
+          )}
+          {!erreurTopProduitsDetail && topProduitsDetail.length === 0 && (
+            <div style={{fontSize:"11px",color:C.muted,fontStyle:"italic"}}>Aucun produit renseigné sur les tickets chargés.</div>
+          )}
+          {!erreurTopProduitsDetail && topProduitsDetail.length > 0 && (
             <div style={{border:"1px solid "+C.border,borderRadius:"8px",overflow:"hidden"}}>
-              {topProduits.map(([produit, n], i) => (
-                <div key={produit} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 12px",borderBottom:i<topProduits.length-1?"1px solid "+C.border:"none",fontSize:"12px"}}>
-                  <span>{produit}</span>
-                  <b style={{color:C.or}}>{n}</b>
+              <div style={{display:"flex",padding:"6px 12px",fontSize:"9.5px",fontWeight:"700",color:C.muted,borderBottom:"1px solid "+C.border,textTransform:"uppercase"}}>
+                <span style={{flex:2}}>Produit</span>
+                <span style={{flex:1,textAlign:"right"}}>Tickets</span>
+                <span style={{flex:1,textAlign:"right"}}>Clients</span>
+                <span style={{flex:1,textAlign:"right"}}>Causes</span>
+              </div>
+              {topProduitsDetail.map((p, i) => (
+                <div key={p.produit} style={{display:"flex",alignItems:"center",padding:"7px 12px",borderBottom:i<topProduitsDetail.length-1?"1px solid "+C.border:"none",fontSize:"12px"}}>
+                  <span style={{flex:2}}>
+                    {p.produit}
+                    {p.evolution && (
+                      <span title={"Tendance 6 mois : "+p.evolution}
+                        style={{marginLeft:"6px",fontSize:"10px",color:p.evolution==="hausse"?C.rouge:(p.evolution==="baisse"?"#22C55E":C.muted)}}>
+                        {p.evolution==="hausse"?"↑":p.evolution==="baisse"?"↓":"→"}
+                      </span>
+                    )}
+                  </span>
+                  <b style={{flex:1,textAlign:"right",color:C.or}}>{p.total}</b>
+                  <span style={{flex:1,textAlign:"right"}}>{p.nbClients}</span>
+                  <span style={{flex:1,textAlign:"right"}}>{p.nbCauses}</span>
                 </div>
               ))}
             </div>
