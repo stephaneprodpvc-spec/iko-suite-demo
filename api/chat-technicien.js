@@ -148,6 +148,115 @@ const OUTIL_DIAGNOSTIC = {
   },
 };
 
+// ==================== Bloc 2D : analyse automatique d'une photo SAV ====================
+// Déclenchée juste après l'ajout d'une photo terrain (voir technicien.html,
+// ajouterPhotosTerrain). Complète le diagnostic Max, ne le remplace jamais :
+// lecture visuelle rapide et strictement factuelle d'UNE photo, réutilise
+// recupererPhotoValidee (même infra que le Bloc 1 diagnostic). Rien n'est
+// écrit dans Airtable par ce mode : affichage uniquement, le technicien
+// reste seul décisionnaire.
+
+const SYSTEM_PROMPT_ANALYSE_PHOTO = `
+Tu es Max, et tu donnes une première lecture visuelle rapide d'UNE photo
+SAV que le technicien vient d'ajouter, dans l'application Iko Suite. Cette
+lecture complète un éventuel diagnostic existant, elle ne le remplace jamais.
+
+RÈGLES ABSOLUES
+- Reste strictement factuel : décris uniquement ce qui est réellement
+  visible sur la photo.
+- Ne présente jamais une hypothèse comme un fait acquis. Si tu formules une
+  piste, dis-le explicitement ("cela pourrait indiquer...").
+- N'invente jamais un élément, une anomalie ou une mesure absente de
+  l'image.
+- Si la photo est trop floue, trop sombre, trop éloignée, ou ne permet pas
+  de conclure : dis-le clairement dans "limites" plutôt que de forcer une
+  lecture. Les autres champs peuvent alors rester vides.
+- confiance : "faible" si la photo est peu exploitable, "moyenne" si
+  partiellement exploitable, "elevee" UNIQUEMENT si les éléments visibles
+  sont nets et sans ambiguïté.
+- recommandation : uniquement si une suite concrète et utile se dégage
+  clairement de la photo (ex. "prendre une photo plus rapprochée de la
+  zone X", "vérifier l'état de..."). Laisse vide sinon.
+`;
+
+const OUTIL_ANALYSE_PHOTO = {
+  name: "analyser_photo_sav",
+  description: "Donne une première lecture factuelle d'une photo SAV, sans jamais inventer d'élément absent de l'image.",
+  input_schema: {
+    type: "object",
+    properties: {
+      elements_visibles: { type: "string", description: "Éléments concrets identifiables sur la photo (produit, matériau, environnement...)." },
+      anomalie_dommage: { type: "string", description: "Anomalie ou dommage apparent, si réellement visible. Vide sinon." },
+      zone_concernee: { type: "string", description: "Zone ou partie précise concernée par l'anomalie, si identifiable." },
+      indices_diagnostic: { type: "string", description: "Indices utiles pour orienter le diagnostic, formulés prudemment." },
+      confiance: { type: "string", enum: NIVEAUX_CONFIANCE, description: "Niveau de confiance honnête dans cette lecture." },
+      recommandation: { type: "string", description: "Recommandation concrète pour la suite, uniquement si elle se dégage clairement de la photo." },
+      limites: { type: "string", description: "À remplir si la photo est insuffisante, floue ou ambiguë pour conclure ; vide sinon." },
+    },
+    required: ["elements_visibles", "anomalie_dommage", "zone_concernee", "indices_diagnostic", "confiance", "recommandation", "limites"],
+  },
+};
+
+async function traiterAnalysePhoto(req, res, body, cle) {
+  try {
+    const photo = await recupererPhotoValidee(String(body.photoUrl || ""));
+    if (!photo) {
+      return res.status(200).json({ erreur: "", limites: "Photo inaccessible ou illisible : aucune analyse possible.", nonExploitable: true });
+    }
+
+    const contexteRecu = body.contexte && typeof body.contexte === "object" ? body.contexte : {};
+    const contexte = {
+      produit: String(contexteRecu.produit || "").slice(0, 200),
+      probleme: String(contexteRecu.probleme || "").slice(0, 500),
+      diagnosticExistant: String(contexteRecu.diagnosticExistant || "").slice(0, 500),
+      metier: String(contexteRecu.metier || "").slice(0, 60),
+    };
+
+    const blocsContenu = [
+      { type: "image", source: { type: "base64", media_type: photo.media_type, data: photo.data } },
+      { type: "text", text: "Contexte de l'intervention (JSON, purement informatif, ne décrit pas forcément ce qui est visible sur CETTE photo) :\n" + JSON.stringify(contexte) },
+    ];
+
+    const reponse = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-api-key": cle, "anthropic-version": "2023-06-01" },
+      body: JSON.stringify({
+        model: MODELE_SONNET,
+        max_tokens: 500,
+        temperature: 0.2,
+        system: [{ type: "text", text: SYSTEM_PROMPT_ANALYSE_PHOTO, cache_control: { type: "ephemeral" } }],
+        tools: [OUTIL_ANALYSE_PHOTO],
+        tool_choice: { type: "tool", name: "analyser_photo_sav" },
+        messages: [{ role: "user", content: blocsContenu }],
+      }),
+    });
+
+    if (!reponse.ok) {
+      const detail = await reponse.text();
+      console.error("Erreur API Anthropic (analyse photo):", reponse.status, detail);
+      return res.status(502).json({ erreur: "Analyse photo momentanément indisponible." });
+    }
+
+    const data = await reponse.json();
+    const appel = (Array.isArray(data.content) ? data.content : []).find(b => b.type === "tool_use" && b.name === "analyser_photo_sav");
+    if (!appel) return res.status(502).json({ erreur: "Réponse d'analyse invalide." });
+
+    const sortie = appel.input || {};
+    return res.status(200).json({
+      elements_visibles: String(sortie.elements_visibles || ""),
+      anomalie_dommage: String(sortie.anomalie_dommage || ""),
+      zone_concernee: String(sortie.zone_concernee || ""),
+      indices_diagnostic: String(sortie.indices_diagnostic || ""),
+      confiance: NIVEAUX_CONFIANCE.includes(sortie.confiance) ? sortie.confiance : "moyenne",
+      recommandation: String(sortie.recommandation || ""),
+      limites: String(sortie.limites || ""),
+    });
+  } catch (e) {
+    console.error("Erreur traiterAnalysePhoto:", e);
+    return res.status(500).json({ erreur: "Une erreur est survenue pendant l'analyse de la photo." });
+  }
+}
+
 // ==================== Bloc 2C : suggestions de lignes de devis ====================
 
 const SYSTEM_PROMPT_DEVIS = `
@@ -317,12 +426,13 @@ export default async function handler(req, res) {
 
     // Bloc 1 + Bloc 2 : modes dédiés, distincts de la navigation par
     // défaut. Origine et débit déjà vérifiés ci-dessus pour tous les modes.
-    const modeRequete = ["diagnostic", "devis_suggestion", "structurer_compte_rendu"].includes(body.mode)
+    const modeRequete = ["diagnostic", "devis_suggestion", "structurer_compte_rendu", "analyser_photo"].includes(body.mode)
       ? body.mode
       : "navigation";
     if (modeRequete === "diagnostic") return await traiterDiagnostic(req, res, body, cle);
     if (modeRequete === "devis_suggestion") return await traiterDevisSuggestion(req, res, body, cle);
     if (modeRequete === "structurer_compte_rendu") return await traiterCompteRendu(req, res, body, cle);
+    if (modeRequete === "analyser_photo") return await traiterAnalysePhoto(req, res, body, cle);
 
     // Nom deja resolu cote client (technicien.html lit window.IKO_CLIENT_INFO,
     // deja charge via la session/le tenant : pas de nouvel appel Airtable ici).
