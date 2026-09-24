@@ -1,6 +1,7 @@
 import { verifierOrigine, verifierDebit, reponseBloquee } from "./_securite.js";
 import { normaliserConnaissance, blocPromptConnaissance, affinerPourPrompt } from "./_connaissance.js";
 import { blocPromptAnalyticsSAV, genererRecommandationsSAV, blocPromptRecommandationsSAV } from "../analytics-sav.js";
+import { nomAssistantDepuisEntree } from "./_assistants.js";
 
 // api/chat-technicien.js
 // Relais serveur entre le widget vocal Max (technicien.html) et l'API
@@ -36,8 +37,11 @@ const MAX_PHOTOS_DIAGNOSTIC = 3;
 const MAX_OCTETS_PHOTO = 5 * 1024 * 1024; // 5 Mo
 const TIMEOUT_PHOTO_MS = 6000;
 
-const SYSTEM_PROMPT_BASE = `
-Tu es Max, l'assistant vocal du technicien sur le terrain, dans
+// Convertie en fonction pour permettre la personnalisation du nom affiche
+// (repli sur "Max" si le client n'a rien configure, voir _assistants.js).
+function construireSystemPromptBase(nomAssistant) {
+return `
+Tu es ${nomAssistant}, l'assistant vocal du technicien sur le terrain, dans
 l'application Iko Suite. Le technicien te parle depuis son telephone,
 souvent les mains prises (outils, echelle), donc tes reponses doivent
 etre tres courtes et utiles tout de suite.
@@ -66,6 +70,7 @@ REGLES
   redecrire au technicien ce qui a deja ete mesure.
 - Un seul outil d'action a la fois.
 `;
+}
 
 // Filtrage/formatage de la "Connaissance entreprise" transmise par le
 // client (deja extraite du record Clients qu'il a lui-meme charge au
@@ -76,12 +81,12 @@ REGLES
 // identifiant de tenant depuis la connaissance recue ; le perimetre tenant
 // reste exclusivement determine par le JWT/session existant
 // (verif-securite.js), jamais par le contenu du body.
-function buildSystemPrompt(connaissanceEntrees, analyticsSAVResume) {
+function buildSystemPrompt(connaissanceEntrees, analyticsSAVResume, nomAssistant) {
   // Connaissance entreprise et Analytics SAV restent deux blocs distincts
   // (natures differentes) - jamais fusionnes. Recommandations = 3e bloc,
   // deduit des deux precedents (voir chat-dashboard.js pour le detail).
   const recommandationsSAV = genererRecommandationsSAV(analyticsSAVResume, connaissanceEntrees);
-  return SYSTEM_PROMPT_BASE + blocPromptConnaissance(connaissanceEntrees) + blocPromptAnalyticsSAV(analyticsSAVResume) + blocPromptRecommandationsSAV(recommandationsSAV);
+  return construireSystemPromptBase(nomAssistant) + blocPromptConnaissance(connaissanceEntrees) + blocPromptAnalyticsSAV(analyticsSAVResume) + blocPromptRecommandationsSAV(recommandationsSAV);
 }
 
 // ==================== Bloc 1 : diagnostic assisté ====================
@@ -315,6 +320,10 @@ export default async function handler(req, res) {
     if (modeRequete === "devis_suggestion") return await traiterDevisSuggestion(req, res, body, cle);
     if (modeRequete === "structurer_compte_rendu") return await traiterCompteRendu(req, res, body, cle);
 
+    // Nom deja resolu cote client (technicien.html lit window.IKO_CLIENT_INFO,
+    // deja charge via la session/le tenant : pas de nouvel appel Airtable ici).
+    const nomAssistantActuel = nomAssistantDepuisEntree(body.nomAssistant, "technicien");
+
     const message = String(body.message || "").slice(0, MAX_CHARS_MESSAGE).trim();
     if (!message) {
       return res.status(400).json({ erreur: "Aucune commande recue" });
@@ -394,7 +403,7 @@ du ticket telle qu'elle est ecrite.
         model: MODELE,
         max_tokens: 400,
         temperature: 0.3,
-        system: [{ type: "text", text: buildSystemPrompt(connaissanceActuelle, analyticsSAVActuelles) + (body.reunion ? BLOC_REUNION_MAX : ""), cache_control: { type: "ephemeral" } }],
+        system: [{ type: "text", text: buildSystemPrompt(connaissanceActuelle, analyticsSAVActuelles, nomAssistantActuel) + (body.reunion ? BLOC_REUNION_MAX : ""), cache_control: { type: "ephemeral" } }],
         tools: TOOLS,
         tool_choice: { type: "any" },
         messages: [{ role: "user", content: messageUtilisateur }],
@@ -404,7 +413,7 @@ du ticket telle qu'elle est ecrite.
     if (!reponse.ok) {
       const detail = await reponse.text();
       console.error("Erreur API Anthropic:", reponse.status, detail);
-      return res.status(502).json({ erreur: "Max est momentanément indisponible." });
+      return res.status(502).json({ erreur: nomAssistantActuel + " est momentanément indisponible." });
     }
 
     const data = await reponse.json();

@@ -313,6 +313,12 @@
 window.IKO_CLIENT_ID = null;
 window.IKO_CLIENT_INFO = null;
 window.IKO_CLIENT_SLUG = null;
+// Nom affiche pour Amandine, personnalisable par client via le champ
+// Airtable "Assistants (JSON)" sur Clients (ex: {"amandine":"Sophie"}).
+// Repli sur "Amandine" si le champ est absent/vide/JSON invalide (champ
+// pas encore cree dans Airtable a ce jour) : logique miroir de la
+// fonction pure nomAssistant() dans api/_assistants.js.
+window.IKO_NOM_AMANDINE = 'Amandine';
 window.IKO_CLIENT_READY = (async function () {
   try {
     var params = new URLSearchParams(window.location.search);
@@ -328,6 +334,14 @@ window.IKO_CLIENT_READY = (async function () {
     if (!rec) return null;
     window.IKO_CLIENT_ID = rec.id;
     window.IKO_CLIENT_INFO = rec.fields || {};
+    try {
+      var confAssistants = rec.fields && rec.fields["Assistants (JSON)"];
+      if (confAssistants) {
+        var parsedAssistants = JSON.parse(confAssistants);
+        var nomPerso = parsedAssistants && typeof parsedAssistants.amandine === 'string' ? parsedAssistants.amandine.trim().slice(0, 40) : '';
+        if (nomPerso) window.IKO_NOM_AMANDINE = nomPerso;
+      }
+    } catch (e) { /* JSON invalide : repli silencieux sur "Amandine" */ }
     var couleur = rec.fields && rec.fields["Couleur principale"];
     var logo = rec.fields && rec.fields["Logo"] && rec.fields["Logo"][0] && rec.fields["Logo"][0].url;
     var nom = rec.fields && rec.fields["Nom client"];
@@ -338,7 +352,7 @@ window.IKO_CLIENT_READY = (async function () {
       else if (nom) { logoEl.textContent = nom.slice(0, 3).toUpperCase(); }
     }
     var titreEl = document.querySelector('header .titre');
-    if (titreEl && nom) titreEl.textContent = 'Amandine — SAV ' + nom;
+    if (titreEl && nom) titreEl.textContent = window.IKO_NOM_AMANDINE + ' — SAV ' + nom;
     return rec.id;
   } catch (e) { return null; }
 })();
@@ -651,8 +665,17 @@ window.IKO_CLIENT_READY = (async function () {
       afficherBlocageAcces();
       return;
     }
-    ajouterBulle(ACCUEIL, 'conseiller');
-    historique.push({ role: 'assistant', texte: ACCUEIL });
+    // Nom personnalise resolu apres coup (voir IKO_CLIENT_READY plus haut) :
+    // on substitue dans le texte d'accueil par defaut plutot que de le
+    // dupliquer, pour rester identique au comportement historique tant
+    // qu'aucune personnalisation n'est configuree.
+    var accueilTexte = (window.IKO_NOM_AMANDINE !== 'Amandine') ? ACCUEIL.replace('Amandine', window.IKO_NOM_AMANDINE) : ACCUEIL;
+    ajouterBulle(accueilTexte, 'conseiller');
+    historique.push({ role: 'assistant', texte: accueilTexte });
+    var texteLanding = document.getElementById('amandine-landing-texte');
+    if (texteLanding && window.IKO_NOM_AMANDINE !== 'Amandine') {
+      texteLanding.textContent = 'Bonjour, je suis ' + window.IKO_NOM_AMANDINE + '. Dites-moi ce qui vous amène, ou tapez votre message.';
+    }
     afficherSuggestions(true);
   });
 

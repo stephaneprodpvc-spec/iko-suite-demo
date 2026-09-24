@@ -604,6 +604,24 @@ function appliquerConfigEntreprise(cfg) {
   C.jaune = CONFIG_ENTREPRISE.couleurAccent;
 }
 
+// Nom affiche pour Max, personnalisable par client via le champ Airtable
+// "Assistants (JSON)" sur Clients (ex: {"technicien":"Théo"}). Lu depuis
+// window.IKO_CLIENT_INFO deja charge par window.IKO_CLIENT_READY (aucun
+// nouvel appel Airtable). Repli silencieux sur "Max" si absent/vide/JSON
+// invalide (champ pas encore cree dans Airtable a ce jour) : logique
+// miroir de la fonction pure nomAssistant() dans api/_assistants.js.
+function nomMaxLocal() {
+  try {
+    const brut = window.IKO_CLIENT_INFO && window.IKO_CLIENT_INFO["Assistants (JSON)"];
+    if (!brut) return "Max";
+    const config = JSON.parse(brut);
+    const nom = config && typeof config.technicien === "string" ? config.technicien.trim().slice(0, 40) : "";
+    return nom || "Max";
+  } catch (e) {
+    return "Max";
+  }
+}
+
 // Combine une formule Airtable existante avec le filtre "appartient au
 // client courant" (si un client est charge via ?client=slug).
 // ARRAYJOIN() sur un lien renvoie le nom affiche, jamais l'ID (confirme en
@@ -2312,7 +2330,7 @@ function Technicien({ agence, onClose }) {
       const historiqueClient = selectedTicket ? await chercherHistoriqueClientMax(selectedTicket.fields?.Client) : null;
       const r = await fetch('/api/chat-technicien', {
         method: 'POST', headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({ message: transcript, tickets: contexteTickets, ongletActuel: onglet, historique: maxHistorique.slice(-6), historiqueClient, connaissance: connaissanceEntrepriseLocale(), metier: metierEntrepriseLocal(), analyticsSAV: window.AnalyticsSAV.resumerAnalyticsSAV(window.AnalyticsSAV.calculerAnalyticsSAV(tickets), tickets.length, window.AnalyticsSAV.calculerCroisementsSAV(tickets)) })
+        body: JSON.stringify({ message: transcript, tickets: contexteTickets, ongletActuel: onglet, historique: maxHistorique.slice(-6), historiqueClient, connaissance: connaissanceEntrepriseLocale(), metier: metierEntrepriseLocal(), analyticsSAV: window.AnalyticsSAV.resumerAnalyticsSAV(window.AnalyticsSAV.calculerAnalyticsSAV(tickets), tickets.length, window.AnalyticsSAV.calculerCroisementsSAV(tickets)), nomAssistant: nomMaxLocal() })
       });
       const data = await r.json();
       if (data.erreur) { setMaxErreur(data.erreur); setMaxEnCours(false); return; }
@@ -2427,7 +2445,7 @@ function Technicien({ agence, onClose }) {
           boxShadow:"0 0 90px rgba(34,197,94,0.35)",
           animation: maxEcoute ? "pulseMaxEcran 1s ease-in-out infinite" : "respireMax 3.2s ease-in-out infinite"}}/>
         <div style={{marginTop:"32px",color:"#b8b8b8",fontSize:"14px",maxWidth:"320px",textAlign:"center",minHeight:"40px",lineHeight:"1.5",padding:"0 16px"}}>
-          {maxEcoute ? "Je vous écoute... (relâchez le micro pour terminer)" : maxEnCours ? "..." : maxDernier ? maxDernier : "Dites une commande à Max : \"Montre les urgents\", \"Ouvre l'itinéraire\"..."}
+          {maxEcoute ? "Je vous écoute... (relâchez le micro pour terminer)" : maxEnCours ? "..." : maxDernier ? maxDernier : `Dites une commande à ${nomMaxLocal()} : "Montre les urgents", "Ouvre l'itinéraire"...`}
         </div>
         {maxErreur && <div style={{color:"#DC2626",fontSize:"12px",marginTop:"10px",padding:"0 16px",textAlign:"center"}}>{maxErreur}</div>}
 
@@ -2549,7 +2567,7 @@ function Technicien({ agence, onClose }) {
         onContextMenu={e => e.preventDefault()}>
         {maxOuvert && (
           <div style={{width:"270px",background:C.card,border:"1px solid "+C.border,borderRadius:"14px",padding:"16px",boxShadow:"0 10px 40px rgba(0,0,0,0.35)"}}>
-            <div style={{fontSize:"12px",fontWeight:"800",color:"#fff",marginBottom:"8px",letterSpacing:"1px"}}>MAX</div>
+            <div style={{fontSize:"12px",fontWeight:"800",color:"#fff",marginBottom:"8px",letterSpacing:"1px"}}>{nomMaxLocal().toUpperCase()}</div>
             <div style={{fontSize:"12px",color:C.muted,minHeight:"36px"}}>
               {maxEcoute ? "Je vous écoute..." : maxEnCours ? "..." : maxDernier ? maxDernier : "Dites par exemple : \"Montre les urgents\" ou \"Ouvre l'itinéraire\"."}
             </div>
@@ -2569,7 +2587,7 @@ function Technicien({ agence, onClose }) {
           {maxOuvert && (
             <button onClick={() => setMaxOuvert(false)} style={{width:"36px",height:"36px",borderRadius:"50%",background:C.card,border:"1px solid "+C.border,color:C.muted,cursor:"pointer",fontSize:"14px"}}>✕</button>
           )}
-          <button onClick={() => setVueMode("vocal")} title="Écran vocal Max"
+          <button onClick={() => setVueMode("vocal")} title={"Écran vocal " + nomMaxLocal()}
             style={{width:"36px",height:"36px",borderRadius:"50%",background:C.card,border:"2px solid #22C55E",color:"#22C55E",cursor:"pointer",fontSize:"15px"}}>
             🔮
           </button>

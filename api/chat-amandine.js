@@ -14,6 +14,7 @@ import { verifierOrigine, verifierDebit } from "./_securite.js";
 import vocabMenuiserie from "./_trades/menuiserie.js";
 import vocabPlomberieChauffage from "./_trades/plomberie_chauffage.js";
 import { extraireConnaissanceDuRecord, blocPromptConnaissance, affinerPourPrompt } from "./_connaissance.js";
+import { nomAssistant as resoudreNomAssistant, NOMS_PAR_DEFAUT } from "./_assistants.js";
 
 // Vocabulaire parametrable par metier (voir trades/*.js). Menuiserie reste
 // le repli par defaut pour ne rien casser sur les clients demo existants.
@@ -54,7 +55,7 @@ const CRENEAUX = {
     apres_midi: "Après-midi (13h00 — 17h00)",
 };
 
-function buildSystemPrompt(vocab, agencesNoms, questionnairePersonnalise, connaissanceEntrees) {
+function buildSystemPrompt(vocab, agencesNoms, questionnairePersonnalise, connaissanceEntrees, nomAssistant) {
   const listeDiagnostics = vocab.diagnostics.map(function (d) { return "- " + d; }).join("\n");
   const listeAgences = (agencesNoms && agencesNoms.length > 0 ? agencesNoms : ["Agence 1", "Agence 2", "Agence 3", "Agence 4"]).join(", ");
   const blocQuestionnaire = (questionnairePersonnalise && questionnairePersonnalise.length > 0) ? `
@@ -74,7 +75,7 @@ un objet JSON en texte, au format {"question 1": "reponse", "question 2": "repon
 en reprenant exactement le texte de chaque question ci-dessus comme cle.` : "";
   const blocConnaissance = blocPromptConnaissance(connaissanceEntrees);
   return `
-Tu es Amandine, l'assistante SAV en ligne d'Iko Suite, specialiste de
+Tu es ${nomAssistant}, l'assistante SAV en ligne d'Iko Suite, specialiste de
 ${vocab.nom_metier}.
 
 TON ROLE
@@ -309,6 +310,9 @@ async function resoudreClient(slug) {
       agences: agences,
       bloque: rec.fields && rec.fields["Accès bloqué"] === true,
       connaissance: extraireConnaissanceDuRecord(rec, metier),
+      // Nom affiche pour Amandine, personnalisable via le champ Airtable
+      // "Assistants (JSON)" sur Clients ; repli sur "Amandine" si absent.
+      nomAssistant: resoudreNomAssistant(rec.fields, "amandine"),
     };
   } catch (e) {
     console.error("resoudreClient erreur:", e);
@@ -541,6 +545,7 @@ try {
     return res.status(200).json({ reponse: "Ce service est temporairement suspendu. Merci de contacter votre interlocuteur pour régulariser la situation." });
   }
   const clientIdActuel = contexteClient ? contexteClient.id : null;
+  const nomAssistantActuel = (contexteClient && contexteClient.nomAssistant) || NOMS_PAR_DEFAUT.amandine;
   const tradeIdActuel = (contexteClient && contexteClient.tradeId) || TRADE_ID;
   const vocabActuel = loadTradeVocab(tradeIdActuel);
   // Agences de ce client si configurees (table Agences), sinon repli sur le
@@ -584,7 +589,7 @@ client. Dans ce contexte precis, oublie le deroule de creation de
 ticket : tu n'es pas en train d'aider un client.
 
 EXEMPLE OBLIGATOIRE A SUIVRE quand Stephane dit "bonjour" ou "bonjour a tous" :
-- MAUVAIS (interdit) : "Bonjour ! Je suis Amandine, l'assistante SAV d'Iko Suite. Comment puis-je vous aider aujourd'hui ?"
+- MAUVAIS (interdit) : "Bonjour ! Je suis ${nomAssistantActuel}, l'assistante SAV d'Iko Suite. Comment puis-je vous aider aujourd'hui ?"
 - BON (a faire) : "Bonjour !"
 C'est tout. Une seule fois "Bonjour !", rien d'autre. Tout le monde
 sait deja qui tu es, ce n'est pas ta premiere reunion avec eux.
@@ -617,7 +622,7 @@ sait deja qui tu es, ce n'est pas ta premiere reunion avec eux.
         model: MODELE,
         max_tokens: 800,
         temperature: 0.6,
-        system: [{ type: "text", text: buildSystemPrompt(vocabActuel, agencesNomsActuels, questionnaireActuel, connaissanceActuelle) + (req.body.reunion ? BLOC_REUNION_AMANDINE : ""), cache_control: { type: "ephemeral" } }],
+        system: [{ type: "text", text: buildSystemPrompt(vocabActuel, agencesNomsActuels, questionnaireActuel, connaissanceActuelle, nomAssistantActuel) + (req.body.reunion ? BLOC_REUNION_AMANDINE : ""), cache_control: { type: "ephemeral" } }],
         tools: toolsActuels,
         messages: convertis,
       }),
