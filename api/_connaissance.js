@@ -70,8 +70,14 @@ function normaliserTexte(s) {
 //   même question) que cette fonction ne doit jamais trancher elle-même ni
 //   faire disparaître silencieusement ; seul un contenu identique est un
 //   doublon sans ambiguïté.
-// - plafonnée à CONNAISSANCE_MAX_ENTREES entrées, chacune à
-//   CONNAISSANCE_MAX_CHARS caractères de contenu (titre à 200)
+// - plafonnée à CONNAISSANCE_MAX_ENTREES entrées via une SÉLECTION ÉQUILIBRÉE
+//   par entrelacement des catégories (voir ORDRE_PRIORITE_CATEGORIES
+//   ci-dessous) : un client avec 20+ FAQ ne doit jamais faire disparaître
+//   entièrement ses Procédures ou Règles internes du seul fait du plafond —
+//   corrige une limite réelle détectée en validation (le tri "catégorie
+//   puis titre" suivi d'un simple slice(0, 20) pouvait remplir tout le
+//   quota avec une seule catégorie surreprésentée). Chaque entrée fait
+//   toujours CONNAISSANCE_MAX_CHARS caractères de contenu (titre à 200).
 export function normaliserConnaissance(entrees, metierClient) {
   if (!Array.isArray(entrees)) return [];
   const propres = entrees
@@ -97,14 +103,53 @@ export function normaliserConnaissance(entrees, metierClient) {
     dedupliquees.push(e);
   }
 
-  return dedupliquees
+  return selectionEquilibreeParCategorie(dedupliquees, CONNAISSANCE_MAX_ENTREES)
     .sort(function (a, b) {
       const ca = CATEGORIES_VALIDES.indexOf(a.categorie);
       const cb = CATEGORIES_VALIDES.indexOf(b.categorie);
       if (ca !== cb) return ca - cb;
       return a.titre.localeCompare(b.titre, "fr");
-    })
-    .slice(0, CONNAISSANCE_MAX_ENTREES);
+    });
+}
+
+// Ordre de priorité pour l'entrelacement round-robin ci-dessous (choisir
+// QUI passe le plafond) — indépendant de CATEGORIES_VALIDES qui régit
+// l'ordre d'AFFICHAGE final. Procédure et Règle interne passent en premier
+// à chaque tour car ce sont typiquement les catégories les moins
+// nombreuses mais les plus critiques (une procédure ou une règle absente
+// du contexte est plus dommageable qu'une FAQ absente parmi vingt).
+const ORDRE_PRIORITE_CATEGORIES = ["Procédure", "Règle interne", "FAQ"];
+
+// Sélectionne au plus `plafond` entrées parmi `entrees` en garantissant
+// qu'AUCUNE catégorie non vide ne soit totalement exclue par le seul effet
+// du plafond, tant qu'il reste de la place : à chaque tour, prend au plus
+// UNE entrée de chaque catégorie (dans ORDRE_PRIORITE_CATEGORIES), dans
+// l'ordre alphabétique du titre à l'intérieur de sa catégorie. Une
+// catégorie épuisée cède simplement sa place aux autres au tour suivant —
+// jamais l'inverse (une catégorie abondante n'empêche jamais une catégorie
+// rare de passer). Déterministe, aucun appel réseau, aucun jugement sur le
+// contenu (uniquement une règle de répartition mécanique).
+function selectionEquilibreeParCategorie(entrees, plafond) {
+  const files = {};
+  CATEGORIES_VALIDES.forEach(function (c) { files[c] = []; });
+  entrees.forEach(function (e) { files[e.categorie].push(e); });
+  Object.keys(files).forEach(function (c) {
+    files[c].sort(function (a, b) { return a.titre.localeCompare(b.titre, "fr"); });
+  });
+
+  const selection = [];
+  let aEncoreDesEntrees = true;
+  while (selection.length < plafond && aEncoreDesEntrees) {
+    aEncoreDesEntrees = false;
+    for (const cat of ORDRE_PRIORITE_CATEGORIES) {
+      if (selection.length >= plafond) break;
+      if (files[cat].length > 0) {
+        selection.push(files[cat].shift());
+        aEncoreDesEntrees = true;
+      }
+    }
+  }
+  return selection;
 }
 
 // Extrait + normalise directement depuis un record Airtable "Clients" déjà
