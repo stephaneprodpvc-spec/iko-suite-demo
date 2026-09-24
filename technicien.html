@@ -706,6 +706,10 @@ const LABELS_ACTION_MAX = {
 
 const LABELS_CONFIANCE_MAX = { faible: "Confiance faible", moyenne: "Confiance moyenne", elevee: "Confiance élevée" };
 const COULEURS_CONFIANCE_MAX = { faible: "#DC2626", moyenne: "#DAB239", elevee: "#22C55E" };
+// Suggestions d'action technicien V1 : affichage lecture seule uniquement,
+// jamais persisté (comme action_suggeree, voir formaterTexteDiagnosticMax).
+const LABELS_PRIORITE_ACTION = { faible: "Priorité faible", moyenne: "Priorité moyenne", forte: "Priorité forte" };
+const COULEURS_PRIORITE_ACTION = { faible: "#8a8a8a", moyenne: "#DAB239", forte: "#DC2626" };
 const SEUIL_RDV_MODIFIE_JOURS = 2; // extension Bloc 5, même seuil que dashboard.html
 
 // Bloc 4 - point 1 : fonction partagée entre DiagnosticMaxCard (sauvegarde
@@ -834,6 +838,24 @@ function DiagnosticMaxCard({ ticket, resultat, setResultat, diagnosticGarde, set
               {resultat.action_suggeree && resultat.action_suggeree !== "aucune" && (
                 <div style={{fontSize:"10px",color:C.muted,fontStyle:"italic",marginTop:"2px"}}>
                   Max suggère : {LABELS_ACTION_MAX[resultat.action_suggeree] || resultat.action_suggeree} — à toi de choisir.
+                </div>
+              )}
+              {Array.isArray(resultat.actions_suggerees) && resultat.actions_suggerees.length > 0 && (
+                <div style={{marginTop:"4px",display:"flex",flexDirection:"column",gap:"6px"}}>
+                  <b style={{color:"#0D0D0D",fontSize:"11px"}}>🎯 Actions suggérées par IKO</b>
+                  {resultat.actions_suggerees.map((a, i) => (
+                    <div key={i} style={{background:"#fff",border:"1px solid rgba(0,0,0,0.08)",borderRadius:"8px",padding:"8px",display:"flex",flexDirection:"column",gap:"3px"}}>
+                      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:"6px"}}>
+                        <span style={{fontSize:"11px",fontWeight:"700",color:C.text}}>{a.action}</span>
+                        <span style={{fontSize:"9px",fontWeight:"700",color:COULEURS_PRIORITE_ACTION[a.priorite]||C.muted,whiteSpace:"nowrap"}}>
+                          {LABELS_PRIORITE_ACTION[a.priorite] || "Priorité faible"}
+                        </span>
+                      </div>
+                      {a.justification && <div style={{fontSize:"10px",color:C.muted}}>{a.justification}</div>}
+                      {a.verification && <div style={{fontSize:"10px",color:"#8a8a8a",fontStyle:"italic"}}>À vérifier avant d'agir : {a.verification}</div>}
+                    </div>
+                  ))}
+                  <div style={{fontSize:"9px",color:C.muted,fontStyle:"italic"}}>Suggestions IKO — à vérifier, le technicien décide.</div>
                 </div>
               )}
               <button type="button" onClick={garderDiagnostic} disabled={enregistrementDiagEnCours}

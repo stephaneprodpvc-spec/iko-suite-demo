@@ -25,6 +25,11 @@ const MAX_CATALOGUE_CONTEXTE = 60;
 
 const ONGLETS_VALIDES = ["aujourd_hui", "urgent", "devis", "termines", "annules"];
 const ACTIONS_SUGGERABLES = ["terminer", "devis", "devis_place", "replanifier", "annuler", "aucune"];
+// Suggestions d'action technicien V1 : priorité des actions suggérées par IKO
+// dans le diagnostic (jamais persistée, jamais une décision à la place du
+// technicien — voir OUTIL_DIAGNOSTIC.actions_suggerees).
+const NIVEAUX_PRIORITE_ACTION = ["faible", "moyenne", "forte"];
+const MAX_ACTIONS_SUGGEREES = 4;
 // Bloc 3 - axe F : niveau de confiance du diagnostic, toujours accompagné
 // du diagnostic (jamais un champ Airtable séparé, embarqué dans le texte).
 const NIVEAUX_CONFIANCE = ["faible", "moyenne", "elevee"];
@@ -162,6 +167,32 @@ RÈGLES ABSOLUES
   tu as des éléments concrets et cohérents (ex. photo nette + description
   précise qui se corroborent). Ne mets jamais "elevee" sans base solide.
 - Le technicien reste toujours seul décisionnaire.
+
+ACTIONS SUGGÉRÉES PAR IKO (actions_suggerees)
+- En t'appuyant UNIQUEMENT sur le contexte déjà fourni ci-dessus (ticket,
+  photos, analyse photo existante, métier, connaissance entreprise,
+  historique des tickets précédents du même client si présent, et ton propre
+  diagnostic FAIT/SIGNAL/PISTE/PROPOSITION), propose 0 à 3 actions concrètes
+  et pertinentes que le technicien pourrait envisager.
+- Chaque action doit rester cohérente avec la distinction fait / hypothèse /
+  action déjà utilisée plus haut : la justification s'appuie sur des
+  éléments réellement observés ou déjà diagnostiqués, jamais sur une pièce,
+  une panne ou une information inventée.
+- Chaque action est une SUGGESTION, jamais une certitude ni une décision :
+  formule-la comme une proposition ("vérifier...", "envisager...",
+  "proposer..."), jamais comme un ordre ou un fait acquis.
+- "verification" doit toujours indiquer une vérification concrète et
+  réalisable sur place par le technicien AVANT d'agir (ex. contrôler un
+  point précis, confirmer une mesure, vérifier la disponibilité d'une pièce
+  déjà mentionnée dans le contexte).
+- "priorite" reflète l'urgence/l'impact perçus de cette action précise
+  ("faible", "moyenne" ou "forte"), pas la confiance globale du diagnostic.
+- Si les informations disponibles sont insuffisantes, s'il n'y a pas de
+  diagnostic exploitable, ou si aucune action pertinente ne se dégage
+  clairement du contexte, renvoie un tableau vide plutôt que de forcer une
+  suggestion peu fiable.
+- Ne propose jamais plus de 3 actions ; privilégie la pertinence à la
+  quantité.
 `;
 
 const OUTIL_DIAGNOSTIC = {
@@ -177,8 +208,22 @@ const OUTIL_DIAGNOSTIC = {
       resume_vocal: { type: "string", description: "Résumé très court (1-2 phrases) utilisable à l'oral par Max." },
       action_suggeree: { type: "string", enum: ACTIONS_SUGGERABLES, description: "Action du parcours technicien éventuellement suggérée (aucune si pas pertinent)." },
       confiance: { type: "string", enum: NIVEAUX_CONFIANCE, description: "Niveau de confiance honnête dans ce diagnostic, selon la quantité et la clarté des éléments disponibles." },
+      actions_suggerees: {
+        type: "array",
+        description: "0 à 3 actions concrètes suggérées par IKO à partir du contexte déjà disponible (jamais inventées). Tableau vide si rien de pertinent à suggérer.",
+        items: {
+          type: "object",
+          properties: {
+            action: { type: "string", description: "Action concrète proposée, formulée comme une suggestion, jamais une décision prise à la place du technicien." },
+            justification: { type: "string", description: "Justification factuelle courte, basée uniquement sur des éléments déjà disponibles (ticket, photos, diagnostic, historique)." },
+            priorite: { type: "string", enum: NIVEAUX_PRIORITE_ACTION, description: "Priorité de cette action précise : faible, moyenne ou forte." },
+            verification: { type: "string", description: "Vérification concrète à effectuer par le technicien avant d'agir." },
+          },
+          required: ["action", "justification", "priorite", "verification"],
+        },
+      },
     },
-    required: ["fait", "signal", "piste", "proposition", "resume_vocal", "action_suggeree", "confiance"],
+    required: ["fait", "signal", "piste", "proposition", "resume_vocal", "action_suggeree", "confiance", "actions_suggerees"],
   },
 };
 
@@ -717,6 +762,19 @@ async function traiterDiagnostic(req, res, body, cle) {
       return res.status(502).json({ erreur: "Réponse de diagnostic invalide." });
     }
     const sortie = appel.input || {};
+    // Suggestions d'action technicien V1 : assainissement défensif, aucune
+    // invention côté serveur — on ne fait que valider/tronquer ce que le
+    // modèle a produit à partir du contexte déjà fourni.
+    const actionsSuggereesBrutes = Array.isArray(sortie.actions_suggerees) ? sortie.actions_suggerees : [];
+    const actionsSuggerees = actionsSuggereesBrutes
+      .filter(a => a && typeof a === "object" && String(a.action || "").trim())
+      .slice(0, MAX_ACTIONS_SUGGEREES)
+      .map(a => ({
+        action: String(a.action || "").slice(0, 200),
+        justification: String(a.justification || "").slice(0, 300),
+        priorite: NIVEAUX_PRIORITE_ACTION.includes(a.priorite) ? a.priorite : "faible",
+        verification: String(a.verification || "").slice(0, 300),
+      }));
     return res.status(200).json({
       fait: String(sortie.fait || ""),
       signal: String(sortie.signal || ""),
@@ -725,6 +783,7 @@ async function traiterDiagnostic(req, res, body, cle) {
       resume_vocal: String(sortie.resume_vocal || ""),
       action_suggeree: ACTIONS_SUGGERABLES.includes(sortie.action_suggeree) ? sortie.action_suggeree : "aucune",
       confiance: NIVEAUX_CONFIANCE.includes(sortie.confiance) ? sortie.confiance : "moyenne",
+      actions_suggerees: actionsSuggerees,
       photosAnalysees: nbPhotosAnalysees,
     });
   } catch (e) {
