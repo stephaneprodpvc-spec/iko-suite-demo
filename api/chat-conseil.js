@@ -4,26 +4,118 @@
 // envoyée au navigateur du visiteur.
 
 import { verifierOrigine, verifierDebit } from "./_securite.js";
+import vocabMenuiserie from "./_trades/menuiserie.js";
+import vocabPlomberieChauffage from "./_trades/plomberie_chauffage.js";
 
-const MODELE = "claude-haiku-4-5-20251001"; // le plus économique, largement suffisant ici
+const MODELE = "claude-haiku-4-5-20251001"; // le plus economique, largement suffisant ici
 const MAX_MESSAGES = 30;        // garde-fou : longueur max d'une conversation
 const MAX_CHARS_MESSAGE = 2000; // garde-fou : taille max d'un message
 
+// Vocabulaire parametrable par metier (voir _trades/*.js) — meme mecanisme
+// que chat-amandine.js. Menuiserie reste le repli par defaut si aucun
+// client n'est resolu ou si son metier n'est pas renseigne.
+const TRADES = {
+  menuiserie: vocabMenuiserie,
+  plomberie_chauffage: vocabPlomberieChauffage,
+};
+function loadTradeVocab(tradeId) {
+  return TRADES[tradeId] || TRADES.menuiserie;
+}
+
+const AIRTABLE_BASE = "appkI8RKHkYNWY86U"; // meme base demo que chat-amandine.js
+
+function airtableHeaders() {
+  return {
+    Authorization: "Bearer " + process.env.AIRTABLE_TOKEN,
+    "Content-Type": "application/json",
+  };
+}
+
+// Agences de ce client (table "Agences", filtre Client + Actif) — meme
+// requete que obtenirAgencesClient() dans chat-amandine.js, reduite au nom
+// seul : Stef n'a besoin que d'orienter le visiteur, pas des emails de
+// notification internes (specifiques au flux SAV d'Amandine).
+async function obtenirAgencesClient(clientId) {
+  if (!clientId) return null;
+  try {
+    const formule = encodeURIComponent('AND(FIND("' + clientId + '", ARRAYJOIN({Client})), {Actif}=1)');
+    const url = "https://api.airtable.com/v0/" + AIRTABLE_BASE + "/" + encodeURIComponent("Agences") +
+      "?filterByFormula=" + formule + "&maxRecords=10";
+    const r = await fetch(url, { headers: airtableHeaders() });
+    if (!r.ok) return null;
+    const json = await r.json();
+    const noms = (json.records || []).map(function (rec) { return rec.fields["Nom agence"] || ""; }).filter(Boolean);
+    return noms.length > 0 ? noms : null;
+  } catch (e) {
+    console.error("obtenirAgencesClient erreur:", e);
+    return null;
+  }
+}
+
+// Resout le client courant a partir de son slug (?client= transmis par
+// conseil.html) — meme pattern que resoudreClient() dans chat-amandine.js,
+// reduit aux seules donnees utiles a Stef (pas de questionnaire SAV, hors
+// sujet pour un conseiller commercial). Calcule par requete (pas de variable
+// globale partagee) : plusieurs visiteurs de clients differents peuvent
+// discuter avec Stef simultanement sur ce meme serveur.
+async function resoudreClient(slug) {
+  if (!slug) return null;
+  try {
+    const formule = encodeURIComponent('{Slug}="' + String(slug).replace(/"/g, '\\"') + '"');
+    const r = await fetch("https://api.airtable.com/v0/" + AIRTABLE_BASE + "/Clients?filterByFormula=" + formule + "&maxRecords=1", { headers: airtableHeaders() });
+    if (!r.ok) return null;
+    const json = await r.json();
+    const rec = (json.records || [])[0];
+    if (!rec) return null;
+    const metier = rec.fields && rec.fields["Métier"];
+    const metierId = metier === "Menuiserie" ? "menuiserie" : (metier === "Plomberie & Chauffage" ? "plomberie_chauffage" : null);
+    const agences = await obtenirAgencesClient(rec.id);
+    return {
+      id: rec.id,
+      nom: (rec.fields && rec.fields["Nom client"]) || null,
+      tradeId: (metierId && TRADES[metierId]) ? metierId : null,
+      agences: agences,
+    };
+  } catch (e) {
+    console.error("resoudreClient erreur:", e);
+    return null;
+  }
+}
+
 // Personnalité + cadre métier du conseiller. C'est ici qu'on définit ce qu'il
-// a le droit de dire — et surtout ce qu'il ne doit pas inventer.
-const SYSTEM_PROMPT = `Tu es le conseiller virtuel de RSIA IKO, spécialiste de la menuiserie.
+// a le droit de dire — et surtout ce qu'il ne doit pas inventer. Paramétré
+// par le vocabulaire métier (trade) et, si un client est résolu, son nom et
+// ses agences — comportement par défaut inchangé quand aucun client n'est
+// transmis (repli menuiserie, pas d'agences).
+function buildSystemPrompt(vocab, nomEntreprise, agencesNoms) {
+  const nom = nomEntreprise || "RSIA IKO";
+  const listeGammes = vocab.produits.map(function (p) { return "- " + p; }).join("\n");
+  const blocAgences = (agencesNoms && agencesNoms.length > 0) ? `
+
+AGENCES DE CETTE ENTREPRISE
+${agencesNoms.join(", ")}
+Si le visiteur mentionne une ville ou demande une agence, oriente-le vers celle
+qui semble la plus proche parmi cette liste, sans jamais inventer d'adresse ni
+de numéro de téléphone : laisse le conseiller humain confirmer les coordonnées
+exactes.` : "";
+  const blocConseilsMenuiserie = vocab.trade_id === "menuiserie" ? `
+
+CONSEILS TECHNIQUES DE BASE (tu peux les donner)
+- PVC : très bon isolant, entretien facile, plus économique, choix de teintes
+  plus limité, moins adapté aux très grandes dimensions.
+- Aluminium : fin et élégant, permet de grandes surfaces vitrées, large choix
+  de couleurs RAL, plus onéreux que le PVC.
+- Neuf / rénovation : en rénovation on conserve souvent le dormant existant,
+  ce qui réduit légèrement la surface vitrée.` : "";
+
+  return `Tu es le conseiller virtuel de ${nom}, spécialiste de ${vocab.nom_metier}.
 
 TON RÔLE
 Accueillir le visiteur, comprendre son projet, répondre aux questions générales,
 et l'orienter vers un rendez-vous ou un devis avec un conseiller humain.
 
 GAMMES COUVERTES
-- Fenêtres et portes-fenêtres PVC et Aluminium
-- Portes d'entrée
-- Portails aluminium (battants et coulissants)
-- Volets (roulants, battants)
-- Stores bannes
-- Vérandas
+${listeGammes}
 
 TON STYLE
 - Chaleureux, direct, sans jargon inutile. Vouvoiement.
@@ -39,20 +131,15 @@ RÈGLES ABSOLUES
   faire vérifier par un conseiller.
 - Pour un problème sur une installation existante (panne, casse, réglage),
   c'est du SAV : oriente vers le service après-vente, ne tente pas de dépanner.
-- Reste sur le sujet menuiserie. Si on te parle d'autre chose, ramène
+- Reste concentré sur ${vocab.nom_metier}. Si on te parle d'autre chose, ramène
   poliment la conversation vers le projet du visiteur.
-
-CONSEILS TECHNIQUES DE BASE (tu peux les donner)
-- PVC : très bon isolant, entretien facile, plus économique, choix de teintes
-  plus limité, moins adapté aux très grandes dimensions.
-- Aluminium : fin et élégant, permet de grandes surfaces vitrées, large choix
-  de couleurs RAL, plus onéreux que le PVC.
-- Neuf / rénovation : en rénovation on conserve souvent le dormant existant,
-  ce qui réduit légèrement la surface vitrée.
+${blocConseilsMenuiserie}
+${blocAgences}
 
 OBJECTIF
 Quand le visiteur a exprimé son besoin, propose naturellement un rendez-vous
 avec un conseiller (à domicile ou en agence) pour un devis gratuit.`;
+}
 
 export default async function handler(req, res) {
   if (req.method !== "POST") {
@@ -73,13 +160,22 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { messages } = req.body || {};
+    const { messages, client_slug } = req.body || {};
     if (!Array.isArray(messages) || messages.length === 0) {
       return res.status(400).json({ error: "Aucun message reçu" });
     }
     if (messages.length > MAX_MESSAGES) {
       return res.status(400).json({ error: "Conversation trop longue" });
     }
+
+    // Résolution tenant : identique au pattern chat-amandine.js. Calculée
+    // par requête (pas de cache global) — plusieurs visiteurs de clients
+    // différents peuvent discuter avec Stef en parallèle sur ce serveur.
+    const contexteClient = await resoudreClient(client_slug || null);
+    const vocabActuel = loadTradeVocab(contexteClient ? contexteClient.tradeId : null);
+    const nomEntrepriseActuel = contexteClient ? contexteClient.nom : null;
+    const agencesActuelles = contexteClient ? contexteClient.agences : null;
+    const systemPromptActuel = buildSystemPrompt(vocabActuel, nomEntrepriseActuel, agencesActuelles);
 
     // Conversion au format attendu par l'API Messages + validation.
     // L'API exige que le premier message soit de rôle "user" : on écarte donc
@@ -107,7 +203,7 @@ export default async function handler(req, res) {
         model: MODELE,
         max_tokens: 500,
         temperature: 0.7,
-        system: SYSTEM_PROMPT,
+        system: systemPromptActuel,
         messages: convertis,
       }),
     });

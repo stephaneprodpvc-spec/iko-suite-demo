@@ -335,6 +335,14 @@
   const historique = [];
   let enAttente = false;
 
+  // Slug client (?client=... ou repris du localStorage) — même mécanisme
+  // que amandine.html, réduit à la seule résolution du slug : Stef n'a pas
+  // besoin du thème/logo ici, juste d'identifier l'entreprise côté serveur.
+  var paramsUrl = new URLSearchParams(window.location.search);
+  var clientSlug = paramsUrl.get('client');
+  if (clientSlug) { localStorage.setItem('iko_client_slug', clientSlug); }
+  else { clientSlug = localStorage.getItem('iko_client_slug'); }
+
   const SUGGESTIONS = [
     "PVC ou aluminium ?",
     "Je change mes fenêtres",
@@ -393,7 +401,7 @@
       const reponse = await fetch('/api/chat-conseil', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: historique }),
+        body: JSON.stringify({ messages: historique, client_slug: clientSlug || null }),
       });
       const data = await reponse.json();
       frappe.remove();
