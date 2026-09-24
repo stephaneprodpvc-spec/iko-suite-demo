@@ -1,5 +1,6 @@
 import { verifierOrigine, verifierDebit, reponseBloquee } from "./_securite.js";
 import { normaliserConnaissance, blocPromptConnaissance, affinerPourPrompt } from "./_connaissance.js";
+import { blocPromptAnalyticsSAV } from "../analytics-sav.js";
 
 // api/chat-dashboard.js
 // Relais serveur entre le widget vocal Amandine (dashboard.html) et l'API
@@ -217,8 +218,11 @@ REGLES
 // identifiant de tenant depuis la connaissance recue ; le perimetre tenant
 // reste exclusivement determine par le JWT/session existant
 // (verif-securite.js), jamais par le contenu du body.
-function buildSystemPrompt(connaissanceEntrees) {
-  return SYSTEM_PROMPT_BASE + blocPromptConnaissance(connaissanceEntrees);
+function buildSystemPrompt(connaissanceEntrees, analyticsSAVResume) {
+  // Connaissance entreprise et Analytics SAV restent deux blocs distincts
+  // (natures differentes : texte libre saisi par l'admin vs chiffres
+  // calcules a partir des tickets) - jamais fusionnes.
+  return SYSTEM_PROMPT_BASE + blocPromptConnaissance(connaissanceEntrees) + blocPromptAnalyticsSAV(analyticsSAVResume);
 }
 
 const TOOLS = [
@@ -560,6 +564,12 @@ export default async function handler(req, res) {
     // pour que les entrees les plus pertinentes ne soient jamais celles
     // coupees par le budget global si le client en a beaucoup.
     const connaissanceActuelle = affinerPourPrompt(normaliserConnaissance(body.connaissance, String(body.metier || "").slice(0, 60)), message);
+    // Analytics SAV : deja calcule cote navigateur (window.AnalyticsSAV,
+    // module partage - voir dashboard.html) a partir des tickets deja
+    // charges du tenant. Le serveur ne fait que FORMATER ce resume deja
+    // calcule (aucun recalcul, aucun appel Airtable ici) ; blocPromptAnalyticsSAV
+    // est deja defensif (try/catch) si body.analyticsSAV est mal forme.
+    const analyticsSAVActuelles = body.analyticsSAV || null;
 
     const blocHistorique = historique.length
       ? "\n\nEchanges precedents de cette session (le plus recent en dernier) :\n" +
@@ -620,7 +630,7 @@ precis :
         model: MODELE,
         max_tokens: 500,
         temperature: 0.1,
-        system: [{ type: "text", text: buildSystemPrompt(connaissanceActuelle) + (body.reunion ? BLOC_REUNION_IKO : ""), cache_control: { type: "ephemeral" } }],
+        system: [{ type: "text", text: buildSystemPrompt(connaissanceActuelle, analyticsSAVActuelles) + (body.reunion ? BLOC_REUNION_IKO : ""), cache_control: { type: "ephemeral" } }],
         tools: TOOLS,
         tool_choice: { type: "any" },
         messages: [{ role: "user", content: messageUtilisateur }],

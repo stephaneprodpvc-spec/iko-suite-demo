@@ -1,5 +1,6 @@
 import { verifierOrigine, verifierDebit, reponseBloquee } from "./_securite.js";
 import { normaliserConnaissance, blocPromptConnaissance, affinerPourPrompt } from "./_connaissance.js";
+import { blocPromptAnalyticsSAV } from "../analytics-sav.js";
 
 // api/chat-technicien.js
 // Relais serveur entre le widget vocal Max (technicien.html) et l'API
@@ -75,8 +76,10 @@ REGLES
 // identifiant de tenant depuis la connaissance recue ; le perimetre tenant
 // reste exclusivement determine par le JWT/session existant
 // (verif-securite.js), jamais par le contenu du body.
-function buildSystemPrompt(connaissanceEntrees) {
-  return SYSTEM_PROMPT_BASE + blocPromptConnaissance(connaissanceEntrees);
+function buildSystemPrompt(connaissanceEntrees, analyticsSAVResume) {
+  // Connaissance entreprise et Analytics SAV restent deux blocs distincts
+  // (natures differentes) - jamais fusionnes.
+  return SYSTEM_PROMPT_BASE + blocPromptConnaissance(connaissanceEntrees) + blocPromptAnalyticsSAV(analyticsSAVResume);
 }
 
 // ==================== Bloc 1 : diagnostic assisté ====================
@@ -324,6 +327,11 @@ export default async function handler(req, res) {
     // determiner un perimetre tenant : voir commentaire ci-dessus.
     // Priorisee ensuite selon la commande vocale en cours (affinerPourPrompt).
     const connaissanceActuelle = affinerPourPrompt(normaliserConnaissance(body.connaissance, String(body.metier || "").slice(0, 60)), message);
+    // Analytics SAV : deja calcule cote navigateur (window.AnalyticsSAV,
+    // module partage - voir technicien.html) a partir des tickets deja
+    // charges. Le serveur ne fait que FORMATER (aucun recalcul, aucun
+    // appel Airtable ici).
+    const analyticsSAVActuelles = body.analyticsSAV || null;
 
     const blocHistorique = historique.length
       ? "\n\nEchanges precedents de cette session (le plus recent en dernier) :\n" +
@@ -384,7 +392,7 @@ du ticket telle qu'elle est ecrite.
         model: MODELE,
         max_tokens: 400,
         temperature: 0.3,
-        system: [{ type: "text", text: buildSystemPrompt(connaissanceActuelle) + (body.reunion ? BLOC_REUNION_MAX : ""), cache_control: { type: "ephemeral" } }],
+        system: [{ type: "text", text: buildSystemPrompt(connaissanceActuelle, analyticsSAVActuelles) + (body.reunion ? BLOC_REUNION_MAX : ""), cache_control: { type: "ephemeral" } }],
         tools: TOOLS,
         tool_choice: { type: "any" },
         messages: [{ role: "user", content: messageUtilisateur }],

@@ -377,3 +377,72 @@ export function detecterAlertesSAV({ tauxUrgents, topCauses, topProduitsDetail, 
 
   return alertes;
 }
+
+// ---- Intelligence entreprise V1 : résumé compact pour injection dans le
+// prompt d'un assistant conversationnel (IKO/Dashboard, Max/Technicien).
+// Ne garde que les indicateurs les plus utiles pour répondre à une
+// question orale — jamais la structure complète de calculerAnalyticsSAV
+// (trop volumineuse, pas faite pour un prompt). Fonction pure, aucun appel
+// réseau, s'utilise aussi bien côté navigateur (calcul, avant envoi dans
+// le body existant d'un fetch déjà présent) que côté serveur (formatage
+// uniquement, voir blocPromptAnalyticsSAV ci-dessous — pas besoin
+// d'importer calculerAnalyticsSAV côté serveur, le résumé arrive déjà
+// calculé dans la requête). nbTickets (le nombre de tickets réellement
+// analysés, généralement tickets.length côté appelant) est requis : sans
+// lui, impossible de distinguer "aucun ticket urgent sur 40" de "aucune
+// donnée chargée" — retourne null si absent/nul, pour que
+// blocPromptAnalyticsSAV n'affiche jamais un "0%" trompeur en l'absence
+// réelle de données.
+export function resumerAnalyticsSAV(analytics, nbTickets) {
+  if (!analytics || !nbTickets) return null;
+  const dernierMois = analytics.tendance[analytics.tendance.length - 1];
+  const moisPrecedent = analytics.tendance[analytics.tendance.length - 2];
+  const tendanceRecente = (dernierMois && moisPrecedent)
+    ? (dernierMois.valeur > moisPrecedent.valeur ? "hausse" : dernierMois.valeur < moisPrecedent.valeur ? "baisse" : "stable")
+    : null;
+  return {
+    topProduits: analytics.topProduits.slice(0, 3).map(([produit, n]) => ({ produit, tickets: n })),
+    topCauses: analytics.topCauses.slice(0, 3).map(([cause, n]) => ({ cause, tickets: n })),
+    tauxUrgents: analytics.tauxUrgents,
+    coutSAVGlobal: Math.round(analytics.coutSAVGlobal),
+    tendanceRecente,
+  };
+}
+
+// Formate resumerAnalyticsSAV() en bloc de prompt, identique pour tous les
+// assistants qui l'utilisent. N'a besoin QUE du résumé (pas de
+// calculerAnalyticsSAV) — c'est pourquoi le serveur peut l'importer seul,
+// sans jamais recalculer côté serveur ce que le navigateur a déjà calculé
+// avec les mêmes données déjà chargées.
+export function blocPromptAnalyticsSAV(resume) {
+  if (!resume) return "";
+  try {
+    const lignes = [];
+    if (resume.topProduits && resume.topProduits.length) {
+      lignes.push("Produits générant le plus de SAV : " + resume.topProduits.map(p => p.produit + " (" + p.tickets + " tickets)").join(", "));
+    }
+    if (resume.topCauses && resume.topCauses.length) {
+      lignes.push("Causes SAV les plus fréquentes : " + resume.topCauses.map(c => c.cause + " (" + c.tickets + " tickets)").join(", "));
+    }
+    if (typeof resume.tauxUrgents === "number") {
+      lignes.push("Taux de tickets urgents actuel : " + resume.tauxUrgents + "%.");
+    }
+    if (resume.coutSAVGlobal > 0) {
+      lignes.push("Coût SAV total sur les interventions chiffrées : " + resume.coutSAVGlobal + " €.");
+    }
+    if (resume.tendanceRecente) {
+      lignes.push("Tendance du volume SAV sur le dernier mois : " + resume.tendanceRecente + ".");
+    }
+    if (lignes.length === 0) return "";
+    return `
+
+ANALYTICS SAV DE CETTE ENTREPRISE
+Données réelles, calculées à partir des tickets actuellement chargés —
+jamais une estimation ni une invention. Utilise-les pour répondre à une
+question sur les tendances/chiffres SAV, sans les recalculer toi-même
+(risque d'erreur de comptage) :
+${lignes.map(l => "- " + l).join("\n")}`;
+  } catch (e) {
+    return "";
+  }
+}

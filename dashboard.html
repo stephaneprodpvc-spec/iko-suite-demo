@@ -3485,7 +3485,7 @@ function Dashboard({ agenceAccess, onClose }) {
       }));
       const r = await fetch('/api/chat-dashboard', {
         method: 'POST', headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({ message: transcript, tickets: contexteTickets, agenceActuelle: agenceFilter, historique: ikoHistorique.slice(-6), connaissance: connaissanceEntrepriseLocale(), metier: metierEntrepriseLocal() })
+        body: JSON.stringify({ message: transcript, tickets: contexteTickets, agenceActuelle: agenceFilter, historique: ikoHistorique.slice(-6), connaissance: connaissanceEntrepriseLocale(), metier: metierEntrepriseLocal(), analyticsSAV: window.AnalyticsSAV.resumerAnalyticsSAV(window.AnalyticsSAV.calculerAnalyticsSAV(tickets), tickets.length) })
       });
       const data = await r.json();
       if (data.erreur) { setAmandineErreur(data.erreur); setAmandineEnCours(false); return; }
