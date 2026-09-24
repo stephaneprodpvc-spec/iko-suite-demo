@@ -15,8 +15,9 @@
 <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 <script src="https://unpkg.com/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
 <style>
-* { box-sizing: border-box; margin: 0; padding: 0; }
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
 body { font-family: 'Segoe UI', sans-serif; background: #F5F5F5; color: #374151; min-height: 100vh; }
+button, a, label, [onClick] { touch-action: manipulation; }
 ::-webkit-scrollbar { width: 4px; } ::-webkit-scrollbar-thumb { background: #22C55E; border-radius: 2px; }
 .modal-overlay { position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.9);z-index:1000;display:flex;align-items:flex-end;justify-content:center;padding:0; }
 @media(min-width:600px){ .modal-overlay { align-items:center; padding:20px; } }
@@ -1404,14 +1405,14 @@ function ModalAction({ ticket, onClose, onDone }) {
               ⚠️ {erreurFermeture}
             </div>
           )}
-          <div style={{display:"flex",alignItems:"center",gap:"8px",marginTop:"8px"}}>
+          <div style={{marginTop:"10px"}}>
             <input id={"photoTerrain-" + ticket.id} type="file" accept="image/*" capture="environment" multiple style={{display:"none"}}
               onChange={e => { const f = Array.from(e.target.files || []); e.target.value = ""; if (f.length) ajouterPhotosTerrain(f); }}/>
             <label htmlFor={"photoTerrain-" + ticket.id}
-              style={{padding:"6px 10px",borderRadius:"8px",background:photoEnCoursUpload?"#D1D5DB":"rgba(34,197,94,0.1)",border:"1px solid #22C55E",color:"#16A34A",fontSize:"11px",fontWeight:"700",cursor:photoEnCoursUpload?"not-allowed":"pointer"}}>
+              style={{display:"flex",alignItems:"center",justifyContent:"center",width:"100%",padding:"14px",borderRadius:"12px",background:photoEnCoursUpload?"#D1D5DB":"rgba(34,197,94,0.1)",border:"2px solid #22C55E",color:"#16A34A",fontSize:"14px",fontWeight:"900",cursor:photoEnCoursUpload?"not-allowed":"pointer"}}>
               {photoEnCoursUpload ? (progressionPhotos ? "⏳ Envoi " + (progressionPhotos.fait + 1) + "/" + progressionPhotos.total + "..." : "⏳ Envoi...") : "📷 Ajouter des photos"}
             </label>
-            {photosTicket && <span style={{fontSize:"10px",color:C.muted}}>{photosTicket.split(",").filter(Boolean).length} photo(s) sur ce ticket</span>}
+            {photosTicket && <div style={{fontSize:"11px",color:C.muted,marginTop:"6px",textAlign:"center"}}>{photosTicket.split(",").filter(Boolean).length} photo(s) sur ce ticket</div>}
           </div>
           {erreurPhoto && <div style={{fontSize:"11px",color:"#DC2626",marginTop:"6px"}}>{erreurPhoto}</div>}
         </div>
@@ -2014,7 +2015,7 @@ function TicketCard({ ticket, onAction, onAcquitterRdv }) {
         )}
         {!isTermine && !isAnnule && !isEnAttenteDevis && (
           <button onClick={() => onAction(ticket)}
-            style={{width:"100%",padding:"13px",background:C.or,color:"#111",border:"none",borderRadius:"10px",fontSize:"13px",fontWeight:"900",cursor:"pointer"}}>
+            style={{width:"100%",padding:"16px",background:C.or,color:"#111",border:"none",borderRadius:"12px",fontSize:"15px",fontWeight:"900",cursor:"pointer"}}>
             Gérer cette intervention →
           </button>
         )}
@@ -2496,17 +2497,17 @@ function Technicien({ agence, onClose }) {
             </div>
           </div>
           <div style={{display:"flex",alignItems:"center",gap:"8px"}}>
-            <button onClick={charger} title="Rafraîchir" style={{background:C.orDim,border:"1px solid "+C.orBord,color:C.or,borderRadius:"8px",width:"30px",height:"30px",fontSize:"13px",fontWeight:"700",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>↺</button>
-            <button onClick={onClose} title="Fermer la session" style={{background:"rgba(220,38,38,0.08)",border:"1px solid rgba(220,38,38,0.25)",color:"rgba(220,38,38,0.85)",borderRadius:"8px",width:"30px",height:"30px",cursor:"pointer",fontSize:"14px",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>✕</button>
+            <button onClick={charger} title="Rafraîchir" style={{background:C.orDim,border:"1px solid "+C.orBord,color:C.or,borderRadius:"10px",width:"44px",height:"44px",fontSize:"17px",fontWeight:"700",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>↺</button>
+            <button onClick={onClose} title="Fermer la session" style={{background:"rgba(220,38,38,0.08)",border:"1px solid rgba(220,38,38,0.25)",color:"rgba(220,38,38,0.85)",borderRadius:"10px",width:"44px",height:"44px",cursor:"pointer",fontSize:"17px",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>✕</button>
           </div>
         </div>
         <div style={{display:"flex",alignItems:"center",gap:"6px",marginTop:"10px",flexWrap:"wrap"}}>
-          <button onClick={imprimerSemaine} title="Imprimer ma semaine" style={{background:C.orDim,border:"1px solid "+C.orBord,color:C.or,borderRadius:"8px",padding:"0 12px",height:"30px",fontSize:"11px",fontWeight:"700",cursor:"pointer",display:"flex",alignItems:"center",gap:"5px",whiteSpace:"nowrap",flexShrink:0}}>🖨️ Ma semaine</button>
-            <button onClick={() => setItineraireOpen(true)} title="Itinéraire optimisé" style={{background:"#0D0D0D",border:"1px solid #0D0D0D",color:"#fff",borderRadius:"8px",padding:"0 12px",height:"30px",fontSize:"11px",fontWeight:"700",cursor:"pointer",display:"flex",alignItems:"center",gap:"5px",whiteSpace:"nowrap",flexShrink:0}}>🗺️ Itinéraire</button>
-            <button onClick={() => setOnglet("devis")} title="Devis en attente" style={{background:onglet==="devis"?"#22C55E":"rgba(218,178,57,0.12)",border:"1px solid #22C55E",color:onglet==="devis"?"#111":"#8a6d1f",borderRadius:"8px",padding:"0 12px",height:"30px",fontSize:"11px",fontWeight:"700",cursor:"pointer",display:"flex",alignItems:"center",gap:"5px",whiteSpace:"nowrap",flexShrink:0}}>
+          <button onClick={imprimerSemaine} title="Imprimer ma semaine" style={{background:C.orDim,border:"1px solid "+C.orBord,color:C.or,borderRadius:"10px",padding:"0 14px",height:"40px",fontSize:"12px",fontWeight:"700",cursor:"pointer",display:"flex",alignItems:"center",gap:"5px",whiteSpace:"nowrap",flexShrink:0}}>🖨️ Ma semaine</button>
+            <button onClick={() => setItineraireOpen(true)} title="Itinéraire optimisé" style={{background:"#0D0D0D",border:"1px solid #0D0D0D",color:"#fff",borderRadius:"10px",padding:"0 14px",height:"40px",fontSize:"12px",fontWeight:"700",cursor:"pointer",display:"flex",alignItems:"center",gap:"5px",whiteSpace:"nowrap",flexShrink:0}}>🗺️ Itinéraire</button>
+            <button onClick={() => setOnglet("devis")} title="Devis en attente" style={{background:onglet==="devis"?"#22C55E":"rgba(218,178,57,0.12)",border:"1px solid #22C55E",color:onglet==="devis"?"#111":"#8a6d1f",borderRadius:"10px",padding:"0 14px",height:"40px",fontSize:"12px",fontWeight:"700",cursor:"pointer",display:"flex",alignItems:"center",gap:"5px",whiteSpace:"nowrap",flexShrink:0}}>
               📋 Devis {nbDevisAttente > 0 && <span style={{background:onglet==="devis"?"#0D0D0D":"#22C55E",color:"#fff",borderRadius:"10px",padding:"0 5px",fontSize:"10px"}}>{nbDevisAttente}</span>}
             </button>
-            <button onClick={() => setNoteOpen(true)} title="Ma note client" style={{background:"rgba(217,119,6,0.12)",border:"1px solid #22C55E",color:"#8a5a06",borderRadius:"8px",padding:"0 12px",height:"30px",fontSize:"11px",fontWeight:"700",cursor:"pointer",display:"flex",alignItems:"center",gap:"5px",whiteSpace:"nowrap",flexShrink:0}}>
+            <button onClick={() => setNoteOpen(true)} title="Ma note client" style={{background:"rgba(217,119,6,0.12)",border:"1px solid #22C55E",color:"#8a5a06",borderRadius:"10px",padding:"0 14px",height:"40px",fontSize:"12px",fontWeight:"700",cursor:"pointer",display:"flex",alignItems:"center",gap:"5px",whiteSpace:"nowrap",flexShrink:0}}>
               ⭐ {moyenneAgence ? moyenneAgence.toFixed(1) : "—"}
             </button>
             {noteOpen && (
