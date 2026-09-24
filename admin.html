@@ -880,6 +880,17 @@
           </div>
         </div>
 
+        <div id="connaissanceWrap" style="display:none;">
+          <button type="button" class="secondary" id="connaissanceToggleBtn" style="width:100%;text-align:left;display:flex;justify-content:space-between;align-items:center;margin-top:18px;">
+            <span>Connaissance entreprise <span id="connaissanceCount" style="color:var(--texte-faint);font-weight:400;"></span></span><span id="connaissanceChevron">▾</span>
+          </button>
+          <div id="connaissanceBody" style="display:none;margin-top:10px;">
+            <div id="connaissanceListe" style="display:flex;flex-direction:column;gap:10px;"></div>
+            <button type="button" class="secondary" id="ajouterConnaissanceBtn" style="margin-top:8px;width:100%;">+ Ajouter une entrée</button>
+            <div class="hint" style="font-size:11px;color:var(--texte-faint);margin-top:5px;">FAQ, procédures, règles internes propres à ce client. Pas encore branché sur les bots — stockage seul pour l'instant. Enregistrement automatique.</div>
+          </div>
+        </div>
+
         <div id="diagramWrap" style="display:none;">
           <div class="diag-label">Schéma des flux <button type="button" class="diag-fs-btn" id="diagFsBtn">Plein écran</button></div>
           <div id="diagramSvg"></div>
@@ -1868,6 +1879,7 @@ function chargerDansFormulaire(id){
   chargerAgencesClient(id);
   chargerUtilisateursClient(id);
   chargerQuestionnaire(id);
+  chargerConnaissance(id, f);
   ouvrirDevisPourClient(id, f);
 }
 
@@ -2143,6 +2155,91 @@ document.getElementById("ajouterQuestionBtn").addEventListener("click", function
   }).then(function(){ chargerQuestionnaire(editingId); });
 });
 
+// ---- Connaissance entreprise (JSON) : FAQ/procédures/règles internes par
+// client. Champ unique sur Clients (pas de table dédiée) : le tableau vit
+// en mémoire (connaissanceEntrees) et se réécrit en entier à chaque
+// mutation, même principe que "Devis Prospect JSON" plus haut, mais par
+// client au lieu du record CONFIG. Pas de branchement bot pour l'instant.
+var connaissanceEntrees = [];
+var CONNAISSANCE_CHAMP = "Connaissance entreprise (JSON)";
+
+function chargerConnaissance(clientId, f){
+  var wrap = document.getElementById("connaissanceWrap");
+  if (!clientId) { wrap.style.display = "none"; connaissanceEntrees = []; return; }
+  wrap.style.display = "block";
+  try { connaissanceEntrees = JSON.parse((f || {})[CONNAISSANCE_CHAMP] || "[]"); } catch(e){ connaissanceEntrees = []; }
+  if (!Array.isArray(connaissanceEntrees)) connaissanceEntrees = [];
+  afficherConnaissanceUI();
+}
+
+function enregistrerConnaissance(){
+  if (!editingId) return Promise.resolve();
+  var champs = {}; champs[CONNAISSANCE_CHAMP] = JSON.stringify(connaissanceEntrees);
+  return fetch("/api/airtable/" + encodeURIComponent(TABLE) + "/" + editingId, {
+    method: "PATCH", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ fields: champs })
+  });
+}
+
+function afficherConnaissanceUI(){
+  var el = document.getElementById("connaissanceListe");
+  document.getElementById("connaissanceCount").textContent = "(" + connaissanceEntrees.length + ")";
+  if (!connaissanceEntrees.length) {
+    el.innerHTML = "<div style='font-size:12px;color:var(--texte-faint);'>Aucune entrée pour l'instant.</div>";
+    return;
+  }
+  el.innerHTML = connaissanceEntrees.map(function(entree, i){
+    var actif = entree.actif !== false ? "checked" : "";
+    var categorie = entree.categorie || "FAQ";
+    var metier = entree.metier || "";
+    return "<div class='c-row' style='border:1px solid var(--border);border-radius:12px;padding:10px;'>" +
+      "<div style='display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:6px;'>" +
+        "<select data-index='" + i + "' data-champ='categorie' style='padding:6px 8px;border-radius:8px;border:1px solid var(--border);background:rgba(255,255,255,0.04);color:var(--texte);font-size:12px;'>" +
+          "<option " + (categorie === "FAQ" ? "selected" : "") + ">FAQ</option>" +
+          "<option " + (categorie === "Procédure" ? "selected" : "") + ">Procédure</option>" +
+          "<option " + (categorie === "Règle interne" ? "selected" : "") + ">Règle interne</option>" +
+        "</select>" +
+        "<select data-index='" + i + "' data-champ='metier' style='padding:6px 8px;border-radius:8px;border:1px solid var(--border);background:rgba(255,255,255,0.04);color:var(--texte);font-size:12px;'>" +
+          "<option value='' " + (metier === "" ? "selected" : "") + ">Tous métiers</option>" +
+          "<option " + (metier === "Menuiserie" ? "selected" : "") + ">Menuiserie</option>" +
+          "<option " + (metier === "Plomberie & Chauffage" ? "selected" : "") + ">Plomberie &amp; Chauffage</option>" +
+          "<option " + (metier === "Électricité" ? "selected" : "") + ">Électricité</option>" +
+          "<option " + (metier === "Autre" ? "selected" : "") + ">Autre</option>" +
+        "</select>" +
+        "<label style='font-size:11px;color:var(--texte-dim);display:flex;align-items:center;gap:4px;'><input type='checkbox' data-index='" + i + "' data-champ='actif' " + actif + "> Actif</label>" +
+        "<button type='button' class='c-del' data-index='" + i + "' style='margin-left:auto;background:none;border:none;color:#FF453A;cursor:pointer;font-size:12px;'>Supprimer</button>" +
+      "</div>" +
+      "<input type='text' value='" + escHtml(entree.titre) + "' placeholder='Titre / question' data-index='" + i + "' data-champ='titre' style='width:100%;margin-bottom:6px;padding:8px 10px;border-radius:8px;border:1px solid var(--border);background:rgba(255,255,255,0.04);color:var(--texte);font-size:13px;outline:none;'>" +
+      "<textarea data-index='" + i + "' data-champ='contenu' placeholder='Contenu / réponse' rows='2' style='width:100%;padding:8px 10px;border-radius:8px;border:1px solid var(--border);background:rgba(255,255,255,0.04);color:var(--texte);font-size:12px;outline:none;resize:vertical;'>" + escHtml(entree.contenu) + "</textarea>" +
+    "</div>";
+  }).join("");
+
+  Array.prototype.forEach.call(el.querySelectorAll("input[data-index], select[data-index], textarea[data-index]"), function(champ){
+    var estCheckboxOuSelect = champ.type === "checkbox" || champ.tagName === "SELECT";
+    champ.addEventListener(estCheckboxOuSelect ? "change" : "blur", function(){
+      var nomChamp = this.getAttribute("data-champ");
+      var idx = parseInt(this.getAttribute("data-index"), 10);
+      var valeur = this.type === "checkbox" ? this.checked : this.value;
+      connaissanceEntrees[idx][nomChamp] = valeur;
+      enregistrerConnaissance();
+    });
+  });
+  Array.prototype.forEach.call(el.querySelectorAll(".c-del"), function(btn){
+    btn.addEventListener("click", function(){
+      if (!confirm("Supprimer cette entrée ?")) return;
+      var idx = parseInt(this.getAttribute("data-index"), 10);
+      connaissanceEntrees.splice(idx, 1);
+      enregistrerConnaissance().then(afficherConnaissanceUI);
+    });
+  });
+}
+
+document.getElementById("ajouterConnaissanceBtn").addEventListener("click", function(){
+  if (!editingId) return;
+  connaissanceEntrees.push({ categorie: "FAQ", titre: "", contenu: "", actif: true, metier: "" });
+  enregistrerConnaissance().then(afficherConnaissanceUI);
+});
+toggleSection("connaissanceToggleBtn", "connaissanceBody", "connaissanceChevron");
+
 function chargerActivite(clientId){
   var el = document.getElementById("activiteInfo");
   el.textContent = "Chargement de l'activité…";
@@ -2307,6 +2404,8 @@ function reinitialiserFormulaire(){
   document.getElementById("agencesWrap").style.display = "none";
   document.getElementById("utilisateursWrap").style.display = "none";
   document.getElementById("questionnaireWrap").style.display = "none";
+  document.getElementById("connaissanceWrap").style.display = "none";
+  connaissanceEntrees = [];
   Array.prototype.forEach.call(document.querySelectorAll(".client-item"), function(x){ x.classList.remove("selected"); });
 }
 
