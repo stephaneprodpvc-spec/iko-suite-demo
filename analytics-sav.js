@@ -1,12 +1,29 @@
-// api/_analytics-sav.js
+// analytics-sav.js
 // Extraction pure des calculs d'analytics SAV de dashboard.html
 // (calculerAnalyticsSAV, calculerPerformanceEtResolution,
 // calculerAgregatsPredictifs, detecterAlertesSAV et leurs dépendances
-// directes), pour servir de source unique de vérité réutilisable par
-// d'autres assistants IKO à l'avenir (Amandine, Max, Stef — non branchés
-// dans cette mission), sans dupliquer la logique. Fichier préfixé "_"
-// comme _securite.js / _connaissance.js / _trades/*.js : convention déjà
-// en place dans ce repo pour un module interne, jamais une route Vercel.
+// directes) — module ES (export/import) à la RACINE du repo, pas dans
+// api/, volontairement : les fichiers api/_*.js (comme _connaissance.js,
+// _securite.js) ne sont accessibles qu'au serveur (convention Vercel :
+// tout fichier préfixé "_" sous api/ n'est jamais exposé comme route HTTP
+// — dashboard.html est une page statique, sans chargeur de module, elle
+// ne peut donc pas les importer). Ce repo a déjà une convention pour du JS
+// partagé accessible au NAVIGATEUR : un fichier .js à la racine, servi tel
+// quel par Vercel comme n'importe quel .html du repo (voir stef-widget.js,
+// chargé via <script type="module" src="stef-widget.js">). Un module ES
+// standard fonctionne nativement dans les deux runtimes sans aucune
+// transpilation supplémentaire :
+// - Navigateur (dashboard.html) : <script type="module"> import ... from
+//   "/analytics-sav.js" — chargé une fois au démarrage de la page, aucun
+//   nouvel appel réseau à l'usage (les fonctions sont déjà en mémoire
+//   quand un panneau Analytics s'ouvre).
+// - Serveur (futurs assistants) : import ... from "../analytics-sav.js"
+//   depuis un fichier api/*.js — Node ESM résout un chemin relatif
+//   indépendamment de la convention de routage Vercel, qui ne s'applique
+//   qu'aux fichiers PHYSIQUEMENT situés sous api/.
+
+// Pour d'autres assistants IKO à l'avenir (Amandine, Max, Stef — non
+// branchés dans cette mission), sans dupliquer la logique.
 //
 // PUR : aucune requête réseau, aucune dépendance UI/DOM/React. Toutes les
 // fonctions ci-dessous prennent des données déjà chargées par l'appelant
