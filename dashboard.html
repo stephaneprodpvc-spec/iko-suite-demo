@@ -303,6 +303,86 @@ function evaluerPrioriteIKO(t) {
   return { priorite: "en_attente", raisons: [] };
 }
 
+// ==================== Notifications intelligentes IKO V1 ====================
+// Lecture seule, purement déterministe (aucun LLM, aucun nouvel appel
+// Airtable) : combine des données déjà en mémoire au niveau du Dashboard
+// (tickets + ticketsATraiterIKO, déjà calculés ci-dessus par
+// evaluerPrioriteIKO) avec les signaux prédictifs déjà livrés dans
+// analytics-sav.js (genererSignauxPredictifsSAV, Mission "Détection
+// prédictive SAV V1") — calculés uniquement à partir de
+// calculerAnalyticsSAV(tickets), qui ne nécessite QUE les tickets déjà
+// chargés (pas les interventions SAV, chargées à la demande ailleurs :
+// aucun nouvel appel réseau introduit ici). Les signaux "agence"/
+// "technicien" de genererSignauxPredictifsSAV (qui nécessitent les
+// interventions) sont donc absents de ce bloc — limite assumée, pas une
+// donnée inventée.
+//
+// N'affiche jamais le détail ticket par ticket déjà présent dans le bloc
+// "🎯 À traiter" juste au-dessus (pour éviter un doublon évident) : une
+// seule notification agrégée y renvoie.
+const LABELS_NIVEAU_NOTIF_IKO = { faible: "Niveau faible", moyen: "Niveau moyen", fort: "Niveau fort" };
+const COULEURS_NIVEAU_NOTIF_IKO = { faible: "#8a8a8a", moyen: "#DAB239", fort: "#DC2626" };
+
+function genererNotificationsIKO(tickets, ticketsATraiterIKO) {
+  const notifications = [];
+
+  // ---- Résumé agrégé du suivi ticket-level déjà existant (🎯 À traiter).
+  if (ticketsATraiterIKO.length > 0) {
+    const nbUrgent = ticketsATraiterIKO.filter(x => x.info.priorite === "urgent").length;
+    notifications.push({
+      type: nbUrgent > 0 ? "urgent" : "action",
+      titre: nbUrgent > 0 ? "SAV urgent nécessitant une action" : "Interventions nécessitant une action",
+      information: ticketsATraiterIKO.length + " ticket(s) signalé(s) par le suivi IKO" + (nbUrgent > 0 ? ", dont " + nbUrgent + " urgent(s)" : "") + ".",
+      niveau: nbUrgent >= 3 ? "fort" : (nbUrgent > 0 || ticketsATraiterIKO.length >= 3) ? "moyen" : "faible",
+      contexte: ticketsATraiterIKO.slice(0, 5).map(x => x.t.fields?.Name).filter(Boolean).join(", ") || "Plusieurs tickets",
+      action: "Voir le bloc « 🎯 À traiter » ci-dessus pour le détail par ticket.",
+    });
+  }
+
+  // ---- Message(s) client en attente (champ déjà chargé sur chaque
+  // ticket, cf. stats.messagesNonLus) : agrégé en une seule notification.
+  const messagesNonLus = tickets.filter(t => t.fields?.["Message client non lu"] && !isStatutClos(t.fields?.Statut));
+  if (messagesNonLus.length > 0) {
+    notifications.push({
+      type: "confirmation",
+      titre: "Message(s) client en attente de réponse",
+      information: messagesNonLus.length + " ticket(s) avec un message client non lu.",
+      niveau: messagesNonLus.length >= 3 ? "moyen" : "faible",
+      contexte: messagesNonLus.slice(0, 5).map(t => t.fields?.Name).filter(Boolean).join(", "),
+      action: "Lire et répondre au client depuis le ticket concerné.",
+    });
+  }
+
+  // ---- Signaux prédictifs SAV : réutilisation stricte de
+  // window.AnalyticsSAV.genererSignauxPredictifsSAV (déjà livré, mêmes
+  // seuils et garde-fous anti faux-positif — aucun nouveau calcul de fond).
+  try {
+    const analytics = window.AnalyticsSAV.calculerAnalyticsSAV(tickets);
+    const signaux = window.AnalyticsSAV.genererSignauxPredictifsSAV({
+      tauxUrgents: analytics.tauxUrgents,
+      topCauses: analytics.topCauses,
+      topProduitsDetail: analytics.topProduitsDetail,
+    });
+    signaux.forEach(s => {
+      notifications.push({
+        type: "predictif",
+        titre: s.probleme,
+        information: s.donneeObservee,
+        niveau: s.niveau,
+        contexte: [s.produit, s.agence, s.technicien].filter(Boolean).join(" / ") || "Ensemble des tickets chargés",
+        action: s.action,
+      });
+    });
+  } catch (e) {
+    // Défensif : une erreur de calcul ne doit jamais faire planter le
+    // dashboard ni afficher une notification inventée.
+  }
+
+  const ORDRE_NIVEAU = { fort: 0, moyen: 1, faible: 2 };
+  notifications.sort((a, b) => (ORDRE_NIVEAU[a.niveau] ?? 3) - (ORDRE_NIVEAU[b.niveau] ?? 3));
+  return notifications;
+}
+
 function Badge({ label, color, bg, style }) {
   return <span style={{display:"inline-block",padding:"2px 8px",borderRadius:"20px",fontSize:"10px",fontWeight:"700",color,background:bg,letterSpacing:"0.5px",...style}}>{label}</span>;
 }
@@ -3919,6 +3999,8 @@ function Dashboard({ agenceAccess, onClose }) {
       return parseDateCreneau(a.t.fields?.Créneau) - parseDateCreneau(b.t.fields?.Créneau);
     });
 
+  const notificationsIKO = genererNotificationsIKO(ticketsPourAgence, ticketsATraiterIKO);
+
   const allerAuTicketIKO = (id, statutTicket) => {
     // Un ticket clos (avis client faible) n'apparaît pas sous le filtre
     // "tous" (qui exclut Terminé/Annulé/Supprimé) : cibler son statut réel
@@ -4169,6 +4251,41 @@ function Dashboard({ agenceAccess, onClose }) {
             )}
           </div>
         )}
+
+        {/* Notifications intelligentes IKO V1 — lecture seule, purement
+            déterministe, jamais d'action automatique. Distinct du bloc
+            "🎯 À traiter" ci-dessus (détail ticket par ticket) : ici, des
+            notifications agrégées/typées avec niveau et action suggérée,
+            incluant les signaux prédictifs SAV (absents du bloc "À
+            traiter"). */}
+        <div style={{background:"#fff",border:"1px solid "+C.border,borderRadius:"12px",marginBottom:"20px",padding:"14px 16px"}}>
+          <div style={{display:"flex",alignItems:"center",gap:"8px",marginBottom:"12px"}}>
+            <span style={{fontSize:"13px",fontWeight:"900",color:C.white}}>🔔 Notifications IKO</span>
+            {notificationsIKO.length > 0 && (
+              <span style={{background:C.or,color:"#111",borderRadius:"10px",padding:"1px 8px",fontSize:"11px",fontWeight:"900"}}>{notificationsIKO.length}</span>
+            )}
+          </div>
+          {notificationsIKO.length === 0 && (
+            <div style={{fontSize:"12px",color:C.muted,fontStyle:"italic"}}>Aucune notification importante actuellement.</div>
+          )}
+          {notificationsIKO.length > 0 && (
+            <div style={{display:"flex",flexDirection:"column",gap:"8px"}}>
+              {notificationsIKO.map((n, i) => (
+                <div key={i} style={{border:"1px solid "+C.border,borderRadius:"8px",padding:"9px 12px",background:"#FAFAFA"}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:"8px",marginBottom:"3px"}}>
+                    <span style={{fontSize:"12px",fontWeight:"700",color:C.white}}>{n.titre}</span>
+                    <span style={{fontSize:"9px",fontWeight:"700",color:COULEURS_NIVEAU_NOTIF_IKO[n.niveau]||C.muted,whiteSpace:"nowrap"}}>
+                      {LABELS_NIVEAU_NOTIF_IKO[n.niveau] || "Niveau faible"}
+                    </span>
+                  </div>
+                  <div style={{fontSize:"11px",color:C.text}}>{n.information}</div>
+                  {n.contexte && <div style={{fontSize:"10px",color:C.muted,marginTop:"2px"}}>Contexte : {n.contexte}</div>}
+                  {n.action && <div style={{fontSize:"10px",color:"#8a6d1f",fontStyle:"italic",marginTop:"3px"}}>À vérifier : {n.action}</div>}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
 
         <div style={{display:"flex",gap:"12px",marginBottom:"20px",flexWrap:"wrap"}}>
           <StatCard label="Total tickets" value={stats.total} accent
