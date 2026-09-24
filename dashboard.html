@@ -1967,6 +1967,23 @@ function ModalAnalyticsSAV({ tickets, onClose }) {
   const perfEtResolution = interventions ? window.AnalyticsSAV.calculerPerformanceEtResolution(interventions, tickets) : null;
   const alertesSAV = window.AnalyticsSAV.detecterAlertesSAV({ tauxUrgents, topCauses, topProduitsDetail, resolutionParAgence: perfEtResolution ? perfEtResolution.resolutionParAgence : [] });
 
+  // ---- Détection prédictive SAV V1 : "Signaux prédictifs SAV" ----
+  // Reutilise EXACTEMENT les memes agregats deja calcules ci-dessus (aucun
+  // nouveau calcul de fond, aucun nouvel appel Airtable) : fonction separee
+  // de detecterAlertesSAV, qui reste inchangee (section "Alertes SAV"
+  // ci-dessus non modifiee). Purement statistique/deterministe, jamais une
+  // prediction presentee comme certaine (voir analytics-sav.js).
+  const signauxPredictifsSAV = window.AnalyticsSAV.genererSignauxPredictifsSAV({
+    tauxUrgents, topCauses, topProduitsDetail,
+    resolutionParAgence: perfEtResolution ? perfEtResolution.resolutionParAgence : [],
+    performanceTechniciens: perfEtResolution ? perfEtResolution.performanceTechniciens : [],
+  });
+  const NIVEAU_SIGNAL_STYLE = {
+    fort: { couleur: "#DC2626", fond: "rgba(220,38,38,0.08)", label: "Signal fort" },
+    moyen: { couleur: "#D97706", fond: "rgba(217,119,6,0.08)", label: "Signal moyen" },
+    faible: { couleur: "#6B7280", fond: "rgba(107,114,128,0.08)", label: "Signal faible" },
+  };
+
   // ---- Socle IA : synthèse direction (mode "synthese_direction") ----
   // Reutilise l'architecture existante (api/chat-dashboard.js, meme
   // principe que devis_suggestion) : le serveur ne recoit QUE les chiffres
@@ -2016,6 +2033,27 @@ function ModalAnalyticsSAV({ tickets, onClose }) {
             {alertesSAV.map((a, i) => (
               <div key={i} style={{fontSize:"11.5px",color:C.text,marginBottom:i<alertesSAV.length-1?"4px":0}}>• {a.texte}</div>
             ))}
+          </div>
+        )}
+
+        {signauxPredictifsSAV.length > 0 && (
+          <div style={{marginBottom:"18px",border:"1px solid "+C.border,borderRadius:"8px",padding:"10px 12px"}}>
+            <div style={{fontSize:"12px",fontWeight:"700",color:C.white,marginBottom:"2px"}}>🔮 Signaux prédictifs SAV</div>
+            <div style={{fontSize:"10px",color:C.muted,marginBottom:"8px"}}>Détection statistique, pas une certitude — chaque signal reste à vérifier sur le terrain.</div>
+            {signauxPredictifsSAV.map((s, i) => {
+              const style = NIVEAU_SIGNAL_STYLE[s.niveau] || NIVEAU_SIGNAL_STYLE.faible;
+              return (
+                <div key={i} style={{background:style.fond,border:"1px solid "+style.couleur,borderRadius:"8px",padding:"8px 10px",marginBottom:i<signauxPredictifsSAV.length-1?"8px":0}}>
+                  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:"8px",marginBottom:"4px"}}>
+                    <span style={{fontSize:"11.5px",fontWeight:"700",color:C.white}}>{s.probleme}</span>
+                    <span style={{fontSize:"9px",fontWeight:"700",color:style.couleur,border:"1px solid "+style.couleur,borderRadius:"10px",padding:"1px 7px",whiteSpace:"nowrap"}}>{style.label}</span>
+                  </div>
+                  <div style={{fontSize:"10.5px",color:C.text,marginBottom:"3px"}}><b>Donnée observée</b> · {s.donneeObservee}</div>
+                  <div style={{fontSize:"10.5px",color:C.muted,fontStyle:"italic",marginBottom:"3px"}}><b>Hypothèse (non confirmée)</b> · {s.hypothese}</div>
+                  <div style={{fontSize:"10.5px",color:C.text}}><b>À vérifier</b> · {s.action}</div>
+                </div>
+              );
+            })}
           </div>
         )}
 

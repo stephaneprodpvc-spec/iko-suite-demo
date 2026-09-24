@@ -391,6 +391,164 @@ export function detecterAlertesSAV({ tauxUrgents, topCauses, topProduitsDetail, 
   return alertes;
 }
 
+// ---- Détection prédictive SAV V1 : "Signaux prédictifs SAV" du dashboard
+// IKO. Réutilise EXACTEMENT les mêmes agrégats déjà calculés ci-dessus
+// (topCauses, topProduitsDetail, resolutionParAgence, performanceTechniciens,
+// tauxUrgents) — aucun nouveau calcul de fond, aucun nouvel appel Airtable,
+// fonction séparée de detecterAlertesSAV pour ne jamais modifier son
+// comportement existant (déjà affiché tel quel dans ModalAnalyticsSAV).
+//
+// Comme detecterAlertesSAV : purement statistique et déterministe (moyenne +
+// écart-type), aucune IA, aucune cause inventée. Ajoute par rapport à
+// detecterAlertesSAV :
+// - un niveau de signal explicite (faible/moyen/fort), selon la distance à
+//   la moyenne en écarts-types — jamais un pourcentage choisi au hasard ;
+// - une distinction explicite donnée observée (faits bruts) / signal
+//   (l'écart statistique) / hypothèse (une piste prudente, jamais présentée
+//   comme acquise) / action de vérification recommandée ;
+// - un signal "technicien" (symétrique du signal "agence" déjà existant,
+//   même logique de taux de retour anormal) ;
+// - un signal "faible" dédié à une évolution récente en hausse (réutilise
+//   topProduitsDetail.evolution déjà calculé), pour repérer un problème qui
+//   COMMENCE à devenir récurrent avant qu'il ne franchisse un seuil fort.
+//
+// Garde-fous anti faux-positif (mêmes seuils minimums que detecterAlertesSAV,
+// plus stricts sur le niveau "faible") :
+// - toujours >= 3 éléments distincts (causes/produits/agences/techniciens)
+//   avant tout calcul d'écart-type — sinon aucun signal de ce type, jamais
+//   un signal forcé sur un échantillon trop petit ;
+// - un plancher de volume absolu (>= 2 tickets) en plus de l'écart-type,
+//   pour ignorer un écart statistiquement "significatif" mais construit sur
+//   1 seul ticket ;
+// - un technicien/agence n'entre dans le calcul que s'il a un volume minimal
+//   (>= 3 interventions) pour que son taux ne soit pas dominé par 1 ou 2 cas.
+function niveauSignalDepuisEcart(valeur, moyenne, ecartType) {
+  if (!(ecartType > 0)) return null;
+  const z = (valeur - moyenne) / ecartType;
+  if (z > 2) return "fort";
+  if (z > 1) return "moyen";
+  if (z > 0.5) return "faible";
+  return null;
+}
+
+export function genererSignauxPredictifsSAV({ tauxUrgents, topCauses, topProduitsDetail, resolutionParAgence, performanceTechniciens }) {
+  const signaux = [];
+
+  // ---- Cause SAV en récurrence anormale ----
+  if (topCauses && topCauses.length >= 3) {
+    const { moyenne, ecartType } = ecartTypeMoyenne(topCauses.map(([, n]) => n));
+    const [causeTop, nTop] = topCauses[0];
+    const niveau = nTop >= 2 ? niveauSignalDepuisEcart(nTop, moyenne, ecartType) : null;
+    if (niveau) {
+      signaux.push({
+        type: "cause",
+        probleme: `Cause SAV en récurrence anormale : "${causeTop}".`,
+        donneeObservee: `${nTop} tickets portent cette cause, contre une moyenne de ${moyenne.toFixed(1)} tickets par cause sur les causes renseignées.`,
+        produit: null, agence: null, technicien: null,
+        niveau,
+        hypothese: "Cela peut indiquer un problème récurrent lié à cette cause (produit, fournisseur, pose) — pas encore confirmé.",
+        action: "Vérifier les tickets récents portant cette cause pour un point commun (produit, lot, fournisseur, pose).",
+      });
+    }
+  }
+
+  // ---- Produit générant plusieurs SAV similaires ----
+  if (topProduitsDetail && topProduitsDetail.length >= 3) {
+    const { moyenne, ecartType } = ecartTypeMoyenne(topProduitsDetail.map(p => p.total));
+    const top = topProduitsDetail[0];
+    const niveau = top.total >= 2 ? niveauSignalDepuisEcart(top.total, moyenne, ecartType) : null;
+    if (niveau) {
+      signaux.push({
+        type: "produit",
+        probleme: `Volume SAV anormalement élevé sur le produit "${top.produit}".`,
+        donneeObservee: `${top.total} tickets sur ce produit (${top.nbClients} client(s) distinct(s), ${top.nbCauses} cause(s) distincte(s)), contre une moyenne de ${moyenne.toFixed(1)} tickets par produit.`,
+        produit: top.produit, agence: null, technicien: null,
+        niveau,
+        hypothese: "Cela peut indiquer un défaut récurrent sur ce produit (référence, lot, pose) — à confirmer sur le terrain.",
+        action: "Vérifier si les tickets de ce produit partagent une cause, un lot ou une période de pose commune.",
+      });
+    }
+  }
+
+  // ---- Agence avec taux de retour anormal ----
+  if (resolutionParAgence && resolutionParAgence.length >= 3) {
+    const tauxRetourParAgence = resolutionParAgence.map(a => ({ agence: a.agence, total: a.total, tauxRetour: 100 - a.taux }));
+    const { moyenne, ecartType } = ecartTypeMoyenne(tauxRetourParAgence.map(a => a.tauxRetour));
+    const pire = [...tauxRetourParAgence].sort((a, b) => b.tauxRetour - a.tauxRetour)[0];
+    const niveau = pire.total >= 3 ? niveauSignalDepuisEcart(pire.tauxRetour, moyenne, ecartType) : null;
+    if (niveau) {
+      signaux.push({
+        type: "agence",
+        probleme: `Taux de retour anormal pour l'agence ${pire.agence}.`,
+        donneeObservee: `${pire.tauxRetour}% des tickets avec intervention de cette agence nécessitent un retour, contre une moyenne de ${moyenne.toFixed(1)}% entre agences (sur ${pire.total} tickets avec intervention).`,
+        produit: null, agence: pire.agence, technicien: null,
+        niveau,
+        hypothese: "Cela peut indiquer une difficulté de suivi ou de diagnostic au premier passage dans cette agence — à vérifier avec l'équipe.",
+        action: "Passer en revue avec l'agence les tickets nécessitant un retour pour identifier un point commun.",
+      });
+    }
+  }
+
+  // ---- Technicien avec taux de retour anormal (symétrique du signal agence) ----
+  if (performanceTechniciens && performanceTechniciens.length >= 3) {
+    const eligibles = performanceTechniciens.filter(t => t.total >= 3);
+    if (eligibles.length >= 3) {
+      const tauxRetourParTech = eligibles.map(t => ({ nom: t.nom, total: t.total, tauxRetour: 100 - t.tauxResolution }));
+      const { moyenne, ecartType } = ecartTypeMoyenne(tauxRetourParTech.map(t => t.tauxRetour));
+      const pire = [...tauxRetourParTech].sort((a, b) => b.tauxRetour - a.tauxRetour)[0];
+      const niveau = niveauSignalDepuisEcart(pire.tauxRetour, moyenne, ecartType);
+      if (niveau) {
+        signaux.push({
+          type: "technicien",
+          probleme: `Taux de retour anormal pour un technicien (${pire.nom}).`,
+          donneeObservee: `${pire.tauxRetour}% des interventions de ce technicien nécessitent un retour, contre une moyenne de ${moyenne.toFixed(1)}% entre techniciens (sur ${pire.total} interventions).`,
+          produit: null, agence: null, technicien: pire.nom,
+          niveau,
+          hypothese: "Cela peut indiquer un besoin d'accompagnement sur un type d'intervention précis — pas une évaluation de compétence générale.",
+          action: "Vérifier avec ce technicien les cas nécessitant un retour (type d'intervention, outillage, besoin de formation).",
+        });
+      }
+    }
+  }
+
+  // ---- Taux de tickets urgents élevé (même seuil que detecterAlertesSAV,
+  // avec un niveau selon l'ampleur du dépassement) ----
+  if (tauxUrgents > 20) {
+    signaux.push({
+      type: "urgence",
+      probleme: "Taux de tickets urgents élevé.",
+      donneeObservee: `${tauxUrgents}% des tickets actuels sont qualifiés urgents (seuil de vigilance : 20%).`,
+      produit: null, agence: null, technicien: null,
+      niveau: tauxUrgents > 40 ? "fort" : tauxUrgents > 28 ? "moyen" : "faible",
+      hypothese: "Cela peut indiquer une dégradation ponctuelle ou un problème émergent commun à plusieurs tickets urgents — à confirmer.",
+      action: "Vérifier si les tickets urgents récents partagent une cause commune avant qu'elle ne se généralise.",
+    });
+  }
+
+  // ---- Signal faible : évolution récente en hausse sur un produit ----
+  // Réutilise topProduitsDetail.evolution déjà calculé (fenêtre 3 mois vs 3
+  // mois précédents, seuil >=3 tickets datés déjà appliqué en amont) : un
+  // signal volontairement classé "faible" — c'est une tendance qui débute,
+  // pas encore une anomalie statistique confirmée comme les signaux ci-dessus.
+  if (topProduitsDetail) {
+    topProduitsDetail.forEach(p => {
+      if (p.evolution === "hausse") {
+        signaux.push({
+          type: "evolution",
+          probleme: `Évolution récente en hausse sur le produit "${p.produit}".`,
+          donneeObservee: `Nombre de tickets en hausse sur les 3 derniers mois par rapport aux 3 mois précédents, pour ce produit.`,
+          produit: p.produit, agence: null, technicien: null,
+          niveau: "faible",
+          hypothese: "Ce problème pourrait devenir récurrent s'il se confirme sur les prochaines semaines — pas encore une anomalie établie.",
+          action: "Surveiller ce produit sur les prochaines semaines et vérifier les nouveaux tickets dès leur ouverture.",
+        });
+      }
+    });
+  }
+
+  return signaux;
+}
+
 // ---- Intelligence entreprise V2 : croisements SAV, calculés à partir des
 // mêmes tickets déjà chargés (aucun nouveau fetch, aucune nouvelle donnée
 // Airtable). Fonction pure séparée de calculerAnalyticsSAV (qui reste
