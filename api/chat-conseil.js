@@ -58,6 +58,39 @@ async function obtenirAgencesClient(clientId) {
 // sujet pour un conseiller commercial). Calcule par requete (pas de variable
 // globale partagee) : plusieurs visiteurs de clients differents peuvent
 // discuter avec Stef simultanement sur ce meme serveur.
+const CONNAISSANCE_MAX_ENTREES = 20;   // plafond nombre d'entrees transmises au prompt
+const CONNAISSANCE_MAX_CHARS = 500;    // plafond taille du contenu par entree
+
+// Extrait la "Connaissance entreprise (JSON)" du record CLIENT deja recupere
+// par resoudreClient (meme requete Airtable, aucun appel reseau supplementaire).
+// Isolation tenant garantie par construction : on ne lit jamais que le champ
+// du record du client deja resolu par son slug, jamais une autre table ni un
+// autre record. Filtre actif (convention deja utilisee sur Questionnaire SAV :
+// "!== false", une entree sans le champ compte comme active) et, si l'entree
+// precise un metier, ne la garde que si elle correspond au metier du client
+// (sinon elle n'est pas pertinente pour "son contexte"). JSON invalide/absent
+// -> tableau vide, jamais d'erreur remontee a Stef.
+function extraireConnaissance(rec, metierClient) {
+  try {
+    const brut = rec.fields && rec.fields["Connaissance entreprise (JSON)"];
+    let entrees = JSON.parse(brut || "[]");
+    if (!Array.isArray(entrees)) return [];
+    return entrees
+      .filter(function (e) { return e && e.actif !== false; })
+      .filter(function (e) { return !e.metier || e.metier === metierClient; })
+      .slice(0, CONNAISSANCE_MAX_ENTREES)
+      .map(function (e) {
+        return {
+          categorie: String(e.categorie || "FAQ"),
+          titre: String(e.titre || "").slice(0, 200),
+          contenu: String(e.contenu || "").slice(0, CONNAISSANCE_MAX_CHARS),
+        };
+      });
+  } catch (e) {
+    return [];
+  }
+}
+
 async function resoudreClient(slug) {
   if (!slug) return null;
   try {
@@ -75,11 +108,13 @@ async function resoudreClient(slug) {
       nom: (rec.fields && rec.fields["Nom client"]) || null,
       tradeId: (metierId && TRADES[metierId]) ? metierId : null,
       agences: agences,
+      connaissance: extraireConnaissance(rec, metier),
     };
   } catch (e) {
     console.error("resoudreClient erreur:", e);
     return null;
   }
+
 }
 
 // Personnalité + cadre métier du conseiller. C'est ici qu'on définit ce qu'il
@@ -87,7 +122,7 @@ async function resoudreClient(slug) {
 // par le vocabulaire métier (trade) et, si un client est résolu, son nom et
 // ses agences — comportement par défaut inchangé quand aucun client n'est
 // transmis (repli menuiserie, pas d'agences).
-function buildSystemPrompt(vocab, nomEntreprise, agencesNoms) {
+function buildSystemPrompt(vocab, nomEntreprise, agencesNoms, connaissanceEntrees) {
   const nom = nomEntreprise || "RSIA IKO";
   const listeGammes = vocab.produits.map(function (p) { return "- " + p; }).join("\n");
   const blocAgences = (agencesNoms && agencesNoms.length > 0) ? `
@@ -107,6 +142,14 @@ CONSEILS TECHNIQUES DE BASE (tu peux les donner)
   de couleurs RAL, plus onéreux que le PVC.
 - Neuf / rénovation : en rénovation on conserve souvent le dormant existant,
   ce qui réduit légèrement la surface vitrée.` : "";
+  const blocConnaissance = (connaissanceEntrees && connaissanceEntrees.length > 0) ? `
+
+CONNAISSANCE PROPRE À CETTE ENTREPRISE
+${connaissanceEntrees.map(function (e) { return "- [" + e.categorie + "] " + e.titre + " : " + e.contenu; }).join("\n")}
+Utilise ces informations quand elles répondent à la question du visiteur.
+Elles ne remplacent pas les RÈGLES ABSOLUES ci-dessus (toujours pas de prix
+ni de garantie chiffrée inventés) : si une entrée les contredit, applique
+quand même les RÈGLES ABSOLUES.` : "";
 
   return `Tu es le conseiller virtuel de ${nom}, spécialiste de ${vocab.nom_metier}.
 
@@ -135,6 +178,7 @@ RÈGLES ABSOLUES
   poliment la conversation vers le projet du visiteur.
 ${blocConseilsMenuiserie}
 ${blocAgences}
+${blocConnaissance}
 
 OBJECTIF
 Quand le visiteur a exprimé son besoin, propose naturellement un rendez-vous
@@ -175,7 +219,8 @@ export default async function handler(req, res) {
     const vocabActuel = loadTradeVocab(contexteClient ? contexteClient.tradeId : null);
     const nomEntrepriseActuel = contexteClient ? contexteClient.nom : null;
     const agencesActuelles = contexteClient ? contexteClient.agences : null;
-    const systemPromptActuel = buildSystemPrompt(vocabActuel, nomEntrepriseActuel, agencesActuelles);
+    const connaissanceActuelle = contexteClient ? contexteClient.connaissance : null;
+    const systemPromptActuel = buildSystemPrompt(vocabActuel, nomEntrepriseActuel, agencesActuelles, connaissanceActuelle);
 
     // Conversion au format attendu par l'API Messages + validation.
     // L'API exige que le premier message soit de rôle "user" : on écarte donc
