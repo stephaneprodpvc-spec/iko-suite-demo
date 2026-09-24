@@ -13,6 +13,7 @@
 import { verifierOrigine, verifierDebit } from "./_securite.js";
 import vocabMenuiserie from "./_trades/menuiserie.js";
 import vocabPlomberieChauffage from "./_trades/plomberie_chauffage.js";
+import { extraireConnaissanceDuRecord, blocPromptConnaissance } from "./_connaissance.js";
 
 // Vocabulaire parametrable par metier (voir trades/*.js). Menuiserie reste
 // le repli par defaut pour ne rien casser sur les clients demo existants.
@@ -71,14 +72,7 @@ ${questionnairePersonnalise.map(function (q, i) {
 Quand tu appelles creer_ticket, remplis le champ reponses_questionnaire avec
 un objet JSON en texte, au format {"question 1": "reponse", "question 2": "reponse"},
 en reprenant exactement le texte de chaque question ci-dessus comme cle.` : "";
-  const blocConnaissance = (connaissanceEntrees && connaissanceEntrees.length > 0) ? `
-
-CONNAISSANCE PROPRE A CETTE ENTREPRISE
-${connaissanceEntrees.map(function (e) { return "- [" + e.categorie + "] " + e.titre + " : " + e.contenu; }).join("\n")}
-Utilise ces informations quand elles repondent a la question du client. Elles
-ne remplacent pas les REGLES ABSOLUES ci-dessus (toujours pas de prix
-invente) : si une entree les contredit, applique quand meme les REGLES
-ABSOLUES.` : "";
+  const blocConnaissance = blocPromptConnaissance(connaissanceEntrees);
   return `
 Tu es Amandine, l'assistante SAV en ligne d'Iko Suite, specialiste de
 ${vocab.nom_metier}.
@@ -237,36 +231,8 @@ function airtableHeaders() {
 // amandine.html). Calcul PAR REQUETE (pas de variable globale partagee, a
 // la difference de TRADE_ID/AGENCES_VALIDES) car plusieurs clients peuvent
 // discuter avec Amandine simultanement sur ce meme serveur.
-const CONNAISSANCE_MAX_ENTREES = 20;   // plafond nombre d'entrees transmises au prompt
-const CONNAISSANCE_MAX_CHARS = 500;    // plafond taille du contenu par entree
-
-// Extrait la "Connaissance entreprise (JSON)" du record CLIENT deja recupere
-// par resoudreClient (meme requete Airtable, aucun appel reseau supplementaire).
-// Copie exacte de chat-conseil.js (Stef) : isolation tenant garantie par
-// construction (uniquement le champ du record deja resolu par slug), filtre
-// actif (convention deja utilisee sur Questionnaire SAV : "!== false"), filtre
-// metier (entree reservee a un autre metier exclue), JSON invalide/absent ->
-// tableau vide, jamais d'erreur remontee a Amandine.
-function extraireConnaissance(rec, metierClient) {
-  try {
-    const brut = rec.fields && rec.fields["Connaissance entreprise (JSON)"];
-    let entrees = JSON.parse(brut || "[]");
-    if (!Array.isArray(entrees)) return [];
-    return entrees
-      .filter(function (e) { return e && e.actif !== false; })
-      .filter(function (e) { return !e.metier || e.metier === metierClient; })
-      .slice(0, CONNAISSANCE_MAX_ENTREES)
-      .map(function (e) {
-        return {
-          categorie: String(e.categorie || "FAQ"),
-          titre: String(e.titre || "").slice(0, 200),
-          contenu: String(e.contenu || "").slice(0, CONNAISSANCE_MAX_CHARS),
-        };
-      });
-  } catch (e) {
-    return [];
-  }
-}
+// (Connaissance entreprise : voir extraireConnaissanceDuRecord dans
+// _connaissance.js, module commun reutilise par les 4 assistants IKO.)
 
 // Questionnaire SAV personnalise de ce client (table "Questionnaire SAV",
 // filtre Client + Actif, trie par Ordre). null si le client n'en a pas
@@ -342,7 +308,7 @@ async function resoudreClient(slug) {
       questionnaire: questionnaire,
       agences: agences,
       bloque: rec.fields && rec.fields["Accès bloqué"] === true,
-      connaissance: extraireConnaissance(rec, metier),
+      connaissance: extraireConnaissanceDuRecord(rec, metier),
     };
   } catch (e) {
     console.error("resoudreClient erreur:", e);

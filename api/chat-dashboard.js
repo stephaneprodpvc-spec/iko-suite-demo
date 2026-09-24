@@ -1,4 +1,5 @@
 import { verifierOrigine, verifierDebit, reponseBloquee } from "./_securite.js";
+import { normaliserConnaissance, blocPromptConnaissance } from "./_connaissance.js";
 
 // api/chat-dashboard.js
 // Relais serveur entre le widget vocal Amandine (dashboard.html) et l'API
@@ -207,45 +208,17 @@ REGLES
   executee.
 `;
 
-// Plafond nombre d'entrees / taille contenu transmises au prompt - meme
-// convention que chat-conseil.js et chat-amandine.js.
-const CONNAISSANCE_MAX_ENTREES = 20;
-const CONNAISSANCE_MAX_CHARS = 500;
-
-// Filtre server-side la "Connaissance entreprise" transmise par le client
-// (deja extraite du record Clients qu'il a lui-meme charge au demarrage,
-// voir window.IKO_CLIENT_INFO dans dashboard.html - aucun appel Airtable
-// ici). Meme logique que extraireConnaissance() dans chat-conseil.js /
-// chat-amandine.js, adaptee a un tableau deja en JS (pas de JSON.parse
-// d'un champ brut) puisque le tri actif/metier reste une responsabilite
-// serveur, jamais confiee au client. IMPORTANT (isolation tenant) : cette
-// fonction ne fait que filtrer/formater du TEXTE pour le prompt - elle ne
-// lit et n'utilise JAMAIS un identifiant de tenant depuis la connaissance
-// recue ; le perimetre tenant reste exclusivement determine par le JWT/
-// session existant (verif-securite.js), jamais par le contenu du body.
-function filtrerConnaissance(entrees, metierClient) {
-  if (!Array.isArray(entrees)) return [];
-  return entrees
-    .filter(function (e) { return e && typeof e === "object" && e.actif !== false; })
-    .filter(function (e) { return !e.metier || e.metier === metierClient; })
-    .slice(0, CONNAISSANCE_MAX_ENTREES)
-    .map(function (e) {
-      return {
-        categorie: String(e.categorie || "FAQ"),
-        titre: String(e.titre || "").slice(0, 200),
-        contenu: String(e.contenu || "").slice(0, CONNAISSANCE_MAX_CHARS),
-      };
-    });
-}
-
+// Filtrage/formatage de la "Connaissance entreprise" transmise par le
+// client (deja extraite du record Clients qu'il a lui-meme charge au
+// demarrage, voir window.IKO_CLIENT_INFO dans dashboard.html - aucun appel
+// Airtable ici) : voir normaliserConnaissance/blocPromptConnaissance dans
+// _connaissance.js, module commun reutilise par les 4 assistants IKO.
+// IMPORTANT (isolation tenant) : ce module ne lit et n'utilise JAMAIS un
+// identifiant de tenant depuis la connaissance recue ; le perimetre tenant
+// reste exclusivement determine par le JWT/session existant
+// (verif-securite.js), jamais par le contenu du body.
 function buildSystemPrompt(connaissanceEntrees) {
-  const blocConnaissance = (connaissanceEntrees && connaissanceEntrees.length > 0) ? `
-
-CONNAISSANCE PROPRE A CETTE ENTREPRISE
-${connaissanceEntrees.map(function (e) { return "- [" + e.categorie + "] " + e.titre + " : " + e.contenu; }).join("\n")}
-Utilise ces informations quand elles repondent a la question posee. Elles ne
-changent rien aux REGLES ci-dessus sur les actions du dashboard.` : "";
-  return SYSTEM_PROMPT_BASE + blocConnaissance;
+  return SYSTEM_PROMPT_BASE + blocPromptConnaissance(connaissanceEntrees);
 }
 
 const TOOLS = [
@@ -583,7 +556,7 @@ export default async function handler(req, res) {
     // record Clients qu'il a lui-meme charge - voir dashboard.html). Filtree
     // ici uniquement (actif/metier), jamais utilisee pour determiner un
     // perimetre tenant : voir commentaire de filtrerConnaissance ci-dessus.
-    const connaissanceActuelle = filtrerConnaissance(body.connaissance, String(body.metier || "").slice(0, 60));
+    const connaissanceActuelle = normaliserConnaissance(body.connaissance, String(body.metier || "").slice(0, 60));
 
     const blocHistorique = historique.length
       ? "\n\nEchanges precedents de cette session (le plus recent en dernier) :\n" +
