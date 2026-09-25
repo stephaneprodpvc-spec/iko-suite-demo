@@ -2492,6 +2492,11 @@ function ModalIntelligenceCommerciale({ onClose }) {
   const panierMoyen = devis ? window.AnalyticsSAV.calculerPanierMoyenEtTendance(devis) : null;
   const maxPanierMoyenTendance = panierMoyen ? Math.max(1, ...panierMoyen.tendance.map(m => m.panierMoyen || 0)) : 1;
 
+  // Mission #3 — Top produits/services : réutilise EXACTEMENT le même
+  // tableau `devis` déjà chargé ci-dessus (aucun nouvel appel Airtable,
+  // aucun nouveau useEffect).
+  const topProduitsServices = devis ? window.AnalyticsSAV.calculerTopProduitsServices(devis) : null;
+
   // Diagnostic uniquement (jamais affiché à l'utilisateur) : signale les
   // statuts Devis inattendus sans jamais bloquer le calcul.
   React.useEffect(() => {
@@ -2600,6 +2605,32 @@ function ModalIntelligenceCommerciale({ onClose }) {
                     ))}
                   </div>
                 </>
+              )}
+            </div>
+
+            <div style={{marginBottom:"18px",borderTop:"1px solid "+C.border,paddingTop:"14px"}}>
+              <div style={{fontSize:"12px",fontWeight:"700",color:C.white,marginBottom:"2px"}}>Top produits / services</div>
+              <div style={{fontSize:"11px",color:C.muted,marginBottom:"8px"}}>Devis validés uniquement, classés par CA HT généré — 5 premiers.</div>
+              {topProduitsServices.top.length === 0 && (
+                <div style={{fontSize:"11px",color:C.muted,fontStyle:"italic"}}>Aucune ligne de devis exploitable pour l'instant.</div>
+              )}
+              {topProduitsServices.top.length > 0 && (
+                <div style={{border:"1px solid "+C.border,borderRadius:"8px",overflow:"hidden"}}>
+                  <div style={{display:"flex",padding:"6px 12px",fontSize:"9.5px",fontWeight:"700",color:C.muted,borderBottom:"1px solid "+C.border,textTransform:"uppercase"}}>
+                    <span style={{flex:2}}>Produit / Service</span>
+                    <span style={{flex:1,textAlign:"right"}}>Quantité</span>
+                    <span style={{flex:1,textAlign:"right"}}>Devis</span>
+                    <span style={{flex:1.2,textAlign:"right"}}>CA HT</span>
+                  </div>
+                  {topProduitsServices.top.map((p, i) => (
+                    <div key={p.designation} style={{display:"flex",alignItems:"center",padding:"7px 12px",borderBottom:i<topProduitsServices.top.length-1?"1px solid "+C.border:"none",fontSize:"12px"}}>
+                      <span style={{flex:2}}>{p.designation}</span>
+                      <span style={{flex:1,textAlign:"right",color:C.muted}}>{p.quantiteTotale === null ? "—" : p.quantiteTotale}</span>
+                      <span style={{flex:1,textAlign:"right",color:C.muted}}>{p.nbDevis}</span>
+                      <b style={{flex:1.2,textAlign:"right",color:C.or}}>{p.caHT === null ? "—" : p.caHT.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " €"}</b>
+                    </div>
+                  ))}
+                </div>
               )}
             </div>
           </>

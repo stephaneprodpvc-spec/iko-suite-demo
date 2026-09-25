@@ -966,3 +966,96 @@ export function calculerPanierMoyenEtTendance(devisRecords) {
     tendance,
   };
 }
+
+// ==================== Intelligence Commerciale V1 — mission #3 ====================
+// Top produits/services les plus vendus. Fonction PURE, aucun fetch — reçoit
+// exactement le même tableau `devisRecords` déjà chargé/mis en cache par
+// chargerDevisPourAnalytics() (mission #1).
+//
+// Structure des données réellement utilisée par le projet (vérifiée dans le
+// code de création des devis — dashboard.html/LigneDevisEditeur/ModalDevis
+// ET technicien.html, mêmes deux points d'écriture, structure identique) :
+// chaque Devis a un champ "Lignes devis (JSON)" — une chaîne JSON d'un
+// tableau de lignes { designation, qte, puHT, tauxTva, totalHT, totalTTC }.
+// "totalHT" est déjà le montant de ligne calculé (qte × puHT) au moment de
+// la création : on le réutilise tel quel, jamais recalculé à partir de
+// qte × puHT (ce serait une supposition redondante et une deuxième source
+// de vérité pour la même donnée).
+//
+// Règle : seuls les devis Statut === "Validé" sont pris en compte (même
+// définition de "converti" qu'en missions #1/#2). Classement par CA HT
+// généré (donnée fiable : valeur déjà stockée, jamais recalculée par
+// supposition) — les 5 premiers.
+//
+// Robustesse (aucune des situations suivantes ne doit faire planter la
+// fonction ni fausser silencieusement un total) :
+//   - "Lignes devis (JSON)" absent, vide ou JSON invalide → devis ignoré
+//     pour ce calcul (jamais une erreur qui interrompt les autres devis).
+//   - Lignes qui ne sont pas un tableau → devis ignoré.
+//   - Une ligne qui n'est pas un objet → ligne ignorée.
+//   - designation absente/vide → regroupée sous "Produit/service non renseigné"
+//     (jamais fusionnée silencieusement avec une désignation réelle).
+//   - qte absente/non numérique/<= 0 → n'alimente jamais le total de
+//     quantité (quantiteConnue reste false tant qu'aucune ligne valide
+//     n'a été rencontrée pour ce produit).
+//   - totalHT absent/non numérique/négatif → n'alimente jamais le CA HT
+//     (caConnu reste false tant qu'aucune ligne valide n'a été rencontrée).
+//   - Un même produit apparaissant plusieurs fois dans un même devis compte
+//     pour UN SEUL devis dans "nbDevis" (Set d'IDs de devis, jamais un
+//     comptage de lignes).
+export function calculerTopProduitsServices(devisRecords) {
+  const NON_RENSEIGNE = "Produit/service non renseigné";
+  const parProduit = {}; // label -> { quantiteTotale, quantiteConnue, caHT, caConnu, devisIds:Set }
+
+  (devisRecords || []).forEach(d => {
+    const f = d && d.fields || {};
+    if (f.Statut !== "Validé") return;
+
+    const brut = f["Lignes devis (JSON)"];
+    if (!brut) return;
+    let lignes;
+    try {
+      lignes = JSON.parse(brut);
+    } catch (e) {
+      return; // JSON invalide : devis ignoré pour ce calcul, jamais une exception qui remonte
+    }
+    if (!Array.isArray(lignes)) return;
+
+    lignes.forEach(ligne => {
+      if (!ligne || typeof ligne !== "object") return; // ligne mal formée, ignorée
+
+      const designationBrute = typeof ligne.designation === "string" ? ligne.designation.trim() : "";
+      const label = designationBrute || NON_RENSEIGNE;
+
+      if (!parProduit[label]) {
+        parProduit[label] = { quantiteTotale: 0, quantiteConnue: false, caHT: 0, caConnu: false, devisIds: new Set() };
+      }
+      const acc = parProduit[label];
+      acc.devisIds.add(d.id);
+
+      const qte = Number(ligne.qte);
+      if (Number.isFinite(qte) && qte > 0) {
+        acc.quantiteTotale += qte;
+        acc.quantiteConnue = true;
+      }
+
+      const totalHT = Number(ligne.totalHT);
+      if (Number.isFinite(totalHT) && totalHT >= 0) {
+        acc.caHT += totalHT;
+        acc.caConnu = true;
+      }
+    });
+  });
+
+  const top = Object.keys(parProduit).map(label => {
+    const acc = parProduit[label];
+    return {
+      designation: label,
+      quantiteTotale: acc.quantiteConnue ? Math.round(acc.quantiteTotale * 100) / 100 : null,
+      nbDevis: acc.devisIds.size,
+      caHT: acc.caConnu ? Math.round(acc.caHT * 100) / 100 : null,
+    };
+  }).sort((a, b) => (b.caHT || 0) - (a.caHT || 0)).slice(0, 5);
+
+  return { top };
+}
