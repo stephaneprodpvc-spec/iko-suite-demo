@@ -2055,14 +2055,14 @@ export function calculerIntelligenceProduitsServicesV1(devisRecords) {
         acc.devisCategories.set(devisId, categorie);
       }
 
-      const qte = Number(ligne.qte);
-      if (Number.isFinite(qte) && qte > 0) {
+      const qte = ligne.qte;
+      if (typeof qte === "number" && Number.isFinite(qte) && qte > 0) {
         acc.quantiteTotale += qte;
         acc.quantiteConnue = true;
       }
 
-      const totalHT = Number(ligne.totalHT);
-      if (Number.isFinite(totalHT) && totalHT > 0) {
+      const totalHT = ligne.totalHT;
+      if (typeof totalHT === "number" && Number.isFinite(totalHT) && totalHT > 0) {
         acc.montantDevisHT += totalHT;
         acc.montantConnu = true;
         if (categorie === "converti") {
