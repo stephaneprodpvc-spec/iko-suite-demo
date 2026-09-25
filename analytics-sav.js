@@ -1129,3 +1129,83 @@ export function calculerConversionParMode(devisRecords) {
 
   return { parMode };
 }
+
+// ---------------------------------------------------------------------
+// Intelligence Commerciale V1 — mission #7B (note client du ticket SAV vs
+// résultat du devis EXACTEMENT lié à ce ticket via Devis["Ticket lié"]).
+//
+// Analyse strictement DESCRIPTIVE : « quelle est la répartition des
+// résultats des devis liés à un ticket SAV, selon la note laissée par le
+// client sur ce ticket ? ». Ce n'est ni une prédiction, ni une preuve de
+// causalité, ni une analyse de « devis ultérieur » — le devis retrouvé via
+// Ticket lié est celui qui est à l'ORIGINE de l'intervention/du ticket
+// noté, jamais un devis créé après coup (voir Mission #7A : aucune donnée
+// fiable n'existe aujourd'hui pour relier un ticket à un devis ultérieur
+// distinct, faute d'identifiant de client final commun aux deux tables).
+//
+// Règle de jointure ABSOLUE (mission #7B) : uniquement
+// Devis["Ticket lié"] -> Tickets SAV.id. Jamais de rapprochement par nom
+// de client, email, agence ou toute autre heuristique de correspondance
+// approximative.
+//
+// Résultat du devis : mêmes règles que la mission #1 —
+//   Converti : Statut === "Validé"
+//   Refusé   : Devis refusé === true
+//   En attente : tout le reste (exclu du taux, exclu même du dénominateur)
+//
+// Note du ticket : uniquement les entiers 1 à 5. Note absente, nulle,
+// non numérique, décimale ou hors de cette plage => ticket ignoré (le
+// devis correspondant n'est alors compté dans aucune case).
+export function calculerNoteVsResultatDevis(devisRecords, ticketsRecords) {
+  const ticketsParId = {};
+  (ticketsRecords || []).forEach(t => {
+    if (t && t.id) ticketsParId[t.id] = t;
+  });
+
+  const NOTES_POSSIBLES = [1, 2, 3, 4, 5];
+  const parNoteAcc = {};
+  NOTES_POSSIBLES.forEach(n => { parNoteAcc[n] = { convertis: 0, refuses: 0 }; });
+
+  (devisRecords || []).forEach(d => {
+    const f = d && d.fields || {};
+
+    // Ticket lié : lien Airtable = tableau d'IDs. On ne suit que le
+    // premier ID présent (le code de création n'écrit jamais qu'un seul
+    // ID dans ce champ — voir dashboard.html/technicien.html). Un devis
+    // sans Ticket lié identifiable, ou dont l'ID ne correspond à aucun
+    // ticket transmis, est ignoré : aucune correspondance inventée.
+    const idsTicketLie = Array.isArray(f["Ticket lié"]) ? f["Ticket lié"] : [];
+    const idTicket = idsTicketLie[0];
+    if (!idTicket) return;
+
+    const ticket = ticketsParId[idTicket];
+    if (!ticket) return;
+
+    const note = ticket.fields?.Note;
+    const noteValide = typeof note === "number" && Number.isInteger(note) && note >= 1 && note <= 5;
+    if (!noteValide) return;
+
+    const estRefuse = f["Devis refusé"] === true;
+    let categorie = null;
+    if (estRefuse) categorie = "refuse";
+    else if (f.Statut === "Validé") categorie = "converti";
+    else return; // en attente ou statut inconnu : exclu du calcul, même logique que mission #1
+
+    if (categorie === "refuse") parNoteAcc[note].refuses += 1;
+    else parNoteAcc[note].convertis += 1;
+  });
+
+  const parNote = NOTES_POSSIBLES.map(note => {
+    const a = parNoteAcc[note];
+    const eligibles = a.convertis + a.refuses;
+    return {
+      note,
+      eligibles,
+      convertis: a.convertis,
+      refuses: a.refuses,
+      taux: eligibles > 0 ? Math.round((a.convertis / eligibles) * 100) : null,
+    };
+  });
+
+  return { parNote };
+}

@@ -2102,6 +2102,32 @@ async function chargerDevisPourAnalytics() {
   }
 }
 
+// Intelligence Commerciale V1 — mission #7B (note client vs résultat du
+// devis lié). Chargement CIBLÉ par ID, sur le même modèle que
+// resoudreNomsAgences ci-dessous : jamais un listing global de la table
+// Tickets SAV, seulement les fiches correspondant aux IDs réellement
+// présents dans Devis["Ticket lié"] des devis déjà chargés par
+// chargerDevisPourAnalytics(). Aucun helper générique "get record by ID"
+// n'existe ailleurs dans le projet (le seul mécanisme comparable est déjà
+// resoudreNomsAgences, spécifique à Agences) — ce loader en reprend
+// exactement le principe. Cache mémoire persistant entre les ouvertures
+// du panneau, jamais rafraîchi en cas d'échec pour permettre un nouvel essai.
+let _ticketsAnalyticsCache = {};
+async function chargerTicketsPourAnalytics(idsDistincts) {
+  const manquants = idsDistincts.filter(id => !(id in _ticketsAnalyticsCache));
+  if (manquants.length > 0) {
+    await Promise.all(manquants.map(async id => {
+      try {
+        const r = await fetch('/api/airtable/Tickets%20SAV/' + id);
+        _ticketsAnalyticsCache[id] = r.ok ? await r.json() : null;
+      } catch (e) {
+        _ticketsAnalyticsCache[id] = null;
+      }
+    }));
+  }
+  return idsDistincts.map(id => _ticketsAnalyticsCache[id]).filter(Boolean);
+}
+
 // Résolution des noms d'agence pour les devis (champ Airtable "Agence" =
 // lien vers la table Agences, jamais résolu en nom nulle part ailleurs
 // dans le code existant). Résout uniquement les IDs distincts passés en
@@ -2503,6 +2529,24 @@ function ModalIntelligenceCommerciale({ onClose }) {
   // ci-dessus (aucun nouvel appel Airtable, aucun nouveau useEffect).
   const conversionParMode = devis ? window.AnalyticsSAV.calculerConversionParMode(devis) : null;
 
+  // Mission #7B — Note client vs résultat du devis lié : chargement CIBLÉ
+  // des seuls Tickets SAV réellement référencés par Devis["Ticket lié"]
+  // dans les devis déjà chargés (aucun listing global de Tickets SAV,
+  // aucun nouveau useEffect indépendant des devis — chargerTicketsPourAnalytics
+  // ci-dessus).
+  const [ticketsNote, setTicketsNote] = React.useState(null);
+  React.useEffect(() => {
+    if (!devis) return;
+    const idsDistincts = Array.from(new Set(
+      devis
+        .map(d => Array.isArray(d.fields?.["Ticket lié"]) ? d.fields["Ticket lié"][0] : null)
+        .filter(Boolean)
+    ));
+    if (idsDistincts.length === 0) { setTicketsNote([]); return; }
+    chargerTicketsPourAnalytics(idsDistincts).then(setTicketsNote);
+  }, [devis]);
+  const noteVsResultatDevis = (devis && ticketsNote) ? window.AnalyticsSAV.calculerNoteVsResultatDevis(devis, ticketsNote) : null;
+
   // Diagnostic uniquement (jamais affiché à l'utilisateur) : signale les
   // statuts Devis inattendus sans jamais bloquer le calcul.
   React.useEffect(() => {
@@ -2658,6 +2702,37 @@ function ModalIntelligenceCommerciale({ onClose }) {
                       <span style={{flex:1.5}}>{m.mode}</span>
                       <span style={{flex:1,textAlign:"right",color:C.muted}}>{m.convertis}/{m.eligibles}</span>
                       <b style={{flex:1,textAlign:"right",color:C.or}}>{m.taux === null ? "—" : m.taux + "%"}</b>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div style={{marginBottom:"18px",borderTop:"1px solid "+C.border,paddingTop:"14px"}}>
+              <div style={{fontSize:"12px",fontWeight:"700",color:C.white,marginBottom:"2px"}}>Note client vs résultat du devis lié</div>
+              <div style={{fontSize:"11px",color:C.muted,marginBottom:"8px"}}>Analyse descriptive des devis liés à un ticket SAV et notés par le client. Les devis en attente sont exclus du taux de conversion.</div>
+              {!ticketsNote && (
+                <div style={{fontSize:"11px",color:C.muted,fontStyle:"italic"}}>⏳ Chargement des tickets liés...</div>
+              )}
+              {ticketsNote && noteVsResultatDevis && noteVsResultatDevis.parNote.every(n => n.eligibles === 0) && (
+                <div style={{fontSize:"11px",color:C.muted,fontStyle:"italic"}}>Aucune donnée exploitable</div>
+              )}
+              {ticketsNote && noteVsResultatDevis && !noteVsResultatDevis.parNote.every(n => n.eligibles === 0) && (
+                <div style={{border:"1px solid "+C.border,borderRadius:"8px",overflow:"hidden"}}>
+                  <div style={{display:"flex",padding:"6px 12px",fontSize:"9.5px",fontWeight:"700",color:C.muted,borderBottom:"1px solid "+C.border,textTransform:"uppercase"}}>
+                    <span style={{flex:1}}>Note client</span>
+                    <span style={{flex:1,textAlign:"right"}}>Éligibles</span>
+                    <span style={{flex:1,textAlign:"right"}}>Convertis</span>
+                    <span style={{flex:1,textAlign:"right"}}>Refusés</span>
+                    <span style={{flex:1,textAlign:"right"}}>Taux</span>
+                  </div>
+                  {noteVsResultatDevis.parNote.map((n, i) => (
+                    <div key={n.note} style={{display:"flex",alignItems:"center",padding:"7px 12px",borderBottom:i<noteVsResultatDevis.parNote.length-1?"1px solid "+C.border:"none",fontSize:"12px"}}>
+                      <span style={{flex:1}}>{"⭐".repeat(n.note)}</span>
+                      <span style={{flex:1,textAlign:"right",color:C.muted}}>{n.eligibles}</span>
+                      <span style={{flex:1,textAlign:"right",color:C.muted}}>{n.convertis}</span>
+                      <span style={{flex:1,textAlign:"right",color:C.muted}}>{n.refuses}</span>
+                      <b style={{flex:1,textAlign:"right",color:C.or}}>{n.taux === null ? "—" : n.taux + "%"}</b>
                     </div>
                   ))}
                 </div>
