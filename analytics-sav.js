@@ -890,3 +890,79 @@ export function calculerTauxConversionDevis(devisRecords, agencesMap) {
     statutsInconnus,
   };
 }
+
+// ==================== Intelligence Commerciale V1 — mission #2 ====================
+// Panier moyen des devis convertis + tendance mensuelle. Fonction PURE,
+// aucun fetch : reçoit exactement le même tableau `devisRecords` déjà
+// chargé/mis en cache par chargerDevisPourAnalytics() (mission #1) — aucune
+// deuxième source de données, aucun nouvel appel Airtable.
+//
+// Champ montant retenu : "Montant HT" (montant commercial hors taxes,
+// déjà stocké sur chaque Devis à la création dans dashboard.html/ModalDevis
+// — champ réellement utilisé par le projet pour le calcul commercial).
+// Champ date retenu : "Date validation client" (date réelle de conversion,
+// déjà affichée dans l'onglet "Signés" de ModalGestionDevis) — vrai champ
+// Date Airtable (chaîne ISO), contrairement au Créneau texte des Tickets
+// SAV : pas besoin de parseDateCreneau ici, un simple `new Date(...)` suffit.
+//
+// Règle de calcul (même définition de "converti" qu'en mission #1, jamais
+// changée) :
+//   - Seuls les devis Statut === "Validé" entrent dans le panier moyen.
+//   - Un montant absent, non numérique, non fini ou <= 0 est invalide et
+//     exclu du calcul (jamais compté comme 0, jamais inclus dans le
+//     dénominateur).
+//   - Panier moyen global = somme des Montant HT valides / nombre de devis
+//     validés avec un montant exploitable.
+//   - Tendance mensuelle : même convention que calculerAnalyticsSAV
+//     ci-dessus (6 derniers mois calendaires glissants, clé "AAAA-MM",
+//     libellé fr-FR "mmm aa"). Un devis validé avec montant valide mais
+//     sans date résolvable est compté dans le total global mais jamais
+//     rattaché à un mois inventé.
+export function calculerPanierMoyenEtTendance(devisRecords) {
+  let sommeGlobale = 0;
+  let nbGlobal = 0;
+
+  const maintenant = new Date();
+  const moisLabels = [];
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(maintenant.getFullYear(), maintenant.getMonth() - i, 1);
+    moisLabels.push({ key: d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0"), label: d.toLocaleDateString("fr-FR", { month: "short", year: "2-digit" }) });
+  }
+  const parMois = {};
+
+  (devisRecords || []).forEach(d => {
+    const f = d && d.fields || {};
+    if (f.Statut !== "Validé") return;
+
+    const montant = f["Montant HT"];
+    if (typeof montant !== "number" || !isFinite(montant) || montant <= 0) return;
+
+    sommeGlobale += montant;
+    nbGlobal += 1;
+
+    const dateStr = f["Date validation client"];
+    if (!dateStr) return;
+    const dateObj = new Date(dateStr);
+    if (isNaN(dateObj.getTime())) return;
+    const key = dateObj.getFullYear() + "-" + String(dateObj.getMonth() + 1).padStart(2, "0");
+    if (!parMois[key]) parMois[key] = { nb: 0, montant: 0 };
+    parMois[key].nb += 1;
+    parMois[key].montant += montant;
+  });
+
+  const tendance = moisLabels.map(m => {
+    const agg = parMois[m.key] || { nb: 0, montant: 0 };
+    return {
+      label: m.label,
+      nbConvertis: agg.nb,
+      montantTotal: Math.round(agg.montant * 100) / 100,
+      panierMoyen: agg.nb > 0 ? Math.round((agg.montant / agg.nb) * 100) / 100 : null,
+    };
+  });
+
+  return {
+    panierMoyenGlobal: nbGlobal > 0 ? Math.round((sommeGlobale / nbGlobal) * 100) / 100 : null,
+    nbDevisConvertisAnalyses: nbGlobal,
+    tendance,
+  };
+}

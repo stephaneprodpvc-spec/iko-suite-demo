@@ -2486,6 +2486,12 @@ function ModalIntelligenceCommerciale({ onClose }) {
 
   const resultat = devis ? window.AnalyticsSAV.calculerTauxConversionDevis(devis, agencesNoms) : null;
 
+  // Mission #2 — Panier moyen + tendance mensuelle : réutilise EXACTEMENT
+  // le même tableau `devis` déjà chargé ci-dessus (aucun nouvel appel
+  // Airtable, aucune deuxième fonction de chargement).
+  const panierMoyen = devis ? window.AnalyticsSAV.calculerPanierMoyenEtTendance(devis) : null;
+  const maxPanierMoyenTendance = panierMoyen ? Math.max(1, ...panierMoyen.tendance.map(m => m.panierMoyen || 0)) : 1;
+
   // Diagnostic uniquement (jamais affiché à l'utilisateur) : signale les
   // statuts Devis inattendus sans jamais bloquer le calcul.
   React.useEffect(() => {
@@ -2544,6 +2550,56 @@ function ModalIntelligenceCommerciale({ onClose }) {
                     </div>
                   ))}
                 </div>
+              )}
+            </div>
+
+            <div style={{marginBottom:"18px",borderTop:"1px solid "+C.border,paddingTop:"14px"}}>
+              <div style={{fontSize:"12px",fontWeight:"700",color:C.white,marginBottom:"2px"}}>Panier moyen</div>
+              <div style={{fontSize:"11px",color:C.muted,marginBottom:"8px"}}>Devis validés uniquement, montant HT — devis refusés/en attente exclus.</div>
+              <div style={{fontSize:"26px",fontWeight:"900",color:C.white,marginBottom:"6px"}}>
+                {panierMoyen.panierMoyenGlobal === null ? "—" : panierMoyen.panierMoyenGlobal.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " € HT"}
+              </div>
+              <div style={{fontSize:"11px",color:C.muted}}>
+                {panierMoyen.nbDevisConvertisAnalyses === 0
+                  ? "Aucun devis validé avec un montant exploitable pour l'instant."
+                  : panierMoyen.nbDevisConvertisAnalyses + " devis converti(s) analysé(s)"}
+              </div>
+            </div>
+
+            <div style={{marginBottom:"18px"}}>
+              <div style={{fontSize:"12px",fontWeight:"700",color:C.white,marginBottom:"2px"}}>Évolution du panier moyen (6 derniers mois)</div>
+              <div style={{fontSize:"11px",color:C.muted,marginBottom:"8px"}}>Basée sur la date de validation client de chaque devis.</div>
+              {panierMoyen.tendance.every(m => m.nbConvertis === 0) && (
+                <div style={{fontSize:"11px",color:C.muted,fontStyle:"italic"}}>Aucun devis validé avec date et montant exploitables sur cette période.</div>
+              )}
+              {!panierMoyen.tendance.every(m => m.nbConvertis === 0) && (
+                <>
+                  <div style={{display:"flex",alignItems:"flex-end",gap:"6px",height:"64px",marginBottom:"10px"}}>
+                    {panierMoyen.tendance.map(m => (
+                      <div key={m.label} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:"4px"}}>
+                        <div style={{width:"100%",height:Math.max(3,Math.round((m.panierMoyen||0)/maxPanierMoyenTendance*48))+"px",background:C.or,borderRadius:"3px"}}
+                          title={m.panierMoyen===null?"Aucun devis validé":m.panierMoyen.toFixed(2)+" € HT (panier moyen)"}/>
+                        <div style={{fontSize:"9px",color:C.muted}}>{m.label}</div>
+                      </div>
+                    ))}
+                  </div>
+                  <div style={{border:"1px solid "+C.border,borderRadius:"8px",overflow:"hidden"}}>
+                    <div style={{display:"flex",padding:"6px 12px",fontSize:"9.5px",fontWeight:"700",color:C.muted,borderBottom:"1px solid "+C.border,textTransform:"uppercase"}}>
+                      <span style={{flex:1.2}}>Mois</span>
+                      <span style={{flex:1,textAlign:"right"}}>Devis</span>
+                      <span style={{flex:1.4,textAlign:"right"}}>CA HT</span>
+                      <span style={{flex:1.4,textAlign:"right"}}>Panier moyen</span>
+                    </div>
+                    {panierMoyen.tendance.map((m, i) => (
+                      <div key={m.label} style={{display:"flex",alignItems:"center",padding:"6px 12px",borderBottom:i<panierMoyen.tendance.length-1?"1px solid "+C.border:"none",fontSize:"11.5px"}}>
+                        <span style={{flex:1.2}}>{m.label}</span>
+                        <span style={{flex:1,textAlign:"right",color:C.muted}}>{m.nbConvertis}</span>
+                        <span style={{flex:1.4,textAlign:"right"}}>{m.montantTotal.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €</span>
+                        <b style={{flex:1.4,textAlign:"right",color:C.or}}>{m.panierMoyen===null?"—":m.panierMoyen.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })+" €"}</b>
+                      </div>
+                    ))}
+                  </div>
+                </>
               )}
             </div>
           </>
