@@ -2497,6 +2497,12 @@ function ModalIntelligenceCommerciale({ onClose }) {
   // aucun nouveau useEffect).
   const topProduitsServices = devis ? window.AnalyticsSAV.calculerTopProduitsServices(devis) : null;
 
+  // Mission #4 — Auto Iko vs Manuel : comparaison du taux de conversion PAR
+  // MODE DE CRÉATION du devis (jamais "IA vs humain" — voir commentaire dans
+  // analytics-sav.js). Réutilise EXACTEMENT le même `devis` déjà chargé
+  // ci-dessus (aucun nouvel appel Airtable, aucun nouveau useEffect).
+  const conversionParMode = devis ? window.AnalyticsSAV.calculerConversionParMode(devis) : null;
+
   // Diagnostic uniquement (jamais affiché à l'utilisateur) : signale les
   // statuts Devis inattendus sans jamais bloquer le calcul.
   React.useEffect(() => {
@@ -2628,6 +2634,30 @@ function ModalIntelligenceCommerciale({ onClose }) {
                       <span style={{flex:1,textAlign:"right",color:C.muted}}>{p.quantiteTotale === null ? "—" : p.quantiteTotale}</span>
                       <span style={{flex:1,textAlign:"right",color:C.muted}}>{p.nbDevis}</span>
                       <b style={{flex:1.2,textAlign:"right",color:C.or}}>{p.caHT === null ? "—" : p.caHT.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " €"}</b>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div style={{marginBottom:"18px",borderTop:"1px solid "+C.border,paddingTop:"14px"}}>
+              <div style={{fontSize:"12px",fontWeight:"700",color:C.white,marginBottom:"2px"}}>Auto Iko vs Manuel</div>
+              <div style={{fontSize:"11px",color:C.muted,marginBottom:"8px"}}>Comparaison du taux de conversion par mode de création du devis (parcours Technicien "Auto Iko" vs backoffice "Manuel") — devis en attente exclus.</div>
+              {conversionParMode.parMode.length === 0 && (
+                <div style={{fontSize:"11px",color:C.muted,fontStyle:"italic"}}>Aucun devis éligible (validé ou refusé) pour l'instant.</div>
+              )}
+              {conversionParMode.parMode.length > 0 && (
+                <div style={{border:"1px solid "+C.border,borderRadius:"8px",overflow:"hidden"}}>
+                  <div style={{display:"flex",padding:"6px 12px",fontSize:"9.5px",fontWeight:"700",color:C.muted,borderBottom:"1px solid "+C.border,textTransform:"uppercase"}}>
+                    <span style={{flex:1.5}}>Mode</span>
+                    <span style={{flex:1,textAlign:"right"}}>Éligibles</span>
+                    <span style={{flex:1,textAlign:"right"}}>Taux</span>
+                  </div>
+                  {conversionParMode.parMode.map((m, i) => (
+                    <div key={m.mode} style={{display:"flex",alignItems:"center",padding:"7px 12px",borderBottom:i<conversionParMode.parMode.length-1?"1px solid "+C.border:"none",fontSize:"12px"}}>
+                      <span style={{flex:1.5}}>{m.mode}</span>
+                      <span style={{flex:1,textAlign:"right",color:C.muted}}>{m.convertis}/{m.eligibles}</span>
+                      <b style={{flex:1,textAlign:"right",color:C.or}}>{m.taux === null ? "—" : m.taux + "%"}</b>
                     </div>
                   ))}
                 </div>

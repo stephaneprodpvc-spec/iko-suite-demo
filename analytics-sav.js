@@ -1059,3 +1059,73 @@ export function calculerTopProduitsServices(devisRecords) {
 
   return { top };
 }
+
+// ==================== Intelligence Commerciale V1 — mission #4 ====================
+// Comparaison du taux de conversion PAR MODE DE CRÉATION du devis (Auto Iko
+// vs Manuel). Fonction PURE, aucun fetch — reçoit exactement le même
+// tableau `devisRecords` déjà chargé/mis en cache par
+// chargerDevisPourAnalytics() (mission #1).
+//
+// Source de vérité (vérifiée aux deux seuls points de création de Devis du
+// projet, aucun autre endroit n'écrit ce champ) : champ "Mode", toujours
+// renseigné sans condition —
+//   - dashboard.html (ModalDevis.envoyer)      → "Mode": "Manuel"
+//   - technicien.html (envoyerDevisAuto)       → "Mode": "Auto Iko"
+//
+// IMPORTANT (validé avec l'utilisateur) : "Mode" distingue le PARCOURS/
+// INTERFACE d'origine du devis (backoffice Manuel vs écran Technicien Auto
+// Iko), jamais "IA vs saisie humaine" — dans les deux parcours, les lignes
+// peuvent être ajoutées via une suggestion IA ou choisies manuellement au
+// catalogue. Ce module ne doit donc jamais être présenté comme une
+// comparaison IA/humain, uniquement comme une comparaison du taux de
+// conversion par mode de création du devis.
+//
+// Mêmes règles de conversion que la mission #1 (jamais réinventées) :
+//   - Convertis  : Statut === "Validé"
+//   - Refusés    : "Devis refusé" === true
+//   - En attente : Statut === "Envoyé" et non refusé → exclus du dénominateur
+//   - Éligibles  : Convertis + Refusés
+//   - Taux       : convertis / éligibles × 100, arrondi entier, null si 0 éligible
+//
+// Un Mode absent ou différent de "Auto Iko"/"Manuel" est classé sous
+// "Origine inconnue" — jamais rattaché artificiellement à l'un des deux
+// modes réels.
+export function calculerConversionParMode(devisRecords) {
+  const ORIGINE_INCONNUE = "Origine inconnue";
+  const parModeAcc = {};
+
+  const enregistrer = (mode, categorie) => {
+    if (!parModeAcc[mode]) parModeAcc[mode] = { convertis: 0, refuses: 0 };
+    if (categorie === "converti") parModeAcc[mode].convertis += 1;
+    else if (categorie === "refuse") parModeAcc[mode].refuses += 1;
+  };
+
+  (devisRecords || []).forEach(d => {
+    const f = d && d.fields || {};
+    const statut = f.Statut;
+    const estRefuse = f["Devis refusé"] === true;
+
+    let categorie = null;
+    if (estRefuse) categorie = "refuse";
+    else if (statut === "Validé") categorie = "converti";
+    else return; // en attente ou statut inconnu : jamais compté dans cette comparaison (même logique qu'en mission #1)
+
+    const modeBrut = f.Mode;
+    const mode = (modeBrut === "Auto Iko" || modeBrut === "Manuel") ? modeBrut : ORIGINE_INCONNUE;
+    enregistrer(mode, categorie);
+  });
+
+  const parMode = Object.keys(parModeAcc).map(mode => {
+    const a = parModeAcc[mode];
+    const eligibles = a.convertis + a.refuses;
+    return {
+      mode,
+      convertis: a.convertis,
+      refuses: a.refuses,
+      eligibles,
+      taux: eligibles > 0 ? Math.round((a.convertis / eligibles) * 100) : null,
+    };
+  }).sort((a, b) => b.eligibles - a.eligibles);
+
+  return { parMode };
+}
