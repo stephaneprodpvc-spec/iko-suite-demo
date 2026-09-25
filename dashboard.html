@@ -2210,6 +2210,17 @@ function ModalAnalyticsSAV({ tickets, onClose }) {
   const dureeInterventionSAV = interventions ? window.AnalyticsSAV.calculerIntelligenceDureeInterventionSAVV1(interventions) : null;
   const coutSAVParResolution = interventions ? window.AnalyticsSAV.calculerCoutSAVParResolutionV1(interventions, tickets) : null;
 
+  // Pack missions #19, #20, #21 — mêmes `interventions`/`tickets` déjà
+  // chargés ci-dessus (aucun nouvel appel Airtable, aucun nouveau
+  // useEffect de chargement, aucun nouveau fetch). Mission #21 ne
+  // recalcule rien : elle reçoit uniquement les résultats déjà calculés
+  // ci-dessus (#17, #18, #15) ainsi que #19/#20.
+  const profilsProduitsSAV = interventions ? window.AnalyticsSAV.calculerProfilSAVParProduitV1(interventions, tickets) : null;
+  const intelligenceTechniciensSAV = interventions ? window.AnalyticsSAV.calculerIntelligenceTechniciensSAVV1(interventions, tickets) : null;
+  const signauxMultiIndicateursSAV = (profilsProduitsSAV && intelligenceTechniciensSAV && dureeInterventionSAV && coutSAVParResolution && intelligenceResolutionSAV)
+    ? window.AnalyticsSAV.genererSignauxMultiIndicateursSAVV1(profilsProduitsSAV, intelligenceTechniciensSAV, dureeInterventionSAV, coutSAVParResolution, intelligenceResolutionSAV)
+    : null;
+
   // ---- Détection prédictive SAV V1 : "Signaux prédictifs SAV" ----
   // Reutilise EXACTEMENT les memes agregats deja calcules ci-dessus (aucun
   // nouveau calcul de fond, aucun nouvel appel Airtable) : fonction separee
@@ -2643,6 +2654,107 @@ function ModalAnalyticsSAV({ tickets, onClose }) {
               <div style={{fontSize:"11.5px",color:C.text}}>Coût moyen par ticket : <b style={{color:C.white}}>{coutSAVParResolution.coutMoyenParTicket === null ? "N/A" : coutSAVParResolution.coutMoyenParTicket.toFixed(2) + " €"}</b></div>
               <div style={{fontSize:"11.5px",color:C.text}}>Coût moyen — 1 intervention : <b style={{color:C.white}}>{coutSAVParResolution.coutMoyenPremiereIntervention === null ? "N/A" : coutSAVParResolution.coutMoyenPremiereIntervention.toFixed(2) + " €"}</b></div>
               <div style={{fontSize:"11.5px",color:C.text}}>Coût moyen — réinterventions : <b style={{color:C.white}}>{coutSAVParResolution.coutMoyenReintervention === null ? "N/A" : coutSAVParResolution.coutMoyenReintervention.toFixed(2) + " €"}</b></div>
+            </div>
+          )}
+        </div>
+
+        {/* Mission #19 — Profil SAV par produit/service : synthèse
+            descriptive (volumes, résolution, durée, coût), jamais un score
+            de produit. Affiche au maximum 10 produits. */}
+        <div style={{marginBottom:"18px"}}>
+          <div style={{fontSize:"12px",fontWeight:"700",color:C.white,marginBottom:"2px"}}>Profil SAV par produit/service</div>
+          <div style={{fontSize:"11px",color:C.muted,marginBottom:"8px"}}>Synthèse descriptive des volumes, interventions, durées et coûts réellement observés par produit/service.</div>
+          {!profilsProduitsSAV ? (
+            <div style={{fontSize:"11.5px",color:C.muted,fontStyle:"italic"}}>Chargement des interventions en cours…</div>
+          ) : profilsProduitsSAV.length === 0 ? (
+            <div style={{fontSize:"11.5px",color:C.muted,fontStyle:"italic"}}>Analyse non disponible : aucune donnée produit/service exploitable.</div>
+          ) : (
+            <div style={{overflowX:"auto"}}>
+              <div style={{border:"1px solid "+C.border,borderRadius:"8px",overflow:"hidden",minWidth:"760px"}}>
+                <div style={{display:"flex",padding:"6px 10px",fontSize:"9px",fontWeight:"700",color:C.muted,borderBottom:"1px solid "+C.border,textTransform:"uppercase"}}>
+                  <span style={{flex:2}}>Produit / service</span>
+                  <span style={{flex:1,textAlign:"right"}}>Tickets</span>
+                  <span style={{flex:1,textAlign:"right"}}>Taux 1 interv.</span>
+                  <span style={{flex:1,textAlign:"right"}}>Taux réinterv.</span>
+                  <span style={{flex:1,textAlign:"right"}}>Durée moy.</span>
+                  <span style={{flex:1,textAlign:"right"}}>Coût moy./ticket</span>
+                </div>
+                {profilsProduitsSAV.slice(0, 10).map((p, i) => (
+                  <div key={p.produitService} style={{display:"flex",alignItems:"center",padding:"6px 10px",borderBottom:i<Math.min(10,profilsProduitsSAV.length)-1?"1px solid "+C.border:"none",fontSize:"11px"}}>
+                    <span style={{flex:2}}>{p.produitService}</span>
+                    <span style={{flex:1,textAlign:"right"}}>{p.tickets}</span>
+                    <span style={{flex:1,textAlign:"right"}}>{p.tauxPremiereIntervention === null ? "N/A" : p.tauxPremiereIntervention + " %"}</span>
+                    <span style={{flex:1,textAlign:"right"}}>{p.tauxReintervention === null ? "N/A" : p.tauxReintervention + " %"}</span>
+                    <span style={{flex:1,textAlign:"right"}}>{p.dureeMoyenneMinutes === null ? "N/A" : p.dureeMoyenneMinutes + " min"}</span>
+                    <span style={{flex:1,textAlign:"right"}}>{p.coutMoyenParTicket === null ? "N/A" : p.coutMoyenParTicket.toFixed(2) + " €"}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Mission #20 — Intelligence techniciens SAV : synthèse
+            descriptive par technicien, jamais un classement de
+            performance. Affiche les 10 premiers selon le tri technique. */}
+        <div style={{marginBottom:"18px"}}>
+          <div style={{fontSize:"12px",fontWeight:"700",color:C.white,marginBottom:"2px"}}>Intelligence techniciens SAV</div>
+          <div style={{fontSize:"11px",color:C.muted,marginBottom:"8px"}}>Analyse descriptive des interventions, durées, coûts et réinterventions observés par technicien.</div>
+          {!intelligenceTechniciensSAV ? (
+            <div style={{fontSize:"11.5px",color:C.muted,fontStyle:"italic"}}>Chargement des interventions en cours…</div>
+          ) : intelligenceTechniciensSAV.length === 0 ? (
+            <div style={{fontSize:"11.5px",color:C.muted,fontStyle:"italic"}}>Analyse non disponible : aucune intervention avec technicien exploitable.</div>
+          ) : (
+            <div style={{overflowX:"auto"}}>
+              <div style={{border:"1px solid "+C.border,borderRadius:"8px",overflow:"hidden",minWidth:"760px"}}>
+                <div style={{display:"flex",padding:"6px 10px",fontSize:"9px",fontWeight:"700",color:C.muted,borderBottom:"1px solid "+C.border,textTransform:"uppercase"}}>
+                  <span style={{flex:2}}>Technicien</span>
+                  <span style={{flex:1,textAlign:"right"}}>Interventions</span>
+                  <span style={{flex:1,textAlign:"right"}}>Tickets associés</span>
+                  <span style={{flex:1,textAlign:"right"}}>Taux réinterv.</span>
+                  <span style={{flex:1,textAlign:"right"}}>Durée moy.</span>
+                  <span style={{flex:1,textAlign:"right"}}>Coût moy./interv.</span>
+                </div>
+                {intelligenceTechniciensSAV.slice(0, 10).map((t, i) => (
+                  <div key={t.technicien} style={{display:"flex",alignItems:"center",padding:"6px 10px",borderBottom:i<Math.min(10,intelligenceTechniciensSAV.length)-1?"1px solid "+C.border:"none",fontSize:"11px"}}>
+                    <span style={{flex:2}}>{t.technicien}</span>
+                    <span style={{flex:1,textAlign:"right"}}>{t.interventions}</span>
+                    <span style={{flex:1,textAlign:"right"}}>{t.ticketsAssocies}</span>
+                    <span style={{flex:1,textAlign:"right"}}>{t.tauxReintervention === null ? "N/A" : t.tauxReintervention + " %"}</span>
+                    <span style={{flex:1,textAlign:"right"}}>{t.dureeMoyenneMinutes === null ? "N/A" : t.dureeMoyenneMinutes + " min"}</span>
+                    <span style={{flex:1,textAlign:"right"}}>{t.coutMoyenParIntervention === null ? "N/A" : t.coutMoyenParIntervention.toFixed(2) + " €"}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Mission #21 — Signaux SAV multi-indicateurs : détection
+            purement descriptive de convergences (jamais une prédiction,
+            jamais une causalité). Ne recalcule rien : reçoit les résultats
+            déjà calculés ci-dessus. */}
+        <div style={{marginBottom:"18px"}}>
+          <div style={{fontSize:"12px",fontWeight:"700",color:C.white,marginBottom:"2px"}}>Signaux SAV multi-indicateurs</div>
+          <div style={{fontSize:"11px",color:C.muted,marginBottom:"8px"}}>Convergences descriptives à vérifier, détectées lorsqu'au moins deux indicateurs indépendants se recoupent sur une même entité. Aucune prédiction, aucune causalité.</div>
+          {!signauxMultiIndicateursSAV ? (
+            <div style={{fontSize:"11.5px",color:C.muted,fontStyle:"italic"}}>Chargement des interventions en cours…</div>
+          ) : signauxMultiIndicateursSAV.length === 0 ? (
+            <div style={{fontSize:"11.5px",color:C.muted,fontStyle:"italic"}}>Aucun signal détecté sur les données actuellement disponibles.</div>
+          ) : (
+            <div>
+              {signauxMultiIndicateursSAV.map((s, i) => (
+                <div key={s.type + ":" + s.entite} style={{marginBottom:"10px",border:"1px solid "+C.border,borderRadius:"8px",padding:"10px 12px"}}>
+                  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"4px"}}>
+                    <div style={{fontSize:"11.5px",fontWeight:"700",color:C.white}}>{s.type === "produit" ? "Produit/service" : "Technicien"} — {s.entite}</div>
+                    <div style={{fontSize:"9.5px",fontWeight:"700",color:C.muted,textTransform:"uppercase",padding:"2px 8px",border:"1px solid "+C.border,borderRadius:"999px"}}>{s.niveau}</div>
+                  </div>
+                  <ul style={{margin:"0 0 6px 18px",padding:0,fontSize:"11px",color:C.text}}>
+                    {s.signauxConvergents.map((txt, j) => <li key={j}>{txt}</li>)}
+                  </ul>
+                  <div style={{fontSize:"10.5px",color:C.muted}}>{s.actionVerification}</div>
+                </div>
+              ))}
             </div>
           )}
         </div>

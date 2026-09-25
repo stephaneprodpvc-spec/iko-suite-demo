@@ -2733,3 +2733,387 @@ export function calculerCoutSAVParResolutionV1(interventions, ticketsRecords) {
     },
   };
 }
+
+// ==================== Intelligence SAV — pack missions #19, #20, #21 ====
+
+// Petit helper local (privé) partagé par les 3 missions ci-dessous : arrondi
+// à 2 décimales, et médiane classique sur un tableau de nombres déjà filtré
+// exploitable (pair = moyenne des deux valeurs centrales).
+function _arrondi2(v) {
+  return Math.round(v * 100) / 100;
+}
+function _medianeSimple(valeurs) {
+  if (!valeurs || valeurs.length === 0) return null;
+  const triees = [...valeurs].sort((a, b) => a - b);
+  const milieu = Math.floor(triees.length / 2);
+  const brute = triees.length % 2 === 0
+    ? (triees[milieu - 1] + triees[milieu]) / 2
+    : triees[milieu];
+  return _arrondi2(brute);
+}
+
+// ---- Mission #19 — Profil SAV par produit V1 -----------------------------
+// Fonction PURE : étend le comptage produit (mission #14) à une synthèse
+// descriptive par produit/service (volumes, résolution, durée, coût),
+// réutilisant exactement les relations déjà établies (Produit trim() —
+// mission #14 ; relation Ticket ↔ Intervention et définition
+// première-intervention/réintervention — mission #15 ; règles strictes de
+// durée/coût sans conversion permissive — missions #17/#18). N'est jamais
+// un score : aucune formulation de jugement ("mauvais produit", etc.), le
+// tri reste purement technique (tickets décroissant, puis nom alphabétique).
+export function calculerProfilSAVParProduitV1(interventions, ticketsRecords) {
+  const ticketsValides = ticketsRecords || [];
+  const parTicketInterventions = _interventionsExploitablesParTicket(interventions, ticketsValides);
+
+  const parProduit = {}; // produitService -> accumulateur
+
+  ticketsValides.forEach(t => {
+    const f = (t && t.fields) || {};
+    const brutProduit = f.Produit;
+    const valeursProduit = Array.isArray(brutProduit) ? brutProduit : (brutProduit != null ? [brutProduit] : []);
+    const produitsUniquesDuTicket = new Set();
+    valeursProduit.forEach(v => {
+      const pTrim = typeof v === "string" ? v.trim() : "";
+      if (pTrim) produitsUniquesDuTicket.add(pTrim);
+    });
+    if (produitsUniquesDuTicket.size === 0) return; // ticket non exploitable pour cette analyse produit
+
+    const ivs = parTicketInterventions[t && t.id] || [];
+    const n = ivs.length;
+
+    // Durée/coût exploitables au niveau de ce ticket (règles strictes,
+    // aucune conversion permissive, aucune valeur manquante transformée en
+    // 0 — mêmes exigences que missions #17/#18).
+    const dureesTicket = [];
+    let coutTicket = 0;
+    let auMoinsUneDureeValide = false;
+    let auMoinsUnCoutValide = false;
+    ivs.forEach(iv => {
+      const brutDuree = iv && iv.fields && iv.fields["Durée (min)"];
+      if (typeof brutDuree === "number" && Number.isFinite(brutDuree) && brutDuree > 0) {
+        dureesTicket.push(brutDuree);
+        auMoinsUneDureeValide = true;
+      }
+      const brutCout = iv && iv.fields && iv.fields["Coût total intervention"];
+      if (typeof brutCout === "number" && Number.isFinite(brutCout) && brutCout > 0) {
+        coutTicket += brutCout;
+        auMoinsUnCoutValide = true;
+      }
+    });
+
+    produitsUniquesDuTicket.forEach(produitService => {
+      if (!parProduit[produitService]) {
+        parProduit[produitService] = {
+          tickets: 0, ticketsAvecIntervention: 0, ticketsPremiereIntervention: 0, ticketsReintervention: 0,
+          sommeInterventionsExploitees: 0,
+          durees: [], ticketsAvecDureeExploitable: 0,
+          coutTotalExploitable: 0, ticketsAvecCoutExploitable: 0,
+        };
+      }
+      const s = parProduit[produitService];
+      s.tickets += 1;
+      if (n > 0) {
+        s.ticketsAvecIntervention += 1;
+        s.sommeInterventionsExploitees += n;
+        if (n === 1) s.ticketsPremiereIntervention += 1;
+        else s.ticketsReintervention += 1;
+      }
+      if (auMoinsUneDureeValide) {
+        dureesTicket.forEach(d => s.durees.push(d));
+        s.ticketsAvecDureeExploitable += 1;
+      }
+      if (auMoinsUnCoutValide) {
+        s.coutTotalExploitable += coutTicket;
+        s.ticketsAvecCoutExploitable += 1;
+      }
+    });
+  });
+
+  const profils = Object.keys(parProduit)
+    .map(produitService => {
+      const s = parProduit[produitService];
+      return {
+        produitService,
+        tickets: s.tickets,
+        ticketsAvecIntervention: s.ticketsAvecIntervention,
+        ticketsPremiereIntervention: s.ticketsPremiereIntervention,
+        ticketsReintervention: s.ticketsReintervention,
+        tauxPremiereIntervention: s.ticketsAvecIntervention
+          ? Math.round((s.ticketsPremiereIntervention / s.ticketsAvecIntervention) * 100)
+          : null,
+        tauxReintervention: s.ticketsAvecIntervention
+          ? Math.round((s.ticketsReintervention / s.ticketsAvecIntervention) * 100)
+          : null,
+        moyenneInterventionsParTicket: s.ticketsAvecIntervention
+          ? _arrondi2(s.sommeInterventionsExploitees / s.ticketsAvecIntervention)
+          : null,
+        dureeMoyenneMinutes: s.durees.length
+          ? _arrondi2(s.durees.reduce((a, b) => a + b, 0) / s.durees.length)
+          : null,
+        dureeMedianeMinutes: _medianeSimple(s.durees),
+        ticketsAvecDureeExploitable: s.ticketsAvecDureeExploitable,
+        coutTotalExploitable: _arrondi2(s.coutTotalExploitable),
+        coutMoyenParTicket: s.ticketsAvecCoutExploitable
+          ? _arrondi2(s.coutTotalExploitable / s.ticketsAvecCoutExploitable)
+          : null,
+      };
+    })
+    .sort((a, b) => b.tickets - a.tickets || a.produitService.localeCompare(b.produitService, 'fr'));
+
+  return profils;
+}
+
+// ---- Mission #20 — Intelligence techniciens SAV V1 ----------------------
+// Fonction PURE : synthèse descriptive par technicien à partir du champ
+// relationnel `Intervention.fields["Technicien"]` (premier record ID lié,
+// même lecture que `calculerPerformanceEtResolution`), nom via
+// `_technicienIdentifiant` si disponible sinon l'ID. `ticketsAssocies`
+// dédoublonne les tickets par technicien ; `ticketsPremiereIntervention`/
+// `ticketsReintervention` restent conformes à la classification GLOBALE du
+// ticket établie en mission #15 (nombre total d'interventions exploitables
+// sur ce ticket, tous techniciens confondus), pour ne jamais diverger
+// silencieusement de cette définition selon qui a réalisé l'intervention.
+// Jamais un classement de performance : tri purement technique
+// (interventions décroissant, puis nom alphabétique).
+export function calculerIntelligenceTechniciensSAVV1(interventions, ticketsRecords) {
+  const ticketsValides = ticketsRecords || [];
+  const parTicketInterventions = _interventionsExploitablesParTicket(interventions, ticketsValides);
+
+  const parTech = {}; // idTech -> accumulateur
+
+  (interventions || []).forEach(iv => {
+    const idTech = Array.isArray(iv && iv.fields && iv.fields["Technicien"]) ? iv.fields["Technicien"][0] : null;
+    if (!idTech) return; // aucun technicien réellement lié : exclue, jamais inventée
+
+    const nom = (iv.fields && iv.fields["_technicienIdentifiant"]) || idTech;
+    if (!parTech[idTech]) {
+      parTech[idTech] = {
+        technicien: nom,
+        interventions: 0,
+        durees: [],
+        coutTotalExploitable: 0,
+        interventionsAvecCoutExploitable: 0,
+        ticketsSet: new Set(),
+      };
+    }
+    const s = parTech[idTech];
+    s.interventions += 1;
+
+    const brutDuree = iv.fields && iv.fields["Durée (min)"];
+    if (typeof brutDuree === "number" && Number.isFinite(brutDuree) && brutDuree > 0) {
+      s.durees.push(brutDuree);
+    }
+    const brutCout = iv.fields && iv.fields["Coût total intervention"];
+    if (typeof brutCout === "number" && Number.isFinite(brutCout) && brutCout > 0) {
+      s.coutTotalExploitable += brutCout;
+      s.interventionsAvecCoutExploitable += 1;
+    }
+
+    const ticketId = Array.isArray(iv.fields && iv.fields["Ticket SAV"]) ? iv.fields["Ticket SAV"][0] : null;
+    // Relation Ticket SAV réelle uniquement : `parTicketInterventions` ne
+    // contient que les tickets effectivement présents dans `ticketsRecords`.
+    if (ticketId && parTicketInterventions[ticketId]) {
+      s.ticketsSet.add(ticketId);
+    }
+  });
+
+  const techniciens = Object.keys(parTech)
+    .map(idTech => {
+      const s = parTech[idTech];
+      const ticketIds = Array.from(s.ticketsSet);
+      let ticketsPremiereIntervention = 0;
+      let ticketsReintervention = 0;
+      ticketIds.forEach(tid => {
+        const n = (parTicketInterventions[tid] || []).length; // classification GLOBALE du ticket (mission #15)
+        if (n === 1) ticketsPremiereIntervention += 1;
+        else if (n >= 2) ticketsReintervention += 1;
+      });
+      const ticketsAssocies = ticketIds.length;
+
+      return {
+        technicien: s.technicien,
+        interventions: s.interventions,
+        interventionsAvecDureeExploitable: s.durees.length,
+        dureeTotaleMinutes: _arrondi2(s.durees.reduce((a, b) => a + b, 0)),
+        dureeMoyenneMinutes: s.durees.length
+          ? _arrondi2(s.durees.reduce((a, b) => a + b, 0) / s.durees.length)
+          : null,
+        dureeMedianeMinutes: _medianeSimple(s.durees),
+        interventionsAvecCoutExploitable: s.interventionsAvecCoutExploitable,
+        coutTotalExploitable: _arrondi2(s.coutTotalExploitable),
+        coutMoyenParIntervention: s.interventionsAvecCoutExploitable
+          ? _arrondi2(s.coutTotalExploitable / s.interventionsAvecCoutExploitable)
+          : null,
+        ticketsAssocies,
+        ticketsPremiereIntervention,
+        ticketsReintervention,
+        tauxReintervention: ticketsAssocies
+          ? Math.round((ticketsReintervention / ticketsAssocies) * 100)
+          : null,
+      };
+    })
+    .sort((a, b) => b.interventions - a.interventions || a.technicien.localeCompare(b.technicien, 'fr'));
+
+  return techniciens;
+}
+
+// ---- Mission #21 — Signaux SAV multi-indicateurs V1 ----------------------
+// Fonction PURE : ne recalcule RIEN — reçoit uniquement les résultats déjà
+// produits par les missions #17, #18, #19, #15 et #20, et détecte des
+// convergences PUREMENT DESCRIPTIVES (jamais une prédiction, jamais une
+// causalité). Chaque "signal" ci-dessous exige la convergence d'AU MOINS
+// DEUX indicateurs indépendants pour une même entité :
+//   (a) un volume d'activité au moins égal à la moyenne observée sur la
+//       population exploitable pour cet indicateur (jamais un seuil
+//       arbitraire type "10 tickets minimum" : le seuil est lui-même une
+//       moyenne statistique calculée sur les données réellement
+//       disponibles) ;
+//   (b) une valeur strictement supérieure à une moyenne de référence
+//       explicite (moyenne inter-produits/techniciens pour le taux de
+//       réintervention "observé", ou moyenne globale déjà calculée par les
+//       missions #15/#17/#18 pour la durée/le coût).
+// Une comparaison n'est évaluée que si la population exploitable pour cet
+// indicateur contient au moins 3 éléments (sinon : aucun signal pour cet
+// indicateur, jamais un signal produit avec une population insuffisante).
+// `niveau` reste une distinction purement descriptive (jamais un score) :
+// "information" quand une seule des 5 familles de signal converge pour
+// l'entité, "signal" quand deux familles ou plus convergent simultanément.
+function _statistiquesPopulation(items, getValeur) {
+  const valeurs = items.map(getValeur).filter(v => typeof v === "number" && Number.isFinite(v));
+  if (valeurs.length < 3) return null; // population insuffisante : aucune comparaison possible
+  return { valeurs, ...ecartTypeMoyenne(valeurs) };
+}
+
+export function genererSignauxMultiIndicateursSAVV1(profilsProduits, intelligenceTechniciens, dureeInterventionSAV, coutSAVParResolution, intelligenceResolutionSAV) {
+  const produits = profilsProduits || [];
+  const techniciens = intelligenceTechniciens || [];
+
+  // entiteKey ("produit:<nom>" / "technicien:<nom>") -> entrée en construction
+  const entrees = {};
+  function ajouterSignal(type, entite, description, donnees) {
+    const cle = type + ":" + entite;
+    if (!entrees[cle]) {
+      entrees[cle] = { type, entite, signauxConvergents: [], donneesObservees: {} };
+    }
+    entrees[cle].signauxConvergents.push(description);
+    Object.assign(entrees[cle].donneesObservees, donnees);
+  }
+
+  // ---- Signal 1 (produit) : volume suffisant ET taux de réintervention
+  // supérieur à la moyenne observée sur les produits exploitables. ----
+  {
+    const population = produits.filter(p => typeof p.tauxReintervention === "number");
+    const statsTaux = _statistiquesPopulation(population, p => p.tauxReintervention);
+    const statsVolume = _statistiquesPopulation(population, p => p.tickets);
+    if (statsTaux && statsVolume) {
+      population.forEach(p => {
+        const volumeSuffisant = p.tickets >= statsVolume.moyenne;
+        const tauxSuperieur = p.tauxReintervention > statsTaux.moyenne;
+        if (volumeSuffisant && tauxSuperieur) {
+          ajouterSignal("produit", p.produitService, "taux de réintervention supérieur à la moyenne observée sur les produits exploitables", {
+            tickets: p.tickets,
+            volumeMoyenObserve: _arrondi2(statsVolume.moyenne),
+            tauxReintervention: p.tauxReintervention,
+            moyenneReinterventionObservee: _arrondi2(statsTaux.moyenne),
+            ecartTypeReinterventionObserve: _arrondi2(statsTaux.ecartType),
+          });
+        }
+      });
+    }
+  }
+
+  // ---- Signal 2 (produit) : volume suffisant ET durée moyenne supérieure
+  // à la moyenne globale exploitable (mission #17). ----
+  if (dureeInterventionSAV && typeof dureeInterventionSAV.dureeMoyenneMinutes === "number") {
+    const population = produits.filter(p => typeof p.dureeMoyenneMinutes === "number");
+    const statsVolume = _statistiquesPopulation(population, p => p.tickets);
+    if (statsVolume) {
+      population.forEach(p => {
+        const volumeSuffisant = p.tickets >= statsVolume.moyenne;
+        const dureeSuperieure = p.dureeMoyenneMinutes > dureeInterventionSAV.dureeMoyenneMinutes;
+        if (volumeSuffisant && dureeSuperieure) {
+          ajouterSignal("produit", p.produitService, "durée moyenne supérieure à la moyenne globale exploitable", {
+            tickets: p.tickets,
+            volumeMoyenObserve: _arrondi2(statsVolume.moyenne),
+            dureeMoyenneMinutes: p.dureeMoyenneMinutes,
+            dureeMoyenneGlobaleMinutes: dureeInterventionSAV.dureeMoyenneMinutes,
+          });
+        }
+      });
+    }
+  }
+
+  // ---- Signal 3 (produit) : volume suffisant ET coût moyen par ticket
+  // supérieur à la moyenne globale exploitable (mission #18). ----
+  if (coutSAVParResolution && typeof coutSAVParResolution.coutMoyenParTicket === "number") {
+    const population = produits.filter(p => typeof p.coutMoyenParTicket === "number");
+    const statsVolume = _statistiquesPopulation(population, p => p.tickets);
+    if (statsVolume) {
+      population.forEach(p => {
+        const volumeSuffisant = p.tickets >= statsVolume.moyenne;
+        const coutSuperieur = p.coutMoyenParTicket > coutSAVParResolution.coutMoyenParTicket;
+        if (volumeSuffisant && coutSuperieur) {
+          ajouterSignal("produit", p.produitService, "coût moyen par ticket supérieur à la moyenne globale exploitable", {
+            tickets: p.tickets,
+            volumeMoyenObserve: _arrondi2(statsVolume.moyenne),
+            coutMoyenParTicket: p.coutMoyenParTicket,
+            coutMoyenGlobalParTicket: coutSAVParResolution.coutMoyenParTicket,
+          });
+        }
+      });
+    }
+  }
+
+  // ---- Signal 4 (technicien) : volume suffisant ET durée moyenne
+  // supérieure à la moyenne globale des interventions exploitables. ----
+  if (dureeInterventionSAV && typeof dureeInterventionSAV.dureeMoyenneMinutes === "number") {
+    const population = techniciens.filter(t => typeof t.dureeMoyenneMinutes === "number");
+    const statsVolume = _statistiquesPopulation(population, t => t.interventions);
+    if (statsVolume) {
+      population.forEach(t => {
+        const volumeSuffisant = t.interventions >= statsVolume.moyenne;
+        const dureeSuperieure = t.dureeMoyenneMinutes > dureeInterventionSAV.dureeMoyenneMinutes;
+        if (volumeSuffisant && dureeSuperieure) {
+          ajouterSignal("technicien", t.technicien, "durée moyenne supérieure à la moyenne globale des interventions exploitables", {
+            interventions: t.interventions,
+            volumeMoyenObserve: _arrondi2(statsVolume.moyenne),
+            dureeMoyenneMinutes: t.dureeMoyenneMinutes,
+            dureeMoyenneGlobaleMinutes: dureeInterventionSAV.dureeMoyenneMinutes,
+          });
+        }
+      });
+    }
+  }
+
+  // ---- Signal 5 (technicien) : volume suffisant ET taux de réintervention
+  // supérieur au taux global observé (mission #15). ----
+  if (intelligenceResolutionSAV && typeof intelligenceResolutionSAV.tauxReintervention === "number") {
+    const population = techniciens.filter(t => typeof t.tauxReintervention === "number");
+    const statsVolume = _statistiquesPopulation(population, t => t.interventions);
+    if (statsVolume) {
+      population.forEach(t => {
+        const volumeSuffisant = t.interventions >= statsVolume.moyenne;
+        const tauxSuperieur = t.tauxReintervention > intelligenceResolutionSAV.tauxReintervention;
+        if (volumeSuffisant && tauxSuperieur) {
+          ajouterSignal("technicien", t.technicien, "taux de réintervention supérieur au taux global observé", {
+            interventions: t.interventions,
+            volumeMoyenObserve: _arrondi2(statsVolume.moyenne),
+            tauxReintervention: t.tauxReintervention,
+            tauxReinterventionGlobal: intelligenceResolutionSAV.tauxReintervention,
+          });
+        }
+      });
+    }
+  }
+
+  return Object.values(entrees)
+    .map(e => ({
+      type: e.type,
+      entite: e.entite,
+      niveau: e.signauxConvergents.length >= 2 ? "signal" : "information",
+      signauxConvergents: e.signauxConvergents,
+      donneesObservees: e.donneesObservees,
+      actionVerification: "Vérifier les dossiers concernés et confirmer sur le terrain si ce signal se retrouve dans les interventions récentes.",
+    }))
+    .sort((a, b) => a.type.localeCompare(b.type, 'fr') || a.entite.localeCompare(b.entite, 'fr'));
+}
