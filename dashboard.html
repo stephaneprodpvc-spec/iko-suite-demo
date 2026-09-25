@@ -2547,25 +2547,41 @@ function ModalIntelligenceCommerciale({ onClose }) {
   }, [devis]);
   const noteVsResultatDevis = (devis && ticketsNote) ? window.AnalyticsSAV.calculerNoteVsResultatDevis(devis, ticketsNote) : null;
 
+  // Mission #9B — Motifs de refus structurés : réutilise le même tableau
+  // `devis` déjà chargé par l'Intelligence Commerciale (mission #1). Aucun
+  // nouveau loader, aucun nouveau useEffect, aucune nouvelle requête
+  // Airtable, aucun fetch supplémentaire.
+  const motifsRefus = devis ? window.AnalyticsSAV.calculerMotifsRefusV1(devis) : null;
+
+  // Mission #10 — Intelligence Commerciale V2 : les 5 nouveaux calculs
+  // réutilisent EXACTEMENT le même tableau `devis` (et, pour le panier par
+  // agence, le même `agencesNoms`) déjà chargés ci-dessus par la mission #1.
+  // Aucun nouveau chargement Airtable, aucun nouveau useEffect de
+  // chargement, aucun nouveau fetch.
+  const conversionMensuelle = devis ? window.AnalyticsSAV.calculerConversionMensuelleDevis(devis) : null;
+  const chiffreAffairesSigne = devis ? window.AnalyticsSAV.calculerChiffreAffairesSigneV1(devis) : null;
+  const panierMoyenParMode = devis ? window.AnalyticsSAV.calculerPanierMoyenParModeV1(devis) : null;
+  const panierMoyenParAgence = devis ? window.AnalyticsSAV.calculerPanierMoyenParAgenceV1(devis, agencesNoms) : null;
+  const volumeMensuel = devis ? window.AnalyticsSAV.calculerVolumeMensuelDevisV1(devis) : null;
+
   // Mission #8 — Moteur de recommandations commerciales : réutilise
   // EXACTEMENT les résultats déjà calculés ci-dessus (resultat, panierMoyen,
-  // topProduitsServices, conversionParMode, noteVsResultatDevis). Aucun
-  // nouvel appel Airtable, aucun nouveau useEffect de chargement, aucune
-  // donnée brute recalculée. Pas de diagnostic React associé (nonGenerees
-  // reste disponible dans le résultat pour les tests, sans useEffect dédié).
+  // topProduitsServices, conversionParMode, noteVsResultatDevis, et les
+  // nouveaux indicateurs de la mission #10). Aucun nouvel appel Airtable,
+  // aucun nouveau useEffect de chargement, aucune donnée brute recalculée.
   const recommandationsCommerciales = window.AnalyticsSAV.genererRecommandationsCommercialesV1({
     resultatConversion: resultat,
     panierMoyen,
     topProduitsServices,
     conversionParMode,
     noteVsResultatDevis,
+    motifsRefus,
+    conversionMensuelle,
+    chiffreAffairesSigne,
+    panierMoyenParMode,
+    panierMoyenParAgence,
+    volumeMensuel,
   });
-
-  // Mission #9B — Motifs de refus structurés : réutilise le même tableau
-  // `devis` déjà chargé par l'Intelligence Commerciale (mission #1). Aucun
-  // nouveau loader, aucun nouveau useEffect, aucune nouvelle requête
-  // Airtable, aucun fetch supplémentaire.
-  const motifsRefus = devis ? window.AnalyticsSAV.calculerMotifsRefusV1(devis) : null;
 
   // Diagnostic uniquement (jamais affiché à l'utilisateur) : signale les
   // statuts Devis inattendus sans jamais bloquer le calcul.
@@ -2813,6 +2829,145 @@ function ModalIntelligenceCommerciale({ onClose }) {
                     )}
                   </>
                 )}
+              </div>
+            )}
+
+            {/* Mission #10 — Bloc A : Évolution du taux de conversion (mensuel, base createdTime) */}
+            {conversionMensuelle && (
+              <div style={{marginBottom:"18px",borderTop:"1px solid "+C.border,paddingTop:"14px"}}>
+                <div style={{fontSize:"12px",fontWeight:"700",color:C.white,marginBottom:"2px"}}>Évolution du taux de conversion</div>
+                <div style={{fontSize:"11px",color:C.muted,marginBottom:"8px"}}>Basée sur la date de création du devis (6 derniers mois) — mois sans devis éligible affiché "—".</div>
+                <div style={{border:"1px solid "+C.border,borderRadius:"8px",overflow:"hidden"}}>
+                  <div style={{display:"flex",padding:"6px 12px",fontSize:"9.5px",fontWeight:"700",color:C.muted,borderBottom:"1px solid "+C.border,textTransform:"uppercase"}}>
+                    <span style={{flex:1.2}}>Mois</span>
+                    <span style={{flex:1,textAlign:"right"}}>Convertis</span>
+                    <span style={{flex:1,textAlign:"right"}}>Refusés</span>
+                    <span style={{flex:1,textAlign:"right"}}>Éligibles</span>
+                    <span style={{flex:1,textAlign:"right"}}>Taux</span>
+                  </div>
+                  {conversionMensuelle.tendance.map((m, i) => (
+                    <div key={m.mois} style={{display:"flex",alignItems:"center",padding:"7px 12px",borderBottom:i<conversionMensuelle.tendance.length-1?"1px solid "+C.border:"none",fontSize:"12px"}}>
+                      <span style={{flex:1.2}}>{m.label}</span>
+                      <span style={{flex:1,textAlign:"right",color:C.muted}}>{m.convertis}</span>
+                      <span style={{flex:1,textAlign:"right",color:C.muted}}>{m.refuses}</span>
+                      <span style={{flex:1,textAlign:"right",color:C.muted}}>{m.eligibles}</span>
+                      <b style={{flex:1,textAlign:"right",color:C.or}}>{m.taux === null ? "—" : m.taux + "%"}</b>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Mission #10 — Bloc B : Chiffre d'affaires signé (base Date validation client) */}
+            {chiffreAffairesSigne && (
+              <div style={{marginBottom:"18px",borderTop:"1px solid "+C.border,paddingTop:"14px"}}>
+                <div style={{fontSize:"12px",fontWeight:"700",color:C.white,marginBottom:"2px"}}>Chiffre d'affaires signé</div>
+                <div style={{fontSize:"11px",color:C.muted,marginBottom:"8px"}}>Devis validés uniquement, montant HT exploitable — base temporelle : date de validation client (différente de la date de création utilisée pour le taux de conversion).</div>
+                <div style={{fontSize:"26px",fontWeight:"900",color:C.white,marginBottom:"6px"}}>
+                  {chiffreAffairesSigne.totalHT.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} € HT
+                </div>
+                <div style={{fontSize:"11px",color:C.muted,marginBottom:"10px"}}>
+                  {chiffreAffairesSigne.nombreDevis} devis signé(s) — panier moyen {chiffreAffairesSigne.panierMoyenHT === null ? "—" : chiffreAffairesSigne.panierMoyenHT.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " € HT"}
+                </div>
+                <div style={{fontSize:"11px",color:C.muted,marginBottom:"6px"}}>Évolution mensuelle du CA signé</div>
+                <div style={{border:"1px solid "+C.border,borderRadius:"8px",overflow:"hidden"}}>
+                  <div style={{display:"flex",padding:"6px 12px",fontSize:"9.5px",fontWeight:"700",color:C.muted,borderBottom:"1px solid "+C.border,textTransform:"uppercase"}}>
+                    <span style={{flex:1.2}}>Mois</span>
+                    <span style={{flex:1,textAlign:"right"}}>Devis</span>
+                    <span style={{flex:1.4,textAlign:"right"}}>CA HT</span>
+                  </div>
+                  {chiffreAffairesSigne.tendance.map((m, i) => (
+                    <div key={m.mois} style={{display:"flex",alignItems:"center",padding:"7px 12px",borderBottom:i<chiffreAffairesSigne.tendance.length-1?"1px solid "+C.border:"none",fontSize:"12px"}}>
+                      <span style={{flex:1.2}}>{m.label}</span>
+                      <span style={{flex:1,textAlign:"right",color:C.muted}}>{m.nombreDevis}</span>
+                      <b style={{flex:1.4,textAlign:"right",color:C.or}}>{m.caHT.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €</b>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Mission #10 — Bloc C : Panier moyen par mode de création */}
+            {panierMoyenParMode && (
+              <div style={{marginBottom:"18px",borderTop:"1px solid "+C.border,paddingTop:"14px"}}>
+                <div style={{fontSize:"12px",fontWeight:"700",color:C.white,marginBottom:"2px"}}>Panier moyen par mode de création</div>
+                <div style={{fontSize:"11px",color:C.muted,marginBottom:"8px"}}>Devis validés uniquement — Mode représente le parcours de création (jamais une comparaison de performance).</div>
+                {panierMoyenParMode.parMode.length === 0 && (
+                  <div style={{fontSize:"11px",color:C.muted,fontStyle:"italic"}}>Aucun devis validé avec montant exploitable pour l'instant.</div>
+                )}
+                {panierMoyenParMode.parMode.length > 0 && (
+                  <div style={{border:"1px solid "+C.border,borderRadius:"8px",overflow:"hidden"}}>
+                    <div style={{display:"flex",padding:"6px 12px",fontSize:"9.5px",fontWeight:"700",color:C.muted,borderBottom:"1px solid "+C.border,textTransform:"uppercase"}}>
+                      <span style={{flex:1.5}}>Mode</span>
+                      <span style={{flex:1,textAlign:"right"}}>Devis</span>
+                      <span style={{flex:1.4,textAlign:"right"}}>CA HT</span>
+                      <span style={{flex:1.4,textAlign:"right"}}>Panier moyen HT</span>
+                    </div>
+                    {panierMoyenParMode.parMode.map((m, i) => (
+                      <div key={m.mode} style={{display:"flex",alignItems:"center",padding:"7px 12px",borderBottom:i<panierMoyenParMode.parMode.length-1?"1px solid "+C.border:"none",fontSize:"12px"}}>
+                        <span style={{flex:1.5}}>{m.mode}</span>
+                        <span style={{flex:1,textAlign:"right",color:C.muted}}>{m.nombreDevis}</span>
+                        <span style={{flex:1.4,textAlign:"right",color:C.muted}}>{m.totalHT.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €</span>
+                        <b style={{flex:1.4,textAlign:"right",color:C.or}}>{m.panierMoyenHT === null ? "—" : m.panierMoyenHT.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " €"}</b>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Mission #10 — Bloc D : Panier moyen par agence (sans classement) */}
+            {panierMoyenParAgence && (
+              <div style={{marginBottom:"18px",borderTop:"1px solid "+C.border,paddingTop:"14px"}}>
+                <div style={{fontSize:"12px",fontWeight:"700",color:C.white,marginBottom:"2px"}}>Panier moyen par agence</div>
+                <div style={{fontSize:"11px",color:C.muted,marginBottom:"8px"}}>Devis validés uniquement — liste descriptive, sans classement.</div>
+                {panierMoyenParAgence.parAgence.length === 0 && (
+                  <div style={{fontSize:"11px",color:C.muted,fontStyle:"italic"}}>Aucun devis validé avec montant exploitable pour l'instant.</div>
+                )}
+                {panierMoyenParAgence.parAgence.length > 0 && (
+                  <div style={{border:"1px solid "+C.border,borderRadius:"8px",overflow:"hidden"}}>
+                    <div style={{display:"flex",padding:"6px 12px",fontSize:"9.5px",fontWeight:"700",color:C.muted,borderBottom:"1px solid "+C.border,textTransform:"uppercase"}}>
+                      <span style={{flex:2}}>Agence</span>
+                      <span style={{flex:1,textAlign:"right"}}>Devis</span>
+                      <span style={{flex:1.4,textAlign:"right"}}>CA HT</span>
+                      <span style={{flex:1.4,textAlign:"right"}}>Panier moyen HT</span>
+                    </div>
+                    {panierMoyenParAgence.parAgence.map((a, i) => (
+                      <div key={a.agence} style={{display:"flex",alignItems:"center",padding:"7px 12px",borderBottom:i<panierMoyenParAgence.parAgence.length-1?"1px solid "+C.border:"none",fontSize:"12px"}}>
+                        <span style={{flex:2}}>{a.agence}</span>
+                        <span style={{flex:1,textAlign:"right",color:C.muted}}>{a.nombreDevis}</span>
+                        <span style={{flex:1.4,textAlign:"right",color:C.muted}}>{a.totalHT.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €</span>
+                        <b style={{flex:1.4,textAlign:"right",color:C.or}}>{a.panierMoyenHT === null ? "—" : a.panierMoyenHT.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " €"}</b>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Mission #10 — Bloc E : Volume mensuel des devis (statut observé à ce jour) */}
+            {volumeMensuel && (
+              <div style={{marginBottom:"18px",borderTop:"1px solid "+C.border,paddingTop:"14px"}}>
+                <div style={{fontSize:"12px",fontWeight:"700",color:C.white,marginBottom:"2px"}}>Volume mensuel des devis</div>
+                <div style={{fontSize:"11px",color:C.muted,marginBottom:"8px"}}>Statut observé à ce jour pour les devis créés pendant le mois.</div>
+                <div style={{border:"1px solid "+C.border,borderRadius:"8px",overflow:"hidden"}}>
+                  <div style={{display:"flex",padding:"6px 12px",fontSize:"9.5px",fontWeight:"700",color:C.muted,borderBottom:"1px solid "+C.border,textTransform:"uppercase"}}>
+                    <span style={{flex:1.2}}>Mois</span>
+                    <span style={{flex:1,textAlign:"right"}}>Total</span>
+                    <span style={{flex:1,textAlign:"right"}}>Validés</span>
+                    <span style={{flex:1,textAlign:"right"}}>Refusés</span>
+                    <span style={{flex:1,textAlign:"right"}}>En attente</span>
+                  </div>
+                  {volumeMensuel.tendance.map((m, i) => (
+                    <div key={m.mois} style={{display:"flex",alignItems:"center",padding:"7px 12px",borderBottom:i<volumeMensuel.tendance.length-1?"1px solid "+C.border:"none",fontSize:"12px"}}>
+                      <span style={{flex:1.2}}>{m.label}</span>
+                      <b style={{flex:1,textAlign:"right",color:C.or}}>{m.total}</b>
+                      <span style={{flex:1,textAlign:"right",color:C.muted}}>{m.valides}</span>
+                      <span style={{flex:1,textAlign:"right",color:C.muted}}>{m.refuses}</span>
+                      <span style={{flex:1,textAlign:"right",color:C.muted}}>{m.enAttente}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
           </>

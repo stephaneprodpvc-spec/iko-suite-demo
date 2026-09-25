@@ -1250,12 +1250,38 @@ export function calculerNoteVsResultatDevis(devisRecords, ticketsRecords) {
 // convention que `statutsInconnus` en mission #1).
 export function genererRecommandationsCommercialesV1({
   resultatConversion, panierMoyen, topProduitsServices, conversionParMode, noteVsResultatDevis,
+  motifsRefus, conversionMensuelle, chiffreAffairesSigne, panierMoyenParMode, panierMoyenParAgence, volumeMensuel,
 } = {}) {
   const recommandations = [];
   const nonGenerees = [
-    { type: "conversion_evolution", raison: "Aucune répartition temporelle disponible dans calculerTauxConversionDevis sans inventer une période de découpage." },
     { type: "concentration_ca", raison: "Aucun CA HT total exploitable disponible dans calculerTopProduitsServices (seul le Top 5 est connu) sans mélanger deux bases de calcul différentes." },
   ];
+
+  // ---- A — Évolution mensuelle du taux de conversion (mission #10.1) ----
+  // Paramètre optionnel et additif : en son absence, ce bloc est simplement
+  // ignoré (comportement V1 strictement inchangé). Désormais alimentable
+  // grâce à calculerConversionMensuelleDevis (mission #10), qui fournit une
+  // vraie série mensuelle basée sur createdTime — la limitation V1 qui
+  // empêchait cette observation n'existe donc plus, mais reste honnête ici :
+  // au moins deux mois avec des devis éligibles sont nécessaires pour décrire
+  // une évolution, jamais inventée sur un seul point de donnée.
+  if (conversionMensuelle && Array.isArray(conversionMensuelle.tendance)) {
+    const moisEligibles = conversionMensuelle.tendance.filter(m => m && m.taux !== null);
+    if (moisEligibles.length >= 2) {
+      const moisRecent = moisEligibles[moisEligibles.length - 1];
+      const moisPrecedent = moisEligibles[moisEligibles.length - 2];
+      recommandations.push({
+        type: "conversion_evolution",
+        titre: "Évolution mensuelle du taux de conversion",
+        message: "Le taux de conversion observé est de " + moisPrecedent.taux + "% en " + moisPrecedent.label + " et de " + moisRecent.taux + "% en " + moisRecent.label + ".",
+        donnees: { moisPrecedent, moisRecent },
+      });
+    } else {
+      nonGenerees.push({ type: "conversion_evolution", raison: "Moins de deux mois avec au moins un devis éligible dans la série mensuelle déjà calculée." });
+    }
+  } else {
+    nonGenerees.push({ type: "conversion_evolution", raison: "Aucune répartition temporelle disponible dans calculerTauxConversionDevis sans inventer une période de découpage." });
+  }
 
   // ---- B — Évolution récente du panier moyen (tendance déjà calculée) ----
   if (panierMoyen && Array.isArray(panierMoyen.tendance)) {
@@ -1275,6 +1301,21 @@ export function genererRecommandationsCommercialesV1({
     }
   }
 
+  // ---- CA signé (mission #10.2, déjà calculé par calculerChiffreAffairesSigneV1) ----
+  if (chiffreAffairesSigne && typeof chiffreAffairesSigne.totalHT === "number") {
+    if (chiffreAffairesSigne.nombreDevis > 0) {
+      const fmt = (v) => v.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      recommandations.push({
+        type: "ca_signe",
+        titre: "Chiffre d'affaires signé",
+        message: "Le CA HT signé s'élève à " + fmt(chiffreAffairesSigne.totalHT) + " € sur la période analysée (" + chiffreAffairesSigne.nombreDevis + " devis validé(s) avec montant exploitable).",
+        donnees: { totalHT: chiffreAffairesSigne.totalHT, nombreDevis: chiffreAffairesSigne.nombreDevis, panierMoyenHT: chiffreAffairesSigne.panierMoyenHT },
+      });
+    } else {
+      nonGenerees.push({ type: "ca_signe", raison: "Aucun devis validé avec un montant HT exploitable." });
+    }
+  }
+
   // ---- D — Manuel vs Auto Iko (déjà calculé par calculerConversionParMode) ----
   if (conversionParMode && Array.isArray(conversionParMode.parMode)) {
     const autoIko = conversionParMode.parMode.find(m => m.mode === "Auto Iko");
@@ -1288,6 +1329,25 @@ export function genererRecommandationsCommercialesV1({
       });
     } else {
       nonGenerees.push({ type: "mode_creation", raison: "Taux non calculable (aucun devis éligible) pour au moins un des deux modes Manuel/Auto Iko." });
+    }
+  }
+
+  // ---- Panier moyen par mode de création (mission #10.3, déjà calculé par calculerPanierMoyenParModeV1) ----
+  // Même mise en garde que le bloc D ci-dessus : jamais présenté comme une
+  // comparaison de performance ou d'efficacité entre les deux parcours.
+  if (panierMoyenParMode && Array.isArray(panierMoyenParMode.parMode)) {
+    const autoIkoP = panierMoyenParMode.parMode.find(m => m.mode === "Auto Iko");
+    const manuelP = panierMoyenParMode.parMode.find(m => m.mode === "Manuel");
+    if (autoIkoP && manuelP && autoIkoP.panierMoyenHT !== null && manuelP.panierMoyenHT !== null) {
+      const fmt = (v) => v.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      recommandations.push({
+        type: "panier_par_mode",
+        titre: "Panier moyen par mode de création",
+        message: "Le panier moyen observé est de " + fmt(autoIkoP.panierMoyenHT) + " € HT pour le parcours Auto Iko et de " + fmt(manuelP.panierMoyenHT) + " € HT pour le parcours Manuel.",
+        donnees: { autoIko: autoIkoP, manuel: manuelP },
+      });
+    } else {
+      nonGenerees.push({ type: "panier_par_mode", raison: "Panier moyen non calculable (aucun devis validé avec montant exploitable) pour au moins un des deux modes Manuel/Auto Iko." });
     }
   }
 
@@ -1326,6 +1386,44 @@ export function genererRecommandationsCommercialesV1({
     });
   } else {
     nonGenerees.push({ type: "repartition_agences", raison: "Aucune agence avec au moins un devis éligible." });
+  }
+
+  // ---- Panier moyen par agence (mission #10.4, déjà calculé par calculerPanierMoyenParAgenceV1) ----
+  // Aucun classement "meilleure"/"pire" agence, même esprit que le bloc F.
+  if (panierMoyenParAgence && Array.isArray(panierMoyenParAgence.parAgence) && panierMoyenParAgence.parAgence.length > 0) {
+    const fmt = (v) => v.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const avecPanier = panierMoyenParAgence.parAgence.filter(a => a.panierMoyenHT !== null);
+    if (avecPanier.length > 0) {
+      const fragments = avecPanier.map(a => fmt(a.panierMoyenHT) + " € HT pour l'agence " + a.agence);
+      recommandations.push({
+        type: "panier_par_agence",
+        titre: "Panier moyen par agence",
+        message: "Le panier moyen observé est de " + fragments.join(" ; ") + ".",
+        donnees: { parAgence: avecPanier },
+      });
+    } else {
+      nonGenerees.push({ type: "panier_par_agence", raison: "Aucune agence avec un devis validé et un montant exploitable." });
+    }
+  } else {
+    nonGenerees.push({ type: "panier_par_agence", raison: "Aucune agence avec au moins un devis validé et un montant exploitable." });
+  }
+
+  // ---- Volume mensuel des devis (mission #10.5, déjà calculé par calculerVolumeMensuelDevisV1) ----
+  // Décrit uniquement l'évolution du nombre de devis créés d'un mois à
+  // l'autre — jamais un jugement sur le résultat de ces devis (certains
+  // restent en attente au moment du calcul, voir mise en garde de la
+  // fonction source).
+  if (volumeMensuel && Array.isArray(volumeMensuel.tendance) && volumeMensuel.tendance.length >= 2) {
+    const moisRecentV = volumeMensuel.tendance[volumeMensuel.tendance.length - 1];
+    const moisPrecedentV = volumeMensuel.tendance[volumeMensuel.tendance.length - 2];
+    recommandations.push({
+      type: "volume_mensuel",
+      titre: "Volume mensuel des devis",
+      message: "Le volume de devis créés passe de " + moisPrecedentV.total + " en " + moisPrecedentV.label + " à " + moisRecentV.total + " en " + moisRecentV.label + ".",
+      donnees: { moisPrecedent: moisPrecedentV, moisRecent: moisRecentV },
+    });
+  } else if (volumeMensuel) {
+    nonGenerees.push({ type: "volume_mensuel", raison: "Moins de deux mois disponibles dans la série mensuelle déjà calculée." });
   }
 
   return { recommandations, nonGenerees };
@@ -1395,4 +1493,268 @@ export function calculerMotifsRefusV1(devisRecords) {
     .sort((a, b) => b.count - a.count || ordreOfficiel[a.categorie] - ordreOfficiel[b.categorie]);
 
   return { totalRefus, totalCategorises, nonCategorises, categoriesInconnues, parCategorie };
+}
+
+// ==================== Intelligence Commerciale V2 — mission #10.1 ====================
+// Évolution mensuelle du taux de conversion des devis. Fonction PURE, aucun
+// fetch — reçoit exactement le même tableau `devisRecords` déjà chargé par
+// chargerDevisPourAnalytics (mission #1). Mêmes règles de conversion que la
+// mission #1, JAMAIS réinventées :
+//   - Convertis  : Statut === "Validé"
+//   - Refusés    : "Devis refusé" === true
+//   - En attente / statut inconnu : exclus du dénominateur
+//   - Taux       : convertis / (convertis + refusés) × 100, arrondi entier,
+//                  null si 0 éligible
+//
+// Fenêtre calendaire : les 6 mêmes mois glissants que calculerPanierMoyenEtTendance
+// (mission #2) — même construction, jamais une fenêtre différente (30 jours,
+// 90 jours) inventée pour cette mission.
+//
+// Date utilisée : createdTime (date de création du devis, fournie par
+// Airtable au niveau de l'enregistrement, pas dans `fields`) — UNIQUE date
+// utilisée pour TOUS les devis de cette fonction, jamais mélangée avec
+// "Date validation client" (utilisée par calculerChiffreAffairesSigneV1
+// ci-dessous, pour une question différente : le CA signé par mois de
+// VALIDATION, pas de création).
+export function calculerConversionMensuelleDevis(devisRecords) {
+  const maintenant = new Date();
+  const moisLabels = [];
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(maintenant.getFullYear(), maintenant.getMonth() - i, 1);
+    moisLabels.push({ key: d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0"), label: d.toLocaleDateString("fr-FR", { month: "short", year: "2-digit" }) });
+  }
+  const parMoisAcc = {};
+  moisLabels.forEach(m => { parMoisAcc[m.key] = { convertis: 0, refuses: 0 }; });
+
+  (devisRecords || []).forEach(d => {
+    const f = d && d.fields || {};
+    const estRefuse = f["Devis refusé"] === true;
+    let categorie = null;
+    if (estRefuse) categorie = "refuse";
+    else if (f.Statut === "Validé") categorie = "converti";
+    else return; // en attente ou statut inconnu : exclu, même logique que mission #1
+
+    const dateStr = d && d.createdTime;
+    if (!dateStr) return; // pas de date exploitable : exclu de la répartition mensuelle, jamais deviné
+    const dateObj = new Date(dateStr);
+    if (isNaN(dateObj.getTime())) return;
+    const key = dateObj.getFullYear() + "-" + String(dateObj.getMonth() + 1).padStart(2, "0");
+    if (!parMoisAcc[key]) return; // hors des 6 derniers mois : non affiché (fenêtre glissante fixe)
+
+    if (categorie === "refuse") parMoisAcc[key].refuses += 1;
+    else parMoisAcc[key].convertis += 1;
+  });
+
+  const tendance = moisLabels.map(m => {
+    const a = parMoisAcc[m.key];
+    const eligibles = a.convertis + a.refuses;
+    return {
+      mois: m.key,
+      label: m.label,
+      convertis: a.convertis,
+      refuses: a.refuses,
+      eligibles,
+      taux: eligibles > 0 ? Math.round((a.convertis / eligibles) * 100) : null,
+    };
+  });
+
+  return { tendance };
+}
+
+// ==================== Intelligence Commerciale V2 — mission #10.2 ====================
+// Chiffre d'affaires signé (devis validés). Fonction PURE, aucun fetch.
+// Population : Statut === "Validé" uniquement (même définition de "converti"
+// que la mission #1). Montant : "Montant HT", exploitable seulement s'il est
+// numérique, fini et strictement supérieur à 0 (même règle de validité que
+// la mission #2) — un montant invalide est exclu, jamais compté comme 0.
+//
+// Tendance mensuelle : mêmes 6 mois glissants que calculerPanierMoyenEtTendance,
+// et MÊME date que cette fonction — "Date validation client" — car on mesure
+// ici le CA signé par mois de VALIDATION, pas par mois de création. Cette
+// date n'est JAMAIS réutilisée pour le taux de conversion mensuel (mission
+// #10.1 ci-dessus, qui utilise createdTime) : deux questions différentes,
+// deux bases temporelles explicitement séparées, jamais mélangées.
+export function calculerChiffreAffairesSigneV1(devisRecords) {
+  const maintenant = new Date();
+  const moisLabels = [];
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(maintenant.getFullYear(), maintenant.getMonth() - i, 1);
+    moisLabels.push({ key: d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0"), label: d.toLocaleDateString("fr-FR", { month: "short", year: "2-digit" }) });
+  }
+  const parMoisAcc = {};
+  moisLabels.forEach(m => { parMoisAcc[m.key] = { caHT: 0, nombreDevis: 0 }; });
+
+  let totalHT = 0;
+  let nombreDevis = 0;
+
+  (devisRecords || []).forEach(d => {
+    const f = d && d.fields || {};
+    if (f.Statut !== "Validé") return;
+
+    const montant = f["Montant HT"];
+    if (typeof montant !== "number" || !isFinite(montant) || montant <= 0) return;
+
+    totalHT += montant;
+    nombreDevis += 1;
+
+    const dateStr = f["Date validation client"];
+    if (!dateStr) return;
+    const dateObj = new Date(dateStr);
+    if (isNaN(dateObj.getTime())) return;
+    const key = dateObj.getFullYear() + "-" + String(dateObj.getMonth() + 1).padStart(2, "0");
+    if (!parMoisAcc[key]) return;
+    parMoisAcc[key].caHT += montant;
+    parMoisAcc[key].nombreDevis += 1;
+  });
+
+  const tendance = moisLabels.map(m => ({
+    mois: m.key,
+    label: m.label,
+    caHT: Math.round(parMoisAcc[m.key].caHT * 100) / 100,
+    nombreDevis: parMoisAcc[m.key].nombreDevis,
+  }));
+
+  return {
+    totalHT: Math.round(totalHT * 100) / 100,
+    nombreDevis,
+    panierMoyenHT: nombreDevis > 0 ? Math.round((totalHT / nombreDevis) * 100) / 100 : null,
+    tendance,
+  };
+}
+
+// ==================== Intelligence Commerciale V2 — mission #10.3 ====================
+// Panier moyen par mode de création du devis (Manuel / Auto Iko). Fonction
+// PURE, aucun fetch. Population : Statut === "Validé" avec "Montant HT"
+// exploitable (numérique, fini, > 0) — mêmes règles de validité que les
+// missions #1/#2. Groupes identiques à calculerConversionParMode (mission
+// #4) : "Manuel", "Auto Iko", ou "Origine inconnue" pour tout Mode absent ou
+// différent de ces deux valeurs — jamais rattaché artificiellement à l'un
+// des deux modes réels.
+//
+// IMPORTANT (rappel mission #4) : "Mode" distingue le PARCOURS/INTERFACE
+// d'origine du devis, jamais "IA vs humain" — ce module ne doit jamais être
+// présenté comme une comparaison de performance ou d'efficacité.
+export function calculerPanierMoyenParModeV1(devisRecords) {
+  const ORIGINE_INCONNUE = "Origine inconnue";
+  const ORDRE = { "Manuel": 0, "Auto Iko": 1, [ORIGINE_INCONNUE]: 2 };
+  const parModeAcc = {};
+
+  (devisRecords || []).forEach(d => {
+    const f = d && d.fields || {};
+    if (f.Statut !== "Validé") return;
+
+    const montant = f["Montant HT"];
+    if (typeof montant !== "number" || !isFinite(montant) || montant <= 0) return;
+
+    const modeBrut = f.Mode;
+    const mode = (modeBrut === "Auto Iko" || modeBrut === "Manuel") ? modeBrut : ORIGINE_INCONNUE;
+    if (!parModeAcc[mode]) parModeAcc[mode] = { nombreDevis: 0, totalHT: 0 };
+    parModeAcc[mode].nombreDevis += 1;
+    parModeAcc[mode].totalHT += montant;
+  });
+
+  const parMode = Object.keys(parModeAcc).map(mode => {
+    const a = parModeAcc[mode];
+    return {
+      mode,
+      nombreDevis: a.nombreDevis,
+      totalHT: Math.round(a.totalHT * 100) / 100,
+      panierMoyenHT: a.nombreDevis > 0 ? Math.round((a.totalHT / a.nombreDevis) * 100) / 100 : null,
+    };
+  }).sort((a, b) => b.nombreDevis - a.nombreDevis || ORDRE[a.mode] - ORDRE[b.mode]);
+
+  return { parMode };
+}
+
+// ==================== Intelligence Commerciale V2 — mission #10.4 ====================
+// Panier moyen par agence. Fonction PURE, aucun fetch, aucune résolution
+// réseau : `nomsAgences` est le même mapping { idAgence: nom } déjà résolu
+// par l'appelant (resoudreNomsAgences, dashboard.html — mission #1), jamais
+// un nouveau mécanisme de résolution. Population : Statut === "Validé" avec
+// "Montant HT" exploitable (numérique, fini, > 0).
+//
+// Même convention de libellé que calculerTauxConversionDevis (mission #1) :
+// pas d'agence renseignée -> "Non renseignée" ; ID présent mais non résolu
+// dans nomsAgences -> "Agence inconnue" (jamais fusionnée avec "Non
+// renseignée" : deux réalités différentes, jamais un nom inventé).
+export function calculerPanierMoyenParAgenceV1(devisRecords, nomsAgences) {
+  const map = nomsAgences || {};
+  const parAgenceAcc = {};
+
+  (devisRecords || []).forEach(d => {
+    const f = d && d.fields || {};
+    if (f.Statut !== "Validé") return;
+
+    const montant = f["Montant HT"];
+    if (typeof montant !== "number" || !isFinite(montant) || montant <= 0) return;
+
+    const idsAgence = Array.isArray(f.Agence) ? f.Agence : [];
+    const idAgence = idsAgence[0] || null;
+    let label;
+    if (!idAgence) label = "Non renseignée";
+    else if (map[idAgence]) label = map[idAgence];
+    else label = "Agence inconnue";
+
+    if (!parAgenceAcc[label]) parAgenceAcc[label] = { nombreDevis: 0, totalHT: 0 };
+    parAgenceAcc[label].nombreDevis += 1;
+    parAgenceAcc[label].totalHT += montant;
+  });
+
+  const parAgence = Object.keys(parAgenceAcc).map(agence => {
+    const a = parAgenceAcc[agence];
+    return {
+      agence,
+      nombreDevis: a.nombreDevis,
+      totalHT: Math.round(a.totalHT * 100) / 100,
+      panierMoyenHT: a.nombreDevis > 0 ? Math.round((a.totalHT / a.nombreDevis) * 100) / 100 : null,
+    };
+  }).sort((a, b) => b.nombreDevis - a.nombreDevis || a.agence.localeCompare(b.agence, 'fr'));
+
+  return { parAgence };
+}
+
+// ==================== Intelligence Commerciale V2 — mission #10.5 ====================
+// Volume mensuel des devis créés. Fonction PURE, aucun fetch. Fenêtre
+// calendaire : mêmes 6 mois glissants, même date (createdTime) que
+// calculerConversionMensuelleDevis (mission #10.1) — répartition par mois de
+// CRÉATION, pas de résultat final.
+//
+// ATTENTION : décrit le statut ACTUEL des devis créés pendant le mois, pas
+// un résultat définitif — un devis "en attente" à la date du calcul peut
+// encore évoluer. Aucune conclusion causale à tirer de cette seule donnée.
+export function calculerVolumeMensuelDevisV1(devisRecords) {
+  const maintenant = new Date();
+  const moisLabels = [];
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(maintenant.getFullYear(), maintenant.getMonth() - i, 1);
+    moisLabels.push({ key: d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0"), label: d.toLocaleDateString("fr-FR", { month: "short", year: "2-digit" }) });
+  }
+  const parMoisAcc = {};
+  moisLabels.forEach(m => { parMoisAcc[m.key] = { total: 0, valides: 0, refuses: 0, enAttente: 0 }; });
+
+  (devisRecords || []).forEach(d => {
+    const f = d && d.fields || {};
+    const dateStr = d && d.createdTime;
+    if (!dateStr) return;
+    const dateObj = new Date(dateStr);
+    if (isNaN(dateObj.getTime())) return;
+    const key = dateObj.getFullYear() + "-" + String(dateObj.getMonth() + 1).padStart(2, "0");
+    if (!parMoisAcc[key]) return;
+
+    parMoisAcc[key].total += 1;
+    if (f["Devis refusé"] === true) parMoisAcc[key].refuses += 1;
+    else if (f.Statut === "Validé") parMoisAcc[key].valides += 1;
+    else parMoisAcc[key].enAttente += 1;
+  });
+
+  const tendance = moisLabels.map(m => ({
+    mois: m.key,
+    label: m.label,
+    total: parMoisAcc[m.key].total,
+    valides: parMoisAcc[m.key].valides,
+    refuses: parMoisAcc[m.key].refuses,
+    enAttente: parMoisAcc[m.key].enAttente,
+  }));
+
+  return { tendance };
 }
