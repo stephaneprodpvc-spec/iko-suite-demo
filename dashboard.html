@@ -2194,6 +2194,13 @@ function ModalAnalyticsSAV({ tickets, onClose }) {
   // fetch).
   const produitsServicesSAV = window.AnalyticsSAV.calculerProduitsServicesSAVV1(tickets);
 
+  // Mission #15 — Intelligence de résolution SAV : réutilise EXACTEMENT les
+  // mêmes `interventions` (déjà chargées par le useEffect existant
+  // ci-dessus) et `tickets` déjà chargés par ce panneau (aucun nouvel appel
+  // Airtable, aucun nouveau useEffect de chargement, aucun nouveau fetch).
+  // null tant que `interventions` n'est pas encore chargé.
+  const intelligenceResolutionSAV = interventions ? window.AnalyticsSAV.calculerIntelligenceResolutionSAVV1(interventions, tickets) : null;
+
   // ---- Détection prédictive SAV V1 : "Signaux prédictifs SAV" ----
   // Reutilise EXACTEMENT les memes agregats deja calcules ci-dessus (aucun
   // nouveau calcul de fond, aucun nouvel appel Airtable) : fonction separee
@@ -2464,6 +2471,79 @@ function ModalAnalyticsSAV({ tickets, onClose }) {
                       ))}
                     </div>
                   ))}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+
+        {/* Mission #15 — Intelligence de résolution SAV V1 : analyse
+            purement descriptive du nombre d'interventions par ticket.
+            "Résolution première intervention" signifie ICI uniquement
+            "ticket avec une seule intervention exploitable" — aucune
+            lecture du statut de l'intervention, aucune interprétation de
+            qualité. `intelligenceResolutionSAV` reste null tant que les
+            interventions n'ont pas fini de charger (même useEffect que
+            "Performance et résolution" ci-dessus, aucun nouveau chargement). */}
+        <div style={{marginBottom:"18px"}}>
+          <div style={{fontSize:"12px",fontWeight:"700",color:C.white,marginBottom:"2px"}}>Résolution SAV</div>
+          <div style={{fontSize:"11px",color:C.muted,marginBottom:"8px"}}>Analyse descriptive du nombre d'interventions nécessaires par ticket. Une seule intervention indique ici l'absence de réintervention observée dans les données disponibles.</div>
+          {!intelligenceResolutionSAV ? (
+            <div style={{fontSize:"11.5px",color:C.muted,fontStyle:"italic"}}>Chargement des interventions en cours…</div>
+          ) : intelligenceResolutionSAV.ticketsAvecInterventionExploitable === 0 ? (
+            <div style={{fontSize:"11.5px",color:C.muted,fontStyle:"italic"}}>Analyse non disponible : aucune intervention exploitable reliée aux tickets SAV chargés.</div>
+          ) : (
+            <>
+              <div style={{display:"flex",flexWrap:"wrap",gap:"14px",marginBottom:"8px"}}>
+                <div style={{fontSize:"11.5px",color:C.text}}>Tickets analysés : <b style={{color:C.white}}>{intelligenceResolutionSAV.totalTicketsAnalyses}</b></div>
+                <div style={{fontSize:"11.5px",color:C.text}}>Tickets avec intervention : <b style={{color:C.white}}>{intelligenceResolutionSAV.ticketsAvecInterventionExploitable}</b></div>
+                <div style={{fontSize:"11.5px",color:C.text}}>Résolution première intervention : <b style={{color:C.white}}>{intelligenceResolutionSAV.ticketsResolusPremiereIntervention}</b></div>
+                <div style={{fontSize:"11.5px",color:C.text}}>Réintervention : <b style={{color:C.white}}>{intelligenceResolutionSAV.ticketsAvecReintervention}</b></div>
+                <div style={{fontSize:"11.5px",color:C.text}}>Sans intervention : <b style={{color:C.white}}>{intelligenceResolutionSAV.ticketsSansInterventionExploitable}</b></div>
+              </div>
+              <div style={{display:"flex",flexWrap:"wrap",gap:"14px",marginBottom:"10px"}}>
+                <div style={{fontSize:"11.5px",color:C.text}}>Taux de résolution première intervention : <b style={{color:C.white}}>{intelligenceResolutionSAV.tauxResolutionPremiereIntervention === null ? "N/A" : intelligenceResolutionSAV.tauxResolutionPremiereIntervention + " %"}</b></div>
+                <div style={{fontSize:"11.5px",color:C.text}}>Taux de réintervention : <b style={{color:C.white}}>{intelligenceResolutionSAV.tauxReintervention === null ? "N/A" : intelligenceResolutionSAV.tauxReintervention + " %"}</b></div>
+              </div>
+
+              <div style={{fontSize:"11.5px",fontWeight:"700",color:C.white,marginBottom:"6px"}}>Répartition du nombre d'interventions</div>
+              <div style={{border:"1px solid "+C.border,borderRadius:"8px",overflow:"hidden",marginBottom:"6px"}}>
+                <div style={{display:"flex",padding:"6px 12px",fontSize:"9.5px",fontWeight:"700",color:C.muted,borderBottom:"1px solid "+C.border,textTransform:"uppercase"}}>
+                  <span style={{flex:2}}>Nombre d'interventions</span>
+                  <span style={{flex:1,textAlign:"right"}}>Tickets</span>
+                </div>
+                {intelligenceResolutionSAV.detail.parNombreInterventions.map((d, i) => (
+                  <div key={d.nombreInterventions} style={{display:"flex",alignItems:"center",padding:"7px 12px",borderBottom:i<intelligenceResolutionSAV.detail.parNombreInterventions.length-1?"1px solid "+C.border:"none",fontSize:"12px"}}>
+                    <span style={{flex:2}}>{d.nombreInterventions} intervention{d.nombreInterventions>1?"s":""}</span>
+                    <b style={{flex:1,textAlign:"right",color:C.or}}>{d.nombreTickets}</b>
+                  </div>
+                ))}
+              </div>
+
+              {intelligenceResolutionSAV.parCause && intelligenceResolutionSAV.parCause.length > 0 && (
+                <div style={{marginTop:"14px"}}>
+                  <div style={{fontSize:"11.5px",fontWeight:"700",color:C.white,marginBottom:"6px"}}>Résolution par cause SAV</div>
+                  <div style={{fontSize:"10.5px",color:C.muted,marginBottom:"8px"}}>Parmi les tickets contenant chaque cause, répartition entre une intervention et plusieurs interventions — analyse descriptive, aucun lien de cause à effet.</div>
+                  <div style={{border:"1px solid "+C.border,borderRadius:"8px",overflow:"hidden"}}>
+                    <div style={{display:"flex",padding:"6px 10px",fontSize:"9px",fontWeight:"700",color:C.muted,borderBottom:"1px solid "+C.border,textTransform:"uppercase"}}>
+                      <span style={{flex:2}}>Cause</span>
+                      <span style={{flex:1,textAlign:"right"}}>Tickets</span>
+                      <span style={{flex:1,textAlign:"right"}}>1 intervention</span>
+                      <span style={{flex:1,textAlign:"right"}}>Réinterventions</span>
+                      <span style={{flex:1,textAlign:"right"}}>Taux 1 intervention</span>
+                      <span style={{flex:1,textAlign:"right"}}>Taux réintervention</span>
+                    </div>
+                    {intelligenceResolutionSAV.parCause.slice(0, 10).map((c, i) => (
+                      <div key={c.cause} style={{display:"flex",alignItems:"center",padding:"6px 10px",borderBottom:i<Math.min(10,intelligenceResolutionSAV.parCause.length)-1?"1px solid "+C.border:"none",fontSize:"11px"}}>
+                        <span style={{flex:2}}>{c.cause}</span>
+                        <span style={{flex:1,textAlign:"right"}}>{c.tickets}</span>
+                        <span style={{flex:1,textAlign:"right"}}>{c.ticketsPremiereIntervention}</span>
+                        <span style={{flex:1,textAlign:"right"}}>{c.ticketsReintervention}</span>
+                        <span style={{flex:1,textAlign:"right"}}>{c.tauxResolutionPremiereIntervention === null ? "N/A" : c.tauxResolutionPremiereIntervention + " %"}</span>
+                        <span style={{flex:1,textAlign:"right"}}>{c.tauxReintervention === null ? "N/A" : c.tauxReintervention + " %"}</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
             </>

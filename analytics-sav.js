@@ -2318,3 +2318,165 @@ export function calculerProduitsServicesSAVV1(ticketsRecords) {
 
   return resultat;
 }
+
+// ==================== Intelligence SAV — mission #15 ====================
+// Intelligence de résolution SAV V1. Fonction PURE (aucun fetch, aucun DOM,
+// aucun état global, aucune mutation de `interventions`/`tickets`) :
+// mesure descriptivement la capacité du SAV à résoudre un ticket dès la
+// première intervention, à partir de la SEULE relation Ticket ↔
+// Intervention réellement présente dans ce fichier — le champ relationnel
+// `Intervention.fields["Ticket SAV"]`, un tableau de record IDs dont on
+// retient le premier élément (voir calculerPerformanceEtResolution,
+// seule autre fonction du fichier à relier une intervention à un ticket) —
+// jamais un rapprochement inventé par nom client, adresse, date
+// approximative ou texte libre.
+//
+// Une intervention est "exploitable" pour cette analyse si et seulement
+// si : (a) elle porte un `Ticket SAV` lié exploitable (premier élément du
+// tableau, non vide) ET (b) ce ticket lié existe réellement parmi les
+// `ticketsRecords` fournis (même identifiant `t.id`). Une intervention
+// dont la relation pointe vers un identifiant qui ne correspond à aucun
+// ticket chargé n'est PAS attribuée artificiellement au premier ticket
+// venu : elle est simplement exclue de l'analyse, comme n'importe quelle
+// intervention non exploitable.
+//
+// DÉFINITION V1 DE "RÉSOLUTION PREMIÈRE INTERVENTION" — VOLONTAIREMENT
+// DIFFÉRENTE de celle de `calculerPerformanceEtResolution` (qui exige en
+// plus `Statut intervention === "Résolu"`). Ici, conformément à la
+// mission #15, "résolu dès la première intervention" signifie
+// UNIQUEMENT : le ticket dispose d'exactement UNE SEULE intervention
+// exploitable qui lui est reliée — aucune lecture du statut de
+// l'intervention, aucune déduction depuis un commentaire ou un texte
+// libre. Un ticket avec 2+ interventions exploitables est une
+// "réintervention". Cette définition restrictive doit rester visible
+// telle quelle dans le dashboard (sous-titre dédié), pour ne jamais être
+// confondue avec une notion de qualité de résolution.
+export function calculerIntelligenceResolutionSAVV1(interventions, ticketsRecords) {
+  const ticketsValides = ticketsRecords || [];
+  const idsTicketsValides = new Set(ticketsValides.map(t => t && t.id).filter(Boolean));
+
+  // Étape 1 : compter, pour chaque ticket réellement présent dans
+  // `ticketsRecords`, le nombre d'interventions exploitables qui lui sont
+  // reliées via `Ticket SAV`.
+  const nombreInterventionsParTicket = {};
+  (interventions || []).forEach(iv => {
+    const ticketId = Array.isArray(iv && iv.fields && iv.fields["Ticket SAV"])
+      ? iv.fields["Ticket SAV"][0]
+      : null;
+    if (!ticketId) return; // intervention non exploitable : pas de relation
+    if (!idsTicketsValides.has(ticketId)) return; // relation vers un ticket non chargé : jamais attribuée artificiellement
+    nombreInterventionsParTicket[ticketId] = (nombreInterventionsParTicket[ticketId] || 0) + 1;
+  });
+
+  const totalTicketsAnalyses = ticketsValides.length;
+  let ticketsAvecInterventionExploitable = 0;
+  let ticketsResolusPremiereIntervention = 0;
+  let ticketsAvecReintervention = 0;
+  let nombreInterventionsExploitees = 0;
+  const parNombreInterventionsMap = {}; // nombreInterventions -> nombreTickets
+
+  ticketsValides.forEach(t => {
+    const n = nombreInterventionsParTicket[t && t.id] || 0;
+    if (n === 0) return; // ticket sans intervention exploitable
+    ticketsAvecInterventionExploitable += 1;
+    nombreInterventionsExploitees += n;
+    if (n === 1) ticketsResolusPremiereIntervention += 1;
+    if (n >= 2) ticketsAvecReintervention += 1;
+    parNombreInterventionsMap[n] = (parNombreInterventionsMap[n] || 0) + 1;
+  });
+
+  const ticketsSansInterventionExploitable = totalTicketsAnalyses - ticketsAvecInterventionExploitable;
+
+  // Taux calculés sur `ticketsAvecInterventionExploitable` (jamais sur
+  // l'ensemble des tickets), conformément à la mission. `null` = non
+  // calculable (dénominateur nul), jamais 0 par défaut.
+  const tauxResolutionPremiereIntervention = ticketsAvecInterventionExploitable
+    ? Math.round((ticketsResolusPremiereIntervention / ticketsAvecInterventionExploitable) * 100)
+    : null;
+  const tauxReintervention = ticketsAvecInterventionExploitable
+    ? Math.round((ticketsAvecReintervention / ticketsAvecInterventionExploitable) * 100)
+    : null;
+
+  // Moyenne portant uniquement sur les tickets ayant au moins une
+  // intervention exploitable, arrondie à 2 décimales.
+  const moyenneInterventionsParTicket = ticketsAvecInterventionExploitable
+    ? Math.round((nombreInterventionsExploitees / ticketsAvecInterventionExploitable) * 100) / 100
+    : null;
+
+  // Détail technique, sans limite imposée, trié par nombreInterventions
+  // croissant.
+  const parNombreInterventions = Object.keys(parNombreInterventionsMap)
+    .map(k => ({ nombreInterventions: Number(k), nombreTickets: parNombreInterventionsMap[k] }))
+    .sort((a, b) => a.nombreInterventions - b.nombreInterventions);
+
+  const resultat = {
+    totalTicketsAnalyses,
+    ticketsAvecInterventionExploitable,
+    ticketsResolusPremiereIntervention,
+    ticketsAvecReintervention,
+    ticketsSansInterventionExploitable,
+    tauxResolutionPremiereIntervention,
+    tauxReintervention,
+    nombreInterventionsExploitees,
+    moyenneInterventionsParTicket,
+    detail: { parNombreInterventions },
+  };
+
+  // Analyse complémentaire par Cause SAV (mission #13) : uniquement si le
+  // champ est réellement exploitable sur au moins un ticket. Mêmes règles
+  // de nettoyage/dédoublonnage que calculerCausesRecurrentesSAVV1 (trim()
+  // uniquement, aucune normalisation, une cause comptée une seule fois par
+  // ticket). Jamais de formulation causale : les champs ne décrivent que
+  // des comptages de co-occurrence entre une cause et le nombre
+  // d'interventions observé sur le même ticket.
+  const parCauseMap = {}; // cause -> { tickets, ticketsPremiereIntervention, ticketsReintervention, ticketsAvecIntervention }
+  ticketsValides.forEach(t => {
+    const f = (t && t.fields) || {};
+    const brutCause = f["Cause SAV"];
+    const valeursCause = Array.isArray(brutCause) ? brutCause : (brutCause != null ? [brutCause] : []);
+    const causesUniquesDuTicket = new Set();
+    valeursCause.forEach(v => {
+      const cTrim = typeof v === "string" ? v.trim() : "";
+      if (cTrim) causesUniquesDuTicket.add(cTrim);
+    });
+    if (causesUniquesDuTicket.size === 0) return; // ticket non exploitable pour cette analyse par cause
+
+    const n = nombreInterventionsParTicket[t && t.id] || 0;
+    causesUniquesDuTicket.forEach(cause => {
+      if (!parCauseMap[cause]) {
+        parCauseMap[cause] = { tickets: 0, ticketsAvecIntervention: 0, ticketsPremiereIntervention: 0, ticketsReintervention: 0 };
+      }
+      parCauseMap[cause].tickets += 1;
+      if (n === 1) {
+        parCauseMap[cause].ticketsAvecIntervention += 1;
+        parCauseMap[cause].ticketsPremiereIntervention += 1;
+      } else if (n >= 2) {
+        parCauseMap[cause].ticketsAvecIntervention += 1;
+        parCauseMap[cause].ticketsReintervention += 1;
+      }
+    });
+  });
+
+  const causesAvecDonnees = Object.keys(parCauseMap);
+  if (causesAvecDonnees.length > 0) {
+    resultat.parCause = causesAvecDonnees
+      .map(cause => {
+        const s = parCauseMap[cause];
+        return {
+          cause,
+          tickets: s.tickets,
+          ticketsPremiereIntervention: s.ticketsPremiereIntervention,
+          ticketsReintervention: s.ticketsReintervention,
+          tauxResolutionPremiereIntervention: s.ticketsAvecIntervention
+            ? Math.round((s.ticketsPremiereIntervention / s.ticketsAvecIntervention) * 100)
+            : null,
+          tauxReintervention: s.ticketsAvecIntervention
+            ? Math.round((s.ticketsReintervention / s.ticketsAvecIntervention) * 100)
+            : null,
+        };
+      })
+      .sort((a, b) => b.tickets - a.tickets || a.cause.localeCompare(b.cause, 'fr'));
+  }
+
+  return resultat;
+}
