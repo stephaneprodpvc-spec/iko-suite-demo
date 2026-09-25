@@ -2188,6 +2188,12 @@ function ModalAnalyticsSAV({ tickets, onClose }) {
   // Airtable, aucun nouveau useEffect de chargement, aucun nouveau fetch).
   const causesRecurrentesSAV = window.AnalyticsSAV.calculerCausesRecurrentesSAVV1(tickets);
 
+  // Mission #14 — Produits/services associés au SAV : réutilise EXACTEMENT
+  // le même tableau `tickets` déjà chargé pour ce panneau (aucun nouvel
+  // appel Airtable, aucun nouveau useEffect de chargement, aucun nouveau
+  // fetch).
+  const produitsServicesSAV = window.AnalyticsSAV.calculerProduitsServicesSAVV1(tickets);
+
   // ---- Détection prédictive SAV V1 : "Signaux prédictifs SAV" ----
   // Reutilise EXACTEMENT les memes agregats deja calcules ci-dessus (aucun
   // nouveau calcul de fond, aucun nouvel appel Airtable) : fonction separee
@@ -2408,6 +2414,58 @@ function ModalAnalyticsSAV({ tickets, onClose }) {
                 ))}
               </div>
               <div style={{fontSize:"10.5px",color:C.muted,marginTop:"6px"}}>{causesRecurrentesSAV.causes.length} cause(s) distincte(s) au total.</div>
+            </>
+          )}
+        </div>
+
+        {/* Mission #14 — Produits/services associés au SAV V1 : analyse
+            descriptive dédiée. Se rabat sur un message explicite si aucune
+            donnée structurée exploitable n'est disponible, sans jamais
+            inventer de valeur. La section croisée avec les causes SAV ne
+            s'affiche que si `associationsParCause` a été construite (voir
+            calculerProduitsServicesSAVV1). */}
+        <div style={{marginBottom:"18px"}}>
+          <div style={{fontSize:"12px",fontWeight:"700",color:C.white,marginBottom:"2px"}}>Produits / services associés au SAV</div>
+          <div style={{fontSize:"11px",color:C.muted,marginBottom:"8px"}}>Occurrences observées dans les tickets SAV exploitables — analyse descriptive.</div>
+          {produitsServicesSAV.totalTicketsExploitables === 0 ? (
+            <div style={{fontSize:"11.5px",color:C.muted,fontStyle:"italic"}}>Analyse non disponible : aucune donnée structurée exploitable pour identifier les produits/services associés aux tickets SAV.</div>
+          ) : (
+            <>
+              <div style={{display:"flex",flexWrap:"wrap",gap:"14px",marginBottom:"8px"}}>
+                <div style={{fontSize:"11.5px",color:C.text}}>Tickets analysés : <b style={{color:C.white}}>{produitsServicesSAV.totalTicketsAnalyses}</b></div>
+                <div style={{fontSize:"11.5px",color:C.text}}>Tickets exploitables : <b style={{color:C.white}}>{produitsServicesSAV.totalTicketsExploitables}</b></div>
+              </div>
+              <div style={{border:"1px solid "+C.border,borderRadius:"8px",overflow:"hidden"}}>
+                <div style={{display:"flex",padding:"6px 12px",fontSize:"9.5px",fontWeight:"700",color:C.muted,borderBottom:"1px solid "+C.border,textTransform:"uppercase"}}>
+                  <span style={{flex:2}}>Produit / service</span>
+                  <span style={{flex:1,textAlign:"right"}}>Tickets</span>
+                </div>
+                {produitsServicesSAV.produits.slice(0, 10).map((p, i) => (
+                  <div key={p.produitService} style={{display:"flex",alignItems:"center",padding:"7px 12px",borderBottom:i<Math.min(10,produitsServicesSAV.produits.length)-1?"1px solid "+C.border:"none",fontSize:"12px"}}>
+                    <span style={{flex:2}}>{p.produitService}</span>
+                    <b style={{flex:1,textAlign:"right",color:C.or}}>{p.nombreTickets}</b>
+                  </div>
+                ))}
+              </div>
+              <div style={{fontSize:"10.5px",color:C.muted,marginTop:"6px"}}>{produitsServicesSAV.produits.length} produit(s)/service(s) distinct(s) au total.</div>
+
+              {produitsServicesSAV.associationsParCause && produitsServicesSAV.associationsParCause.length > 0 && (
+                <div style={{marginTop:"14px"}}>
+                  <div style={{fontSize:"11.5px",fontWeight:"700",color:C.white,marginBottom:"6px"}}>Produits / services associés aux causes SAV</div>
+                  <div style={{fontSize:"10.5px",color:C.muted,marginBottom:"8px"}}>Co-présence observée dans les mêmes tickets — analyse descriptive, aucun lien de cause à effet.</div>
+                  {produitsServicesSAV.associationsParCause.map(ac => (
+                    <div key={ac.cause} style={{marginBottom:"10px",border:"1px solid "+C.border,borderRadius:"8px",overflow:"hidden"}}>
+                      <div style={{padding:"6px 12px",fontSize:"11px",fontWeight:"700",color:C.white,borderBottom:"1px solid "+C.border}}>{ac.cause}</div>
+                      {ac.produits.slice(0, 10).map((p, i) => (
+                        <div key={p.produitService} style={{display:"flex",alignItems:"center",padding:"6px 12px",borderBottom:i<Math.min(10,ac.produits.length)-1?"1px solid "+C.border:"none",fontSize:"11.5px"}}>
+                          <span style={{flex:2}}>{p.produitService}</span>
+                          <b style={{flex:1,textAlign:"right",color:C.or}}>{p.nombreTickets}</b>
+                        </div>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+              )}
             </>
           )}
         </div>

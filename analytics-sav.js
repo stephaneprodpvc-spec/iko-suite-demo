@@ -2196,3 +2196,125 @@ export function calculerCausesRecurrentesSAVV1(ticketsRecords) {
     causes,
   };
 }
+
+// ==================== Intelligence SAV — mission #14 ====================
+// Produits/services associés au SAV V1. Fonction PURE (aucun fetch, aucun
+// DOM, aucun état global, aucune mutation de `ticketsRecords`) : identifie
+// les produits/services qui reviennent le plus souvent dans les tickets
+// SAV, à partir du SEUL champ structuré déjà exploité pour cet usage dans
+// ce fichier — "Produit" (voir calculerAnalyticsSAV → parProduit/
+// topProduits/topProduitsDetail/produitsRisque, detecterAlertesSAV,
+// genererSignauxPredictifsSAV, et le champ de recherche/export du
+// dashboard : tous lisent `t.fields?.Produit`) — jamais un champ inventé,
+// et jamais un texte libre ("Problème", "Diagnostic") transformé en
+// catégories par mots-clés, fuzzy matching ou IA.
+//
+// "Produit" est, dans ce projet, un champ facultatif à VALEUR UNIQUE par
+// ticket (confirmé par tout son usage existant : toujours lu comme une
+// chaîne simple via `(t.fields?.Produit || "").trim()`, jamais un
+// tableau). La règle « un même produit/service apparaissant plusieurs fois
+// dans un même ticket ne compte qu'une fois » est néanmoins appliquée
+// explicitement ci-dessous (via un Set par ticket), pour rester correcte
+// si ce champ devenait un jour multi-valeur — sans jamais supposer ni
+// inventer cette évolution aujourd'hui.
+//
+// Nettoyage minimal autorisé : trim() uniquement. Une valeur vide après
+// trim rend le ticket non exploitable pour cette analyse (jamais compté
+// dans un produit "Non renseigné" ou "Autre" inventé). Aucune
+// normalisation de casse ni fusion de désignations proches : "Fenêtre" et
+// "fenêtre" restent deux entrées distinctes, aucune interprétation.
+//
+// Croisement avec Cause SAV (mission #13) : "Cause SAV" est, comme
+// "Produit", un champ scalaire déjà exploité (voir
+// calculerCausesRecurrentesSAVV1 ci-dessus). Les deux champs étant
+// réellement disponibles et exploitables sur les mêmes tickets, la
+// structure complémentaire `associationsParCause` est donc construite.
+// Elle reflète une SEULE chose : la co-présence, dans un même ticket,
+// d'une cause et d'un produit/service — jamais un lien de causalité, une
+// fréquence de panne, ni une interprétation. Si l'un des deux champs
+// n'était pas exploitable dans un jeu de données donné, cette structure
+// resterait un tableau vide plutôt qu'une valeur inventée.
+export function calculerProduitsServicesSAVV1(ticketsRecords) {
+  const parProduit = {}; // produitService -> nombre de tickets distincts
+  // cause -> produitService -> nombre de tickets distincts (co-présence)
+  const parCauseProduit = {};
+
+  let totalTicketsAnalyses = 0;
+  let totalTicketsExploitables = 0;
+  let nombreAssociationsExploitees = 0;
+
+  (ticketsRecords || []).forEach(t => {
+    totalTicketsAnalyses += 1;
+    const f = t && t.fields || {};
+    const brutProduit = f.Produit;
+
+    // Le champ est aujourd'hui une valeur simple (jamais un tableau) dans ce
+    // projet ; il est néanmoins traité via un Set pour dédoublonner sans
+    // jamais supposer sa forme future — voir commentaire ci-dessus.
+    const valeursProduit = Array.isArray(brutProduit) ? brutProduit : (brutProduit != null ? [brutProduit] : []);
+    const produitsUniquesDuTicket = new Set();
+    valeursProduit.forEach(v => {
+      const pTrim = typeof v === "string" ? v.trim() : "";
+      if (pTrim) produitsUniquesDuTicket.add(pTrim);
+    });
+
+    if (produitsUniquesDuTicket.size === 0) return; // ticket non exploitable, jamais inventé
+
+    totalTicketsExploitables += 1;
+    produitsUniquesDuTicket.forEach(produitService => {
+      nombreAssociationsExploitees += 1;
+      parProduit[produitService] = (parProduit[produitService] || 0) + 1;
+    });
+
+    // Co-présence avec Cause SAV, sur ce même ticket uniquement — mêmes
+    // règles de nettoyage (trim) et de dédoublonnage par ticket que
+    // calculerCausesRecurrentesSAVV1.
+    const brutCause = f["Cause SAV"];
+    const valeursCause = Array.isArray(brutCause) ? brutCause : (brutCause != null ? [brutCause] : []);
+    const causesUniquesDuTicket = new Set();
+    valeursCause.forEach(v => {
+      const cTrim = typeof v === "string" ? v.trim() : "";
+      if (cTrim) causesUniquesDuTicket.add(cTrim);
+    });
+
+    if (causesUniquesDuTicket.size > 0) {
+      causesUniquesDuTicket.forEach(cause => {
+        if (!parCauseProduit[cause]) parCauseProduit[cause] = {};
+        produitsUniquesDuTicket.forEach(produitService => {
+          parCauseProduit[cause][produitService] = (parCauseProduit[cause][produitService] || 0) + 1;
+        });
+      });
+    }
+  });
+
+  // Tri purement technique (jamais un classement de qualité, de gravité ou
+  // de performance) : nombreTickets décroissant, puis produitService
+  // alphabétique — déterministe en toutes circonstances.
+  const produits = Object.keys(parProduit)
+    .map(produitService => ({ produitService, nombreTickets: parProduit[produitService] }))
+    .sort((a, b) => b.nombreTickets - a.nombreTickets || a.produitService.localeCompare(b.produitService, 'fr'));
+
+  const resultat = {
+    totalTicketsAnalyses,
+    totalTicketsExploitables,
+    nombreAssociationsExploitees,
+    produits,
+  };
+
+  // N'ajouter `associationsParCause` que si le champ produit/service ET
+  // "Cause SAV" sont réellement exploitables ensemble (au moins une
+  // co-présence observée) — sinon ne pas créer cette partie, comme demandé.
+  const causesAvecAssociations = Object.keys(parCauseProduit);
+  if (causesAvecAssociations.length > 0) {
+    resultat.associationsParCause = causesAvecAssociations
+      .map(cause => {
+        const produitsDeCause = Object.keys(parCauseProduit[cause])
+          .map(produitService => ({ produitService, nombreTickets: parCauseProduit[cause][produitService] }))
+          .sort((a, b) => b.nombreTickets - a.nombreTickets || a.produitService.localeCompare(b.produitService, 'fr'));
+        return { cause, produits: produitsDeCause };
+      })
+      .sort((a, b) => a.cause.localeCompare(b.cause, 'fr'));
+  }
+
+  return resultat;
+}
