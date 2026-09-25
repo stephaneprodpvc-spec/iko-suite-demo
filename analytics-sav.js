@@ -1209,3 +1209,124 @@ export function calculerNoteVsResultatDevis(devisRecords, ticketsRecords) {
 
   return { parNote };
 }
+
+// ---------------------------------------------------------------------
+// Intelligence Commerciale V1 — mission #8 (moteur de recommandations).
+//
+// genererRecommandationsCommercialesV1 est une fonction pure : elle reçoit
+// UNIQUEMENT les résultats déjà produits par les fonctions existantes
+// (calculerTauxConversionDevis, calculerPanierMoyenEtTendance,
+// calculerTopProduitsServices, calculerConversionParMode,
+// calculerNoteVsResultatDevis) — jamais les devis/tickets bruts, jamais un
+// fetch, jamais le DOM. Elle ne recalcule rien qui existe déjà ; elle
+// formule des observations strictement DESCRIPTIVES à partir de ces
+// résultats. Aucune formulation causale, prédictive ou de score de
+// performance.
+//
+// Recommandations « Conversion » (A) et « Concentration du CA » (C) NE
+// SONT PAS générées dans cette V1 — signalées explicitement ci-dessous
+// plutôt qu'implémentées avec une donnée inventée :
+//
+//   A — Évolution récente du taux de conversion : calculerTauxConversionDevis
+//       ne renvoie qu'un instantané global (aucune répartition temporelle).
+//       Produire une "évolution récente" obligerait à inventer arbitrairement
+//       une période de découpage (ex. "30 derniers jours") qui n'existe nulle
+//       part dans les règles déjà établies — interdit explicitement par la
+//       mission. Non généré.
+//
+//   C — Concentration du CA (part du Top 1 / Top 3) : calculerTopProduitsServices
+//       ne renvoie que le Top 5 avec leur CA HT propre, jamais le CA HT total
+//       exploitable de TOUTES les lignes de tous les devis validés — cette
+//       donnée n'existe dans aucun résultat déjà calculé. La reconstruire à
+//       partir de panierMoyenGlobal × nbDevisConvertisAnalyses mélangerait un
+//       total au niveau du devis (Montant HT) avec des totaux au niveau des
+//       lignes (Lignes devis (JSON)), deux bases de calcul différentes et non
+//       garanties identiques (lignes invalides exclues côté Mission #3, pas
+//       côté Mission #2) — ce serait un calcul méthodologiquement inventé, pas
+//       une réutilisation d'une donnée déjà validée. Non généré.
+//
+// Ces deux absences sont documentées dans le champ `nonGenerees` du résultat
+// (jamais affiché à l'utilisateur — diagnostic/tests uniquement, même
+// convention que `statutsInconnus` en mission #1).
+export function genererRecommandationsCommercialesV1({
+  resultatConversion, panierMoyen, topProduitsServices, conversionParMode, noteVsResultatDevis,
+} = {}) {
+  const recommandations = [];
+  const nonGenerees = [
+    { type: "conversion_evolution", raison: "Aucune répartition temporelle disponible dans calculerTauxConversionDevis sans inventer une période de découpage." },
+    { type: "concentration_ca", raison: "Aucun CA HT total exploitable disponible dans calculerTopProduitsServices (seul le Top 5 est connu) sans mélanger deux bases de calcul différentes." },
+  ];
+
+  // ---- B — Évolution récente du panier moyen (tendance déjà calculée) ----
+  if (panierMoyen && Array.isArray(panierMoyen.tendance)) {
+    const moisValides = panierMoyen.tendance.filter(m => m && m.panierMoyen !== null);
+    if (moisValides.length >= 2) {
+      const moisRecent = moisValides[moisValides.length - 1];
+      const moisPrecedent = moisValides[moisValides.length - 2];
+      const fmt = (v) => v.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      recommandations.push({
+        type: "panier_moyen_evolution",
+        titre: "Évolution du panier moyen",
+        message: "Le panier moyen des devis validés évolue de " + fmt(moisPrecedent.panierMoyen) + " € HT (" + moisPrecedent.label + ") à " + fmt(moisRecent.panierMoyen) + " € HT (" + moisRecent.label + ").",
+        donnees: { moisPrecedent, moisRecent },
+      });
+    } else {
+      nonGenerees.push({ type: "panier_moyen_evolution", raison: "Moins de deux mois avec un panier moyen exploitable dans la tendance déjà calculée." });
+    }
+  }
+
+  // ---- D — Manuel vs Auto Iko (déjà calculé par calculerConversionParMode) ----
+  if (conversionParMode && Array.isArray(conversionParMode.parMode)) {
+    const autoIko = conversionParMode.parMode.find(m => m.mode === "Auto Iko");
+    const manuel = conversionParMode.parMode.find(m => m.mode === "Manuel");
+    if (autoIko && manuel && autoIko.taux !== null && manuel.taux !== null) {
+      recommandations.push({
+        type: "mode_creation",
+        titre: "Manuel vs Auto Iko",
+        message: "Sur la période analysée, le taux de conversion observé est de " + autoIko.taux + "% pour le parcours Auto Iko et de " + manuel.taux + "% pour le parcours Manuel.",
+        donnees: { autoIko, manuel },
+      });
+    } else {
+      nonGenerees.push({ type: "mode_creation", raison: "Taux non calculable (aucun devis éligible) pour au moins un des deux modes Manuel/Auto Iko." });
+    }
+  }
+
+  // ---- E — Note client vs résultat du devis lié (déjà calculé) ----
+  if (noteVsResultatDevis && Array.isArray(noteVsResultatDevis.parNote)) {
+    const notesAvecDonnees = noteVsResultatDevis.parNote.filter(n => n.eligibles > 0);
+    if (notesAvecDonnees.length > 0) {
+      const phrases = notesAvecDonnees.map(n =>
+        "Parmi les devis liés à des tickets notés " + n.note + "/5, " + n.convertis + " sur " + n.eligibles + " sont validés."
+      );
+      recommandations.push({
+        type: "note_client_devis_lie",
+        titre: "Note client vs résultat du devis lié",
+        message: phrases.join(" ") + " (Analyse portant sur le devis à l'origine du ticket, pas sur un devis ultérieur.)",
+        donnees: { parNote: notesAvecDonnees },
+      });
+    } else {
+      nonGenerees.push({ type: "note_client_devis_lie", raison: "Aucune note avec au moins un devis éligible." });
+    }
+  }
+
+  // ---- F — Répartition par agence (déjà calculée par calculerTauxConversionDevis) ----
+  // Aucun seuil métier trouvé ailleurs dans le code pour exclure une agence à
+  // faible volume : approche prudente demandée par la mission — on affiche le
+  // nombre d'éligibles et le taux de chaque agence, sans qualifier ni classer
+  // (jamais "meilleure"/"pire" agence).
+  if (resultatConversion && Array.isArray(resultatConversion.parAgence) && resultatConversion.parAgence.length > 0) {
+    const fragments = resultatConversion.parAgence.map(a =>
+      a.agence + " (" + a.eligibles + " éligible(s), taux " + (a.taux === null ? "—" : a.taux + "%") + ")"
+    );
+    recommandations.push({
+      type: "repartition_agences",
+      titre: "Répartition par agence",
+      message: "Répartition observée par agence sur les devis éligibles : " + fragments.join(" ; ") + ".",
+      donnees: { parAgence: resultatConversion.parAgence },
+    });
+  } else {
+    nonGenerees.push({ type: "repartition_agences", raison: "Aucune agence avec au moins un devis éligible." });
+  }
+
+  return { recommandations, nonGenerees };
+}

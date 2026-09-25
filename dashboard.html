@@ -2547,6 +2547,20 @@ function ModalIntelligenceCommerciale({ onClose }) {
   }, [devis]);
   const noteVsResultatDevis = (devis && ticketsNote) ? window.AnalyticsSAV.calculerNoteVsResultatDevis(devis, ticketsNote) : null;
 
+  // Mission #8 — Moteur de recommandations commerciales : réutilise
+  // EXACTEMENT les résultats déjà calculés ci-dessus (resultat, panierMoyen,
+  // topProduitsServices, conversionParMode, noteVsResultatDevis). Aucun
+  // nouvel appel Airtable, aucun nouveau useEffect de chargement, aucune
+  // donnée brute recalculée. Pas de diagnostic React associé (nonGenerees
+  // reste disponible dans le résultat pour les tests, sans useEffect dédié).
+  const recommandationsCommerciales = window.AnalyticsSAV.genererRecommandationsCommercialesV1({
+    resultatConversion: resultat,
+    panierMoyen,
+    topProduitsServices,
+    conversionParMode,
+    noteVsResultatDevis,
+  });
+
   // Diagnostic uniquement (jamais affiché à l'utilisateur) : signale les
   // statuts Devis inattendus sans jamais bloquer le calcul.
   React.useEffect(() => {
@@ -2738,6 +2752,21 @@ function ModalIntelligenceCommerciale({ onClose }) {
                 </div>
               )}
             </div>
+
+            {recommandationsCommerciales.recommandations.length > 0 && (
+              <div style={{marginBottom:"18px",borderTop:"1px solid "+C.border,paddingTop:"14px"}}>
+                <div style={{fontSize:"12px",fontWeight:"700",color:C.white,marginBottom:"2px"}}>Recommandations commerciales IKO</div>
+                <div style={{fontSize:"11px",color:C.muted,marginBottom:"8px"}}>Observations descriptives à partir des indicateurs ci-dessus — aucune causalité, aucune prédiction.</div>
+                <div style={{display:"flex",flexDirection:"column",gap:"8px"}}>
+                  {recommandationsCommerciales.recommandations.map(r => (
+                    <div key={r.type} style={{border:"1px solid "+C.border,borderRadius:"8px",padding:"10px 12px",background:"rgba(255,255,255,0.02)"}}>
+                      <div style={{fontSize:"11px",fontWeight:"700",color:C.white,marginBottom:"3px"}}>{r.titre}</div>
+                      <div style={{fontSize:"11.5px",color:C.text}}>{r.message}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </>
         )}
 
