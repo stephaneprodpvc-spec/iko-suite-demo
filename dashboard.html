@@ -2569,11 +2569,17 @@ function ModalIntelligenceCommerciale({ onClose }) {
   // aucun nouveau useEffect de chargement, aucun nouveau fetch).
   const entonnoirCommercial = devis ? window.AnalyticsSAV.calculerEntonnoirCommercialV1(devis) : null;
 
+  // Mission #12 — Intelligence produits/services : réutilise EXACTEMENT le
+  // même tableau `devis` déjà chargé ci-dessus (aucun nouvel appel
+  // Airtable, aucun nouveau useEffect de chargement, aucun nouveau fetch).
+  const intelligenceProduitsServices = devis ? window.AnalyticsSAV.calculerIntelligenceProduitsServicesV1(devis) : null;
+
   // Mission #8 — Moteur de recommandations commerciales : réutilise
   // EXACTEMENT les résultats déjà calculés ci-dessus (resultat, panierMoyen,
   // topProduitsServices, conversionParMode, noteVsResultatDevis, et les
-  // nouveaux indicateurs des missions #10/#11). Aucun nouvel appel Airtable,
-  // aucun nouveau useEffect de chargement, aucune donnée brute recalculée.
+  // nouveaux indicateurs des missions #10/#11/#12). Aucun nouvel appel
+  // Airtable, aucun nouveau useEffect de chargement, aucune donnée brute
+  // recalculée.
   const recommandationsCommerciales = window.AnalyticsSAV.genererRecommandationsCommercialesV1({
     resultatConversion: resultat,
     panierMoyen,
@@ -2587,6 +2593,7 @@ function ModalIntelligenceCommerciale({ onClose }) {
     panierMoyenParAgence,
     volumeMensuel,
     entonnoirCommercial,
+    intelligenceProduitsServices,
   });
 
   // Diagnostic uniquement (jamais affiché à l'utilisateur) : signale les
@@ -2766,6 +2773,48 @@ function ModalIntelligenceCommerciale({ onClose }) {
                 </div>
               )}
             </div>
+
+            {/* Mission #12 — Intelligence produits / services : résultats observés
+                des devis contenant chaque produit/service, sans classement de
+                performance (tri purement technique par nombre de devis). */}
+            {intelligenceProduitsServices && (
+              <div style={{marginBottom:"18px",borderTop:"1px solid "+C.border,paddingTop:"14px"}}>
+                <div style={{fontSize:"12px",fontWeight:"700",color:C.white,marginBottom:"2px"}}>Intelligence produits / services</div>
+                <div style={{fontSize:"11px",color:C.muted,marginBottom:"8px"}}>Résultats observés des devis contenant chaque produit ou service — analyse descriptive, sans interprétation causale.</div>
+                {intelligenceProduitsServices.produits.length === 0 && (
+                  <div style={{fontSize:"11px",color:C.muted,fontStyle:"italic"}}>Aucune ligne de devis exploitable pour l'instant.</div>
+                )}
+                {intelligenceProduitsServices.produits.length > 0 && (
+                  <>
+                    <div style={{border:"1px solid "+C.border,borderRadius:"8px",overflow:"hidden"}}>
+                      <div style={{display:"flex",padding:"6px 10px",fontSize:"9.5px",fontWeight:"700",color:C.muted,borderBottom:"1px solid "+C.border,textTransform:"uppercase"}}>
+                        <span style={{flex:2}}>Produit / Service</span>
+                        <span style={{flex:0.8,textAlign:"right"}}>Devis</span>
+                        <span style={{flex:0.8,textAlign:"right"}}>Validés</span>
+                        <span style={{flex:0.8,textAlign:"right"}}>Refusés</span>
+                        <span style={{flex:0.9,textAlign:"right"}}>Attente</span>
+                        <span style={{flex:0.8,textAlign:"right"}}>Taux</span>
+                        <span style={{flex:1.3,textAlign:"right"}}>Montant devisé</span>
+                        <span style={{flex:1.3,textAlign:"right"}}>Montant signé</span>
+                      </div>
+                      {intelligenceProduitsServices.produits.slice(0, 10).map((p, i) => (
+                        <div key={p.designation} style={{display:"flex",alignItems:"center",padding:"7px 10px",borderBottom:i<Math.min(10,intelligenceProduitsServices.produits.length)-1?"1px solid "+C.border:"none",fontSize:"11.5px"}}>
+                          <span style={{flex:2}}>{p.designation}</span>
+                          <span style={{flex:0.8,textAlign:"right",color:C.muted}}>{p.nombreDevis}</span>
+                          <span style={{flex:0.8,textAlign:"right",color:C.muted}}>{p.convertis}</span>
+                          <span style={{flex:0.8,textAlign:"right",color:C.muted}}>{p.refuses}</span>
+                          <span style={{flex:0.9,textAlign:"right",color:C.muted}}>{p.enAttente}</span>
+                          <b style={{flex:0.8,textAlign:"right",color:C.or}}>{p.tauxConversion === null ? "—" : p.tauxConversion + "%"}</b>
+                          <span style={{flex:1.3,textAlign:"right",color:C.text}}>{p.montantDevisHT === null ? "—" : p.montantDevisHT.toLocaleString('fr-FR',{minimumFractionDigits:2,maximumFractionDigits:2}) + " €"}</span>
+                          <span style={{flex:1.3,textAlign:"right",color:C.text}}>{p.montantSigneHT === null ? "—" : p.montantSigneHT.toLocaleString('fr-FR',{minimumFractionDigits:2,maximumFractionDigits:2}) + " €"}</span>
+                        </div>
+                      ))}
+                    </div>
+                    <div style={{fontSize:"10.5px",color:C.muted,marginTop:"6px"}}>{intelligenceProduitsServices.produits.length} produits/services analysés au total.</div>
+                  </>
+                )}
+              </div>
+            )}
 
             <div style={{marginBottom:"18px",borderTop:"1px solid "+C.border,paddingTop:"14px"}}>
               <div style={{fontSize:"12px",fontWeight:"700",color:C.white,marginBottom:"2px"}}>Auto Iko vs Manuel</div>

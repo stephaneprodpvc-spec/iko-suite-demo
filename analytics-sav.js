@@ -1251,7 +1251,7 @@ export function calculerNoteVsResultatDevis(devisRecords, ticketsRecords) {
 export function genererRecommandationsCommercialesV1({
   resultatConversion, panierMoyen, topProduitsServices, conversionParMode, noteVsResultatDevis,
   motifsRefus, conversionMensuelle, chiffreAffairesSigne, panierMoyenParMode, panierMoyenParAgence, volumeMensuel,
-  entonnoirCommercial,
+  entonnoirCommercial, intelligenceProduitsServices,
 } = {}) {
   const recommandations = [];
   const nonGenerees = [
@@ -1458,6 +1458,35 @@ export function genererRecommandationsCommercialesV1({
       });
     } else {
       nonGenerees.push({ type: "entonnoir_commercial", raison: "Aucun devis disponible pour l'entonnoir commercial." });
+    }
+  }
+
+  // ---- Intelligence produits/services (mission #12, déjà calculé par calculerIntelligenceProduitsServicesV1) ----
+  // Observation portant sur le produit/service le plus présent selon l'ordre
+  // purement technique du tri de la fonction source (nombreDevis, puis
+  // montantDevisHT, puis alphabétique) — jamais "le meilleur produit", et
+  // jamais présenté comme une cause du résultat des devis dans lesquels il
+  // apparaît.
+  if (intelligenceProduitsServices && Array.isArray(intelligenceProduitsServices.produits)) {
+    if (intelligenceProduitsServices.produits.length > 0) {
+      const p = intelligenceProduitsServices.produits[0];
+      const fmt = (v) => v.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      const fragments = [];
+      fragments.push("Le produit/service \"" + p.designation + "\" apparaît dans " + p.nombreDevis + " devis, dont " + p.convertis + " validé(s) et " + p.refuses + " refusé(s).");
+      if (p.tauxConversion !== null) {
+        fragments.push("Le taux observé sur les devis contenant ce produit/service est de " + p.tauxConversion + " % parmi " + p.eligibles + " devis éligible(s).");
+      }
+      if (p.montantDevisHT !== null) {
+        fragments.push("Ce produit/service représente " + fmt(p.montantDevisHT) + " € HT de montant de devis exploitable.");
+      }
+      recommandations.push({
+        type: "intelligence_produits_services",
+        titre: "Intelligence produits / services",
+        message: fragments.join(" "),
+        donnees: { designation: p.designation, nombreDevis: p.nombreDevis, convertis: p.convertis, refuses: p.refuses, eligibles: p.eligibles, tauxConversion: p.tauxConversion, montantDevisHT: p.montantDevisHT },
+      });
+    } else {
+      nonGenerees.push({ type: "intelligence_produits_services", raison: "Aucun produit/service exploitable dans les lignes de devis." });
     }
   }
 
@@ -1909,5 +1938,183 @@ export function calculerEntonnoirCommercialV1(devisRecords) {
     partMontantEnAttente,
 
     motifsRefus,
+  };
+}
+
+// ==================== Intelligence Commerciale — mission #12 ====================
+// Intelligence produits / services. Fonction PURE (aucun fetch, aucun DOM,
+// aucun état global, aucune mutation de `devisRecords`) : relie la
+// composition des devis (leurs lignes) à leur résultat commercial, en
+// parcourant une seule fois le même tableau `devis` déjà chargé (mission
+// #1) — aucune deuxième source de données.
+//
+// Complémentaire à calculerTopProduitsServices (mission #3), jamais un
+// remplacement : cette dernière reste inchangée et n'analyse que les devis
+// validés. Ici on mesure, pour CHAQUE devis (quel que soit son résultat),
+// la présence de chaque produit/service dans ses lignes, puis on relie
+// cette présence au résultat du devis — jamais l'inverse : on ne mesure que
+// le résultat des devis DANS LESQUELS le produit apparaît, jamais une
+// causalité ("ce produit fait vendre/perdre").
+//
+// Population du devis (même convention que les missions #7B/#11) :
+//   - Refusé    : "Devis refusé" === true (prioritaire en cas de contradiction)
+//   - Converti  : sinon, Statut === "Validé"
+//   - En attente: sinon
+//
+// Clé d'agrégation : `designation` de chaque ligne de "Lignes devis (JSON)",
+// trim uniquement, vide -> "Produit/service non renseigné". Aucune
+// normalisation supplémentaire (pas de casse, pas d'accents, pas de fuzzy
+// matching, pas de fusion) — deux désignations distinctes à la casse près
+// restent deux entrées distinctes, aucune interprétation.
+//
+// Comptage des devis : un même produit apparaissant plusieurs fois dans les
+// lignes d'UN MÊME devis compte comme 1 seul devis contenant ce produit
+// (dédoublonnage par identifiant de devis) — quantités et montants de
+// lignes, eux, sont additionnés sans dédoublonnage.
+//
+// Montants : "totalHT" de chaque ligne exploitable seulement s'il est
+// numérique, fini et strictement > 0 — jamais converti en 0. montantDevisHT
+// somme ces montants quel que soit le résultat du devis ; montantSigneHT ne
+// somme que ceux des devis convertis. Un montant dans un devis refusé reste
+// un montant de devis refusé contenant ce produit, jamais qualifié de
+// "perte".
+//
+// Robustesse : un devis sans "Lignes devis (JSON)" est simplement ignoré
+// pour cette analyse (aucune ligne inventée). Un JSON illisible ou non-
+// tableau est comptabilisé dans nombreLignesInvalides puis le devis est
+// ignoré pour ce calcul (jamais une exception qui remonte). Une ligne mal
+// formée (pas un objet) est ignorée et comptabilisée dans
+// nombreLignesInvalides ; une ligne bien formée mais avec qte/totalHT
+// invalides reste comptée dans nombreLignesExploitees (elle contribue à
+// nombreDevis/convertis/refuses/enAttente) mais ne contribue pas aux
+// sommes de quantité/montant.
+export function calculerIntelligenceProduitsServicesV1(devisRecords) {
+  const NON_RENSEIGNE = "Produit/service non renseigné";
+  const parProduit = {}; // designation -> accumulateur
+
+  let totalDevisAnalyses = 0;
+  let totalDevisAvecLignesExploitables = 0;
+  let nombreLignesExploitees = 0;
+  let nombreLignesInvalides = 0;
+
+  (devisRecords || []).forEach((d, index) => {
+    totalDevisAnalyses += 1;
+    const f = d && d.fields || {};
+    // Identifiant stable pour dédoublonner les devis par produit ; repli sur
+    // l'index si l'enregistrement n'a pas d'id exploitable (jamais deux
+    // devis distincts fusionnés en un seul par accident).
+    const devisId = (d && d.id != null) ? d.id : ("__idx_" + index);
+
+    const estRefuse = f["Devis refusé"] === true;
+    let categorie;
+    if (estRefuse) categorie = "refuse"; // refus prioritaire, même en cas de contradiction avec Statut
+    else if (f.Statut === "Validé") categorie = "converti";
+    else categorie = "attente";
+
+    const brut = f["Lignes devis (JSON)"];
+    if (!brut) return; // pas de lignes : devis ignoré pour cette analyse, aucune ligne inventée
+
+    let lignes;
+    try {
+      lignes = JSON.parse(brut);
+    } catch (e) {
+      nombreLignesInvalides += 1; // JSON du devis illisible : problème comptabilisé, devis ignoré
+      return;
+    }
+    if (!Array.isArray(lignes)) {
+      nombreLignesInvalides += 1;
+      return;
+    }
+
+    let devisAContribue = false;
+
+    lignes.forEach(ligne => {
+      if (!ligne || typeof ligne !== "object") {
+        nombreLignesInvalides += 1; // ligne mal formée, ignorée, jamais inventée
+        return;
+      }
+
+      nombreLignesExploitees += 1;
+      devisAContribue = true;
+
+      const designationBrute = typeof ligne.designation === "string" ? ligne.designation.trim() : "";
+      const label = designationBrute || NON_RENSEIGNE;
+
+      if (!parProduit[label]) {
+        parProduit[label] = {
+          devisCategories: new Map(), // devisId -> catégorie du devis (dédoublonnage)
+          quantiteTotale: 0,
+          quantiteConnue: false,
+          montantDevisHT: 0,
+          montantSigneHT: 0,
+          montantConnu: false,
+        };
+      }
+      const acc = parProduit[label];
+      if (!acc.devisCategories.has(devisId)) {
+        acc.devisCategories.set(devisId, categorie);
+      }
+
+      const qte = Number(ligne.qte);
+      if (Number.isFinite(qte) && qte > 0) {
+        acc.quantiteTotale += qte;
+        acc.quantiteConnue = true;
+      }
+
+      const totalHT = Number(ligne.totalHT);
+      if (Number.isFinite(totalHT) && totalHT > 0) {
+        acc.montantDevisHT += totalHT;
+        acc.montantConnu = true;
+        if (categorie === "converti") {
+          acc.montantSigneHT += totalHT;
+        }
+      }
+    });
+
+    if (devisAContribue) totalDevisAvecLignesExploitables += 1;
+  });
+
+  const produits = Object.keys(parProduit).map(label => {
+    const acc = parProduit[label];
+    let convertis = 0, refuses = 0, enAttente = 0;
+    acc.devisCategories.forEach(cat => {
+      if (cat === "converti") convertis += 1;
+      else if (cat === "refuse") refuses += 1;
+      else enAttente += 1;
+    });
+    const eligibles = convertis + refuses;
+    const tauxConversion = eligibles > 0 ? Math.round((convertis / eligibles) * 100) : null;
+
+    return {
+      designation: label,
+      nombreDevis: acc.devisCategories.size,
+      convertis,
+      refuses,
+      enAttente,
+      eligibles,
+      tauxConversion,
+      quantiteTotale: acc.quantiteConnue ? Math.round(acc.quantiteTotale * 100) / 100 : null,
+      montantDevisHT: acc.montantConnu ? Math.round(acc.montantDevisHT * 100) / 100 : null,
+      montantSigneHT: acc.montantConnu ? Math.round(acc.montantSigneHT * 100) / 100 : null,
+    };
+  });
+
+  // Tri purement technique (jamais un classement "meilleur produit") :
+  // nombreDevis décroissant, puis montantDevisHT décroissant, puis
+  // designation alphabétique — déterministe en toutes circonstances.
+  produits.sort((a, b) => {
+    if (b.nombreDevis !== a.nombreDevis) return b.nombreDevis - a.nombreDevis;
+    const montantA = a.montantDevisHT || 0;
+    const montantB = b.montantDevisHT || 0;
+    if (montantB !== montantA) return montantB - montantA;
+    return a.designation.localeCompare(b.designation, 'fr');
+  });
+
+  return {
+    totalDevisAnalyses,
+    totalDevisAvecLignesExploitables,
+    nombreLignesExploitees,
+    nombreLignesInvalides,
+    produits,
   };
 }
