@@ -2201,6 +2201,15 @@ function ModalAnalyticsSAV({ tickets, onClose }) {
   // null tant que `interventions` n'est pas encore chargé.
   const intelligenceResolutionSAV = interventions ? window.AnalyticsSAV.calculerIntelligenceResolutionSAVV1(interventions, tickets) : null;
 
+  // Pack missions #16, #17, #18 — mêmes `interventions`/`tickets` déjà
+  // chargés ci-dessus (aucun nouvel appel Airtable, aucun nouveau
+  // useEffect de chargement, aucun nouveau fetch). null tant que
+  // `interventions` n'est pas encore chargé (sauf mission #17, qui ne
+  // dépend que des interventions et suit la même règle de garde).
+  const produitsResolutionSAV = interventions ? window.AnalyticsSAV.calculerProduitsResolutionSAVV1(interventions, tickets) : null;
+  const dureeInterventionSAV = interventions ? window.AnalyticsSAV.calculerIntelligenceDureeInterventionSAVV1(interventions) : null;
+  const coutSAVParResolution = interventions ? window.AnalyticsSAV.calculerCoutSAVParResolutionV1(interventions, tickets) : null;
+
   // ---- Détection prédictive SAV V1 : "Signaux prédictifs SAV" ----
   // Reutilise EXACTEMENT les memes agregats deja calcules ci-dessus (aucun
   // nouveau calcul de fond, aucun nouvel appel Airtable) : fonction separee
@@ -2547,6 +2556,94 @@ function ModalAnalyticsSAV({ tickets, onClose }) {
                 </div>
               )}
             </>
+          )}
+        </div>
+
+        {/* Mission #16 — Résolution SAV par produit/service : croise le
+            champ Produit (mission #14) avec le nombre d'interventions par
+            ticket (mission #15). Purement descriptif, jamais causal. */}
+        <div style={{marginBottom:"18px"}}>
+          <div style={{fontSize:"12px",fontWeight:"700",color:C.white,marginBottom:"2px"}}>Résolution SAV par produit/service</div>
+          <div style={{fontSize:"11px",color:C.muted,marginBottom:"8px"}}>Analyse descriptive du nombre d'interventions observé pour les tickets associés à chaque produit/service.</div>
+          {!produitsResolutionSAV ? (
+            <div style={{fontSize:"11.5px",color:C.muted,fontStyle:"italic"}}>Chargement des interventions en cours…</div>
+          ) : produitsResolutionSAV.produits.length === 0 ? (
+            <div style={{fontSize:"11.5px",color:C.muted,fontStyle:"italic"}}>Analyse non disponible : aucune donnée produit/service exploitable.</div>
+          ) : (
+            <div style={{border:"1px solid "+C.border,borderRadius:"8px",overflow:"hidden"}}>
+              <div style={{display:"flex",padding:"6px 10px",fontSize:"9px",fontWeight:"700",color:C.muted,borderBottom:"1px solid "+C.border,textTransform:"uppercase"}}>
+                <span style={{flex:2}}>Produit / service</span>
+                <span style={{flex:1,textAlign:"right"}}>Tickets</span>
+                <span style={{flex:1,textAlign:"right"}}>1 intervention</span>
+                <span style={{flex:1,textAlign:"right"}}>Réinterventions</span>
+                <span style={{flex:1,textAlign:"right"}}>Taux 1 intervention</span>
+                <span style={{flex:1,textAlign:"right"}}>Taux réintervention</span>
+              </div>
+              {produitsResolutionSAV.produits.slice(0, 10).map((p, i) => (
+                <div key={p.produitService} style={{display:"flex",alignItems:"center",padding:"6px 10px",borderBottom:i<Math.min(10,produitsResolutionSAV.produits.length)-1?"1px solid "+C.border:"none",fontSize:"11px"}}>
+                  <span style={{flex:2}}>{p.produitService}</span>
+                  <span style={{flex:1,textAlign:"right"}}>{p.tickets}</span>
+                  <span style={{flex:1,textAlign:"right"}}>{p.ticketsPremiereIntervention}</span>
+                  <span style={{flex:1,textAlign:"right"}}>{p.ticketsReintervention}</span>
+                  <span style={{flex:1,textAlign:"right"}}>{p.tauxResolutionPremiereIntervention === null ? "N/A" : p.tauxResolutionPremiereIntervention + " %"}</span>
+                  <span style={{flex:1,textAlign:"right"}}>{p.tauxReintervention === null ? "N/A" : p.tauxReintervention + " %"}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Mission #17 — Durée des interventions SAV : exploite
+            uniquement Intervention.fields["Durée (min)"] réellement
+            numérique et > 0. */}
+        <div style={{marginBottom:"18px"}}>
+          <div style={{fontSize:"12px",fontWeight:"700",color:C.white,marginBottom:"2px"}}>Durée des interventions SAV</div>
+          <div style={{fontSize:"11px",color:C.muted,marginBottom:"8px"}}>Analyse descriptive des durées réellement renseignées dans les interventions SAV.</div>
+          {!dureeInterventionSAV ? (
+            <div style={{fontSize:"11.5px",color:C.muted,fontStyle:"italic"}}>Chargement des interventions en cours…</div>
+          ) : dureeInterventionSAV.interventionsAvecDureeExploitable === 0 ? (
+            <div style={{fontSize:"11.5px",color:C.muted,fontStyle:"italic"}}>Analyse non disponible : aucune durée d'intervention exploitable.</div>
+          ) : (
+            <>
+              <div style={{display:"flex",flexWrap:"wrap",gap:"14px",marginBottom:"8px"}}>
+                <div style={{fontSize:"11.5px",color:C.text}}>Interventions exploitables : <b style={{color:C.white}}>{dureeInterventionSAV.interventionsAvecDureeExploitable}</b></div>
+                <div style={{fontSize:"11.5px",color:C.text}}>Durée moyenne : <b style={{color:C.white}}>{dureeInterventionSAV.dureeMoyenneMinutes} min</b></div>
+                <div style={{fontSize:"11.5px",color:C.text}}>Durée médiane : <b style={{color:C.white}}>{dureeInterventionSAV.dureeMedianeMinutes} min</b></div>
+              </div>
+              <div style={{border:"1px solid "+C.border,borderRadius:"8px",overflow:"hidden"}}>
+                <div style={{display:"flex",padding:"6px 12px",fontSize:"9.5px",fontWeight:"700",color:C.muted,borderBottom:"1px solid "+C.border,textTransform:"uppercase"}}>
+                  <span style={{flex:2}}>Tranche</span>
+                  <span style={{flex:1,textAlign:"right"}}>Interventions</span>
+                </div>
+                {dureeInterventionSAV.detail.distribution.map((d, i) => (
+                  <div key={d.tranche} style={{display:"flex",alignItems:"center",padding:"7px 12px",borderBottom:i<dureeInterventionSAV.detail.distribution.length-1?"1px solid "+C.border:"none",fontSize:"12px"}}>
+                    <span style={{flex:2}}>{d.tranche}</span>
+                    <b style={{flex:1,textAlign:"right",color:C.or}}>{d.nombreInterventions}</b>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* Mission #18 — Coût SAV × réintervention : mêmes définitions
+            que mission #15, coûts exploitables uniquement si nombre fini
+            et > 0. Jamais de formulation causale, d'économie ou de perte. */}
+        <div style={{marginBottom:"18px"}}>
+          <div style={{fontSize:"12px",fontWeight:"700",color:C.white,marginBottom:"2px"}}>Coût SAV × réintervention</div>
+          <div style={{fontSize:"11px",color:C.muted,marginBottom:"8px"}}>Analyse descriptive des coûts d'intervention selon le nombre d'interventions observé par ticket.</div>
+          {!coutSAVParResolution ? (
+            <div style={{fontSize:"11.5px",color:C.muted,fontStyle:"italic"}}>Chargement des interventions en cours…</div>
+          ) : coutSAVParResolution.ticketsAvecInterventionExploitable === 0 ? (
+            <div style={{fontSize:"11.5px",color:C.muted,fontStyle:"italic"}}>Analyse non disponible : aucune intervention exploitable reliée aux tickets SAV chargés.</div>
+          ) : (
+            <div style={{display:"flex",flexWrap:"wrap",gap:"14px"}}>
+              <div style={{fontSize:"11.5px",color:C.text}}>Tickets concernés : <b style={{color:C.white}}>{coutSAVParResolution.ticketsAvecInterventionExploitable}</b></div>
+              <div style={{fontSize:"11.5px",color:C.text}}>Coût total exploitable : <b style={{color:C.white}}>{coutSAVParResolution.coutTotalExploitable.toFixed(2)} €</b></div>
+              <div style={{fontSize:"11.5px",color:C.text}}>Coût moyen par ticket : <b style={{color:C.white}}>{coutSAVParResolution.coutMoyenParTicket === null ? "N/A" : coutSAVParResolution.coutMoyenParTicket.toFixed(2) + " €"}</b></div>
+              <div style={{fontSize:"11.5px",color:C.text}}>Coût moyen — 1 intervention : <b style={{color:C.white}}>{coutSAVParResolution.coutMoyenPremiereIntervention === null ? "N/A" : coutSAVParResolution.coutMoyenPremiereIntervention.toFixed(2) + " €"}</b></div>
+              <div style={{fontSize:"11.5px",color:C.text}}>Coût moyen — réinterventions : <b style={{color:C.white}}>{coutSAVParResolution.coutMoyenReintervention === null ? "N/A" : coutSAVParResolution.coutMoyenReintervention.toFixed(2) + " €"}</b></div>
+            </div>
           )}
         </div>
 

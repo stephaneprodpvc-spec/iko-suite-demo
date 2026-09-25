@@ -2480,3 +2480,256 @@ export function calculerIntelligenceResolutionSAVV1(interventions, ticketsRecord
 
   return resultat;
 }
+
+// ==================== Intelligence SAV — pack missions #16, #17, #18 ====
+// Petit utilitaire PRIVÉ (non exporté), partagé par les missions #16 et
+// #18 ci-dessous, pour éviter de dupliquer la même relation Ticket ↔
+// Intervention déjà établie et vérifiée en mission #15
+// (`calculerIntelligenceResolutionSAVV1`) : `Intervention.fields["Ticket
+// SAV"][0]` -> id d'un ticket réellement présent dans `ticketsRecords`.
+// Une intervention dont la relation ne pointe vers aucun ticket chargé
+// n'est jamais attribuée artificiellement. Retourne une Map ticketId ->
+// tableau des interventions exploitables reliées à ce ticket.
+function _interventionsExploitablesParTicket(interventions, ticketsRecords) {
+  const idsTicketsValides = new Set((ticketsRecords || []).map(t => t && t.id).filter(Boolean));
+  const parTicket = {};
+  (interventions || []).forEach(iv => {
+    const ticketId = Array.isArray(iv && iv.fields && iv.fields["Ticket SAV"])
+      ? iv.fields["Ticket SAV"][0]
+      : null;
+    if (!ticketId) return;
+    if (!idsTicketsValides.has(ticketId)) return;
+    if (!parTicket[ticketId]) parTicket[ticketId] = [];
+    parTicket[ticketId].push(iv);
+  });
+  return parTicket;
+}
+
+// ---- Mission #16 — Intelligence produit × résolution SAV V1 -------------
+// Fonction PURE : croise le champ `Produit` (déjà exploité en mission #14)
+// avec le nombre d'interventions exploitables par ticket (relation établie
+// en mission #15, factorisée ci-dessus). Aucun usage de "Statut
+// intervention" : "1 intervention" / "réintervention" sont ici de purs
+// comptages, jamais un jugement de résolution effective. Jamais de
+// formulation causale ("ce produit cause...").
+export function calculerProduitsResolutionSAVV1(interventions, ticketsRecords) {
+  const ticketsValides = ticketsRecords || [];
+  const parTicketInterventions = _interventionsExploitablesParTicket(interventions, ticketsValides);
+
+  // produit -> { tickets, ticketsAvecIntervention, ticketsPremiereIntervention, ticketsReintervention, sommeInterventionsExploitees }
+  const parProduit = {};
+
+  ticketsValides.forEach(t => {
+    const f = (t && t.fields) || {};
+    const brutProduit = f.Produit;
+    const valeursProduit = Array.isArray(brutProduit) ? brutProduit : (brutProduit != null ? [brutProduit] : []);
+    const produitsUniquesDuTicket = new Set();
+    valeursProduit.forEach(v => {
+      const pTrim = typeof v === "string" ? v.trim() : "";
+      if (pTrim) produitsUniquesDuTicket.add(pTrim);
+    });
+    if (produitsUniquesDuTicket.size === 0) return; // ticket non exploitable pour cette analyse produit
+
+    const n = (parTicketInterventions[t && t.id] || []).length;
+
+    produitsUniquesDuTicket.forEach(produitService => {
+      if (!parProduit[produitService]) {
+        parProduit[produitService] = { tickets: 0, ticketsAvecIntervention: 0, ticketsPremiereIntervention: 0, ticketsReintervention: 0, sommeInterventionsExploitees: 0 };
+      }
+      const s = parProduit[produitService];
+      s.tickets += 1;
+      if (n > 0) {
+        s.ticketsAvecIntervention += 1;
+        s.sommeInterventionsExploitees += n;
+        if (n === 1) s.ticketsPremiereIntervention += 1;
+        else s.ticketsReintervention += 1;
+      }
+    });
+  });
+
+  const produits = Object.keys(parProduit)
+    .map(produitService => {
+      const s = parProduit[produitService];
+      return {
+        produitService,
+        tickets: s.tickets,
+        ticketsAvecIntervention: s.ticketsAvecIntervention,
+        ticketsPremiereIntervention: s.ticketsPremiereIntervention,
+        ticketsReintervention: s.ticketsReintervention,
+        tauxResolutionPremiereIntervention: s.ticketsAvecIntervention
+          ? Math.round((s.ticketsPremiereIntervention / s.ticketsAvecIntervention) * 100)
+          : null,
+        tauxReintervention: s.ticketsAvecIntervention
+          ? Math.round((s.ticketsReintervention / s.ticketsAvecIntervention) * 100)
+          : null,
+        moyenneInterventionsParTicket: s.ticketsAvecIntervention
+          ? Math.round((s.sommeInterventionsExploitees / s.ticketsAvecIntervention) * 100) / 100
+          : null,
+      };
+    })
+    .sort((a, b) => b.tickets - a.tickets || a.produitService.localeCompare(b.produitService, 'fr'));
+
+  return {
+    totalTicketsAnalyses: ticketsValides.length,
+    produits,
+  };
+}
+
+// ---- Mission #17 — Intelligence durée d'intervention SAV V1 -------------
+// Fonction PURE : exploite uniquement `Intervention.fields["Durée (min)"]`
+// lorsqu'il s'agit réellement d'un nombre fini strictement positif (même
+// exigence stricte que le correctif mission #12 : pas de coercition
+// `Number(...)` permissive d'une chaîne). Aucune estimation, aucune durée
+// inventée. Les tranches de `distribution` sont des tranches d'AFFICHAGE
+// fixes, jamais un seuil métier ou une norme.
+export function calculerIntelligenceDureeInterventionSAVV1(interventions) {
+  const liste = interventions || [];
+  const durees = [];
+
+  liste.forEach(iv => {
+    const brut = iv && iv.fields && iv.fields["Durée (min)"];
+    if (typeof brut === "number" && Number.isFinite(brut) && brut > 0) {
+      durees.push(brut);
+    }
+  });
+
+  const totalInterventionsAnalysees = liste.length;
+  const interventionsAvecDureeExploitable = durees.length;
+  const interventionsSansDureeExploitable = totalInterventionsAnalysees - interventionsAvecDureeExploitable;
+  const dureeTotaleMinutes = durees.reduce((s, v) => s + v, 0);
+  const dureeMoyenneMinutes = interventionsAvecDureeExploitable
+    ? Math.round((dureeTotaleMinutes / interventionsAvecDureeExploitable) * 100) / 100
+    : null;
+
+  let dureeMedianeMinutes = null;
+  if (interventionsAvecDureeExploitable > 0) {
+    const triees = [...durees].sort((a, b) => a - b);
+    const milieu = Math.floor(triees.length / 2);
+    const brute = triees.length % 2 === 0
+      ? (triees[milieu - 1] + triees[milieu]) / 2
+      : triees[milieu];
+    dureeMedianeMinutes = Math.round(brute * 100) / 100;
+  }
+
+  // Tranches fixes et explicites, purement d'affichage — jamais présentées
+  // comme un seuil métier ou une norme. Bornes sans trou (`min` exclusif,
+  // `max` inclusif) pour que toute durée valide (nombre fini > 0, y
+  // compris décimale : 30.5, 60.5, ...) tombe dans exactement une tranche
+  // — les libellés affichés restent inchangés.
+  const tranches = [
+    { label: "0–30 min", min: 0, max: 30 },
+    { label: "31–60 min", min: 30, max: 60 },
+    { label: "61–120 min", min: 60, max: 120 },
+    { label: "121–240 min", min: 120, max: 240 },
+    { label: ">240 min", min: 240, max: Infinity },
+  ];
+  const distribution = tranches.map(tr => ({
+    tranche: tr.label,
+    nombreInterventions: durees.filter(d => d > tr.min && d <= tr.max).length,
+  }));
+
+  return {
+    totalInterventionsAnalysees,
+    interventionsAvecDureeExploitable,
+    interventionsSansDureeExploitable,
+    dureeTotaleMinutes,
+    dureeMoyenneMinutes,
+    dureeMedianeMinutes,
+    detail: { distribution },
+  };
+}
+
+// ---- Mission #18 — Coût SAV × réintervention V1 --------------------------
+// Fonction PURE : réutilise la même relation Ticket ↔ Intervention que la
+// mission #16 (utilitaire privé ci-dessus) et la même définition que la
+// mission #15 (1 intervention exploitable = "première intervention", 2+ =
+// "réintervention", 0 = "sans intervention exploitable"). Coût exploitable
+// uniquement si `Intervention.fields["Coût total intervention"]` est un
+// nombre fini strictement positif — jamais une conversion de chaîne
+// permissive, jamais un coût 0 substitué à une valeur absente. Aucune
+// phrase causale ou d'estimation d'économie/perte : uniquement des sommes
+// et moyennes descriptives.
+export function calculerCoutSAVParResolutionV1(interventions, ticketsRecords) {
+  const ticketsValides = ticketsRecords || [];
+  const parTicketInterventions = _interventionsExploitablesParTicket(interventions, ticketsValides);
+
+  let ticketsAvecInterventionExploitable = 0;
+  let ticketsPremiereIntervention = 0;
+  let ticketsReintervention = 0;
+
+  let coutTotalExploitable = 0;
+  let ticketsAvecCoutExploitableGlobal = 0;
+
+  let coutTotalPremiereIntervention = 0;
+  let ticketsAvecCoutExploitablePremiereIntervention = 0;
+
+  let coutTotalReintervention = 0;
+  let ticketsAvecCoutExploitableReintervention = 0;
+
+  ticketsValides.forEach(t => {
+    const ivs = parTicketInterventions[t && t.id] || [];
+    const n = ivs.length;
+    if (n === 0) return; // ticket sans intervention exploitable : hors dénominateurs
+
+    ticketsAvecInterventionExploitable += 1;
+    const estPremiereIntervention = n === 1;
+    if (estPremiereIntervention) ticketsPremiereIntervention += 1;
+    else ticketsReintervention += 1;
+
+    // Coût exploitable = somme des coûts réellement valides parmi les
+    // interventions exploitables de ce ticket ; un ticket sans aucun coût
+    // valide ne contribue à aucune somme (jamais 0 substitué).
+    let coutTicket = 0;
+    let auMoinsUnCoutValide = false;
+    ivs.forEach(iv => {
+      const brut = iv && iv.fields && iv.fields["Coût total intervention"];
+      if (typeof brut === "number" && Number.isFinite(brut) && brut > 0) {
+        coutTicket += brut;
+        auMoinsUnCoutValide = true;
+      }
+    });
+
+    if (auMoinsUnCoutValide) {
+      coutTotalExploitable += coutTicket;
+      ticketsAvecCoutExploitableGlobal += 1;
+      if (estPremiereIntervention) {
+        coutTotalPremiereIntervention += coutTicket;
+        ticketsAvecCoutExploitablePremiereIntervention += 1;
+      } else {
+        coutTotalReintervention += coutTicket;
+        ticketsAvecCoutExploitableReintervention += 1;
+      }
+    }
+  });
+
+  const arrondi2 = v => Math.round(v * 100) / 100;
+
+  return {
+    totalTicketsAnalyses: ticketsValides.length,
+    ticketsAvecInterventionExploitable,
+    ticketsPremiereIntervention,
+    ticketsReintervention,
+    coutTotalExploitable: arrondi2(coutTotalExploitable),
+    coutMoyenParTicket: ticketsAvecCoutExploitableGlobal
+      ? arrondi2(coutTotalExploitable / ticketsAvecCoutExploitableGlobal)
+      : null,
+    coutMoyenPremiereIntervention: ticketsAvecCoutExploitablePremiereIntervention
+      ? arrondi2(coutTotalPremiereIntervention / ticketsAvecCoutExploitablePremiereIntervention)
+      : null,
+    coutMoyenReintervention: ticketsAvecCoutExploitableReintervention
+      ? arrondi2(coutTotalReintervention / ticketsAvecCoutExploitableReintervention)
+      : null,
+    detail: {
+      premiereIntervention: {
+        tickets: ticketsPremiereIntervention,
+        ticketsAvecCoutExploitable: ticketsAvecCoutExploitablePremiereIntervention,
+        coutTotalExploitable: arrondi2(coutTotalPremiereIntervention),
+      },
+      reintervention: {
+        tickets: ticketsReintervention,
+        ticketsAvecCoutExploitable: ticketsAvecCoutExploitableReintervention,
+        coutTotalExploitable: arrondi2(coutTotalReintervention),
+      },
+    },
+  };
+}
