@@ -1251,6 +1251,7 @@ export function calculerNoteVsResultatDevis(devisRecords, ticketsRecords) {
 export function genererRecommandationsCommercialesV1({
   resultatConversion, panierMoyen, topProduitsServices, conversionParMode, noteVsResultatDevis,
   motifsRefus, conversionMensuelle, chiffreAffairesSigne, panierMoyenParMode, panierMoyenParAgence, volumeMensuel,
+  entonnoirCommercial,
 } = {}) {
   const recommandations = [];
   const nonGenerees = [
@@ -1424,6 +1425,40 @@ export function genererRecommandationsCommercialesV1({
     });
   } else if (volumeMensuel) {
     nonGenerees.push({ type: "volume_mensuel", raison: "Moins de deux mois disponibles dans la série mensuelle déjà calculée." });
+  }
+
+  // ---- Entonnoir commercial (mission #11, déjà calculé par calculerEntonnoirCommercialV1) ----
+  // Observations strictement descriptives sur le volume et les montants déjà
+  // agrégés par la fonction source — jamais de "perte", de classement, de
+  // score, de causalité ni de prédiction.
+  if (entonnoirCommercial && typeof entonnoirCommercial.totalDevis === "number") {
+    if (entonnoirCommercial.totalDevis > 0) {
+      const fmt = (v) => v.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      const fragments = [];
+      fragments.push("Les devis éligibles représentent " + entonnoirCommercial.eligibles + " devis sur " + entonnoirCommercial.totalDevis + " au total.");
+      if (entonnoirCommercial.partMontantValides !== null) {
+        fragments.push("Le montant total des devis validés représente " + entonnoirCommercial.partMontantValides + " % du montant total des devis exploitables.");
+      }
+      if (entonnoirCommercial.montantEnAttenteHT > 0) {
+        fragments.push("Le montant des devis en attente représente " + fmt(entonnoirCommercial.montantEnAttenteHT) + " € HT.");
+      }
+      if (entonnoirCommercial.motifsRefus && typeof entonnoirCommercial.motifsRefus.totalCategorises === "number" && entonnoirCommercial.refuses > 0) {
+        fragments.push(entonnoirCommercial.motifsRefus.totalCategorises + " devis refusé(s) disposent d'une catégorie de refus structurée.");
+      }
+      recommandations.push({
+        type: "entonnoir_commercial",
+        titre: "Entonnoir commercial",
+        message: fragments.join(" "),
+        donnees: {
+          totalDevis: entonnoirCommercial.totalDevis,
+          eligibles: entonnoirCommercial.eligibles,
+          partMontantValides: entonnoirCommercial.partMontantValides,
+          montantEnAttenteHT: entonnoirCommercial.montantEnAttenteHT,
+        },
+      });
+    } else {
+      nonGenerees.push({ type: "entonnoir_commercial", raison: "Aucun devis disponible pour l'entonnoir commercial." });
+    }
   }
 
   return { recommandations, nonGenerees };
@@ -1757,4 +1792,122 @@ export function calculerVolumeMensuelDevisV1(devisRecords) {
   }));
 
   return { tendance };
+}
+
+// ==================== Intelligence Commerciale — mission #11 ====================
+// Entonnoir commercial. Fonction PURE (aucun fetch, aucun DOM, aucun état
+// global, aucune modification de `devisRecords`) : synthèse volume + montant
+// à partir du même tableau `devis` déjà chargé (mission #1), sans nouvelle
+// source de données.
+//
+// Population : mêmes règles que partout ailleurs dans ce fichier.
+//   - Convertis : Statut === "Validé"
+//   - Refusés   : "Devis refusé" === true
+//   - En attente : tout le reste (aucune autre catégorie inventée)
+// Cas simultané (Devis refusé === true ET Statut === "Validé") : le refus
+// est prioritaire — même convention que calculerNoteVsResultatDevis.
+//
+// Montants : "Montant HT" exploitable seulement s'il est numérique, fini et
+// strictement > 0 (même règle de validité que les missions #2/#10) — jamais
+// converti en 0. panierMoyenValidesHT est recalculé directement ici (pas de
+// réutilisation d'un total produit par une autre fonction), pour garder ce
+// calcul indépendant et lisible.
+//
+// Motifs de refus : réutilise tel quel le résultat de calculerMotifsRefusV1
+// (aucune réanalyse de "Motif refus", aucun recalcul de catégorie).
+//
+// Aucune interprétation : ni "perte", ni "manque à gagner", ni classement,
+// ni score — uniquement des compteurs et proportions descriptives.
+export function calculerEntonnoirCommercialV1(devisRecords) {
+  let totalDevis = 0;
+  let convertis = 0;
+  let refuses = 0;
+
+  let montantTotalDevisHT = 0;
+  let montantValidesHT = 0;
+  let montantRefusesHT = 0;
+  let montantEnAttenteHT = 0;
+  let nombreMontantsExploites = 0;
+  let nombreMontantsInvalides = 0;
+
+  let totalHTValidesPourPanier = 0;
+  let nbDevisValidesAvecMontant = 0;
+
+  (devisRecords || []).forEach(d => {
+    const f = d && d.fields || {};
+    totalDevis += 1;
+
+    const estRefuse = f["Devis refusé"] === true;
+    let categorie;
+    if (estRefuse) categorie = "refuse"; // refus prioritaire, même si Statut === "Validé"
+    else if (f.Statut === "Validé") categorie = "converti";
+    else categorie = "attente";
+
+    if (categorie === "converti") convertis += 1;
+    else if (categorie === "refuse") refuses += 1;
+
+    const montant = f["Montant HT"];
+    const montantValide = typeof montant === "number" && isFinite(montant) && montant > 0;
+    if (montantValide) {
+      nombreMontantsExploites += 1;
+      montantTotalDevisHT += montant;
+      if (categorie === "converti") {
+        montantValidesHT += montant;
+        totalHTValidesPourPanier += montant;
+        nbDevisValidesAvecMontant += 1;
+      } else if (categorie === "refuse") {
+        montantRefusesHT += montant;
+      } else {
+        montantEnAttenteHT += montant;
+      }
+    } else {
+      nombreMontantsInvalides += 1;
+    }
+  });
+
+  const eligibles = convertis + refuses;
+  const enAttente = totalDevis - eligibles;
+  const tauxConversion = eligibles > 0 ? Math.round((convertis / eligibles) * 100) : null;
+
+  const panierMoyenValidesHT = nbDevisValidesAvecMontant > 0
+    ? Math.round((totalHTValidesPourPanier / nbDevisValidesAvecMontant) * 100) / 100
+    : null;
+
+  let partMontantValides = null;
+  let partMontantRefuses = null;
+  let partMontantEnAttente = null;
+  if (montantTotalDevisHT > 0) {
+    partMontantValides = Math.round((montantValidesHT / montantTotalDevisHT) * 100);
+    partMontantRefuses = Math.round((montantRefusesHT / montantTotalDevisHT) * 100);
+    partMontantEnAttente = Math.round((montantEnAttenteHT / montantTotalDevisHT) * 100);
+  }
+
+  // Réutilisation directe du résultat existant (mission #9B) — aucune
+  // réanalyse de "Motif refus", aucun recalcul de catégorie.
+  const motifsRefus = calculerMotifsRefusV1(devisRecords);
+
+  return {
+    totalDevis,
+    convertis,
+    refuses,
+    enAttente,
+    eligibles,
+    tauxConversion,
+
+    montantTotalDevisHT: Math.round(montantTotalDevisHT * 100) / 100,
+    montantValidesHT: Math.round(montantValidesHT * 100) / 100,
+    montantRefusesHT: Math.round(montantRefusesHT * 100) / 100,
+    montantEnAttenteHT: Math.round(montantEnAttenteHT * 100) / 100,
+
+    nombreMontantsExploites,
+    nombreMontantsInvalides,
+
+    panierMoyenValidesHT,
+
+    partMontantValides,
+    partMontantRefuses,
+    partMontantEnAttente,
+
+    motifsRefus,
+  };
 }

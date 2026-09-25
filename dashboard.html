@@ -2564,10 +2564,15 @@ function ModalIntelligenceCommerciale({ onClose }) {
   const panierMoyenParAgence = devis ? window.AnalyticsSAV.calculerPanierMoyenParAgenceV1(devis, agencesNoms) : null;
   const volumeMensuel = devis ? window.AnalyticsSAV.calculerVolumeMensuelDevisV1(devis) : null;
 
+  // Mission #11 — Entonnoir commercial : réutilise EXACTEMENT le même
+  // tableau `devis` déjà chargé ci-dessus (aucun nouvel appel Airtable,
+  // aucun nouveau useEffect de chargement, aucun nouveau fetch).
+  const entonnoirCommercial = devis ? window.AnalyticsSAV.calculerEntonnoirCommercialV1(devis) : null;
+
   // Mission #8 — Moteur de recommandations commerciales : réutilise
   // EXACTEMENT les résultats déjà calculés ci-dessus (resultat, panierMoyen,
   // topProduitsServices, conversionParMode, noteVsResultatDevis, et les
-  // nouveaux indicateurs de la mission #10). Aucun nouvel appel Airtable,
+  // nouveaux indicateurs des missions #10/#11). Aucun nouvel appel Airtable,
   // aucun nouveau useEffect de chargement, aucune donnée brute recalculée.
   const recommandationsCommerciales = window.AnalyticsSAV.genererRecommandationsCommercialesV1({
     resultatConversion: resultat,
@@ -2581,6 +2586,7 @@ function ModalIntelligenceCommerciale({ onClose }) {
     panierMoyenParMode,
     panierMoyenParAgence,
     volumeMensuel,
+    entonnoirCommercial,
   });
 
   // Diagnostic uniquement (jamais affiché à l'utilisateur) : signale les
@@ -2609,6 +2615,47 @@ function ModalIntelligenceCommerciale({ onClose }) {
 
         {!erreurDevis && devis && resultat && (
           <>
+            {/* Mission #11 — Entonnoir commercial : vue synthétique en haut du panneau. */}
+            {entonnoirCommercial && (
+              <div style={{marginBottom:"18px",border:"1px solid "+C.border,borderRadius:"10px",padding:"12px"}}>
+                <div style={{fontSize:"12px",fontWeight:"700",color:C.white,marginBottom:"2px"}}>Entonnoir commercial</div>
+                <div style={{fontSize:"11px",color:C.muted,marginBottom:"10px"}}>Vue synthétique des devis selon leur statut actuel et des montants HT exploitables.</div>
+
+                <div style={{fontSize:"9.5px",fontWeight:"700",color:C.bleu,textTransform:"uppercase",marginBottom:"4px"}}>Volume</div>
+                <div style={{display:"flex",flexWrap:"wrap",gap:"10px",marginBottom:"12px"}}>
+                  <div style={{fontSize:"11.5px",color:C.text}}>Total : <b style={{color:C.white}}>{entonnoirCommercial.totalDevis}</b></div>
+                  <div style={{fontSize:"11.5px",color:C.text}}>Éligibles : <b style={{color:C.white}}>{entonnoirCommercial.eligibles}</b></div>
+                  <div style={{fontSize:"11.5px",color:C.text}}>✅ Validés : <b style={{color:C.white}}>{entonnoirCommercial.convertis}</b></div>
+                  <div style={{fontSize:"11.5px",color:C.text}}>❌ Refusés : <b style={{color:C.white}}>{entonnoirCommercial.refuses}</b></div>
+                  <div style={{fontSize:"11.5px",color:C.muted}}>⏳ En attente : <b style={{color:C.white}}>{entonnoirCommercial.enAttente}</b></div>
+                  <div style={{fontSize:"11.5px",color:C.text}}>Taux de conversion : <b style={{color:C.or}}>{entonnoirCommercial.tauxConversion === null ? "—" : entonnoirCommercial.tauxConversion + "%"}</b></div>
+                </div>
+
+                <div style={{fontSize:"9.5px",fontWeight:"700",color:C.vert,textTransform:"uppercase",marginBottom:"4px"}}>Montant</div>
+                <div style={{display:"flex",flexWrap:"wrap",gap:"10px",marginBottom:"12px"}}>
+                  <div style={{fontSize:"11.5px",color:C.text}}>Total : <b style={{color:C.white}}>{entonnoirCommercial.montantTotalDevisHT.toLocaleString('fr-FR',{minimumFractionDigits:2,maximumFractionDigits:2})} € HT</b></div>
+                  <div style={{fontSize:"11.5px",color:C.text}}>Validé : <b style={{color:C.white}}>{entonnoirCommercial.montantValidesHT.toLocaleString('fr-FR',{minimumFractionDigits:2,maximumFractionDigits:2})} € HT</b></div>
+                  <div style={{fontSize:"11.5px",color:C.text}}>Refusé : <b style={{color:C.white}}>{entonnoirCommercial.montantRefusesHT.toLocaleString('fr-FR',{minimumFractionDigits:2,maximumFractionDigits:2})} € HT</b></div>
+                  <div style={{fontSize:"11.5px",color:C.text}}>En attente : <b style={{color:C.white}}>{entonnoirCommercial.montantEnAttenteHT.toLocaleString('fr-FR',{minimumFractionDigits:2,maximumFractionDigits:2})} € HT</b></div>
+                  <div style={{fontSize:"11.5px",color:C.text}}>Panier moyen validé : <b style={{color:C.or}}>{entonnoirCommercial.panierMoyenValidesHT === null ? "—" : entonnoirCommercial.panierMoyenValidesHT.toLocaleString('fr-FR',{minimumFractionDigits:2,maximumFractionDigits:2}) + " € HT"}</b></div>
+                </div>
+                {entonnoirCommercial.nombreMontantsInvalides > 0 && (
+                  <div style={{fontSize:"10.5px",color:C.muted,marginBottom:"12px",fontStyle:"italic"}}>{entonnoirCommercial.nombreMontantsInvalides} devis sans montant HT exploitable, exclu(s) des montants ci-dessus ({entonnoirCommercial.nombreMontantsExploites} montant(s) exploité(s) au total).</div>
+                )}
+
+                <div style={{fontSize:"9.5px",fontWeight:"700",color:C.muted,textTransform:"uppercase",marginBottom:"4px"}}>Proportions du montant</div>
+                <div style={{display:"flex",flexWrap:"wrap",gap:"10px",marginBottom:"12px"}}>
+                  <div style={{fontSize:"11.5px",color:C.text}}>Validé : <b style={{color:C.or}}>{entonnoirCommercial.partMontantValides === null ? "—" : entonnoirCommercial.partMontantValides + "%"}</b></div>
+                  <div style={{fontSize:"11.5px",color:C.text}}>Refusé : <b style={{color:C.or}}>{entonnoirCommercial.partMontantRefuses === null ? "—" : entonnoirCommercial.partMontantRefuses + "%"}</b></div>
+                  <div style={{fontSize:"11.5px",color:C.text}}>En attente : <b style={{color:C.or}}>{entonnoirCommercial.partMontantEnAttente === null ? "—" : entonnoirCommercial.partMontantEnAttente + "%"}</b></div>
+                </div>
+
+                <div style={{fontSize:"10.5px",color:C.muted,borderTop:"1px solid "+C.border,paddingTop:"8px"}}>
+                  Refus catégorisés : <b style={{color:C.text}}>{entonnoirCommercial.motifsRefus.totalCategorises}</b> · Refus non catégorisés : <b style={{color:C.text}}>{entonnoirCommercial.motifsRefus.nonCategorises}</b> · Catégories inconnues : <b style={{color:C.text}}>{entonnoirCommercial.motifsRefus.categoriesInconnues}</b>
+                </div>
+              </div>
+            )}
+
             <div style={{marginBottom:"18px"}}>
               <div style={{fontSize:"12px",fontWeight:"700",color:C.white,marginBottom:"2px"}}>Taux de conversion global</div>
               <div style={{fontSize:"11px",color:C.muted,marginBottom:"8px"}}>Devis validés / (validés + refusés) — devis en attente exclus du calcul.</div>
