@@ -2118,3 +2118,81 @@ export function calculerIntelligenceProduitsServicesV1(devisRecords) {
     produits,
   };
 }
+
+// ==================== Intelligence SAV — mission #13 ====================
+// Causes récurrentes SAV V1. Fonction PURE (aucun fetch, aucun DOM, aucun
+// état global, aucune mutation de `ticketsRecords`) : identifie les causes
+// SAV qui reviennent le plus souvent, à partir du SEUL champ structuré déjà
+// exploité pour cet usage dans ce fichier — "Cause SAV" (voir
+// calculerAnalyticsSAV → topCauses, "Top causes SAV" dans dashboard.html,
+// detecterAlertesSAV, genererSignauxPredictifsSAV, tous lisant
+// `t.fields?.["Cause SAV"]`) — jamais un champ inventé, et jamais du texte
+// libre (ex. "Description du problème") transformé en catégories par
+// mots-clés, fuzzy matching ou IA.
+//
+// "Cause SAV" est, dans ce projet, un champ facultatif à VALEUR UNIQUE par
+// ticket (confirmé par tout son usage existant : toujours lu comme une
+// chaîne simple, jamais un tableau). La règle « une même cause apparaissant
+// plusieurs fois dans un même ticket ne compte qu'une fois » est néanmoins
+// appliquée explicitement ci-dessous (via un Set de causes par ticket),
+// pour rester correcte si ce champ devenait un jour multi-valeur — sans
+// jamais supposer ni inventer cette évolution aujourd'hui.
+//
+// Nettoyage minimal autorisé : trim() uniquement. Une valeur vide après
+// trim rend le ticket non exploitable pour cette analyse (jamais compté
+// dans une cause "Non renseigné" ou "Autre" inventée). Aucune normalisation
+// de casse, d'accents, ni de fusion de désignations proches : "Fuite" et
+// "fuite" restent deux causes distinctes, aucune interprétation.
+//
+// "Structure nonDisponible" (mission) : le champ structuré existe déjà et
+// est déjà exploité ailleurs dans ce fichier — cette fonction ne retourne
+// donc jamais de branche "non disponible" séparée ni de valeur inventée en
+// remplacement. L'absence de donnée exploitable se lit directement dans le
+// résultat normal (totalTicketsExploitables === 0 et causes = []) ; c'est
+// au dashboard de traduire ce cas précis par le message d'indisponibilité
+// demandé, sans que cette fonction n'ait besoin d'un champ dédié pour cela.
+export function calculerCausesRecurrentesSAVV1(ticketsRecords) {
+  const parCause = {}; // cause -> nombre de tickets distincts
+
+  let totalTicketsAnalyses = 0;
+  let totalTicketsExploitables = 0;
+  let nombreEntreesExploitees = 0;
+
+  (ticketsRecords || []).forEach(t => {
+    totalTicketsAnalyses += 1;
+    const f = t && t.fields || {};
+    const brut = f["Cause SAV"];
+
+    // Le champ est aujourd'hui une valeur simple (jamais un tableau) dans ce
+    // projet ; il est néanmoins traité via un Set pour dédoublonner sans
+    // jamais supposer sa forme future — voir commentaire ci-dessus.
+    const valeurs = Array.isArray(brut) ? brut : (brut != null ? [brut] : []);
+    const causesUniquesDuTicket = new Set();
+    valeurs.forEach(v => {
+      const causeTrim = typeof v === "string" ? v.trim() : "";
+      if (causeTrim) causesUniquesDuTicket.add(causeTrim);
+    });
+
+    if (causesUniquesDuTicket.size === 0) return; // ticket non exploitable, jamais inventé
+
+    totalTicketsExploitables += 1;
+    causesUniquesDuTicket.forEach(cause => {
+      nombreEntreesExploitees += 1;
+      parCause[cause] = (parCause[cause] || 0) + 1;
+    });
+  });
+
+  // Tri purement technique (jamais un classement de gravité) : nombreTickets
+  // décroissant, puis cause alphabétique — déterministe en toutes
+  // circonstances.
+  const causes = Object.keys(parCause)
+    .map(cause => ({ cause, nombreTickets: parCause[cause] }))
+    .sort((a, b) => b.nombreTickets - a.nombreTickets || a.cause.localeCompare(b.cause, 'fr'));
+
+  return {
+    totalTicketsAnalyses,
+    totalTicketsExploitables,
+    nombreEntreesExploitees,
+    causes,
+  };
+}

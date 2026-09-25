@@ -2183,6 +2183,11 @@ function ModalAnalyticsSAV({ tickets, onClose }) {
   const perfEtResolution = interventions ? window.AnalyticsSAV.calculerPerformanceEtResolution(interventions, tickets) : null;
   const alertesSAV = window.AnalyticsSAV.detecterAlertesSAV({ tauxUrgents, topCauses, topProduitsDetail, resolutionParAgence: perfEtResolution ? perfEtResolution.resolutionParAgence : [] });
 
+  // Mission #13 — Causes récurrentes SAV : réutilise EXACTEMENT le même
+  // tableau `tickets` déjà chargé pour ce panneau (aucun nouvel appel
+  // Airtable, aucun nouveau useEffect de chargement, aucun nouveau fetch).
+  const causesRecurrentesSAV = window.AnalyticsSAV.calculerCausesRecurrentesSAVV1(tickets);
+
   // ---- Détection prédictive SAV V1 : "Signaux prédictifs SAV" ----
   // Reutilise EXACTEMENT les memes agregats deja calcules ci-dessus (aucun
   // nouveau calcul de fond, aucun nouvel appel Airtable) : fonction separee
@@ -2371,6 +2376,39 @@ function ModalAnalyticsSAV({ tickets, onClose }) {
                 </div>
               ))}
             </div>
+          )}
+        </div>
+
+        {/* Mission #13 — Causes récurrentes SAV V1 : analyse descriptive
+            dédiée, distincte du "Top causes SAV" ci-dessus (qui reste
+            inchangé). Se rabat sur un message explicite si aucune donnée
+            structurée exploitable n'est disponible, sans jamais inventer
+            de valeur. */}
+        <div style={{marginBottom:"18px"}}>
+          <div style={{fontSize:"12px",fontWeight:"700",color:C.white,marginBottom:"2px"}}>Causes récurrentes SAV</div>
+          <div style={{fontSize:"11px",color:C.muted,marginBottom:"8px"}}>Occurrences observées dans les tickets SAV exploitables — analyse descriptive.</div>
+          {causesRecurrentesSAV.totalTicketsExploitables === 0 ? (
+            <div style={{fontSize:"11.5px",color:C.muted,fontStyle:"italic"}}>Analyse non disponible : aucune donnée structurée exploitable pour identifier les causes récurrentes.</div>
+          ) : (
+            <>
+              <div style={{display:"flex",flexWrap:"wrap",gap:"14px",marginBottom:"8px"}}>
+                <div style={{fontSize:"11.5px",color:C.text}}>Tickets analysés : <b style={{color:C.white}}>{causesRecurrentesSAV.totalTicketsAnalyses}</b></div>
+                <div style={{fontSize:"11.5px",color:C.text}}>Tickets exploitables : <b style={{color:C.white}}>{causesRecurrentesSAV.totalTicketsExploitables}</b></div>
+              </div>
+              <div style={{border:"1px solid "+C.border,borderRadius:"8px",overflow:"hidden"}}>
+                <div style={{display:"flex",padding:"6px 12px",fontSize:"9.5px",fontWeight:"700",color:C.muted,borderBottom:"1px solid "+C.border,textTransform:"uppercase"}}>
+                  <span style={{flex:2}}>Cause</span>
+                  <span style={{flex:1,textAlign:"right"}}>Tickets</span>
+                </div>
+                {causesRecurrentesSAV.causes.slice(0, 10).map((c, i) => (
+                  <div key={c.cause} style={{display:"flex",alignItems:"center",padding:"7px 12px",borderBottom:i<Math.min(10,causesRecurrentesSAV.causes.length)-1?"1px solid "+C.border:"none",fontSize:"12px"}}>
+                    <span style={{flex:2}}>{c.cause}</span>
+                    <b style={{flex:1,textAlign:"right",color:C.or}}>{c.nombreTickets}</b>
+                  </div>
+                ))}
+              </div>
+              <div style={{fontSize:"10.5px",color:C.muted,marginTop:"6px"}}>{causesRecurrentesSAV.causes.length} cause(s) distincte(s) au total.</div>
+            </>
           )}
         </div>
 
