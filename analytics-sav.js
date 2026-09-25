@@ -1330,3 +1330,69 @@ export function genererRecommandationsCommercialesV1({
 
   return { recommandations, nonGenerees };
 }
+
+// ==================== Intelligence Commerciale V1 — mission #9B ====================
+// Motifs de refus structurés. Fonction PURE (aucun fetch, aucun accès DOM,
+// aucune modification de l'objet reçu, aucun état global) : reçoit
+// exactement le même tableau `devisRecords` déjà chargé par
+// chargerDevisPourAnalytics (mission #1) — aucune deuxième source de
+// données, aucun nouvel appel Airtable.
+//
+// RÈGLE CENTRALE (mission) : catégorisation UNIQUEMENT à partir du champ
+// structuré `Categorie refus` — jamais à partir de `Motif refus` (texte
+// libre), jamais par mot-clé, heuristique ou interprétation sémantique. Un
+// devis refusé historique n'ayant que du texte libre dans `Motif refus`
+// (avant l'existence de `Categorie refus`) reste STRICTEMENT non catégorisé
+// — le convertir automatiquement serait une donnée inventée, jamais une
+// donnée déjà validée.
+//
+// Trois compartiments mutuellement exclusifs pour chaque devis refusé :
+//   - Catégorisé         : Categorie refus est l'une des 7 valeurs officielles.
+//   - Non catégorisé     : Categorie refus absente/vide/non exploitable
+//                          (typiquement un refus antérieur à ce champ).
+//   - Catégorie inconnue : Categorie refus a une valeur, mais qui ne
+//                          correspond à aucune des 7 valeurs officielles —
+//                          jamais fusionnée dans "Autre" ni reconvertie en
+//                          "Non précisé" : signalée séparément pour détecter
+//                          une incohérence Airtable sans rien inventer (même
+//                          esprit que `statutsInconnus` en mission #1).
+//
+// Identité garantie : totalRefus = totalCategorises + nonCategorises + categoriesInconnues.
+export function calculerMotifsRefusV1(devisRecords) {
+  const CATEGORIES_OFFICIELLES = ["Prix trop élevé", "Délai trop long", "Concurrent choisi", "Projet abandonné / reporté", "Produit / prestation non conforme", "Autre", "Non précisé"];
+  const ordreOfficiel = {};
+  CATEGORIES_OFFICIELLES.forEach((c, i) => { ordreOfficiel[c] = i; });
+
+  let totalRefus = 0;
+  let nonCategorises = 0;
+  let categoriesInconnues = 0;
+  const compteParCategorie = {};
+
+  (devisRecords || []).forEach(d => {
+    const f = d && d.fields || {};
+    if (f["Devis refusé"] !== true) return; // Validé sans refus, en attente, ou champ faux/null/absent : exclu
+
+    totalRefus += 1;
+
+    const categorie = f["Categorie refus"];
+    if (categorie === undefined || categorie === null || categorie === "") {
+      nonCategorises += 1;
+    } else if (CATEGORIES_OFFICIELLES.includes(categorie)) {
+      compteParCategorie[categorie] = (compteParCategorie[categorie] || 0) + 1;
+    } else {
+      categoriesInconnues += 1;
+    }
+  });
+
+  const totalCategorises = Object.values(compteParCategorie).reduce((s, n) => s + n, 0);
+
+  const parCategorie = totalCategorises === 0 ? [] : Object.keys(compteParCategorie)
+    .map(categorie => ({
+      categorie,
+      count: compteParCategorie[categorie],
+      pourcentage: Math.round((compteParCategorie[categorie] / totalCategorises) * 100),
+    }))
+    .sort((a, b) => b.count - a.count || ordreOfficiel[a.categorie] - ordreOfficiel[b.categorie]);
+
+  return { totalRefus, totalCategorises, nonCategorises, categoriesInconnues, parCategorie };
+}

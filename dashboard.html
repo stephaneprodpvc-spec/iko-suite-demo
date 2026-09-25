@@ -2561,6 +2561,12 @@ function ModalIntelligenceCommerciale({ onClose }) {
     noteVsResultatDevis,
   });
 
+  // Mission #9B — Motifs de refus structurés : réutilise le même tableau
+  // `devis` déjà chargé par l'Intelligence Commerciale (mission #1). Aucun
+  // nouveau loader, aucun nouveau useEffect, aucune nouvelle requête
+  // Airtable, aucun fetch supplémentaire.
+  const motifsRefus = devis ? window.AnalyticsSAV.calculerMotifsRefusV1(devis) : null;
+
   // Diagnostic uniquement (jamais affiché à l'utilisateur) : signale les
   // statuts Devis inattendus sans jamais bloquer le calcul.
   React.useEffect(() => {
@@ -2765,6 +2771,48 @@ function ModalIntelligenceCommerciale({ onClose }) {
                     </div>
                   ))}
                 </div>
+              </div>
+            )}
+
+            {motifsRefus && (
+              <div style={{marginBottom:"18px",borderTop:"1px solid "+C.border,paddingTop:"14px"}}>
+                <div style={{fontSize:"12px",fontWeight:"700",color:C.white,marginBottom:"2px"}}>Motifs de refus des devis</div>
+                <div style={{fontSize:"11px",color:C.muted,marginBottom:"8px"}}>Répartition descriptive des devis refusés selon la catégorie renseignée. Les anciens devis sans catégorie restent non catégorisés.</div>
+
+                {motifsRefus.totalRefus === 0 ? (
+                  <div style={{fontSize:"11.5px",color:C.muted,padding:"10px 0"}}>Aucun devis refusé pour l'instant.</div>
+                ) : (
+                  <>
+                    {motifsRefus.parCategorie.length > 0 && (
+                      <div style={{border:"1px solid "+C.border,borderRadius:"8px",overflow:"hidden",marginBottom:"8px"}}>
+                        <div style={{display:"flex",padding:"6px 12px",fontSize:"9.5px",fontWeight:"700",color:C.muted,borderBottom:"1px solid "+C.border,textTransform:"uppercase"}}>
+                          <span style={{flex:2}}>Catégorie</span>
+                          <span style={{flex:1,textAlign:"right"}}>Refus</span>
+                          <span style={{flex:1,textAlign:"right"}}>% des refus catégorisés</span>
+                        </div>
+                        {motifsRefus.parCategorie.map((p, i) => (
+                          <div key={p.categorie} style={{display:"flex",alignItems:"center",padding:"7px 12px",borderBottom:i<motifsRefus.parCategorie.length-1?"1px solid "+C.border:"none",fontSize:"12px"}}>
+                            <span style={{flex:2}}>{p.categorie}</span>
+                            <span style={{flex:1,textAlign:"right",color:C.muted}}>{p.count}</span>
+                            <b style={{flex:1,textAlign:"right",color:C.or}}>{p.pourcentage}%</b>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {motifsRefus.nonCategorises > 0 && (
+                      <div style={{fontSize:"11.5px",color:C.muted,padding:"6px 0"}}>
+                        <b style={{color:C.text}}>Refus non catégorisés : {motifsRefus.nonCategorises}</b> — non répartis dans les catégories ci-dessus, car la catégorisation structurée n'existait pas encore sur ces devis.
+                      </div>
+                    )}
+
+                    {motifsRefus.categoriesInconnues > 0 && (
+                      <div style={{fontSize:"11.5px",color:C.muted,padding:"6px 0"}}>
+                        <b style={{color:C.text}}>Catégories inconnues : {motifsRefus.categoriesInconnues}</b> — valeur non reconnue parmi les catégories officielles, non intégrée à "Autre".
+                      </div>
+                    )}
+                  </>
+                )}
               </div>
             )}
           </>
