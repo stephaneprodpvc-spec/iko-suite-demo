@@ -797,3 +797,96 @@ présente-les comme telles ("il pourrait être utile de vérifier...", jamais
 "c'est la cause de...") :
 ${recommandations.map(r => "- " + r.texte).join("\n")}`;
 }
+
+// ==================== Intelligence Commerciale V1 — mission #1 ====================
+// Taux de conversion des devis. Fonction PURE (aucun fetch, aucun effet de
+// bord) : le chargement (chargerDevisPourAnalytics) et la résolution des
+// noms d'agence (resoudreNomsAgences) vivent dans dashboard.html, jamais
+// ici — même séparation que calculerAnalyticsSAV (pur) / chargerInterventionsSAV
+// (fetch), déjà utilisée dans ce projet.
+//
+// Définition retenue (vérifiée sur le code réel de devis.html / dashboard.html,
+// la table Devis n'a que 3 états observables — aucun 4e statut inventé) :
+//   - Convertis   : Statut === "Validé"
+//   - Refusés     : "Devis refusé" === true
+//   - En attente  : Statut === "Envoyé" et non refusé (décision pas encore prise)
+//   - Éligibles   : Convertis + Refusés (les devis en attente n'ont pas encore
+//                   d'issue, donc jamais comptés dans le taux)
+//   - Formule     : taux = convertis / (convertis + refusés) × 100, arrondi à
+//                   l'entier le plus proche (même convention que le reste du
+//                   dashboard, ex. tauxUrgents/tauxResolutionPremierPassage) ;
+//                   null (jamais 0 ni NaN) si éligibles === 0.
+//
+// agencesMap : { [recordIdAgence]: "Nom agence" | null }, déjà résolu par
+// l'appelant (resoudreNomsAgences) — cette fonction ne fait aucune résolution
+// de nom elle-même. Un devis sans agence (champ vide/absent) est regroupé
+// sous "Non renseignée" ; un devis avec un ID d'agence non résolu (absent de
+// agencesMap ou résolution en échec) est regroupé sous "Agence inconnue"
+// plutôt que silencieusement fusionné avec "Non renseignée" (jamais la même
+// réalité métier).
+export function calculerTauxConversionDevis(devisRecords, agencesMap) {
+  const map = agencesMap || {};
+  const parAgenceAcc = {}; // clé = libellé d'agence affiché
+
+  let convertis = 0, refuses = 0, enAttente = 0;
+  const statutsInconnusCompte = {};
+
+  const enregistrerAgence = (label, categorie) => {
+    if (!parAgenceAcc[label]) parAgenceAcc[label] = { convertis: 0, refuses: 0 };
+    if (categorie === "converti") parAgenceAcc[label].convertis += 1;
+    else if (categorie === "refuse") parAgenceAcc[label].refuses += 1;
+  };
+
+  (devisRecords || []).forEach(d => {
+    const f = d && d.fields || {};
+    const statut = f.Statut;
+    const estRefuse = f["Devis refusé"] === true;
+
+    let categorie = null;
+    if (estRefuse) { refuses += 1; categorie = "refuse"; }
+    else if (statut === "Validé") { convertis += 1; categorie = "converti"; }
+    else if (statut === "Envoyé") { enAttente += 1; }
+    else {
+      // Statut inattendu (jamais vu dans le code existant) : ignoré
+      // proprement, jamais compté ni comme converti ni comme refusé ni
+      // comme en attente — signalé à l'appelant pour diagnostic uniquement.
+      const cle = statut === undefined || statut === null || statut === "" ? "(vide)" : String(statut);
+      statutsInconnusCompte[cle] = (statutsInconnusCompte[cle] || 0) + 1;
+    }
+
+    if (categorie) {
+      const idsAgence = Array.isArray(f.Agence) ? f.Agence : [];
+      const idAgence = idsAgence[0] || null;
+      let label;
+      if (!idAgence) label = "Non renseignée";
+      else if (map[idAgence]) label = map[idAgence];
+      else label = "Agence inconnue";
+      enregistrerAgence(label, categorie);
+    }
+  });
+
+  const eligibles = convertis + refuses;
+  const tauxGlobal = eligibles > 0 ? Math.round((convertis / eligibles) * 100) : null;
+
+  const parAgence = Object.keys(parAgenceAcc).map(agence => {
+    const a = parAgenceAcc[agence];
+    const eligiblesAgence = a.convertis + a.refuses;
+    return {
+      agence,
+      convertis: a.convertis,
+      refuses: a.refuses,
+      eligibles: eligiblesAgence,
+      taux: eligiblesAgence > 0 ? Math.round((a.convertis / eligiblesAgence) * 100) : null,
+    };
+  }).sort((a, b) => b.eligibles - a.eligibles);
+
+  const statutsInconnus = Object.keys(statutsInconnusCompte).map(statut => ({
+    statut, count: statutsInconnusCompte[statut],
+  }));
+
+  return {
+    global: { convertis, refuses, enAttente, eligibles, taux: tauxGlobal },
+    parAgence,
+    statutsInconnus,
+  };
+}

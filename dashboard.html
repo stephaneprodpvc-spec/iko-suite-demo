@@ -2066,6 +2066,74 @@ async function chargerInterventionsSAV() {
   }
 }
 
+// Intelligence Commerciale V1 — mission #1 (taux de conversion des devis).
+// Même architecture que chargerInterventionsSAV ci-dessus : pagination par
+// offset, plafond de sécurité à 20 pages (2000 devis), route Airtable
+// existante (/api/airtable/Devis, déjà utilisée par ModalGestionDevis) —
+// le filtrage tenant est déjà appliqué automatiquement côté serveur pour
+// cette table (api/airtable-proxy.js, TABLES_TENANT_CONFIRME.Devis,
+// filtrageListeFiable:true), aucun filtre à ajouter ici.
+// Cache mémoire : une seule récupération globale par session, jamais au
+// montage du dashboard — appelé uniquement à l'ouverture du panneau
+// Intelligence Commerciale (ModalIntelligenceCommerciale ci-dessous).
+let _devisAnalyticsCache = null;
+async function chargerDevisPourAnalytics() {
+  if (_devisAnalyticsCache) return _devisAnalyticsCache;
+  const MAX_PAGES = 20;
+  let tousLesRecords = [];
+  let offset = undefined;
+  try {
+    for (let page = 0; page < MAX_PAGES; page++) {
+      const url = '/api/airtable/Devis?maxRecords=100' + (offset ? '&offset=' + encodeURIComponent(offset) : '');
+      const r = await fetch(url);
+      if (!r.ok) {
+        return { ok: false, erreur: "Erreur serveur (" + r.status + ") lors du chargement des devis." };
+      }
+      const data = await r.json();
+      tousLesRecords = tousLesRecords.concat(data.records || []);
+      offset = data.offset;
+      if (!offset) break;
+    }
+    const resultat = { ok: true, records: tousLesRecords };
+    _devisAnalyticsCache = resultat; // jamais mis en cache en cas d'erreur, pour permettre un nouvel essai
+    return resultat;
+  } catch (e) {
+    return { ok: false, erreur: "Connexion impossible lors du chargement des devis." };
+  }
+}
+
+// Résolution des noms d'agence pour les devis (champ Airtable "Agence" =
+// lien vers la table Agences, jamais résolu en nom nulle part ailleurs
+// dans le code existant). Résout uniquement les IDs distincts passés en
+// argument (jamais un listing global de la table Agences, qui n'est pas
+// filtrée de façon fiable par tenant côté serveur), via une lecture par
+// enregistrement précis (/api/airtable/Agences/<id>, même route que
+// resoudreClientDepuisAgence) — bénéficie donc du contrôle de propriété
+// tenant déjà appliqué par le proxy sur cette route. Cache mémoire
+// persistant entre les ouvertures du panneau.
+let _agencesNomsCache = {};
+async function resoudreNomsAgences(idsDistincts) {
+  const manquants = idsDistincts.filter(id => !(id in _agencesNomsCache));
+  if (manquants.length > 0) {
+    await Promise.all(manquants.map(async id => {
+      try {
+        const r = await fetch('/api/airtable/Agences/' + id);
+        if (r.ok) {
+          const j = await r.json();
+          _agencesNomsCache[id] = (j.fields && j.fields["Nom agence"]) || null;
+        } else {
+          _agencesNomsCache[id] = null;
+        }
+      } catch (e) {
+        _agencesNomsCache[id] = null;
+      }
+    }));
+  }
+  const resultatMap = {};
+  idsDistincts.forEach(id => { resultatMap[id] = _agencesNomsCache[id] || null; });
+  return resultatMap;
+}
+
 // ecartTypeMoyenne et detecterAlertesSAV sont maintenant dans
 // analytics-sav.js (window.AnalyticsSAV), même raison que ci-dessus.
 
@@ -2378,6 +2446,108 @@ function ModalAnalyticsSAV({ tickets, onClose }) {
             </div>
           )}
         </div>
+
+        <button onClick={onClose} style={{width:"100%",padding:"11px",background:"#0D0D0D",color:"#fff",border:"none",borderRadius:"10px",fontSize:"13px",fontWeight:"900",cursor:"pointer"}}>Fermer</button>
+      </div>
+    </div>
+  );
+}
+
+/* ---- Intelligence Commerciale V1 — Taux de conversion des devis ----
+   Mission #1 (audit validé : commerce.html / avis.html / admin.html /
+   genererRecommandationsSAV vérifiés, aucun doublon). Lecture seule,
+   aucun nouvel appel Airtable au montage du dashboard : chargerDevisPourAnalytics()
+   n'est appelé qu'à l'ouverture de ce panneau, avec cache mémoire (une
+   seule récupération globale par session). Même architecture de
+   pagination/plafond que chargerInterventionsSAV. ---- */
+function ModalIntelligenceCommerciale({ onClose }) {
+  const [devis, setDevis] = React.useState(null);
+  const [erreurDevis, setErreurDevis] = React.useState("");
+  const [agencesNoms, setAgencesNoms] = React.useState({});
+
+  React.useEffect(() => {
+    chargerDevisPourAnalytics().then(res => {
+      if (res.ok) setDevis(res.records);
+      else setErreurDevis(res.erreur);
+    });
+  }, []);
+
+  // Résolution des noms d'agence : uniquement les IDs distincts réellement
+  // rencontrés dans les devis chargés (jamais un listing global de la table
+  // Agences), avec cache mémoire (resoudreNomsAgences ci-dessus).
+  React.useEffect(() => {
+    if (!devis) return;
+    const idsDistincts = Array.from(new Set(
+      devis.flatMap(d => Array.isArray(d.fields?.Agence) ? d.fields.Agence : [])
+    ));
+    if (idsDistincts.length === 0) { setAgencesNoms({}); return; }
+    resoudreNomsAgences(idsDistincts).then(setAgencesNoms);
+  }, [devis]);
+
+  const resultat = devis ? window.AnalyticsSAV.calculerTauxConversionDevis(devis, agencesNoms) : null;
+
+  // Diagnostic uniquement (jamais affiché à l'utilisateur) : signale les
+  // statuts Devis inattendus sans jamais bloquer le calcul.
+  React.useEffect(() => {
+    if (resultat && resultat.statutsInconnus && resultat.statutsInconnus.length > 0) {
+      console.warn("[Intelligence Commerciale] Statuts Devis inconnus ignorés :", resultat.statutsInconnus);
+    }
+  }, [resultat]);
+
+  return (
+    <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="modal-box" style={{maxWidth:"560px"}}>
+        <div style={{fontSize:"16px",fontWeight:"900",color:C.white,marginBottom:"4px"}}>📊 Intelligence Commerciale</div>
+        <div style={{fontSize:"11px",color:C.muted,marginBottom:"16px"}}>Taux de conversion des devis — lecture seule</div>
+
+        {erreurDevis && (
+          <div style={{marginBottom:"18px",border:"1px solid rgba(220,38,38,0.3)",background:"rgba(220,38,38,0.06)",borderRadius:"8px",padding:"10px 12px"}}>
+            <div style={{fontSize:"12px",fontWeight:"700",color:C.rouge}}>⚠️ {erreurDevis}</div>
+          </div>
+        )}
+
+        {!erreurDevis && !devis && (
+          <div style={{fontSize:"11px",color:C.muted,fontStyle:"italic"}}>⏳ Chargement des devis...</div>
+        )}
+
+        {!erreurDevis && devis && resultat && (
+          <>
+            <div style={{marginBottom:"18px"}}>
+              <div style={{fontSize:"12px",fontWeight:"700",color:C.white,marginBottom:"2px"}}>Taux de conversion global</div>
+              <div style={{fontSize:"11px",color:C.muted,marginBottom:"8px"}}>Devis validés / (validés + refusés) — devis en attente exclus du calcul.</div>
+              <div style={{fontSize:"26px",fontWeight:"900",color:C.white,marginBottom:"8px"}}>
+                {resultat.global.taux === null ? "—" : resultat.global.taux + "%"}
+              </div>
+              <div style={{fontSize:"11.5px",color:C.text}}>✅ {resultat.global.convertis} validé(s)</div>
+              <div style={{fontSize:"11.5px",color:C.text}}>❌ {resultat.global.refuses} refusé(s)</div>
+              <div style={{fontSize:"11.5px",color:C.muted}}>⏳ {resultat.global.enAttente} en attente (hors calcul)</div>
+              <div style={{fontSize:"11px",color:C.muted,marginTop:"6px"}}>{resultat.global.eligibles} devis éligible(s) au total</div>
+            </div>
+
+            <div style={{marginBottom:"18px"}}>
+              <div style={{fontSize:"12px",fontWeight:"700",color:C.white,marginBottom:"8px"}}>Répartition par agence</div>
+              {resultat.parAgence.length === 0 && (
+                <div style={{fontSize:"11px",color:C.muted,fontStyle:"italic"}}>Aucun devis éligible (validé ou refusé) pour l'instant.</div>
+              )}
+              {resultat.parAgence.length > 0 && (
+                <div style={{border:"1px solid "+C.border,borderRadius:"8px",overflow:"hidden"}}>
+                  <div style={{display:"flex",padding:"6px 12px",fontSize:"9.5px",fontWeight:"700",color:C.muted,borderBottom:"1px solid "+C.border,textTransform:"uppercase"}}>
+                    <span style={{flex:2}}>Agence</span>
+                    <span style={{flex:1,textAlign:"right"}}>Éligibles</span>
+                    <span style={{flex:1,textAlign:"right"}}>Taux</span>
+                  </div>
+                  {resultat.parAgence.map((a, i) => (
+                    <div key={a.agence} style={{display:"flex",alignItems:"center",padding:"7px 12px",borderBottom:i<resultat.parAgence.length-1?"1px solid "+C.border:"none",fontSize:"12px"}}>
+                      <span style={{flex:2}}>{a.agence}</span>
+                      <span style={{flex:1,textAlign:"right",color:C.muted}}>{a.convertis}/{a.eligibles}</span>
+                      <b style={{flex:1,textAlign:"right",color:C.or}}>{a.taux === null ? "—" : a.taux + "%"}</b>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </>
+        )}
 
         <button onClick={onClose} style={{width:"100%",padding:"11px",background:"#0D0D0D",color:"#fff",border:"none",borderRadius:"10px",fontSize:"13px",fontWeight:"900",cursor:"pointer"}}>Fermer</button>
       </div>
@@ -3231,6 +3401,7 @@ function Dashboard({ agenceAccess, onClose }) {
   const [showModalBlocage, setShowModalBlocage] = React.useState(false);
   const [showModalConcepteur, setShowModalConcepteur] = React.useState(false);
   const [showModalAnalytics, setShowModalAnalytics] = React.useState(false);
+  const [showModalIntelligenceCommerciale, setShowModalIntelligenceCommerciale] = React.useState(false);
   const [showModalDirigeant, setShowModalDirigeant] = React.useState(false);
   const [debugInfo, setDebugInfo] = React.useState(null);
   const [debugOuvert, setDebugOuvert] = React.useState(false);
@@ -4095,6 +4266,11 @@ function Dashboard({ agenceAccess, onClose }) {
           onClose={() => setShowModalAnalytics(false)}
         />
       )}
+      {showModalIntelligenceCommerciale && (
+        <ModalIntelligenceCommerciale
+          onClose={() => setShowModalIntelligenceCommerciale(false)}
+        />
+      )}
       {showModalDirigeant && (
         <ModalTableauBordDirigeant
           tickets={tickets}
@@ -4187,6 +4363,10 @@ function Dashboard({ agenceAccess, onClose }) {
           <button onClick={() => setShowModalAnalytics(true)}
             style={{background:"#fff",border:"1px solid "+C.border,color:C.white,borderRadius:"8px",padding:"8px 14px",fontSize:"12px",fontWeight:"900",cursor:"pointer",display:"flex",alignItems:"center",gap:"6px"}}>
             📊 Analytics
+          </button>
+          <button onClick={() => setShowModalIntelligenceCommerciale(true)}
+            style={{background:"#fff",border:"1px solid "+C.border,color:C.white,borderRadius:"8px",padding:"8px 14px",fontSize:"12px",fontWeight:"900",cursor:"pointer",display:"flex",alignItems:"center",gap:"6px"}}>
+            💼 Intelligence Commerciale
           </button>
           <button onClick={() => setShowModalDirigeant(true)}
             style={{background:"#0D0D0D",border:"1px solid "+C.border,color:"#fff",borderRadius:"8px",padding:"8px 14px",fontSize:"12px",fontWeight:"900",cursor:"pointer",display:"flex",alignItems:"center",gap:"6px"}}>
