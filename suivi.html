@@ -462,13 +462,18 @@ function App() {
           : (data.error || "Erreur de connexion. Réessayez dans un instant."));
       } else {
         const tickets = data.tickets || [];
-        // La demande saisie passe en tête de liste.
-        const cible = (data.numero || ouvrirNumero || "").toUpperCase();
-        tickets.sort((a, b) => (b.fields?.Name?.toUpperCase() === cible) - (a.fields?.Name?.toUpperCase() === cible));
-        setListe(tickets);
-        const voulue = tickets.find(t => cible && t.fields?.Name?.toUpperCase() === cible);
-        if (ouvrirNumero && voulue) await ouvrirTicket(voulue);
-        else if (tickets.length === 1) await ouvrirTicket(tickets[0]);
+        if (corps.jeton) {
+          // Lien du mail : liste de toutes les demandes du client.
+          const cible = (ouvrirNumero || "").toUpperCase();
+          tickets.sort((a, b) => (b.fields?.Name?.toUpperCase() === cible) - (a.fields?.Name?.toUpperCase() === cible));
+          setListe(tickets);
+          const voulue = tickets.find(t => cible && t.fields?.Name?.toUpperCase() === cible);
+          if (voulue) await ouvrirTicket(voulue);
+          else if (tickets.length === 1) await ouvrirTicket(tickets[0]);
+        } else if (tickets[0]) {
+          // Saisie manuelle : ouverture directe du seul ticket correspondant, pas de liste.
+          await ouvrirTicket(tickets[0]);
+        }
       }
     } catch (e) {
       setErreur("Erreur de connexion. Réessayez dans un instant.");

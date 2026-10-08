@@ -46,7 +46,8 @@ function formuleClient({ email, tel }) {
 // Route publique /api/airtable/suivi (POST). Deux entrees, jamais un numero seul :
 //   a) { jeton }            : lien recu par e-mail ;
 //   b) { numero, contact }  : numero de ticket + e-mail OU telephone donne a la declaration.
-// Renvoie toutes les demandes du meme client. Message d'echec unique (pas
+// (a) renvoie toutes les demandes du meme client ; (b) UNIQUEMENT le ticket saisi.
+// Message d'echec unique (pas
 // d'indication sur ce qui est faux) + limite de debit stricte.
 async function handlerSuivi(req, res, baseId, headers) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
@@ -64,34 +65,31 @@ async function handlerSuivi(req, res, baseId, headers) {
     return (await r.json()).records || [];
   };
   try {
-    let identite = null;
-    let numeroDemande = '';
+    const versTickets = (records) => records.map(r => {
+      const fields = {};
+      CHAMPS_SUIVI.forEach(c => { if (r.fields && c in r.fields) fields[c] = r.fields[c]; });
+      return { id: r.id, createdTime: r.createdTime, fields };
+    });
     if (typeof body.jeton === 'string' && body.jeton) {
-      identite = lireJeton(body.jeton);
-    } else if (typeof body.numero === 'string' && typeof body.contact === 'string') {
+      // Lien du mail (adresse prouvee par la reception du mail) : toutes les demandes du client.
+      const identite = lireJeton(body.jeton);
+      if (!identite) return res.status(404).json(ECHEC);
+      const records = await airtable(formuleClient(identite), 50);
+      if (!records.length) return res.status(404).json(ECHEC);
+      return res.status(200).json({ tickets: versTickets(records), numero: '' });
+    }
+    if (typeof body.numero === 'string' && typeof body.contact === 'string') {
+      // Saisie manuelle (rien ne prouve la propriete de l'e-mail/telephone) :
+      // UNIQUEMENT le ticket correspondant, jamais les autres demandes du client.
       const numero = body.numero.trim().toUpperCase();
       const email = normaliserEmail(body.contact);
       const tel = email ? '' : normaliserTel(body.contact);
       if (/^[A-Z0-9-]{4,30}$/.test(numero) && (email || tel)) {
         const trouves = await airtable('AND(UPPER({Name})="' + numero + '",' + formuleClient({ email, tel }) + ')', 1);
-        if (trouves.length) {
-          // L'identite du client vient du ticket lui-meme (e-mail ET telephone),
-          // pour regrouper toutes ses demandes.
-          const f = trouves[0].fields || {};
-          identite = { email: normaliserEmail(f.Email), tel: normaliserTel(f['Téléphone']) };
-          numeroDemande = numero;
-        }
+        if (trouves.length) return res.status(200).json({ tickets: versTickets(trouves), numero });
       }
     }
-    if (!identite || (!identite.email && !identite.tel)) return res.status(404).json(ECHEC);
-    const records = await airtable(formuleClient(identite), 50);
-    if (!records.length) return res.status(404).json(ECHEC);
-    const tickets = records.map(r => {
-      const fields = {};
-      CHAMPS_SUIVI.forEach(c => { if (r.fields && c in r.fields) fields[c] = r.fields[c]; });
-      return { id: r.id, createdTime: r.createdTime, fields };
-    });
-    return res.status(200).json({ tickets, numero: numeroDemande });
+    return res.status(404).json(ECHEC);
   } catch (err) {
     console.error('Erreur route suivi:', err);
     return res.status(502).json({ error: 'Erreur de connexion. Réessayez dans un instant.' });
