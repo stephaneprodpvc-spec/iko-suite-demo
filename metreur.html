@@ -16,13 +16,38 @@
 <script src="https://unpkg.com/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
-body { font-family: 'Segoe UI', sans-serif; background: #F5F5F5; color: #374151; min-height: 100vh; -webkit-tap-highlight-color: transparent; }
-input, select, textarea { font-family: inherit; border: 1px solid #E2E2E2; border-radius: 8px; padding: 9px 11px; font-size: 13px; width: 100%; background: #fff; color: #111; }
-input:focus, select:focus, textarea:focus { outline: none; border-color: #FF6B00; }
+body { font-family: -apple-system, 'Segoe UI', Roboto, sans-serif; background: linear-gradient(160deg,#ffa24d 0%,#ff6b00 52%,#b84300 100%) fixed; color: #1c1c1e; min-height: 100vh; -webkit-tap-highlight-color: transparent; accent-color: #FF6B00; }
+input, select, textarea { font-family: inherit; border: 1px solid rgba(255,255,255,0.85); border-radius: 12px; padding: 10px 12px; font-size: 14px; width: 100%; background: rgba(255,255,255,0.8); color: #1c1c1e; min-height: 42px; }
+input:focus, select:focus, textarea:focus { outline: none; border-color: #FF6B00; box-shadow: 0 0 0 3px rgba(255,107,0,0.22); }
+::selection { background: rgba(255,107,0,0.3); }
 button { font-family: inherit; touch-action: manipulation; }
 svg text { user-select: none; -webkit-user-select: none; }
 ::-webkit-scrollbar { width: 8px; height: 8px; }
-::-webkit-scrollbar-thumb { background: #D1D5DB; border-radius: 4px; }
+::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.25); border-radius: 4px; }
+/* ===== Style verre orange (identique au tableau de bord) ===== */
+div[style*="position: sticky"][style*="top: 0px"][style*="rgb(255, 255, 255)"] { background: rgba(255,255,255,0.62) !important; -webkit-backdrop-filter: blur(24px) saturate(180%); backdrop-filter: blur(24px) saturate(180%); border-bottom: 1px solid rgba(255,255,255,0.8) !important; box-shadow: 0 8px 28px rgba(0,0,0,0.18) !important; }
+div[style*="background: rgb(255, 255, 255)"], button[style*="background: rgb(255, 255, 255)"] { background: rgba(255,255,255,0.78) !important; -webkit-backdrop-filter: blur(18px) saturate(170%); backdrop-filter: blur(18px) saturate(170%); border-color: rgba(255,255,255,0.7) !important; box-shadow: 0 6px 20px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.8) !important; color: #1c1c1e; }
+div[style*="position: fixed"] div[style*="background: rgb(255, 255, 255)"], div[style*="position: fixed"] button[style*="background: rgb(255, 255, 255)"] { background: #fff !important; -webkit-backdrop-filter: none; backdrop-filter: none; box-shadow: none !important; }
+div[style*="position: fixed"][style*="rgba(0, 0, 0, 0.5)"] { background: rgba(60,20,0,0.55) !important; -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
+.ik-btn-or { background: linear-gradient(180deg, rgba(255,150,60,0.97), rgba(255,107,0,0.9)); border: 1px solid rgba(255,255,255,0.55); color: #fff; font-weight: 800; border-radius: 12px; cursor: pointer; box-shadow: 0 6px 18px rgba(255,107,0,0.38), inset 0 1px 0 rgba(255,255,255,0.5); min-height: 44px; padding: 0 18px; font-size: 14px; }
+.ik-btn-or:disabled { opacity: .5; cursor: not-allowed; }
+.ik-btn-noir { background: rgba(20,20,22,0.85); border: 1px solid rgba(255,255,255,0.25); color: #fff; font-weight: 800; border-radius: 12px; cursor: pointer; min-height: 44px; padding: 0 18px; font-size: 14px; }
+.ik-btn-noir:disabled { opacity: .45; cursor: not-allowed; }
+.ik-btn-verre { background: rgba(255,255,255,0.9); border: 1px solid rgba(0,0,0,0.14); box-shadow: 0 2px 8px rgba(0,0,0,0.08); color: #1c1c1e; font-weight: 700; border-radius: 12px; cursor: pointer; min-height: 44px; padding: 0 16px; font-size: 13px; }
+.ik-btn-verre:disabled { opacity: .45; cursor: not-allowed; }
+.ik-carte { background: rgba(255,255,255,0.8); -webkit-backdrop-filter: blur(18px) saturate(170%); backdrop-filter: blur(18px) saturate(170%); border: 1px solid rgba(255,255,255,0.75); border-radius: 18px; box-shadow: 0 6px 22px rgba(0,0,0,0.13), inset 0 1px 0 rgba(255,255,255,0.8); color: #1c1c1e; }
+.ik-chip { display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 0 14px; border-radius: 999px; border: 1px solid rgba(255,255,255,0.7); background: rgba(255,255,255,0.55); color: #1c1c1e; font-size: 12px; font-weight: 700; cursor: pointer; }
+.ik-chip.actif { background: #0D0D0D; color: #fff; border-color: #0D0D0D; }
+.ik-grille { display: grid; grid-template-columns: minmax(0,1fr) 340px; gap: 18px; align-items: start; }
+.ik-sticky { position: sticky; top: 84px; }
+.ik-champs-3 { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 10px; }
+.ik-champs-2 { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 10px; }
+.ik-kpis { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 10px; }
+@media (max-width: 900px) { .ik-grille { grid-template-columns: 1fr; } .ik-sticky { position: static; } .ik-kpis { grid-template-columns: repeat(2, minmax(0,1fr)); } }
+@media (max-width: 600px) { .ik-hide-m { display: none !important; } .ik-champs-3, .ik-champs-2 { grid-template-columns: 1fr; } input, select, textarea { font-size: 16px; min-height: 46px; } .ik-btn-or, .ik-btn-noir, .ik-btn-verre { min-height: 48px; } }
+.ik-mobbar { display: none; }
+@media (max-width: 900px) { .ik-mobbar { display: flex; gap: 10px; position: fixed; left: 0; right: 0; bottom: 0; z-index: 150; padding: 10px 14px calc(10px + env(safe-area-inset-bottom)); background: rgba(255,255,255,0.7); -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px); border-top: 1px solid rgba(255,255,255,0.8); } }
+@media print { body { background: #fff !important; } .ik-noprint { display: none !important; } }
 </style>
 </head>
 <body>
@@ -49,13 +74,13 @@ const AGENCES = ["Agence 1", "Agence 2", "Agence 3", "Agence 4"];
 const WEBHOOK = '/api/airtable/webhook-metreur';
 
 const C = {
-  bg: "#F5F5F5", card: "#FFFFFF", border: "#E2E2E2",
-  or: "#FF6B00", orDim: "rgba(218,178,57,0.12)", orBord: "rgba(218,178,57,0.3)",
-  text: "#374151", muted: "#5B6472", white: "#0D0D0D",
+  bg: "transparent", card: "#FFFFFF", border: "rgba(0,0,0,0.12)",
+  or: "#FF6B00", orDim: "rgba(255,107,0,0.12)", orBord: "rgba(255,107,0,0.35)",
+  text: "#1c1c1e", muted: "#5f5a55", white: "#0D0D0D",
   rouge: "#DC2626", rougeDim: "rgba(220,38,38,0.12)",
   vert: "#16a34a", vertDim: "rgba(22,163,74,0.12)",
-  bleu: "#2563eb", bleuDim: "rgba(37,99,235,0.12)",
-  vitre: "rgba(37,99,235,0.07)", cote: "#8a6d1f",
+  bleu: "#0D0D0D", bleuDim: "rgba(255,107,0,0.12)",
+  vitre: "rgba(255,107,0,0.07)", cote: "#B84300",
 };
 
 const TABLE_METRES = "Métrés";
@@ -183,7 +208,7 @@ const gammeOf = (materiau) => GAMMES[materiau] || GAMMES.PVC;
 function IconOuverture({ type, active, size }) {
   const s = size || 40;
   const stroke = active ? "#0D0D0D" : "#9CA3AF";
-  const fill = active ? "rgba(218,178,57,0.08)" : "none";
+  const fill = active ? "rgba(255,107,0,0.08)" : "none";
   const sw = 2.4;
   const common = { fill, stroke, strokeWidth: sw, strokeLinejoin: "round", strokeLinecap: "round" };
 
@@ -414,8 +439,8 @@ function buildSchemaSvgString(o, fixed, areaW, areaH, miroir) {
   const gradId = 'vg' + Math.random().toString(36).slice(2, 9);
   s.push(
     '<defs><linearGradient id="' + gradId + '" x1="0%" y1="0%" x2="100%" y2="100%">' +
-    '<stop offset="0%" stop-color="#EAF3FA"/>' +
-    '<stop offset="45%" stop-color="#BFDCEE"/>' +
+    '<stop offset="0%" stop-color="#F7F3EE"/>' +
+    '<stop offset="45%" stop-color="#E2DAD1"/>' +
     '<stop offset="100%" stop-color="#7FB2D4"/>' +
     '</linearGradient></defs>'
   );
@@ -587,7 +612,7 @@ function buildSchemaSvgString(o, fixed, areaW, areaH, miroir) {
         text((px0 + px1) / 2, yhp - 6, "🔑 " + Math.round(hp), 8, C.cote, 'middle');
       } else {
         // Poignée grisée, non définie — pas de cote associée
-        s.push('<rect x="' + xEdge + '" y="' + (yhp - 2.4) + '" width="' + lp + '" height="4.8" rx="1.6" fill="#B9BFC8" stroke="' + contour + '" stroke-width="0.6"/>');
+        s.push('<rect x="' + xEdge + '" y="' + (yhp - 2.4) + '" width="' + lp + '" height="4.8" rx="1.6" fill="#BDB6AE" stroke="' + contour + '" stroke-width="0.6"/>');
       }
     }
   }
@@ -651,6 +676,8 @@ function svgVersPng(svgStr, wPx, hPx) {
 function descripteurConfig(o) {
   return {
     repere: (o.repere || "").trim(),
+    piece: (o.piece || "").trim(),
+    estime: !!o.suspect,
     largeur: Number(o.largeur) || 0,
     hauteur: Number(o.hauteur) || 0,
     materiau: o.materiau || "",
@@ -719,7 +746,7 @@ function HauteurPoigneeModal({ o, contexte, currentHp, estPorte, onValider, onCl
         <div style={{display:"flex",gap:"6px",marginBottom:"14px"}}>
           {presets.map(v => (
             <button key={v} type="button" onClick={() => setHp(v)}
-              style={{flex:1,padding:"7px",background:hp===v?C.orDim:"#fff",border:"1.5px solid "+(hp===v?C.orBord:C.border),color:hp===v?"#8a6d1f":C.muted,borderRadius:"7px",fontWeight:"700",fontSize:"11px",cursor:"pointer"}}>
+              style={{flex:1,padding:"7px",background:hp===v?C.orDim:"#fff",border:"1.5px solid "+(hp===v?C.orBord:C.border),color:hp===v?"#B84300":C.muted,borderRadius:"7px",fontWeight:"700",fontSize:"11px",cursor:"pointer"}}>
               {v}
             </button>
           ))}
@@ -801,11 +828,11 @@ function ZonePicker({ o, zoneKey, current, hauteursPoignee, zonesVitrage, zonesP
         )}
         <div style={{display:"flex",gap:"8px",marginBottom:"14px"}}>
           <button type="button" onClick={() => onSplit2("OF-D", "OF-G")}
-            style={{flex:1,padding:"10px 6px",background:C.orDim,border:"1.5px solid "+C.orBord,color:"#8a6d1f",borderRadius:"9px",fontWeight:"800",fontSize:"11px",cursor:"pointer"}}>
+            style={{flex:1,padding:"10px 6px",background:C.orDim,border:"1.5px solid "+C.orBord,color:"#B84300",borderRadius:"9px",fontWeight:"800",fontSize:"11px",cursor:"pointer"}}>
             🪟 2 vantaux (fenêtre)
           </button>
           <button type="button" onClick={() => onSplit2("Porte-D", "Porte-G")}
-            style={{flex:1,padding:"10px 6px",background:C.orDim,border:"1.5px solid "+C.orBord,color:"#8a6d1f",borderRadius:"9px",fontWeight:"800",fontSize:"11px",cursor:"pointer"}}>
+            style={{flex:1,padding:"10px 6px",background:C.orDim,border:"1.5px solid "+C.orBord,color:"#B84300",borderRadius:"9px",fontWeight:"800",fontSize:"11px",cursor:"pointer"}}>
             🚪 2 vantaux (porte-fenêtre)
           </button>
         </div>
@@ -823,7 +850,7 @@ function ZonePicker({ o, zoneKey, current, hauteursPoignee, zonesVitrage, zonesP
         {REMPLISSAGES_POIGNEE.includes(current) && (
           <>
             <button type="button" onClick={() => setModeHp(true)}
-              style={{width:"100%",padding:"11px",background:C.orDim,border:"1.5px solid "+C.orBord,color:"#8a6d1f",borderRadius:"9px",fontWeight:"800",fontSize:"12px",cursor:"pointer",marginBottom:"8px"}}>
+              style={{width:"100%",padding:"11px",background:C.orDim,border:"1.5px solid "+C.orBord,color:"#B84300",borderRadius:"9px",fontWeight:"800",fontSize:"12px",cursor:"pointer",marginBottom:"8px"}}>
               🔑 {hpActuelle ? "Modifier la hauteur de poignée (" + hpActuelle + " mm)" : "Régler la hauteur de poignée"}
             </button>
             <label onClick={() => onSetSecondaire(zoneKey, !((ouvrantsSecondaires || {})[zoneKey]))}
@@ -856,12 +883,12 @@ function ZonePicker({ o, zoneKey, current, hauteursPoignee, zonesVitrage, zonesP
             <label style={{fontSize:"11px",fontWeight:"700",color:C.muted,display:"block",marginBottom:"8px"}}>🪵 Petits bois (couleur menuiserie)</label>
             <ChoiceButtons label="Largeur (mm)" value={String(pbZone.largeur || 18)} onChange={v => onSetPbZone(zoneKey, { largeur: Number(v) })} choices={["10","18","26","45"]}/>
             <div style={{display:"flex",gap:"8px",marginBottom:"10px"}}>
-              <button type="button" onClick={() => ajouterBarre('v')} style={{flex:1,padding:"9px",background:C.orDim,border:"1.5px solid "+C.orBord,color:"#8a6d1f",borderRadius:"8px",fontWeight:"800",fontSize:"11px",cursor:"pointer"}}>┃ + Vertical</button>
-              <button type="button" onClick={() => ajouterBarre('h')} style={{flex:1,padding:"9px",background:C.orDim,border:"1.5px solid "+C.orBord,color:"#8a6d1f",borderRadius:"8px",fontWeight:"800",fontSize:"11px",cursor:"pointer"}}>━ + Horizontal</button>
+              <button type="button" onClick={() => ajouterBarre('v')} style={{flex:1,padding:"9px",background:C.orDim,border:"1.5px solid "+C.orBord,color:"#B84300",borderRadius:"8px",fontWeight:"800",fontSize:"11px",cursor:"pointer"}}>┃ + Vertical</button>
+              <button type="button" onClick={() => ajouterBarre('h')} style={{flex:1,padding:"9px",background:C.orDim,border:"1.5px solid "+C.orBord,color:"#B84300",borderRadius:"8px",fontWeight:"800",fontSize:"11px",cursor:"pointer"}}>━ + Horizontal</button>
             </div>
             {(pbZone.vBars || []).length > 0 && (
               <div style={{display:"flex",justifyContent:"flex-end",marginBottom:"4px"}}>
-                <button type="button" onClick={() => egaliserBarres('v')} style={{padding:"4px 8px",background:C.bleuDim,border:"1px solid rgba(37,99,235,0.3)",color:C.bleu,borderRadius:"6px",fontSize:"9.5px",fontWeight:"800",cursor:"pointer"}}>⚖️ Égaliser verticaux</button>
+                <button type="button" onClick={() => egaliserBarres('v')} style={{padding:"4px 8px",background:C.bleuDim,border:"1px solid rgba(255,107,0,0.3)",color:C.bleu,borderRadius:"6px",fontSize:"9.5px",fontWeight:"800",cursor:"pointer"}}>⚖️ Égaliser verticaux</button>
               </div>
             )}
             {(pbZone.vBars || []).map((b, i) => (
@@ -874,7 +901,7 @@ function ZonePicker({ o, zoneKey, current, hauteursPoignee, zonesVitrage, zonesP
             ))}
             {(pbZone.hBars || []).length > 0 && (
               <div style={{display:"flex",justifyContent:"flex-end",marginBottom:"4px"}}>
-                <button type="button" onClick={() => egaliserBarres('h')} style={{padding:"4px 8px",background:C.bleuDim,border:"1px solid rgba(37,99,235,0.3)",color:C.bleu,borderRadius:"6px",fontSize:"9.5px",fontWeight:"800",cursor:"pointer"}}>⚖️ Égaliser horizontaux</button>
+                <button type="button" onClick={() => egaliserBarres('h')} style={{padding:"4px 8px",background:C.bleuDim,border:"1px solid rgba(255,107,0,0.3)",color:C.bleu,borderRadius:"6px",fontSize:"9.5px",fontWeight:"800",cursor:"pointer"}}>⚖️ Égaliser horizontaux</button>
               </div>
             )}
             {(pbZone.hBars || []).map((b, i) => (
@@ -1089,8 +1116,8 @@ function ConfigurateurModal({ o, set, onClose }) {
         </div>
 
         <div style={{display:"flex",gap:"8px",marginBottom:"10px"}}>
-          <button type="button" onClick={() => ajouter('m')} style={btn(C.orDim, "#8a6d1f", C.orBord)}>┃ + Meneau</button>
-          <button type="button" onClick={() => ajouter('t')} style={btn(C.orDim, "#8a6d1f", C.orBord)}>━ + Traverse</button>
+          <button type="button" onClick={() => ajouter('m')} style={btn(C.orDim, "#B84300", C.orBord)}>┃ + Meneau</button>
+          <button type="button" onClick={() => ajouter('t')} style={btn(C.orDim, "#B84300", C.orBord)}>━ + Traverse</button>
           <div style={{flex:1}}/>
           <button type="button" onClick={() => setVueExt(!vueExt)}
             style={btn(vueExt ? C.rougeDim : "#fff", vueExt ? C.rouge : C.muted, vueExt ? "rgba(220,38,38,0.3)" : C.border)}>
@@ -1199,11 +1226,11 @@ function ConfigurateurModal({ o, set, onClose }) {
               <div style={{display:"flex",gap:"6px"}}>
                 {meneaux.length > 0 && (
                   <button type="button" onClick={egaliserLargeurs} title="Répartit les largeurs uniformément"
-                    style={{padding:"5px 9px",background:C.bleuDim,border:"1px solid rgba(37,99,235,0.3)",color:C.bleu,borderRadius:"7px",fontSize:"10px",fontWeight:"800",cursor:"pointer"}}>⚖️ Largeurs</button>
+                    style={{padding:"5px 9px",background:C.bleuDim,border:"1px solid rgba(255,107,0,0.3)",color:C.bleu,borderRadius:"7px",fontSize:"10px",fontWeight:"800",cursor:"pointer"}}>⚖️ Largeurs</button>
                 )}
                 {traverses.length > 0 && (
                   <button type="button" onClick={egaliserHauteurs} title="Répartit les hauteurs uniformément"
-                    style={{padding:"5px 9px",background:C.bleuDim,border:"1px solid rgba(37,99,235,0.3)",color:C.bleu,borderRadius:"7px",fontSize:"10px",fontWeight:"800",cursor:"pointer"}}>⚖️ Hauteurs</button>
+                    style={{padding:"5px 9px",background:C.bleuDim,border:"1px solid rgba(255,107,0,0.3)",color:C.bleu,borderRadius:"7px",fontSize:"10px",fontWeight:"800",cursor:"pointer"}}>⚖️ Hauteurs</button>
                 )}
               </div>
             </div>
@@ -1279,6 +1306,82 @@ function ConfigurateurModal({ o, set, onClose }) {
       )}
     </div>
   );
+}
+
+// ---- Calculs de métré (fonctions pures, testées) ----
+// Règles explicites et configurables : surface = largeur × hauteur (mm → m²),
+// périmètre = 2 × (L + H) (mm → ml), multipliés par la quantité de l'ouvrage.
+// "surfaceMinM2" = surface minimale facturable par ouvrage (0 = désactivée) :
+// certains fabricants facturent au minimum 1 m² — à régler selon le tarif.
+const REGLES_DEFAUT = { surfaceMinM2: 0 };
+function qteOuv(o) { const q = Number(o && o.quantite); return q > 0 ? q : 1; }
+function dimOk(o) { return Number(o && o.largeur) > 0 && Number(o && o.hauteur) > 0; }
+function surfaceUnitaireM2(o, regles) {
+  if (!dimOk(o)) return null;
+  const brut = (Number(o.largeur) * Number(o.hauteur)) / 1e6;
+  return Math.max(brut, (regles && regles.surfaceMinM2) || 0);
+}
+function perimetreUnitaireMl(o) {
+  if (!dimOk(o)) return null;
+  return (2 * (Number(o.largeur) + Number(o.hauteur))) / 1000;
+}
+function fmtNb(n, d) { return (Math.round((Number(n) || 0) * Math.pow(10, d == null ? 2 : d)) / Math.pow(10, d == null ? 2 : d)).toLocaleString('fr-FR', { minimumFractionDigits: d == null ? 2 : d, maximumFractionDigits: d == null ? 2 : d }); }
+// Contrôles de cohérence d'une ouverture : [{ niveau: "erreur"|"alerte", msg }]
+function controlesOuverture(o, toutes) {
+  const r = [];
+  const L = Number(o.largeur), H = Number(o.hauteur);
+  if (!(L > 0)) r.push({ niveau: "erreur", msg: "Largeur manquante" });
+  if (!(H > 0)) r.push({ niveau: "erreur", msg: "Hauteur manquante" });
+  if (L > 0 && (L < 200 || L > 6000)) r.push({ niveau: L < 100 || L > 8000 ? "erreur" : "alerte", msg: "Largeur " + L + " mm inhabituelle (attendu 200–6000 mm) — mm ou cm ?" });
+  if (H > 0 && (H < 200 || H > 4000)) r.push({ niveau: H < 100 || H > 6000 ? "erreur" : "alerte", msg: "Hauteur " + H + " mm inhabituelle (attendu 200–4000 mm) — mm ou cm ?" });
+  if (TYPES_PORTE.includes(o.type) && H > 0 && H < 1900) r.push({ niveau: "alerte", msg: "Porte de moins de 1900 mm de haut" });
+  const q = Number(o.quantite);
+  if (o.quantite !== "" && o.quantite != null && (!(q > 0) || Math.floor(q) !== q)) r.push({ niveau: "erreur", msg: "Quantité invalide (entier ≥ 1)" });
+  if (!o.pose) r.push({ niveau: "alerte", msg: "Type de pose non renseigné" });
+  if (!o.couleur && !["Portail battant", "Portail coulissant"].includes(o.type)) r.push({ niveau: "alerte", msg: "Couleur non renseignée" });
+  if (L > 0 && (o.meneaux || []).some(m => Number(m) >= L)) r.push({ niveau: "erreur", msg: "Un meneau dépasse la largeur" });
+  if (H > 0 && (o.traverses || []).some(t => Number(t) >= H)) r.push({ niveau: "erreur", msg: "Une traverse dépasse la hauteur" });
+  const rep = (o.repere || "").trim().toLowerCase();
+  if (rep && (toutes || []).filter(x => (x.repere || "").trim().toLowerCase() === rep).length > 1) r.push({ niveau: "alerte", msg: "Repère en doublon" });
+  if (o.suspect) r.push({ niveau: "alerte", msg: "Mesure estimée (photo/voix) — à confirmer sur place" });
+  return r;
+}
+// Synthèse du relevé : saisi (dimensions) / calculé (m², ml) / estimé (à confirmer)
+function syntheseMetre(ouvertures, regles) {
+  const S = { nbLignes: ouvertures.length, qteTotale: 0, m2: 0, ml: 0, m2Estime: 0, nbEstimees: 0, nbErreurs: 0, nbAlertes: 0, incompletes: 0, parType: {}, parMateriau: {}, parPiece: {}, anomalies: [] };
+  ouvertures.forEach(o => {
+    const q = qteOuv(o);
+    const su = surfaceUnitaireM2(o, regles), pu = perimetreUnitaireMl(o);
+    const m2 = su == null ? 0 : su * q, ml = pu == null ? 0 : pu * q;
+    S.qteTotale += q; S.m2 += m2; S.ml += ml;
+    if (o.suspect) { S.nbEstimees += 1; S.m2Estime += m2; }
+    if (su == null) S.incompletes += 1;
+    const ctr = controlesOuverture(o, ouvertures);
+    if (ctr.length) S.anomalies.push({ repere: o.repere || "(sans repère)", controles: ctr });
+    S.nbErreurs += ctr.filter(c => c.niveau === "erreur").length;
+    S.nbAlertes += ctr.filter(c => c.niveau === "alerte").length;
+    [["parType", o.type || "—"], ["parMateriau", o.materiau || "—"], ["parPiece", (o.piece || "").trim() || "Sans pièce"]].forEach(([k, nom]) => {
+      const g = S[k][nom] || (S[k][nom] = { lignes: 0, qte: 0, m2: 0, ml: 0 });
+      g.lignes += 1; g.qte += q; g.m2 += m2; g.ml += ml;
+    });
+  });
+  return S;
+}
+function csvReleve(fiche, ouvertures, regles) {
+  const esc = v => '"' + String(v == null ? "" : v).replace(/"/g, '""') + '"';
+  const l = [["Repère", "Pièce / niveau", "Type", "Matériau", "Pose", "Largeur mm", "Hauteur mm", "Quantité", "Surface unitaire m²", "Surface totale m²", "Périmètre total ml", "Couleur", "Vitrage", "Statut mesure", "Note"].map(esc).join(";")];
+  ouvertures.forEach(o => {
+    const q = qteOuv(o), su = surfaceUnitaireM2(o, regles), pu = perimetreUnitaireMl(o);
+    l.push([o.repere, o.piece, o.type, o.materiau, o.pose, o.largeur, o.hauteur, q, su == null ? "" : fmtNb(su, 3), su == null ? "" : fmtNb(su * q, 3), pu == null ? "" : fmtNb(pu * q, 3), o.couleur, o.vitrage, o.suspect ? "Estimée à confirmer" : "Saisie", o.note].map(esc).join(";"));
+  });
+  return "\uFEFF" + l.join("\r\n");
+}
+function telechargerTexte(nom, contenu, mime) {
+  const blob = new Blob([contenu], { type: mime || "text/csv;charset=utf-8" });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = nom;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
 }
 
 function genererNumero() {
@@ -1496,9 +1599,9 @@ async function imprimerResumeBE(fiche, ouvertures) {
 function htmlResumeBE(ouvertures) {
   return ouvertures.map((o, i) => (
     '<table width="100%" cellpadding="6" cellspacing="0" style="font-size:12px;border:1px solid #E5E7EB;border-radius:6px;margin-bottom:8px;">' +
-    '<tr style="background:#F8FAFC;"><td colspan="2" style="font-weight:900;color:#0D0D0D;padding:6px 8px;">' + (i + 1) + '. ' + esc(o.repere || o.type) + ' — ' + esc(o.type) + '</td></tr>' +
-    '<tr><td style="color:#64748B;width:140px;padding:4px 8px;">Couleur</td><td style="padding:4px 8px;">' + esc(o.couleur || '—') + '</td></tr>' +
-    '<tr><td style="color:#64748B;padding:4px 8px;">Hauteur poignée</td><td style="padding:4px 8px;">' + esc(o.hauteurPoignee ? o.hauteurPoignee + ' mm' : '—') + '</td></tr>' +
+    '<tr style="background:#FAF6F2;"><td colspan="2" style="font-weight:900;color:#0D0D0D;padding:6px 8px;">' + (i + 1) + '. ' + esc(o.repere || o.type) + ' — ' + esc(o.type) + '</td></tr>' +
+    '<tr><td style="color:#6B625C;width:140px;padding:4px 8px;">Couleur</td><td style="padding:4px 8px;">' + esc(o.couleur || '—') + '</td></tr>' +
+    '<tr><td style="color:#6B625C;padding:4px 8px;">Hauteur poignée</td><td style="padding:4px 8px;">' + esc(o.hauteurPoignee ? o.hauteurPoignee + ' mm' : '—') + '</td></tr>' +
     '</table>'
   )).join('');
 }
@@ -1506,41 +1609,41 @@ function htmlResumeBE(ouvertures) {
 function buildOuverturesHtml(ouvertures) {
   return ouvertures.map((o, i) => (
     '<table width="100%" cellpadding="6" cellspacing="0" style="font-size:12px;border:1px solid #E5E7EB;border-radius:6px;margin-bottom:10px;">' +
-    '<tr style="background:#F8FAFC;"><td colspan="2" style="font-weight:900;color:#0D0D0D;padding:8px;">' + (i+1) + '. ' + esc(o.repere || o.type) + ' — ' + esc(o.type) + '</td></tr>' +
-    '<tr><td style="color:#64748B;width:140px;padding:4px 8px;">Matériau</td><td style="padding:4px 8px;">' + esc(o.materiau || '—') + '</td></tr>' +
-    (o.pose ? '<tr><td style="color:#64748B;padding:4px 8px;">Pose</td><td style="padding:4px 8px;">' + esc(o.pose) + '</td></tr>' : '') +
-    '<tr><td style="color:#64748B;padding:4px 8px;">Dimensions</td><td style="padding:4px 8px;">' + (o.largeur || '—') + ' x ' + (o.hauteur || '—') + ' mm</td></tr>' +
-    ((o.traverses && o.traverses.filter(Boolean).length) ? '<tr><td style="color:#64748B;padding:4px 8px;">Traverse(s)</td><td style="padding:4px 8px;">' + esc(o.traverses.filter(Boolean).map(t => t + ' mm').join(' / ')) + '</td></tr>' : '') +
-    ((o.meneaux && o.meneaux.filter(Boolean).length) ? '<tr><td style="color:#64748B;padding:4px 8px;">Meneau(x)</td><td style="padding:4px 8px;">' + esc(o.meneaux.filter(Boolean).map(m => m + ' mm').join(' / ')) + '</td></tr>' : '') +
-    (zonesTexte(o) ? '<tr><td style="color:#64748B;padding:4px 8px;">Zones</td><td style="padding:4px 8px;">' + esc(zonesTexte(o)) + '</td></tr>' : '') +
-    '<tr><td style="color:#64748B;padding:4px 8px;">Couleur / RAL</td><td style="padding:4px 8px;">' + esc(o.couleur || '—') + '</td></tr>' +
-    '<tr><td style="color:#64748B;padding:4px 8px;">Vitrage</td><td style="padding:4px 8px;">' + esc(o.vitrage || '—') + '</td></tr>' +
-    ((o.optionsStandard && o.optionsStandard.length) ? '<tr><td style="color:#64748B;padding:4px 8px;">Options standard</td><td style="padding:4px 8px;">' + esc(o.optionsStandard.join(', ')) + '</td></tr>' : '') +
-    (o.dormant ? '<tr><td style="color:#64748B;padding:4px 8px;">Dormant</td><td style="padding:4px 8px;">' + esc(o.dormant) + '</td></tr>' : '') +
-    ((o.couleurInt || o.couleurExt) ? '<tr><td style="color:#64748B;padding:4px 8px;">Couleur int / ext</td><td style="padding:4px 8px;">' + esc((o.couleurInt||'—') + ' / ' + (o.couleurExt||'—')) + '</td></tr>' : '') +
-    (o.quantite ? '<tr><td style="color:#64748B;padding:4px 8px;">Quantité</td><td style="padding:4px 8px;">' + esc(o.quantite) + '</td></tr>' : '') +
-    (o.serrure ? '<tr><td style="color:#64748B;padding:4px 8px;">Serrure</td><td style="padding:4px 8px;">' + esc(o.serrure) + '</td></tr>' : '') +
-    ((o.cylindreSecu && o.cylindreSecu.length) ? '<tr><td style="color:#64748B;padding:4px 8px;">Cylindre</td><td style="padding:4px 8px;">' + esc(o.cylindreSecu.join(', ')) + '</td></tr>' : '') +
-    (o.patteFixationNeuf ? '<tr><td style="color:#64748B;padding:4px 8px;">Patte fixation neuf</td><td style="padding:4px 8px;">' + esc(o.patteFixationNeuf) + '</td></tr>' : '') +
-    ((o.dormantTrHaut || o.dormantTrBas) ? '<tr><td style="color:#64748B;padding:4px 8px;">Dormant traverse H/B</td><td style="padding:4px 8px;">' + esc((o.dormantTrHaut||'—') + ' / ' + (o.dormantTrBas||'—')) + '</td></tr>' : '') +
-    ((o.dormantMtGauche || o.dormantMtDroit) ? '<tr><td style="color:#64748B;padding:4px 8px;">Dormant montant G/D</td><td style="padding:4px 8px;">' + esc((o.dormantMtGauche||'—') + ' / ' + (o.dormantMtDroit||'—')) + '</td></tr>' : '') +
-    (o.hauteurPoignee ? '<tr><td style="color:#64748B;padding:4px 8px;">Hauteur poignée</td><td style="padding:4px 8px;">' + esc(o.hauteurPoignee) + ' mm</td></tr>' : '') +
-    (o.axeMeneaux ? '<tr><td style="color:#64748B;padding:4px 8px;">Axe meneaux</td><td style="padding:4px 8px;">' + esc(o.axeMeneaux) + '</td></tr>' : '') +
-    (o.appuiSeuilBalai ? '<tr><td style="color:#64748B;padding:4px 8px;">Appui seuil balai</td><td style="padding:4px 8px;">' + esc(o.appuiSeuilBalai) + '</td></tr>' : '') +
-    (o.ref4319 ? '<tr><td style="color:#64748B;padding:4px 8px;">Réf. 4319</td><td style="padding:4px 8px;">' + esc(o.ref4319) + '</td></tr>' : '') +
-    (o.calageDormantHabillage ? '<tr><td style="color:#64748B;padding:4px 8px;">Calage dormant/habillage</td><td style="padding:4px 8px;">' + esc(o.calageDormantHabillage) + '</td></tr>' : '') +
-    (o.petitBois ? '<tr><td style="color:#64748B;padding:4px 8px;">Petit bois</td><td style="padding:4px 8px;">' + esc(o.petitBois) + '</td></tr>' : '') +
-    (o.remplBas ? '<tr><td style="color:#64748B;padding:4px 8px;">Remplissage bas</td><td style="padding:4px 8px;">' + esc(o.remplBas) + '</td></tr>' : '') +
-    (o.ventilation ? '<tr><td style="color:#64748B;padding:4px 8px;">Ventilation</td><td style="padding:4px 8px;">' + esc(o.ventilation) + '</td></tr>' : '') +
-    (o.typeVolet ? '<tr><td style="color:#64748B;padding:4px 8px;">Type volet</td><td style="padding:4px 8px;">' + esc(o.typeVolet) + '</td></tr>' : '') +
-    ((o.delignageInt || o.delignageExt) ? '<tr><td style="color:#64748B;padding:4px 8px;">Délignage int/ext</td><td style="padding:4px 8px;">' + esc((o.delignageInt||'—') + ' / ' + (o.delignageExt||'—')) + '</td></tr>' : '') +
-    (o.tapee ? '<tr><td style="color:#64748B;padding:4px 8px;">Tapée</td><td style="padding:4px 8px;">' + esc(o.tapee) + ' mm</td></tr>' : '') +
-    (o.platCoupe ? '<tr><td style="color:#64748B;padding:4px 8px;">Plat - coupe</td><td style="padding:4px 8px;">' + esc(o.platCoupe) + '</td></tr>' : '') +
-    (o.platDimensions ? '<tr><td style="color:#64748B;padding:4px 8px;">Plat - dimensions</td><td style="padding:4px 8px;">' + esc(o.platDimensions) + '</td></tr>' : '') +
-    (o.corniere ? '<tr><td style="color:#64748B;padding:4px 8px;">Cornière</td><td style="padding:4px 8px;">' + esc(o.corniere) + '</td></tr>' : '') +
-    (o.corniereAppuiSeuil ? '<tr><td style="color:#64748B;padding:4px 8px;">Cornière appui seuil</td><td style="padding:4px 8px;">' + esc(o.corniereAppuiSeuil) + '</td></tr>' : '') +
-    '<tr><td style="color:#64748B;padding:4px 8px;">Options</td><td style="padding:4px 8px;white-space:pre-wrap;">' + esc(o.options || '—') + '</td></tr>' +
-    '<tr><td style="color:#64748B;padding:4px 8px;">Note</td><td style="padding:4px 8px;white-space:pre-wrap;">' + esc(o.note || '—') + '</td></tr>' +
+    '<tr style="background:#FAF6F2;"><td colspan="2" style="font-weight:900;color:#0D0D0D;padding:8px;">' + (i+1) + '. ' + esc(o.repere || o.type) + ' — ' + esc(o.type) + '</td></tr>' +
+    '<tr><td style="color:#6B625C;width:140px;padding:4px 8px;">Matériau</td><td style="padding:4px 8px;">' + esc(o.materiau || '—') + '</td></tr>' +
+    (o.pose ? '<tr><td style="color:#6B625C;padding:4px 8px;">Pose</td><td style="padding:4px 8px;">' + esc(o.pose) + '</td></tr>' : '') +
+    '<tr><td style="color:#6B625C;padding:4px 8px;">Dimensions</td><td style="padding:4px 8px;">' + (o.largeur || '—') + ' x ' + (o.hauteur || '—') + ' mm</td></tr>' +
+    ((o.traverses && o.traverses.filter(Boolean).length) ? '<tr><td style="color:#6B625C;padding:4px 8px;">Traverse(s)</td><td style="padding:4px 8px;">' + esc(o.traverses.filter(Boolean).map(t => t + ' mm').join(' / ')) + '</td></tr>' : '') +
+    ((o.meneaux && o.meneaux.filter(Boolean).length) ? '<tr><td style="color:#6B625C;padding:4px 8px;">Meneau(x)</td><td style="padding:4px 8px;">' + esc(o.meneaux.filter(Boolean).map(m => m + ' mm').join(' / ')) + '</td></tr>' : '') +
+    (zonesTexte(o) ? '<tr><td style="color:#6B625C;padding:4px 8px;">Zones</td><td style="padding:4px 8px;">' + esc(zonesTexte(o)) + '</td></tr>' : '') +
+    '<tr><td style="color:#6B625C;padding:4px 8px;">Couleur / RAL</td><td style="padding:4px 8px;">' + esc(o.couleur || '—') + '</td></tr>' +
+    '<tr><td style="color:#6B625C;padding:4px 8px;">Vitrage</td><td style="padding:4px 8px;">' + esc(o.vitrage || '—') + '</td></tr>' +
+    ((o.optionsStandard && o.optionsStandard.length) ? '<tr><td style="color:#6B625C;padding:4px 8px;">Options standard</td><td style="padding:4px 8px;">' + esc(o.optionsStandard.join(', ')) + '</td></tr>' : '') +
+    (o.dormant ? '<tr><td style="color:#6B625C;padding:4px 8px;">Dormant</td><td style="padding:4px 8px;">' + esc(o.dormant) + '</td></tr>' : '') +
+    ((o.couleurInt || o.couleurExt) ? '<tr><td style="color:#6B625C;padding:4px 8px;">Couleur int / ext</td><td style="padding:4px 8px;">' + esc((o.couleurInt||'—') + ' / ' + (o.couleurExt||'—')) + '</td></tr>' : '') +
+    (o.quantite ? '<tr><td style="color:#6B625C;padding:4px 8px;">Quantité</td><td style="padding:4px 8px;">' + esc(o.quantite) + '</td></tr>' : '') +
+    (o.serrure ? '<tr><td style="color:#6B625C;padding:4px 8px;">Serrure</td><td style="padding:4px 8px;">' + esc(o.serrure) + '</td></tr>' : '') +
+    ((o.cylindreSecu && o.cylindreSecu.length) ? '<tr><td style="color:#6B625C;padding:4px 8px;">Cylindre</td><td style="padding:4px 8px;">' + esc(o.cylindreSecu.join(', ')) + '</td></tr>' : '') +
+    (o.patteFixationNeuf ? '<tr><td style="color:#6B625C;padding:4px 8px;">Patte fixation neuf</td><td style="padding:4px 8px;">' + esc(o.patteFixationNeuf) + '</td></tr>' : '') +
+    ((o.dormantTrHaut || o.dormantTrBas) ? '<tr><td style="color:#6B625C;padding:4px 8px;">Dormant traverse H/B</td><td style="padding:4px 8px;">' + esc((o.dormantTrHaut||'—') + ' / ' + (o.dormantTrBas||'—')) + '</td></tr>' : '') +
+    ((o.dormantMtGauche || o.dormantMtDroit) ? '<tr><td style="color:#6B625C;padding:4px 8px;">Dormant montant G/D</td><td style="padding:4px 8px;">' + esc((o.dormantMtGauche||'—') + ' / ' + (o.dormantMtDroit||'—')) + '</td></tr>' : '') +
+    (o.hauteurPoignee ? '<tr><td style="color:#6B625C;padding:4px 8px;">Hauteur poignée</td><td style="padding:4px 8px;">' + esc(o.hauteurPoignee) + ' mm</td></tr>' : '') +
+    (o.axeMeneaux ? '<tr><td style="color:#6B625C;padding:4px 8px;">Axe meneaux</td><td style="padding:4px 8px;">' + esc(o.axeMeneaux) + '</td></tr>' : '') +
+    (o.appuiSeuilBalai ? '<tr><td style="color:#6B625C;padding:4px 8px;">Appui seuil balai</td><td style="padding:4px 8px;">' + esc(o.appuiSeuilBalai) + '</td></tr>' : '') +
+    (o.ref4319 ? '<tr><td style="color:#6B625C;padding:4px 8px;">Réf. 4319</td><td style="padding:4px 8px;">' + esc(o.ref4319) + '</td></tr>' : '') +
+    (o.calageDormantHabillage ? '<tr><td style="color:#6B625C;padding:4px 8px;">Calage dormant/habillage</td><td style="padding:4px 8px;">' + esc(o.calageDormantHabillage) + '</td></tr>' : '') +
+    (o.petitBois ? '<tr><td style="color:#6B625C;padding:4px 8px;">Petit bois</td><td style="padding:4px 8px;">' + esc(o.petitBois) + '</td></tr>' : '') +
+    (o.remplBas ? '<tr><td style="color:#6B625C;padding:4px 8px;">Remplissage bas</td><td style="padding:4px 8px;">' + esc(o.remplBas) + '</td></tr>' : '') +
+    (o.ventilation ? '<tr><td style="color:#6B625C;padding:4px 8px;">Ventilation</td><td style="padding:4px 8px;">' + esc(o.ventilation) + '</td></tr>' : '') +
+    (o.typeVolet ? '<tr><td style="color:#6B625C;padding:4px 8px;">Type volet</td><td style="padding:4px 8px;">' + esc(o.typeVolet) + '</td></tr>' : '') +
+    ((o.delignageInt || o.delignageExt) ? '<tr><td style="color:#6B625C;padding:4px 8px;">Délignage int/ext</td><td style="padding:4px 8px;">' + esc((o.delignageInt||'—') + ' / ' + (o.delignageExt||'—')) + '</td></tr>' : '') +
+    (o.tapee ? '<tr><td style="color:#6B625C;padding:4px 8px;">Tapée</td><td style="padding:4px 8px;">' + esc(o.tapee) + ' mm</td></tr>' : '') +
+    (o.platCoupe ? '<tr><td style="color:#6B625C;padding:4px 8px;">Plat - coupe</td><td style="padding:4px 8px;">' + esc(o.platCoupe) + '</td></tr>' : '') +
+    (o.platDimensions ? '<tr><td style="color:#6B625C;padding:4px 8px;">Plat - dimensions</td><td style="padding:4px 8px;">' + esc(o.platDimensions) + '</td></tr>' : '') +
+    (o.corniere ? '<tr><td style="color:#6B625C;padding:4px 8px;">Cornière</td><td style="padding:4px 8px;">' + esc(o.corniere) + '</td></tr>' : '') +
+    (o.corniereAppuiSeuil ? '<tr><td style="color:#6B625C;padding:4px 8px;">Cornière appui seuil</td><td style="padding:4px 8px;">' + esc(o.corniereAppuiSeuil) + '</td></tr>' : '') +
+    '<tr><td style="color:#6B625C;padding:4px 8px;">Options</td><td style="padding:4px 8px;white-space:pre-wrap;">' + esc(o.options || '—') + '</td></tr>' +
+    '<tr><td style="color:#6B625C;padding:4px 8px;">Note</td><td style="padding:4px 8px;white-space:pre-wrap;">' + esc(o.note || '—') + '</td></tr>' +
     '</table>'
   )).join('');
 }
@@ -1551,11 +1654,11 @@ function FoldSection({ title, summary, children, defaultOpen }) {
   return (
     <div style={{border:"1px solid "+(!open && summary ? C.orBord : C.border),borderRadius:"10px",marginBottom:"12px",overflow:"hidden"}}>
       <button type="button" onClick={() => setOpen(!open)}
-        style={{width:"100%",display:"flex",justifyContent:"space-between",alignItems:"center",gap:"10px",padding:"10px 12px",background:"#F8FAFC",border:"none",cursor:"pointer"}}>
+        style={{width:"100%",display:"flex",justifyContent:"space-between",alignItems:"center",gap:"10px",padding:"10px 12px",background:"#FAF6F2",border:"none",cursor:"pointer"}}>
         <span style={{display:"flex",flexDirection:"column",alignItems:"flex-start",gap:"2px",minWidth:0,textAlign:"left"}}>
           <span style={{fontSize:"12px",fontWeight:"800",color:C.white}}>{title}</span>
           {!open && summary && (
-            <span style={{fontSize:"10px",fontWeight:"600",color:"#8a6d1f",maxWidth:"100%",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{summary}</span>
+            <span style={{fontSize:"10px",fontWeight:"600",color:"#B84300",maxWidth:"100%",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{summary}</span>
           )}
         </span>
         <span style={{fontSize:"11px",color:C.muted,flexShrink:0}}>{open ? "▲" : "▼"}</span>
@@ -1613,9 +1716,10 @@ function FieldText({ label, value, onChange, placeholder, type }) {
 // ---- MODAL AJOUT / EDITION D'UNE OUVERTURE ----
 // Partie haute = minimum vital du métré + configurateur graphique.
 // Chaque information n'existe qu'à un seul endroit (dédoublonné).
-function OuvertureModal({ initial, onClose, onSave }) {
+function OuvertureModal({ initial, copie, onClose, onSave }) {
   const [o, setO] = React.useState(() => {
     if (initial) return initial;
+    if (copie) return copie;
     const z = zonesFromType("OB1", 1200); // dessin initial cohérent avec le type par défaut
     return {
       repere: "", type: "OB1", materiau: "PVC", pose: "", largeur: "", hauteur: "", couleur: "", vitrage: "", dormant: "", pieceAppui: "", options: "", optionsStandard: [], note: "", photoPreview: null,
@@ -1680,14 +1784,19 @@ function OuvertureModal({ initial, onClose, onSave }) {
   return (
     <div style={{position:"fixed",inset:0,zIndex:3000,background:"rgba(0,0,0,0.5)",display:"flex",alignItems:"center",justifyContent:"center",padding:"16px"}}
       onClick={e => e.target === e.currentTarget && onClose()}>
-      <div style={{background:"#fff",borderRadius:"16px",width:"560px",maxWidth:"100%",maxHeight:"92vh",overflowY:"auto",padding:"22px"}}>
+      <div style={{background:"#fff",borderRadius:"20px",width:"600px",maxWidth:"100%",maxHeight:"92vh",overflowY:"auto",padding:"22px"}}
+        onKeyDown={e => { if (e.key === "Enter" && e.target.tagName === "INPUT" && e.target.type !== "checkbox" && e.target.type !== "file") { e.preventDefault(); const f = Array.from(e.currentTarget.querySelectorAll('input:not([type=file]):not([type=checkbox]):not([disabled]),select,textarea')); const i = f.indexOf(e.target); if (f[i+1]) f[i+1].focus(); } }}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"14px"}}>
-          <h2 style={{fontSize:"15px",color:C.white,fontWeight:"900"}}>📐 Ouverture</h2>
+          <h2 style={{fontSize:"16px",color:C.white,fontWeight:"900"}}>📐 {initial ? "Modifier l'ouverture" : "Nouvelle ouverture"}</h2>
           <button onClick={onClose} style={{background:"none",border:"none",fontSize:"18px",color:C.muted,cursor:"pointer"}}>✕</button>
         </div>
 
         <label style={{fontSize:"11px",fontWeight:"700",color:C.muted,display:"block",marginBottom:"6px"}}>Repère (ex : Salon — Fenêtre 1)</label>
-        <input value={o.repere} onChange={e => set('repere', e.target.value)} placeholder="Repère" style={{marginBottom:"14px"}}/>
+        <input value={o.repere} onChange={e => set('repere', e.target.value)} placeholder="Repère" style={{marginBottom:"12px"}} autoFocus={!initial}/>
+
+        <label style={{fontSize:"11px",fontWeight:"700",color:C.muted,display:"block",marginBottom:"6px"}}>Pièce / niveau (ex : RDC — Salon)</label>
+        <input value={o.piece || ""} onChange={e => set('piece', e.target.value)} placeholder="Pièce, niveau ou zone" list="liste-pieces-metre" style={{marginBottom:"14px"}}/>
+        <datalist id="liste-pieces-metre">{(window.__piecesMetre || []).map(p => <option key={p} value={p}/>)}</datalist>
 
         <label style={{fontSize:"11px",fontWeight:"700",color:C.muted,display:"block",marginBottom:"8px"}}>Type d'ouvrant</label>
         <button type="button" onClick={() => setShowTypePicker(true)}
@@ -1710,16 +1819,35 @@ function OuvertureModal({ initial, onClose, onSave }) {
 
         <ChoiceButtons label="Type de pose" value={o.pose} onChange={v => set('pose', v)} choices={POSES}/>
 
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"10px",marginBottom:"14px"}}>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 90px",gap:"10px",marginBottom:"10px"}}>
           <div>
             <label style={{fontSize:"11px",fontWeight:"700",color:C.muted,display:"block",marginBottom:"6px"}}>Largeur (mm)</label>
-            <input type="number" value={o.largeur} onChange={e => set('largeur', e.target.value)} placeholder="ex : 1200"/>
+            <input type="number" inputMode="numeric" min="0" value={o.largeur} onChange={e => set('largeur', e.target.value)} placeholder="ex : 1200"/>
           </div>
           <div>
             <label style={{fontSize:"11px",fontWeight:"700",color:C.muted,display:"block",marginBottom:"6px"}}>Hauteur (mm)</label>
-            <input type="number" value={o.hauteur} onChange={e => set('hauteur', e.target.value)} placeholder="ex : 1400"/>
+            <input type="number" inputMode="numeric" min="0" value={o.hauteur} onChange={e => set('hauteur', e.target.value)} placeholder="ex : 1400"/>
+          </div>
+          <div>
+            <label style={{fontSize:"11px",fontWeight:"700",color:C.muted,display:"block",marginBottom:"6px"}}>Qté</label>
+            <input type="number" inputMode="numeric" min="1" step="1" value={o.quantite} onChange={e => set('quantite', e.target.value)} placeholder="1"/>
           </div>
         </div>
+        {(() => {
+          const su = surfaceUnitaireM2(o, REGLES_DEFAUT), pu = perimetreUnitaireMl(o), q = qteOuv(o);
+          const ctr = controlesOuverture(o, []).filter(c => c.niveau === "erreur" || /inhabituelle|Porte|meneau|traverse/i.test(c.msg));
+          return (
+            <div style={{marginBottom:"14px"}}>
+              <div style={{display:"flex",gap:"8px",flexWrap:"wrap"}}>
+                <span style={{fontSize:"11px",fontWeight:"800",padding:"4px 10px",borderRadius:"999px",background:C.orDim,color:"#B84300"}} title="Largeur × hauteur, en m² (calculé)">
+                  {su == null ? "Surface : saisir L et H" : "Surface " + fmtNb(su, 3) + " m²" + (q > 1 ? " × " + q + " = " + fmtNb(su * q, 3) + " m²" : "")}
+                </span>
+                {pu != null && <span style={{fontSize:"11px",fontWeight:"800",padding:"4px 10px",borderRadius:"999px",background:"rgba(0,0,0,0.06)",color:C.white}} title="2 × (L + H), en mètres linéaires (calculé)">Périmètre {fmtNb(pu * q, 2)} ml</span>}
+              </div>
+              {ctr.map((c, i) => <div key={i} style={{fontSize:"11px",fontWeight:"700",marginTop:"6px",color:c.niveau === "erreur" ? C.rouge : "#B84300"}}>{c.niveau === "erreur" ? "⛔ " : "⚠️ "}{c.msg}</div>)}
+            </div>
+          );
+        })()}
 
         {/* Configurateur graphique : accessible pour tous les types (pas
             réservé à "Ensemble composé") — aperçu en direct + accès au
@@ -1732,7 +1860,7 @@ function OuvertureModal({ initial, onClose, onSave }) {
               dangerouslySetInnerHTML={{ __html: buildSchemaSvgString(o, false, 300, 220) }}/>
           ) : null}
           <button type="button" onClick={() => { if (!o.largeur || !o.hauteur) { alert("Renseigne d'abord Largeur et Hauteur."); return; } setShowConfig(true); }}
-            style={{width:"100%",marginTop:"8px",display:"flex",alignItems:"center",justifyContent:"center",gap:"8px",padding:"12px",background:C.orDim,border:"1.5px dashed "+C.orBord,color:"#8a6d1f",borderRadius:"10px",fontWeight:"800",fontSize:"12px",cursor:"pointer"}}>
+            style={{width:"100%",marginTop:"8px",display:"flex",alignItems:"center",justifyContent:"center",gap:"8px",padding:"12px",background:C.orDim,border:"1.5px dashed "+C.orBord,color:"#B84300",borderRadius:"10px",fontWeight:"800",fontSize:"12px",cursor:"pointer"}}>
             📐 {resumeConfig ? "Ouvrir le configurateur (" + resumeConfig + ")" : "Ouvrir le configurateur (meneaux, traverses, ouvrants)"}
           </button>
         </div>
@@ -1778,7 +1906,6 @@ function OuvertureModal({ initial, onClose, onSave }) {
             <FieldText label="Couleur intérieure" value={o.couleurInt} onChange={v => set('couleurInt', v)} placeholder="ex : Blanc 9016"/>
             <FieldText label="Couleur extérieure" value={o.couleurExt} onChange={v => set('couleurExt', v)} placeholder="ex : Gris 7016"/>
           </div>
-          <FieldText label="Quantité" type="number" value={o.quantite} onChange={v => set('quantite', v)} placeholder="ex : 1"/>
         </FoldSection>
 
         <FoldSection title="🪟 Vitrage" summary={resumeVitrage}>
@@ -1863,10 +1990,14 @@ function OuvertureModal({ initial, onClose, onSave }) {
         <label style={{fontSize:"11px",fontWeight:"700",color:C.muted,display:"block",marginBottom:"6px"}}>Note</label>
         <textarea value={o.note} onChange={e => set('note', e.target.value)} rows={2} placeholder="Remarque particulière..." style={{marginBottom:"18px",resize:"vertical"}}/>
 
-        <button onClick={() => valide && onSave(o)} disabled={!valide}
-          style={{width:"100%",padding:"13px",background:valide?C.or:"#D1D5DB",color:"#111",border:"none",borderRadius:"10px",fontWeight:"900",fontSize:"13px",cursor:valide?"pointer":"not-allowed"}}>
-          {initial ? "Mettre à jour l'ouverture" : "Ajouter l'ouverture"}
-        </button>
+        <div style={{display:"flex",gap:"10px",flexWrap:"wrap"}}>
+          <button className="ik-btn-or" onClick={() => valide && onSave(o)} disabled={!valide} style={{flex:"1 1 200px"}}>
+            {initial ? "Mettre à jour l'ouverture" : "Ajouter l'ouverture"}
+          </button>
+          <button className="ik-btn-noir" onClick={() => valide && onSave(o, { dupliquer: true })} disabled={!valide} style={{flex:"1 1 200px"}} title="Enregistre cette ouverture et en ouvre une copie à modifier (même type, mêmes options)">
+            Enregistrer + dupliquer
+          </button>
+        </div>
       </div>
 
       {showConfig && (
@@ -2031,7 +2162,7 @@ function Login({ onLogin }) {
     <div style={{minHeight:"100vh",background:C.bg,display:"flex",alignItems:"center",justifyContent:"center",padding:"24px",position:"relative"}}>
       <div style={{width:"100%",maxWidth:"340px"}}>
         <div style={{textAlign:"center",marginBottom:"36px"}}>
-          <div style={{width:"190px",height:"100px",background:"#FFFFFF",borderRadius:"16px",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 16px",boxShadow:"0 8px 32px rgba(218,178,57,0.3)",padding:"8px",boxSizing:"border-box"}}>
+          <div style={{width:"190px",height:"100px",background:"#FFFFFF",borderRadius:"16px",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 16px",boxShadow:"0 8px 32px rgba(255,107,0,0.3)",padding:"8px",boxSizing:"border-box"}}>
             <span style={{fontSize:"26px",fontWeight:"900",color:"#111111",letterSpacing:"1px"}}>RSIA IKO</span>
           </div>
           <div style={{fontSize:"11px",color:C.muted,marginTop:"6px",letterSpacing:"2px",textTransform:"uppercase"}}>📐 Module Métreur</div>
@@ -2066,17 +2197,60 @@ function FicheMetre({ agenceAccess, ficheInit, onBack }) {
   const [toiseHistorique, setToiseHistorique] = React.useState([]);
   const [toiseErreur, setToiseErreur] = React.useState("");
   const [toiseTexte, setToiseTexte] = React.useState("");
-  const [vueMode, setVueMode] = React.useState("vocal");
+  const [vueMode, setVueMode] = React.useState("fiche");
+  const [supprimes, setSupprimes] = React.useState([]); // ids Airtable des ouvertures supprimées (effacées à l'enregistrement)
+  const [recherche, setRecherche] = React.useState("");
+  const [filtrePiece, setFiltrePiece] = React.useState("");
+  const [filtreEtat, setFiltreEtat] = React.useState("tout"); // tout | anomalies | estimees
+  const [tri, setTri] = React.useState("saisie"); // saisie | repere | surface | piece
+  const [regles, setRegles] = React.useState(() => {
+    try { const r = JSON.parse(localStorage.getItem('metreRegles') || 'null'); return { ...REGLES_DEFAUT, ...(r || {}) }; } catch (e) { return { ...REGLES_DEFAUT }; }
+  });
+  const majRegles = (k, v) => { setRegles(prev => { const n = { ...prev, [k]: v }; try { localStorage.setItem('metreRegles', JSON.stringify(n)); } catch (e) {} return n; }); };
+  const [modifie, setModifie] = React.useState(false);
+  const premierRendu = React.useRef(true);
+  React.useEffect(() => { if (premierRendu.current) { premierRendu.current = false; return; } setModifie(true); }, [fiche, ouvertures, supprimes]);
+  React.useEffect(() => {
+    const avant = (e) => { if (modifie) { e.preventDefault(); e.returnValue = ""; } };
+    window.addEventListener('beforeunload', avant);
+    return () => window.removeEventListener('beforeunload', avant);
+  }, [modifie]);
+  const synth = React.useMemo(() => syntheseMetre(ouvertures, regles), [ouvertures, regles]);
+  const pieces = React.useMemo(() => Array.from(new Set(ouvertures.map(o => (o.piece || "").trim()).filter(Boolean))).sort(), [ouvertures]);
+  window.__piecesMetre = pieces;
 
   const setF = (k, v) => setFiche(prev => ({ ...prev, [k]: v }));
 
-  const ajouterOuverture = (o) => {
-    setOuvertures(prev => modalOuverture.index === -1 ? [...prev, o] : prev.map((x,i) => i===modalOuverture.index ? o : x));
-    setModalOuverture(null);
+  // Copie d'une ouverture : mêmes caractéristiques, nouvel enregistrement, repère incrémenté.
+  const copieOuverture = (o, liste) => {
+    const m = String(o.repere || "").match(/^(.*?)(\d+)\s*$/);
+    const repere = m ? m[1] + (parseInt(m[2], 10) + 1) : (o.repere ? o.repere + " (copie)" : "");
+    return { ...o, airtableId: undefined, repere, suspect: false };
+  };
+  const ajouterOuverture = (o, opts) => {
+    const idx = modalOuverture.index;
+    const apres = idx === -1 ? [...ouvertures, o] : ouvertures.map((x,i) => i===idx ? o : x);
+    setOuvertures(apres);
+    if (opts && opts.dupliquer) {
+      setModalOuverture({ index: -1, copie: copieOuverture(o, apres), cle: Date.now() });
+    } else setModalOuverture(null);
+  };
+  const dupliquerLigne = (i) => {
+    setOuvertures(prev => { const c = copieOuverture(prev[i], prev); return [...prev.slice(0, i + 1), c, ...prev.slice(i + 1)]; });
   };
   const supprimerOuverture = (i) => {
-    if (!confirm("Supprimer cette ouverture ?")) return;
+    const o = ouvertures[i];
+    if (!confirm("Supprimer l'ouverture « " + (o.repere || "sans repère") + " » ?" + (o.airtableId ? "\nElle sera effacée de la base à l'enregistrement." : ""))) return;
+    if (o.airtableId) setSupprimes(prev => [...prev, o.airtableId]);
     setOuvertures(prev => prev.filter((_,idx) => idx!==i));
+  };
+  const dupliquerFiche = () => {
+    if (!confirm("Créer une nouvelle fiche (brouillon) à partir de celle-ci ?\nLa fiche actuelle n'est pas modifiée.")) return;
+    setFiche(prev => ({ ...prev, numero: genererNumero(), airtableId: null, statut: "Brouillon", date: new Date().toISOString().split('T')[0] }));
+    setOuvertures(prev => prev.map(o => ({ ...o, airtableId: undefined })));
+    setSupprimes([]);
+    setStatutMsg("📑 Copie créée : complétez puis enregistrez.");
+    setTimeout(() => setStatutMsg(""), 4000);
   };
 
   // ---- Toise, l'assistante vocale du métreur ----
@@ -2430,6 +2604,16 @@ function FicheMetre({ agenceAccess, ficheInit, onBack }) {
         });
       }
 
+      // Ouvertures supprimées à l'écran : effacées de la base (sinon elles réapparaîtraient)
+      const restants = [];
+      for (const idSup of supprimes) {
+        try {
+          const rd = await fetch('/api/airtable/' + encodeURIComponent(TABLE_OUVERTURES) + '/' + idSup, { method: 'DELETE' });
+          if (!rd.ok) restants.push(idSup);
+        } catch (e) { restants.push(idSup); }
+      }
+      setSupprimes(restants);
+      if (restants.length) alert("⚠️ " + restants.length + " ouverture(s) supprimée(s) n'ont pas pu être effacées de la base (droits ou réseau). Elles réapparaîtront à la réouverture.");
       const nouvellesOuvertures = [...ouvertures];
       for (let i = 0; i < nouvellesOuvertures.length; i++) {
         const o = nouvellesOuvertures[i];
@@ -2470,7 +2654,9 @@ function FicheMetre({ agenceAccess, ficheInit, onBack }) {
           nouvellesOuvertures[i] = { ...o, airtableId: data.id };
         }
       }
+      premierRendu.current = true; // la mise à jour des identifiants n'est pas une modification utilisateur
       setOuvertures(nouvellesOuvertures);
+      setModifie(false);
       return ficheId;
     } finally {
       setSaving(false);
@@ -2567,18 +2753,18 @@ function FicheMetre({ agenceAccess, ficheInit, onBack }) {
           {fiche.client ? fiche.client : "Nouvelle fiche"}
         </div>
         <div style={{width:"220px",height:"220px",borderRadius:"50%",
-          background:"radial-gradient(circle at 35% 30%, #E8D4B0, #C9A876 55%, #8a6d1f 100%)",
+          background:"radial-gradient(circle at 35% 30%, #FFB366, #FF6B00 55%, #B84300 100%)",
           boxShadow:"0 0 90px rgba(255,107,0,0.3)",
           animation: toiseEcoute ? "pulseToiseEcran 1s ease-in-out infinite" : "respireToise 3.2s ease-in-out infinite"}}/>
         <div style={{marginTop:"32px",color:"#b8b8b8",fontSize:"14px",maxWidth:"340px",textAlign:"center",minHeight:"40px",lineHeight:"1.5"}}>
           {toiseEcoute ? "Je vous écoute..." : toiseEnCours ? "..." : toiseDernier ? toiseDernier : "Dictez à Toise : \"Fenêtre P1, 120 par 100, blanc, double vitrage\"..."}
         </div>
         {toisePhotoConfirmee && (
-          <div style={{marginTop:"14px",width:"90%",maxWidth:"320px",position:"relative",borderRadius:"14px",overflow:"hidden",border:"2px solid "+(toisePhotoConfirmee.suspect?"#DC2626":"#C9A876")}}>
+          <div style={{marginTop:"14px",width:"90%",maxWidth:"320px",position:"relative",borderRadius:"14px",overflow:"hidden",border:"2px solid "+(toisePhotoConfirmee.suspect?"#DC2626":"#FF6B00")}}>
             <img src={toisePhotoConfirmee.dataUrl} style={{width:"100%",display:"block"}} alt="Mesure"/>
             <div style={{position:"absolute",bottom:0,left:0,right:0,background:"linear-gradient(transparent,rgba(0,0,0,0.85))",padding:"20px 12px 10px",display:"flex",justifyContent:"space-between",alignItems:"flex-end"}}>
               <div>
-                {toisePhotoConfirmee.repere && <div style={{color:"#C9A876",fontSize:"10px",fontWeight:"800"}}>{toisePhotoConfirmee.repere}</div>}
+                {toisePhotoConfirmee.repere && <div style={{color:"#FF6B00",fontSize:"10px",fontWeight:"800"}}>{toisePhotoConfirmee.repere}</div>}
                 <div style={{color:"#fff",fontSize:"16px",fontWeight:"900"}}>{toisePhotoConfirmee.largeur} × {toisePhotoConfirmee.hauteur} mm</div>
               </div>
               {toisePhotoConfirmee.suspect && <div style={{color:"#DC2626",fontSize:"10px",fontWeight:"800"}}>⚠️ à vérifier</div>}
@@ -2620,7 +2806,7 @@ function FicheMetre({ agenceAccess, ficheInit, onBack }) {
             onChange={e => { if (e.target.files[0]) capturerPhotoToise(e.target.files[0]); e.target.value = ""; }}/>
           <button onClick={() => document.getElementById('toisePhotoInput').click()}
             title="Capture rapide : photo avec mètre ruban dans le cadre, envoi automatique"
-            style={{width:"52px",height:"52px",flexShrink:0,borderRadius:"14px",background:"linear-gradient(135deg,#FF6B00,#C9A876)",border:"none",color:"#111",fontSize:"22px",cursor:"pointer",boxShadow:"0 4px 14px rgba(255,107,0,0.35)"}}>
+            style={{width:"52px",height:"52px",flexShrink:0,borderRadius:"14px",background:"linear-gradient(135deg,#FF6B00,#FF6B00)",border:"none",color:"#111",fontSize:"22px",cursor:"pointer",boxShadow:"0 4px 14px rgba(255,107,0,0.35)"}}>
             📷
           </button>
           <input id="toiseChampTexte" type="text" value={toiseTexte}
@@ -2637,7 +2823,7 @@ function FicheMetre({ agenceAccess, ficheInit, onBack }) {
 
         <div style={{position:"fixed",bottom:"36px",left:"36px"}}>
           <button onClick={() => { debloquerVoixIOS(); lancerEcouteToise(); }}
-            style={{width:"64px",height:"64px",borderRadius:"50%",background:toiseEcoute?"#DC2626":"radial-gradient(circle at 35% 30%, #E8D4B0, #C9A876 55%, #8a6d1f 100%)",border:"none",color:"#3a2e10",cursor:"pointer",fontSize:"26px",boxShadow:"0 6px 24px rgba(255,107,0,0.3)"}}>
+            style={{width:"64px",height:"64px",borderRadius:"50%",background:toiseEcoute?"#DC2626":"radial-gradient(circle at 35% 30%, #FFB366, #FF6B00 55%, #B84300 100%)",border:"none",color:"#fff",cursor:"pointer",fontSize:"26px",boxShadow:"0 6px 24px rgba(255,107,0,0.3)"}}>
             🎙️
           </button>
         </div>
@@ -2655,123 +2841,191 @@ function FicheMetre({ agenceAccess, ficheInit, onBack }) {
     );
   }
 
+  const lignesAffichees = (() => {
+    let L = ouvertures.map((o, i) => ({ o, i, ctr: controlesOuverture(o, ouvertures) }));
+    const q = recherche.trim().toLowerCase();
+    if (q) L = L.filter(({ o }) => [o.repere, o.piece, o.type, o.materiau, o.couleur, o.vitrage, o.note, o.pose].join(" ").toLowerCase().includes(q));
+    if (filtrePiece) L = L.filter(({ o }) => ((o.piece || "").trim() || "Sans pièce") === filtrePiece);
+    if (filtreEtat === "anomalies") L = L.filter(({ ctr }) => ctr.length > 0);
+    if (filtreEtat === "estimees") L = L.filter(({ o }) => o.suspect);
+    const surf = ({ o }) => (surfaceUnitaireM2(o, regles) || 0) * qteOuv(o);
+    if (tri === "repere") L = [...L].sort((a, b) => String(a.o.repere).localeCompare(String(b.o.repere), 'fr', { numeric: true }));
+    else if (tri === "surface") L = [...L].sort((a, b) => surf(b) - surf(a));
+    else if (tri === "piece") L = [...L].sort((a, b) => String(a.o.piece || "~").localeCompare(String(b.o.piece || "~"), 'fr', { numeric: true }));
+    return L;
+  })();
+  const lbl = {fontSize:"11px",fontWeight:"800",color:C.muted,display:"block",marginBottom:"6px",textTransform:"uppercase",letterSpacing:"0.4px"};
+  const exporterCsv = () => telechargerTexte("releve-" + fiche.numero + ".csv", csvReleve(fiche, ouvertures, regles));
+  const nomStatutOk = fiche.statut === "Envoyé à l'atelier";
+
   return (
-    <div style={{maxWidth:"760px",margin:"0 auto",padding:"20px"}}>
-      <button onClick={onBack} style={{background:"none",border:"none",color:C.muted,fontSize:"12px",fontWeight:"700",cursor:"pointer",marginBottom:"14px"}}>← Retour aux fiches</button>
-
-      <div style={{background:C.card,border:"1px solid "+C.border,borderRadius:"14px",padding:"20px",marginBottom:"16px"}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"14px"}}>
-          <h2 style={{fontSize:"14px",color:C.white,fontWeight:"900"}}>🏗️ Fiche chantier — {fiche.numero}</h2>
-          {fiche.statut && <span style={{fontSize:"10px",fontWeight:"800",padding:"3px 9px",borderRadius:"20px",background:fiche.statut==="Envoyé à l'atelier"?C.vertDim:C.orDim,color:fiche.statut==="Envoyé à l'atelier"?C.vert:"#8a6d1f"}}>{fiche.statut}</span>}
+    <div style={{maxWidth:"1180px",margin:"0 auto",padding:"18px 16px 110px"}}>
+      <audio ref={toiseAudioRef} style={{display:"none"}}/>
+      <div style={{display:"flex",alignItems:"center",gap:"12px",flexWrap:"wrap",marginBottom:"16px"}}>
+        <button className="ik-btn-verre" onClick={() => { if (modifie && !confirm("Des modifications ne sont pas enregistrées. Quitter quand même ?")) return; onBack(); }}>← Fiches</button>
+        <div style={{flex:"1 1 220px",minWidth:0}}>
+          <div style={{fontSize:"11px",fontWeight:"800",color:"rgba(255,255,255,0.85)",letterSpacing:"1px",textTransform:"uppercase"}}>Chantier · {fiche.numero}</div>
+          <div style={{fontSize:"22px",fontWeight:"900",color:"#fff",textShadow:"0 2px 10px rgba(0,0,0,0.25)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{fiche.client || "Nouvelle fiche"}{fiche.adresse ? " — " + fiche.adresse : ""}</div>
         </div>
-        <label style={{fontSize:"11px",fontWeight:"700",color:C.muted,display:"block",marginBottom:"6px"}}>N° dossier</label>
-        <input value={fiche.numeroDossier} onChange={e => setF('numeroDossier', e.target.value)} placeholder="Réf. dossier commercial" style={{marginBottom:"10px"}}/>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"10px",marginBottom:"10px"}}>
-          <div>
-            <label style={{fontSize:"11px",fontWeight:"700",color:C.muted,display:"block",marginBottom:"6px"}}>Client</label>
-            <input value={fiche.client} onChange={e => setF('client', e.target.value)} placeholder="Nom du client"/>
-          </div>
-          <div>
-            <label style={{fontSize:"11px",fontWeight:"700",color:C.muted,display:"block",marginBottom:"6px"}}>Téléphone</label>
-            <input value={fiche.telephone} onChange={e => setF('telephone', e.target.value)} placeholder="Téléphone"/>
-          </div>
-        </div>
-        <label style={{fontSize:"11px",fontWeight:"700",color:C.muted,display:"block",marginBottom:"6px"}}>Adresse du chantier</label>
-        <input value={fiche.adresse} onChange={e => setF('adresse', e.target.value)} placeholder="Adresse complète" style={{marginBottom:"10px"}}/>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:"10px"}}>
-          <div>
-            <label style={{fontSize:"11px",fontWeight:"700",color:C.muted,display:"block",marginBottom:"6px"}}>Agence</label>
-            {agenceAccess === "global" ? (
-              <select value={fiche.agence} onChange={e => setF('agence', e.target.value)}>
-                {AGENCES.map(a => <option key={a}>{a}</option>)}
-              </select>
-            ) : <input value={fiche.agence} disabled/>}
-          </div>
-          <div>
-            <label style={{fontSize:"11px",fontWeight:"700",color:C.muted,display:"block",marginBottom:"6px"}}>Métreur</label>
-            <input value={fiche.metreur} onChange={e => setF('metreur', e.target.value)} placeholder="Nom"/>
-          </div>
-          <div>
-            <label style={{fontSize:"11px",fontWeight:"700",color:C.muted,display:"block",marginBottom:"6px"}}>Date</label>
-            <input type="date" value={fiche.date} onChange={e => setF('date', e.target.value)}/>
-          </div>
-        </div>
+        <span style={{fontSize:"12px",fontWeight:"800",padding:"6px 12px",borderRadius:"999px",background:nomStatutOk?"#fff":"rgba(20,20,22,0.8)",color:nomStatutOk?"#16a34a":"#fff"}}>{nomStatutOk ? "✓ Envoyé à l'atelier" : modifie ? "● Modifications non enregistrées" : (fiche.airtableId ? "Brouillon enregistré" : "Nouveau — non enregistré")}</span>
+        <button className="ik-btn-or" onClick={() => setVueMode("vocal")} title="Dicter à Toise (voix, photo du mètre)">🎙️ Toise</button>
       </div>
 
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"10px"}}>
-        <h3 style={{fontSize:"13px",color:C.white,fontWeight:"900"}}>Ouvertures ({ouvertures.length})</h3>
-        <button onClick={() => setModalOuverture({ index: -1 })} style={{background:C.or,color:"#111",border:"none",borderRadius:"8px",padding:"8px 14px",fontSize:"12px",fontWeight:"900",cursor:"pointer"}}>
-          + Ajouter une ouverture
-        </button>
-      </div>
+      <div className="ik-grille">
+        <div>
+          <div className="ik-carte" style={{padding:"18px",marginBottom:"16px"}}>
+            <div style={{fontSize:"14px",fontWeight:"900",color:C.white,marginBottom:"12px"}}>🏗️ Client et chantier</div>
+            <div className="ik-champs-2" style={{marginBottom:"10px"}}>
+              <div><label style={lbl}>Client *</label><input value={fiche.client} onChange={e => setF('client', e.target.value)} placeholder="Nom du client"/></div>
+              <div><label style={lbl}>Téléphone</label><input type="tel" inputMode="tel" value={fiche.telephone} onChange={e => setF('telephone', e.target.value)} placeholder="Téléphone"/></div>
+            </div>
+            <div className="ik-champs-2" style={{marginBottom:"10px"}}>
+              <div><label style={lbl}>Adresse du chantier *</label><input value={fiche.adresse} onChange={e => setF('adresse', e.target.value)} placeholder="Adresse complète"/></div>
+              <div><label style={lbl}>N° dossier / affaire</label><input value={fiche.numeroDossier} onChange={e => setF('numeroDossier', e.target.value)} placeholder="Réf. dossier commercial"/></div>
+            </div>
+            <div className="ik-champs-3">
+              <div><label style={lbl}>Agence</label>
+                {agenceAccess === "global" ? (<select value={fiche.agence} onChange={e => setF('agence', e.target.value)}>{AGENCES.map(a => <option key={a}>{a}</option>)}</select>) : <input value={fiche.agence} disabled/>}
+              </div>
+              <div><label style={lbl}>Métreur</label><input value={fiche.metreur} onChange={e => setF('metreur', e.target.value)} placeholder="Nom"/></div>
+              <div><label style={lbl}>Date du relevé</label><input type="date" value={fiche.date} onChange={e => setF('date', e.target.value)}/></div>
+            </div>
+            <div style={{marginTop:"10px"}}><label style={lbl}>Note générale</label><textarea rows={2} value={fiche.noteGenerale || ""} onChange={e => setF('noteGenerale', e.target.value)} placeholder="Accès, contraintes de pose, étage, échafaudage…" style={{resize:"vertical"}}/></div>
+          </div>
 
-      {ouvertures.length === 0 && (
-        <div style={{textAlign:"center",color:C.muted,fontSize:"12px",padding:"30px",background:C.card,border:"1px dashed "+C.border,borderRadius:"12px",marginBottom:"16px"}}>
-          Aucune ouverture pour l'instant.
-        </div>
-      )}
-
-      <div style={{display:"flex",flexDirection:"column",gap:"8px",marginBottom:"20px"}}>
-        {ouvertures.map((o, i) => {
-          const nz = zonesRecap(o).length;
-          return (
-            <div key={i} style={{background:C.card,border:"1px solid "+(o.suspect?"#DC2626":C.border),borderRadius:"10px",padding:"10px 14px",display:"flex",alignItems:"center",gap:"12px"}}>
-              <IconOuverture type={o.type} active={true} size={34}/>
-              <div style={{flex:1,minWidth:0}}>
-                <div style={{fontSize:"12px",fontWeight:"800",color:C.white,display:"flex",alignItems:"center",gap:"6px"}}>
-                  {o.repere}
-                  {o.suspect && <span style={{fontSize:"9px",fontWeight:"800",color:"#DC2626",background:"rgba(220,38,38,0.12)",border:"1px solid rgba(220,38,38,0.3)",borderRadius:"5px",padding:"2px 6px"}}>⚠️ À VÉRIFIER</span>}
-                </div>
-                <div style={{fontSize:"11px",color:C.muted}}>
-                  {o.type} · {o.materiau}{o.pose ? " · " + o.pose : ""} · {o.largeur||"—"}×{o.hauteur||"—"} mm
-                  {nz > 1 ? " · " + nz + " zones" : ""}{o.couleur ? " · " + o.couleur : ""}
+          <div className="ik-carte" style={{padding:"18px",marginBottom:"16px"}}>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:"10px",flexWrap:"wrap",marginBottom:"12px"}}>
+              <div style={{fontSize:"14px",fontWeight:"900",color:C.white}}>📐 Ouvertures <span style={{color:C.muted,fontWeight:"700"}}>({lignesAffichees.length}{lignesAffichees.length !== ouvertures.length ? " sur " + ouvertures.length : ""})</span></div>
+              <button className="ik-btn-or" onClick={() => setModalOuverture({ index: -1 })}>+ Ajouter une ouverture</button>
+            </div>
+            {ouvertures.length > 0 && (
+              <div style={{display:"flex",gap:"8px",flexWrap:"wrap",marginBottom:"12px"}}>
+                <input value={recherche} onChange={e => setRecherche(e.target.value)} placeholder="🔍 Rechercher (repère, pièce, couleur…)" style={{flex:"1 1 200px"}}/>
+                <select value={filtrePiece} onChange={e => setFiltrePiece(e.target.value)} style={{flex:"0 1 170px"}}>
+                  <option value="">Toutes les pièces</option>
+                  {Object.keys(synth.parPiece).sort().map(p => <option key={p} value={p}>{p}</option>)}
+                </select>
+                <select value={tri} onChange={e => setTri(e.target.value)} style={{flex:"0 1 160px"}}>
+                  <option value="saisie">Tri : ordre de saisie</option><option value="repere">Tri : repère</option><option value="piece">Tri : pièce</option><option value="surface">Tri : surface</option>
+                </select>
+                <div style={{display:"flex",gap:"6px",flexWrap:"wrap",width:"100%"}}>
+                  {[["tout","Tout"],["anomalies","⚠️ À vérifier (" + synth.anomalies.length + ")"],["estimees","Estimées (" + synth.nbEstimees + ")"]].map(([k, l]) => (
+                    <button key={k} className={"ik-chip" + (filtreEtat === k ? " actif" : "")} onClick={() => setFiltreEtat(k)}>{l}</button>
+                  ))}
                 </div>
               </div>
-              <button onClick={() => setModalOuverture({ index: i })} style={{background:C.orDim,border:"1px solid "+C.orBord,color:"#8a6d1f",borderRadius:"7px",padding:"6px 10px",fontSize:"11px",fontWeight:"700",cursor:"pointer"}}>Modifier</button>
-              <button onClick={() => supprimerOuverture(i)} style={{background:C.rougeDim,border:"1px solid rgba(220,38,38,0.25)",color:C.rouge,borderRadius:"7px",padding:"6px 10px",fontSize:"11px",fontWeight:"700",cursor:"pointer"}}>✕</button>
+            )}
+            {ouvertures.length === 0 && (
+              <div style={{textAlign:"center",color:C.muted,fontSize:"13px",padding:"30px 12px",border:"1.5px dashed rgba(0,0,0,0.2)",borderRadius:"14px"}}>
+                Aucune ouverture. Touchez <b>+ Ajouter une ouverture</b> ou dictez à <b>🎙️ Toise</b>.
+              </div>
+            )}
+            {ouvertures.length > 0 && lignesAffichees.length === 0 && <div style={{textAlign:"center",color:C.muted,fontSize:"13px",padding:"18px"}}>Aucune ouverture ne correspond au filtre.</div>}
+            <div style={{display:"flex",flexDirection:"column",gap:"8px"}}>
+              {lignesAffichees.map(({ o, i, ctr }) => {
+                const su = surfaceUnitaireM2(o, regles), pu = perimetreUnitaireMl(o), q = qteOuv(o);
+                const err = ctr.some(c => c.niveau === "erreur");
+                return (
+                  <div key={i} style={{background:"rgba(255,255,255,0.7)",border:"1.5px solid "+(err?"#DC2626":ctr.length?C.orBord:"rgba(255,255,255,0.9)"),borderRadius:"14px",padding:"10px 12px",display:"flex",alignItems:"center",gap:"12px",flexWrap:"wrap"}}>
+                    <IconOuverture type={o.type} active={true} size={38}/>
+                    <div style={{flex:"1 1 200px",minWidth:0,cursor:"pointer"}} onClick={() => setModalOuverture({ index: i })}>
+                      <div style={{fontSize:"14px",fontWeight:"900",color:C.white,display:"flex",alignItems:"center",gap:"6px",flexWrap:"wrap"}}>
+                        {o.repere || "(sans repère)"}
+                        {o.piece && <span style={{fontSize:"10px",fontWeight:"800",color:"#B84300",background:C.orDim,borderRadius:"999px",padding:"2px 8px"}}>{o.piece}</span>}
+                        {o.suspect && <span style={{fontSize:"10px",fontWeight:"800",color:"#fff",background:"#0D0D0D",borderRadius:"999px",padding:"2px 8px"}}>ESTIMÉE</span>}
+                        {err && <span style={{fontSize:"10px",fontWeight:"800",color:"#fff",background:"#DC2626",borderRadius:"999px",padding:"2px 8px"}}>ERREUR</span>}
+                      </div>
+                      <div style={{fontSize:"12px",color:C.muted}}>
+                        {(TYPES.find(t => t.v === o.type) || {}).l || o.type} · {o.materiau}{o.pose ? " · " + o.pose : ""}{o.couleur ? " · " + o.couleur : ""}{zonesRecap(o).length > 1 ? " · " + zonesRecap(o).length + " zones" : ""}
+                      </div>
+                      <div style={{fontSize:"13px",fontWeight:"800",color:C.white,marginTop:"2px"}}>
+                        {o.largeur || "—"} × {o.hauteur || "—"} mm
+                        {su != null && <span style={{color:"#B84300"}}> · {fmtNb(su * q, 2)} m²{q > 1 ? " (" + q + " u.)" : ""} · {fmtNb(pu * q, 2)} ml</span>}
+                      </div>
+                      {ctr.length > 0 && <div style={{fontSize:"11px",fontWeight:"700",color:err?C.rouge:"#B84300",marginTop:"3px"}}>{ctr.slice(0, 2).map(c => c.msg).join(" · ")}{ctr.length > 2 ? " · +" + (ctr.length - 2) : ""}</div>}
+                    </div>
+                    <div style={{display:"flex",gap:"6px"}}>
+                      <button className="ik-btn-verre" style={{minWidth:"44px",padding:"0 12px"}} onClick={() => setModalOuverture({ index: i })} title="Modifier">✏️</button>
+                      <button className="ik-btn-verre" style={{minWidth:"44px",padding:"0 12px"}} onClick={() => dupliquerLigne(i)} title="Dupliquer cette ouverture">⧉</button>
+                      <button className="ik-btn-verre" style={{minWidth:"44px",padding:"0 12px",color:C.rouge}} onClick={() => supprimerOuverture(i)} title="Supprimer">✕</button>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
-          );
-        })}
-      </div>
-
-      {statutMsg && <div style={{textAlign:"center",fontSize:"12px",fontWeight:"700",color:C.white,marginBottom:"12px"}}>{statutMsg}</div>}
-
-      <div style={{display:"flex",gap:"10px",flexWrap:"wrap"}}>
-        <button onClick={async () => { await genererPdfMetre(fiche, ouvertures); }} disabled={ouvertures.length===0}
-          style={{flex:"1 1 160px",padding:"13px",background:"#fff",border:"1.5px solid "+C.border,color:C.text,borderRadius:"10px",fontWeight:"800",fontSize:"12px",cursor:ouvertures.length?"pointer":"not-allowed"}}>
-          📄 Télécharger PDF
-        </button>
-        <button onClick={enregistrerBrouillon} disabled={!valideFiche || saving}
-          style={{flex:"1 1 160px",padding:"13px",background:C.orDim,border:"1.5px solid "+C.orBord,color:"#8a6d1f",borderRadius:"10px",fontWeight:"800",fontSize:"12px",cursor:valideFiche?"pointer":"not-allowed"}}>
-          {saving ? "..." : "💾 Enregistrer brouillon"}
-        </button>
-        <button onClick={envoyerAtelier} disabled={!valideFiche || sending}
-          style={{flex:"1 1 200px",padding:"13px",background:C.white,border:"none",color:"#fff",borderRadius:"10px",fontWeight:"900",fontSize:"12px",cursor:valideFiche?"pointer":"not-allowed"}}>
-          {sending ? "Envoi en cours..." : "📤 Envoyer à l'atelier"}
-        </button>
-      </div>
-
-      <div style={{marginTop:"18px",paddingTop:"16px",borderTop:"1px dashed "+C.border}}>
-        <div style={{fontSize:"12px",fontWeight:"900",color:C.white,marginBottom:"10px"}}>📋 Résumé BE — couleur, hauteur poignée, schéma</div>
-        <div style={{display:"flex",gap:"10px",flexWrap:"wrap"}}>
-          <button onClick={() => imprimerResumeBE(fiche, ouvertures)} disabled={ouvertures.length===0}
-            style={{flex:"1 1 140px",padding:"12px",background:"#fff",border:"1.5px solid "+C.border,color:C.text,borderRadius:"10px",fontWeight:"800",fontSize:"12px",cursor:ouvertures.length?"pointer":"not-allowed"}}>
-            🖨️ Imprimer
-          </button>
-          <button onClick={() => telechargerResumeBE(fiche, ouvertures)} disabled={ouvertures.length===0}
-            style={{flex:"1 1 140px",padding:"12px",background:"#fff",border:"1.5px solid "+C.border,color:C.text,borderRadius:"10px",fontWeight:"800",fontSize:"12px",cursor:ouvertures.length?"pointer":"not-allowed"}}>
-            💾 Enregistrer
-          </button>
-          <button onClick={envoyerResumeBE} disabled={!valideFiche || sendingBE}
-            style={{flex:"1 1 160px",padding:"12px",background:C.bleu,border:"none",color:"#fff",borderRadius:"10px",fontWeight:"900",fontSize:"12px",cursor:valideFiche?"pointer":"not-allowed"}}>
-            {sendingBE ? "Envoi en cours..." : "✉️ Envoyer au BE"}
-          </button>
+          </div>
         </div>
+
+        <div className="ik-sticky">
+          <div className="ik-carte" style={{padding:"18px",marginBottom:"16px"}}>
+            <div style={{fontSize:"14px",fontWeight:"900",color:C.white,marginBottom:"12px"}}>📊 Synthèse</div>
+            <div className="ik-kpis" style={{gridTemplateColumns:"repeat(2, minmax(0,1fr))",marginBottom:"12px"}}>
+              <div style={{background:"rgba(0,0,0,0.05)",borderRadius:"12px",padding:"10px"}}><div style={{fontSize:"10px",fontWeight:"800",color:C.muted}}>OUVRAGES (qté)</div><div style={{fontSize:"22px",fontWeight:"900",color:C.white}}>{synth.qteTotale}</div><div style={{fontSize:"10px",color:C.muted}}>{synth.nbLignes} ligne{synth.nbLignes > 1 ? "s" : ""}</div></div>
+              <div style={{background:C.orDim,borderRadius:"12px",padding:"10px"}}><div style={{fontSize:"10px",fontWeight:"800",color:"#B84300"}}>SURFACE CALCULÉE</div><div style={{fontSize:"22px",fontWeight:"900",color:C.white}}>{fmtNb(synth.m2, 2)}</div><div style={{fontSize:"10px",color:C.muted}}>m²</div></div>
+              <div style={{background:C.orDim,borderRadius:"12px",padding:"10px"}}><div style={{fontSize:"10px",fontWeight:"800",color:"#B84300"}}>PÉRIMÈTRE CALCULÉ</div><div style={{fontSize:"22px",fontWeight:"900",color:C.white}}>{fmtNb(synth.ml, 1)}</div><div style={{fontSize:"10px",color:C.muted}}>ml</div></div>
+              <div style={{background:synth.nbEstimees?"#0D0D0D":"rgba(0,0,0,0.05)",borderRadius:"12px",padding:"10px"}}><div style={{fontSize:"10px",fontWeight:"800",color:synth.nbEstimees?"#FFB366":C.muted}}>ESTIMÉ (À CONFIRMER)</div><div style={{fontSize:"22px",fontWeight:"900",color:synth.nbEstimees?"#fff":C.white}}>{fmtNb(synth.m2Estime, 2)}</div><div style={{fontSize:"10px",color:synth.nbEstimees?"#ddd":C.muted}}>m² · {synth.nbEstimees} ligne{synth.nbEstimees > 1 ? "s" : ""}</div></div>
+            </div>
+            <div style={{fontSize:"11px",color:C.muted,marginBottom:"10px"}}>Saisi = dimensions entrées · Calculé = L × H et 2 × (L + H) × quantité · Estimé = mesure par photo/voix à confirmer. Cumul sur valeurs non arrondies.</div>
+            {Object.keys(synth.parType).length > 0 && (<>
+              <div style={lbl}>Par type</div>
+              {Object.entries(synth.parType).map(([k, g]) => (<div key={k} style={{display:"flex",justifyContent:"space-between",fontSize:"12px",padding:"3px 0",borderBottom:"1px solid rgba(0,0,0,0.06)"}}><span>{(TYPES.find(t => t.v === k) || {}).l || k}</span><b>{g.qte} · {fmtNb(g.m2, 2)} m²</b></div>))}
+            </>)}
+            {Object.keys(synth.parPiece).length > 1 && (<>
+              <div style={{...lbl, marginTop:"10px"}}>Par pièce / niveau</div>
+              {Object.entries(synth.parPiece).sort().map(([k, g]) => (<div key={k} style={{display:"flex",justifyContent:"space-between",fontSize:"12px",padding:"3px 0",borderBottom:"1px solid rgba(0,0,0,0.06)"}}><span>{k}</span><b>{g.qte} · {fmtNb(g.m2, 2)} m²</b></div>))}
+            </>)}
+            {Object.keys(synth.parMateriau).length > 1 && (<>
+              <div style={{...lbl, marginTop:"10px"}}>Par matériau</div>
+              {Object.entries(synth.parMateriau).map(([k, g]) => (<div key={k} style={{display:"flex",justifyContent:"space-between",fontSize:"12px",padding:"3px 0",borderBottom:"1px solid rgba(0,0,0,0.06)"}}><span>{k}</span><b>{g.qte} · {fmtNb(g.m2, 2)} m²</b></div>))}
+            </>)}
+            <div style={{marginTop:"12px",padding:"10px",borderRadius:"12px",background:synth.nbErreurs?"rgba(220,38,38,0.1)":synth.nbAlertes?C.orDim:"rgba(22,163,74,0.1)"}}>
+              {synth.nbErreurs + synth.nbAlertes === 0 && ouvertures.length > 0 && <div style={{fontSize:"12px",fontWeight:"800",color:C.vert}}>✓ Aucun point à vérifier</div>}
+              {ouvertures.length === 0 && <div style={{fontSize:"12px",color:C.muted}}>Ajoutez des ouvertures pour voir les contrôles.</div>}
+              {synth.nbErreurs > 0 && <div style={{fontSize:"12px",fontWeight:"800",color:C.rouge}}>⛔ {synth.nbErreurs} erreur{synth.nbErreurs > 1 ? "s" : ""} à corriger</div>}
+              {synth.nbAlertes > 0 && <div style={{fontSize:"12px",fontWeight:"800",color:"#B84300"}}>⚠️ {synth.nbAlertes} point{synth.nbAlertes > 1 ? "s" : ""} à vérifier</div>}
+              {synth.anomalies.slice(0, 5).map((a, k) => <div key={k} style={{fontSize:"11px",color:C.text,marginTop:"4px"}}><b>{a.repere}</b> : {a.controles.map(c => c.msg).join(" · ")}</div>)}
+              {synth.anomalies.length > 5 && <div style={{fontSize:"11px",color:C.muted,marginTop:"4px"}}>+ {synth.anomalies.length - 5} autre(s) — filtre « À vérifier »</div>}
+            </div>
+            <div style={{marginTop:"12px"}}>
+              <label style={lbl}>Règle : surface minimale par ouvrage (m²)</label>
+              <input type="number" inputMode="decimal" min="0" step="0.1" value={regles.surfaceMinM2 || ""} onChange={e => majRegles('surfaceMinM2', Math.max(0, Number(e.target.value) || 0))} placeholder="0 = désactivée (ex : 1 pour facturation mini 1 m²)"/>
+              <div style={{fontSize:"10px",color:C.muted,marginTop:"4px"}}>Appliquée au calcul des m² affichés et exportés. Réglage enregistré sur cet appareil.</div>
+            </div>
+          </div>
+
+          <div className="ik-carte" style={{padding:"18px"}}>
+            <div style={{fontSize:"14px",fontWeight:"900",color:C.white,marginBottom:"12px"}}>Enregistrer et transmettre</div>
+            {statutMsg && <div style={{fontSize:"12px",fontWeight:"800",color:C.white,background:C.orDim,borderRadius:"10px",padding:"8px 10px",marginBottom:"10px"}}>{statutMsg}</div>}
+            {!valideFiche && <div style={{fontSize:"11px",color:"#B84300",fontWeight:"700",marginBottom:"8px"}}>Renseignez le client et l'adresse pour enregistrer.</div>}
+            <div style={{display:"grid",gap:"8px"}}>
+              <button className="ik-btn-or" onClick={enregistrerBrouillon} disabled={!valideFiche || saving}>{saving ? "Enregistrement…" : "💾 Enregistrer le brouillon"}</button>
+              <button className="ik-btn-noir" onClick={envoyerAtelier} disabled={!valideFiche || sending || synth.nbErreurs > 0} title={synth.nbErreurs > 0 ? "Corrigez les erreurs avant l'envoi" : ""}>{sending ? "Envoi en cours…" : synth.nbErreurs > 0 ? "📤 Envoi bloqué : erreurs à corriger" : "📤 Envoyer à l'atelier"}</button>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"8px"}}>
+                <button className="ik-btn-verre" onClick={async () => { await genererPdfMetre(fiche, ouvertures); }} disabled={ouvertures.length===0}>📄 PDF</button>
+                <button className="ik-btn-verre" onClick={exporterCsv} disabled={ouvertures.length===0} title="Tableau Excel/CSV : dimensions, m², ml, quantités">📊 Excel (CSV)</button>
+              </div>
+              <div style={{fontSize:"11px",fontWeight:"800",color:C.muted,marginTop:"4px"}}>📋 Résumé BE — couleur, poignée, schéma</div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"8px"}}>
+                <button className="ik-btn-verre" onClick={() => imprimerResumeBE(fiche, ouvertures)} disabled={ouvertures.length===0}>🖨️ Imprimer</button>
+                <button className="ik-btn-verre" onClick={() => telechargerResumeBE(fiche, ouvertures)} disabled={ouvertures.length===0}>💾 Enregistrer</button>
+              </div>
+              <button className="ik-btn-noir" onClick={envoyerResumeBE} disabled={!valideFiche || sendingBE}>{sendingBE ? "Envoi en cours…" : "✉️ Envoyer au BE"}</button>
+              <button className="ik-btn-verre" onClick={dupliquerFiche} disabled={ouvertures.length===0} title="Nouvelle fiche brouillon avec les mêmes ouvertures">📑 Dupliquer la fiche</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="ik-mobbar ik-noprint">
+        <button className="ik-btn-or" style={{flex:1}} onClick={() => setModalOuverture({ index: -1 })}>+ Ouverture</button>
+        <button className="ik-btn-noir" style={{flex:1}} onClick={enregistrerBrouillon} disabled={!valideFiche || saving}>{saving ? "…" : "💾 Enregistrer"}</button>
       </div>
 
       {modalOuverture && (
         <OuvertureModal
+          key={modalOuverture.cle || modalOuverture.index}
           initial={modalOuverture.index >= 0 ? ouvertures[modalOuverture.index] : null}
+          copie={modalOuverture.copie || null}
           onClose={() => setModalOuverture(null)}
           onSave={ajouterOuverture}
         />
@@ -2779,7 +3033,7 @@ function FicheMetre({ agenceAccess, ficheInit, onBack }) {
 
       {/* Widget vocal Toise */}
       <audio ref={toiseAudioRef} style={{display:"none"}}/>
-      <div style={{position:"fixed",bottom:"24px",right:"24px",zIndex:200,display:"flex",flexDirection:"column",alignItems:"flex-end",gap:"10px"}}>
+      <div style={{position:"fixed",bottom:"92px",right:"18px",zIndex:200,display:"flex",flexDirection:"column",alignItems:"flex-end",gap:"10px"}}>
         {toiseOuvert && (
           <div style={{width:"270px",background:C.card,border:"1px solid "+C.orBord,borderRadius:"14px",padding:"16px",boxShadow:"0 10px 40px rgba(0,0,0,0.2)"}}>
             <div style={{fontSize:"12px",fontWeight:"800",color:C.or,marginBottom:"8px",letterSpacing:"1px"}}>TOISE</div>
@@ -2811,10 +3065,10 @@ function FicheMetre({ agenceAccess, ficheInit, onBack }) {
           )}
           <button onClick={() => setVueMode("vocal")} title="Écran vocal Toise"
             style={{width:"36px",height:"36px",borderRadius:"50%",background:C.card,border:"2px solid "+C.or,color:C.or,cursor:"pointer",fontSize:"15px"}}>
-            🔮
+            🖥️
           </button>
           <button onClick={() => { debloquerVoixIOS(); setToiseOuvert(true); lancerEcouteToise(); }}
-            style={{width:"58px",height:"58px",borderRadius:"50%",background:"radial-gradient(circle at 35% 30%, #E8D4B0, #C9A876 55%, #8a6d1f 100%)",border:"none",color:"#3a2e10",cursor:"pointer",fontSize:"24px",boxShadow:"0 0 26px rgba(255,107,0,0.35)",animation:toiseEcoute?"pulseToise 1.2s infinite":"none"}}>
+            style={{width:"58px",height:"58px",borderRadius:"50%",background:"radial-gradient(circle at 35% 30%, #FFB366, #FF6B00 55%, #B84300 100%)",border:"none",color:"#fff",cursor:"pointer",fontSize:"24px",boxShadow:"0 0 26px rgba(255,107,0,0.35)",animation:toiseEcoute?"pulseToise 1.2s infinite":"none"}}>
             🎙️
           </button>
         </div>
@@ -2829,6 +3083,9 @@ function Metreur({ agenceAccess, onClose }) {
   const [fiches, setFiches] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
   const [ouverte, setOuverte] = React.useState(null); // { fiche, ouvertures } ou null
+  const [recherche, setRecherche] = React.useState("");
+  const [filtreStatut, setFiltreStatut] = React.useState("tout");
+  const [triListe, setTriListe] = React.useState("recent");
 
   const charger = async () => {
     setLoading(true);
@@ -2860,7 +3117,7 @@ function Metreur({ agenceAccess, onClose }) {
       const resp = await fetch('/api/airtable/' + encodeURIComponent(TABLE_OUVERTURES) + '?filterByFormula=' + formula);
       const data = await resp.json();
       const ouvertures = (data.records || []).map(r => {
-        let zonesRempl = {}, cCouleur = {}, cHp = {}, cVitrage = {}, cPb = {}, cMc = {}, cOs = {}, cPa = "", cTc = {};
+        let zonesRempl = {}, cCouleur = {}, cHp = {}, cVitrage = {}, cPb = {}, cMc = {}, cOs = {}, cPa = "", cTc = {}, cPiece = "", cEstime = false;
         try {
           const cj = JSON.parse(r.fields["Configurateur JSON"] || "{}");
           zonesRempl = cj.zonesRempl || {};
@@ -2872,9 +3129,10 @@ function Metreur({ agenceAccess, onClose }) {
           cOs = cj.ouvrantsSecondaires || {};
           cPa = cj.pieceAppui || "";
           cTc = cj.traversesCoupures || {};
-        } catch (e) { zonesRempl = {}; cCouleur = {}; cHp = {}; cVitrage = {}; cPb = {}; cMc = {}; cOs = {}; cPa = ""; cTc = {}; }
+          cPiece = cj.piece || ""; cEstime = !!cj.estime;
+        } catch (e) { zonesRempl = {}; cCouleur = {}; cHp = {}; cVitrage = {}; cPb = {}; cMc = {}; cOs = {}; cPa = ""; cTc = {}; cPiece = ""; cEstime = false; }
         return {
-          airtableId: r.id, repere: r.fields["Repère"] || "", type: r.fields["Type"] || "OB1", materiau: r.fields["Matériau"] || "PVC",
+          airtableId: r.id, piece: cPiece, suspect: cEstime, repere: r.fields["Repère"] || "", type: r.fields["Type"] || "OB1", materiau: r.fields["Matériau"] || "PVC",
           pose: r.fields["Pose"] || "",
           largeur: r.fields["Largeur mm"] || "", hauteur: r.fields["Hauteur mm"] || "", couleur: r.fields["Couleur / RAL"] || "",
           teintePvc: cCouleur.teintePvc || "", capotAlu: !!cCouleur.capotAlu, ralCapot: cCouleur.ralCapot || "", finitionCapot: cCouleur.finitionCapot || "",
@@ -2928,35 +3186,75 @@ function Metreur({ agenceAccess, onClose }) {
     );
   }
 
+  const nbEnvoyees = fiches.filter(f => f.fields.Statut === "Envoyé à l'atelier").length;
+  const nbBrouillons = fiches.length - nbEnvoyees;
+  const q = recherche.trim().toLowerCase();
+  const affichees = fiches
+    .filter(f => filtreStatut === "tout" || (filtreStatut === "envoye" ? f.fields.Statut === "Envoyé à l'atelier" : f.fields.Statut !== "Envoyé à l'atelier"))
+    .filter(f => !q || [f.fields.Name, f.fields.Client, f.fields.Adresse, f.fields["N° dossier"], f.fields.Agence, f.fields["Métreur"]].join(" ").toLowerCase().includes(q))
+    .sort((a, b) => {
+      if (triListe === "client") return String(a.fields.Client || "").localeCompare(String(b.fields.Client || ""), 'fr');
+      if (triListe === "ancien") return String(a.fields["Date métrage"] || "").localeCompare(String(b.fields["Date métrage"] || ""));
+      return String(b.fields["Date métrage"] || "").localeCompare(String(a.fields["Date métrage"] || ""));
+    });
+
   return (
     <div style={{minHeight:"100vh",background:C.bg}}>
       <Header agenceAccess={agenceAccess} onClose={onClose}/>
-      <div style={{maxWidth:"760px",margin:"0 auto",padding:"20px"}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"16px"}}>
-          <h2 style={{fontSize:"15px",color:C.white,fontWeight:"900"}}>📐 Fiches métré</h2>
-          <button onClick={nouvelleFiche} style={{background:C.or,color:"#111",border:"none",borderRadius:"8px",padding:"10px 18px",fontSize:"12px",fontWeight:"900",cursor:"pointer"}}>
-            + Nouvelle fiche
-          </button>
+      <div style={{maxWidth:"1000px",margin:"0 auto",padding:"20px 16px 60px"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:"12px",flexWrap:"wrap",marginBottom:"16px"}}>
+          <div>
+            <div style={{fontSize:"24px",fontWeight:"900",color:"#fff",textShadow:"0 2px 10px rgba(0,0,0,0.25)"}}>📐 Relevés de métré</div>
+            <div style={{fontSize:"13px",color:"rgba(255,255,255,0.9)"}}>Reprenez un chantier ou créez un nouveau relevé.</div>
+          </div>
+          <button className="ik-btn-or" onClick={nouvelleFiche} style={{minHeight:"50px",padding:"0 24px",fontSize:"15px"}}>+ Nouvelle fiche</button>
         </div>
-        {loading && <div style={{textAlign:"center",color:C.muted,fontSize:"12px",padding:"30px"}}>Chargement...</div>}
+
+        <div className="ik-kpis" style={{gridTemplateColumns:"repeat(3, minmax(0,1fr))",marginBottom:"14px"}}>
+          {[["Relevés", fiches.length], ["Brouillons", nbBrouillons], ["Envoyés à l'atelier", nbEnvoyees]].map(([l, v]) => (
+            <div key={l} className="ik-carte" style={{padding:"12px 14px"}}><div style={{fontSize:"11px",fontWeight:"800",color:C.muted,textTransform:"uppercase"}}>{l}</div><div style={{fontSize:"26px",fontWeight:"900",color:C.white}}>{v}</div></div>
+          ))}
+        </div>
+
+        <div className="ik-carte" style={{padding:"14px",marginBottom:"14px"}}>
+          <div style={{display:"flex",gap:"8px",flexWrap:"wrap"}}>
+            <input value={recherche} onChange={e => setRecherche(e.target.value)} placeholder="🔍 Rechercher (client, adresse, n° dossier, métreur…)" style={{flex:"1 1 240px"}}/>
+            <select value={triListe} onChange={e => setTriListe(e.target.value)} style={{flex:"0 1 190px"}}>
+              <option value="recent">Plus récents d'abord</option><option value="ancien">Plus anciens d'abord</option><option value="client">Client (A→Z)</option>
+            </select>
+          </div>
+          <div style={{display:"flex",gap:"6px",flexWrap:"wrap",marginTop:"10px"}}>
+            {[["tout","Tous"],["brouillon","Brouillons"],["envoye","Envoyés"]].map(([k, l]) => (
+              <button key={k} className={"ik-chip" + (filtreStatut === k ? " actif" : "")} onClick={() => setFiltreStatut(k)}>{l}</button>
+            ))}
+          </div>
+        </div>
+
+        {loading && <div style={{textAlign:"center",color:"#fff",fontSize:"13px",padding:"30px"}}>Chargement…</div>}
         {!loading && fiches.length === 0 && (
-          <div style={{textAlign:"center",color:C.muted,fontSize:"12px",padding:"30px",background:C.card,border:"1px dashed "+C.border,borderRadius:"12px"}}>
-            Aucune fiche pour l'instant. Clique sur "+ Nouvelle fiche" pour commencer.
+          <div className="ik-carte" style={{textAlign:"center",color:C.muted,fontSize:"13px",padding:"34px"}}>
+            Aucun relevé pour l'instant. Touchez <b>+ Nouvelle fiche</b> pour commencer.
           </div>
         )}
-        <div style={{display:"flex",flexDirection:"column",gap:"8px"}}>
-          {fiches.map(f => (
-            <div key={f.id} onClick={() => ouvrirFiche(f)} style={{background:C.card,border:"1px solid "+C.border,borderRadius:"10px",padding:"12px 16px",display:"flex",alignItems:"center",gap:"12px",cursor:"pointer"}}>
-              <div style={{flex:1,minWidth:0}}>
-                <div style={{display:"flex",alignItems:"center",gap:"8px",marginBottom:"3px"}}>
-                  <span style={{fontSize:"12px",fontWeight:"900",color:C.or,fontFamily:"monospace"}}>{f.fields.Name}</span>
-                  <span style={{fontSize:"10px",fontWeight:"800",padding:"2px 8px",borderRadius:"20px",background:f.fields.Statut==="Envoyé à l'atelier"?C.vertDim:C.orDim,color:f.fields.Statut==="Envoyé à l'atelier"?C.vert:"#8a6d1f"}}>{f.fields.Statut||"Brouillon"}</span>
+        {!loading && fiches.length > 0 && affichees.length === 0 && <div className="ik-carte" style={{textAlign:"center",color:C.muted,fontSize:"13px",padding:"24px"}}>Aucun relevé ne correspond à la recherche.</div>}
+        <div style={{display:"flex",flexDirection:"column",gap:"10px"}}>
+          {affichees.map(f => {
+            const envoye = f.fields.Statut === "Envoyé à l'atelier";
+            return (
+              <div key={f.id} className="ik-carte" onClick={() => ouvrirFiche(f)} style={{padding:"14px 16px",display:"flex",alignItems:"center",gap:"12px",cursor:"pointer"}}>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{display:"flex",alignItems:"center",gap:"8px",marginBottom:"4px",flexWrap:"wrap"}}>
+                    <span style={{fontSize:"12px",fontWeight:"900",color:"#B84300",fontFamily:"monospace"}}>{f.fields.Name}</span>
+                    <span style={{fontSize:"10px",fontWeight:"800",padding:"3px 9px",borderRadius:"999px",background:envoye?"#0D0D0D":C.orDim,color:envoye?"#fff":"#B84300"}}>{envoye ? "✓ Envoyé à l'atelier" : "Brouillon"}</span>
+                  </div>
+                  <div style={{fontSize:"15px",fontWeight:"800",color:C.white,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{f.fields.Client || "(sans client)"}</div>
+                  <div style={{fontSize:"12px",color:C.muted,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{f.fields.Adresse}</div>
+                  <div style={{fontSize:"11px",color:C.muted,marginTop:"2px"}}>{f.fields.Agence} · {f.fields["Date métrage"]}{f.fields["Métreur"] ? " · " + f.fields["Métreur"] : ""}{f.fields["N° dossier"] ? " · Dossier " + f.fields["N° dossier"] : ""}</div>
                 </div>
-                <div style={{fontSize:"12px",color:C.text}}>{f.fields.Client} — {f.fields.Adresse}</div>
-                <div style={{fontSize:"10px",color:C.muted}}>{f.fields.Agence} · {f.fields["Date métrage"]}{f.fields["N° dossier"] ? " · Dossier " + f.fields["N° dossier"] : ""}</div>
+                <span style={{fontSize:"20px",color:C.or,fontWeight:"900"}}>›</span>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
     </div>
@@ -2965,14 +3263,20 @@ function Metreur({ agenceAccess, onClose }) {
 
 function Header({ agenceAccess, onClose }) {
   return (
-    <div style={{background:C.card,borderBottom:"1px solid "+C.border,padding:"12px 24px",display:"flex",alignItems:"center",justifyContent:"space-between",position:"sticky",top:0,zIndex:100}}>
+    <div style={{background:"rgb(255, 255, 255)",borderBottom:"1px solid rgba(255,255,255,0.8)",padding:"10px 20px",display:"flex",alignItems:"center",justifyContent:"space-between",position:"sticky",top:0,zIndex:100}}>
       <div style={{display:"flex",alignItems:"center",gap:"12px"}}>
-        <div style={{width:"96px",height:"46px",background:"#FFFFFF",borderRadius:"8px",display:"flex",alignItems:"center",justifyContent:"center",padding:"3px",boxSizing:"border-box"}}>
-          <span style={{fontSize:"13px",fontWeight:"900",color:"#111111",letterSpacing:"0.5px"}}>RSIA IKO</span>
+        <div style={{width:"96px",height:"44px",background:"#0D0D0D",borderRadius:"12px",display:"flex",alignItems:"center",justifyContent:"center",boxSizing:"border-box"}}>
+          <span style={{fontSize:"13px",fontWeight:"900",color:"#FF6B00",letterSpacing:"0.5px"}}>RSIA IKO</span>
         </div>
-        <div style={{fontSize:"13px",fontWeight:"700",color:C.muted}}>Module Métreur {agenceAccess !== "global" ? "— " + agenceAccess : ""}</div>
+        <div>
+          <div style={{fontSize:"14px",fontWeight:"900",color:"#0D0D0D"}}>Module Métreur</div>
+          <div style={{fontSize:"11px",fontWeight:"700",color:"#5f5a55"}}>{agenceAccess !== "global" ? agenceAccess : "Toutes les agences"}</div>
+        </div>
       </div>
-      <button onClick={onClose} title="Fermer la session" style={{background:"rgba(220,38,38,0.08)",border:"1px solid rgba(220,38,38,0.25)",color:"rgba(220,38,38,0.85)",borderRadius:"8px",width:"30px",height:"30px",cursor:"pointer",fontSize:"14px",display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>
+      <div style={{display:"flex",gap:"8px",alignItems:"center"}}>
+        <a href="/dashboard.html" className="ik-btn-verre" style={{display:"inline-flex",alignItems:"center",textDecoration:"none"}} title="Retour au tableau de bord">🏠<span className="ik-hide-m">&nbsp;Tableau de bord</span></a>
+        <button onClick={onClose} title="Fermer la session" className="ik-btn-verre" style={{width:"44px",padding:0,color:"#DC2626"}}>⏻</button>
+      </div>
     </div>
   );
 }
