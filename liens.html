@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Iko — Générateur de liens</title>
+<style>
+:root{--bg:#0b0b0c;--card:#17171a;--line:#2a2a2e;--tx:#f5f5f7;--mut:#9a9aa2;--or:#ff6b00}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.4 -apple-system,Segoe UI,Roboto,sans-serif;padding:20px 16px 60px}
+.w{max-width:860px;margin:0 auto}
+h1{font-size:22px;margin:0 0 4px}h1 b{color:var(--or)}
+p.s{color:var(--mut);margin:0 0 18px;font-size:13px}
+.bar{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px}
+@media(max-width:600px){.bar{grid-template-columns:1fr}}
+label{display:block;font-size:12px;color:var(--mut);margin-bottom:4px}
+input,select{width:100%;padding:10px;border-radius:10px;border:1px solid var(--line);background:var(--card);color:var(--tx);font-size:15px;color-scheme:dark}
+select option{background:#1c1c1e;color:#f5f5f7}
+h2{font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:var(--or);margin:22px 0 8px}
+.l{display:flex;align-items:center;gap:10px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin-bottom:8px}
+.l .t{flex:1;min-width:0}.l .t b{display:block}.l .t span{display:block;color:var(--mut);font-size:12px;word-break:break-all}
+.l .t small{color:var(--mut);font-size:12px}
+button,a.b{border:0;border-radius:9px;padding:9px 12px;font-size:13px;font-weight:600;cursor:pointer;text-decoration:none;white-space:nowrap}
+a.b{background:var(--or);color:#000}button{background:#2a2a2e;color:var(--tx)}
+button.ok{background:#fff;color:#000}
+.note{color:var(--mut);font-size:12px;margin-top:18px}
+</style>
+</head>
+<body>
+<div class="w">
+  <h1>Iko <b>· Générateur de liens</b></h1>
+  <p class="s">Choisis un client, copie ou ouvre chaque module. Les liens suivent le client choisi.</p>
+
+  <div class="bar">
+    <div><label>Client (slug)</label>
+      <select id="cli"></select></div>
+    <div><label>Autre slug (facultatif)</label>
+      <input id="autre" placeholder="ex : mon-client" autocapitalize="none"></div>
+  </div>
+  <div class="bar">
+    <div><label>Site</label>
+      <select id="site"></select></div>
+    <div><label>N° de ticket (pour le suivi / devis / avis)</label>
+      <input id="tk" placeholder="ex : SAV-2026-4592"></div>
+  </div>
+
+  <div id="out"></div>
+  <p class="note">Ordre de test conseillé : 1 Amandine (déclaration client) → 2 Tableau de bord → 3 Technicien. Le mot de passe unique est demandé une seule fois à la connexion.</p>
+</div>
+<script>
+var CLIENTS=[["test-menusierie","Test Menusierie (démo)"],["rttageb","Rttagéb (7 agences)"],["roussel","Roussel (en pause)"]];
+var SITES=[["","Ce site (celui-ci)"],["https://iko-suite-demo.vercel.app","Production — iko-suite-demo.vercel.app"],["https://iko-suite-demo-git-feature-modules-actifs-akial.vercel.app","Préversion (branche de test)"]];
+var MODS=[
+ ["1 · Tester","Amandine — déclaration SAV (accueil client)","index.html","c","Formulaire + Amandine en chat/voix"],
+ ["1 · Tester","Amandine — page chat seule","amandine.html","c",""],
+ ["2 · Tester","Tableau de bord (IKO)","dashboard.html","c","Tickets, rendez-vous téléphone, assistant IKO"],
+ ["3 · Tester","Technicien (Max)","technicien.html","c","Interventions, devis, planning"],
+ ["Suite du parcours client","Suivi de ma demande","suivi.html","t","Nécessite un n° de ticket"],
+ ["Suite du parcours client","Devis client","devis.html","t","Nécessite un n° de ticket"],
+ ["Suite du parcours client","Avis client","avis.html","t","Nécessite un n° de ticket"],
+ ["Plus tard · RSIA","ADMIN — poste de pilotage","admin.html","",""],
+ ["Plus tard · RSIA","Espace commercial","commerce.html","",""],
+ ["Plus tard · RSIA","Éditeur de devis","devis-editeur.html","c",""],
+ ["Autres modules","Métreur (Toise)","metreur.html","c",""],
+ ["Autres modules","Salle de réunion","reunion.html","",""],
+ ["Autres modules","Conseil menuiserie","conseil.html","c",""],
+ ["Autres modules","Connexion","auth-login.html","",""]
+];
+function $(i){return document.getElementById(i)}
+CLIENTS.forEach(function(c){var o=document.createElement("option");o.value=c[0];o.textContent=c[1];$("cli").appendChild(o)});
+SITES.forEach(function(s){var o=document.createElement("option");o.value=s[0];o.textContent=s[1];$("site").appendChild(o)});
+function base(){var v=$("site").value;return v||location.origin}
+function slug(){return ($("autre").value.trim().toLowerCase())||$("cli").value}
+function url(m){
+  var u=base()+"/"+m[2],q=[];
+  if(m[3]==="c")q.push("client="+encodeURIComponent(slug()));
+  if(m[3]==="t"){var t=$("tk").value.trim();if(t)q.push("ticket="+encodeURIComponent(t));q.unshift("client="+encodeURIComponent(slug()))}
+  return u+(q.length?"?"+q.join("&"):"");
+}
+function esc(s){return String(s).replace(/[&<>"]/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]})}
+function draw(){
+  var h="",g="";
+  MODS.forEach(function(m,i){
+    if(m[0]!==g){g=m[0];h+="<h2>"+esc(g)+"</h2>"}
+    var u=url(m);
+    h+='<div class="l"><div class="t"><b>'+esc(m[1])+'</b>'+(m[4]?'<small>'+esc(m[4])+'</small>':'')+'<span>'+esc(u)+'</span></div>'
+      +'<button data-u="'+esc(u)+'">Copier</button><a class="b" target="_blank" rel="noopener" href="'+esc(u)+'">Ouvrir</a></div>';
+  });
+  $("out").innerHTML=h;
+}
+$("out").addEventListener("click",function(e){
+  var b=e.target.closest("button[data-u]");if(!b)return;
+  var u=b.getAttribute("data-u");
+  function done(){b.textContent="Copié ✓";b.className="ok";setTimeout(function(){b.textContent="Copier";b.className=""},1400)}
+  if(navigator.clipboard)navigator.clipboard.writeText(u).then(done,function(){prompt("Copie ce lien :",u)});
+  else prompt("Copie ce lien :",u);
+});
+["cli","autre","site","tk"].forEach(function(i){$(i).addEventListener("input",draw)});
+draw();
+</script>
+</body>
+</html>
