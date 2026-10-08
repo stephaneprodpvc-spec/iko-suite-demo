@@ -2308,15 +2308,31 @@ function planAfficher(agence){
     return "<label style='margin-right:10px;'><input type='checkbox' class='planJour' value='" + j[0] + "'" + (r.joursTravailles.indexOf(j[0]) !== -1 ? " checked" : "") + "> " + j[1] + "</label>";
   }).join("");
   var per = r.decoupage.periodes || ["matin", "apres_midi"];
+  var mode = r.decoupage.mode === "heures" ? "heures" : "demi-journees";
+  var plagesActuelles = (r.decoupage.plages || []).slice();
+  var pm = null, pa = null;
+  plagesActuelles.forEach(function(p){ if (p.debut < "13:00") { if (!pm) pm = p; } else if (!pa) pa = p; });
+  var dureeActuelle = r.decoupage.dureeMinutes || 60;
+  var dureesHtml = [30, 45, 60, 90, 120, 180].map(function(m){
+    return "<option value='" + m + "'" + (m === dureeActuelle ? " selected" : "") + ">" + (m >= 60 && m % 60 === 0 ? (m / 60) + " h" : m + " min") + "</option>";
+  }).join("");
   corps.innerHTML =
     "<label style='font-size:11px;color:var(--texte-dim,#aaa);'>Portée</label>" +
     "<select id='planPortee' style='width:100%;" + st + "margin:4px 0 6px;'>" + optionsPortee + "</select>" +
     (agence ? "<div style='font-size:11px;color:var(--texte-dim,#aaa);margin-bottom:8px;'>Les réglages de l'agence remplacent ceux du client, champ par champ. Enregistrer ici crée des réglages propres à cette agence.</div>" : "") +
     "<div style='margin:8px 0 4px;font-weight:700;'>Jours travaillés</div><div>" + jours + "</div>" +
     "<div style='margin:10px 0 4px;font-weight:700;'>Découpage de la journée</div>" +
-    "<label style='margin-right:12px;'><input type='checkbox' id='planMatin'" + (per.indexOf("matin") !== -1 ? " checked" : "") + "> Matin (8h30 — 12h00)</label>" +
-    "<label><input type='checkbox' id='planAM'" + (per.indexOf("apres_midi") !== -1 ? " checked" : "") + "> Après-midi (13h00 — 17h00)</label>" +
-    "<div style='font-size:11px;color:var(--texte-dim,#aaa);margin-top:2px;'>Les heures précises avec durée de créneau arriveront dans une prochaine phase.</div>" +
+    "<select id='planMode' style='width:100%;" + st + "margin-bottom:8px;'>" +
+      "<option value='demi-journees'" + (mode === "heures" ? "" : " selected") + ">Demi-journées (matin / après-midi)</option>" +
+      "<option value='heures'" + (mode === "heures" ? " selected" : "") + ">Heures précises (créneaux de durée fixe)</option></select>" +
+    "<div id='planDemi' style='display:" + (mode === "heures" ? "none" : "block") + ";'>" +
+      "<label style='margin-right:12px;'><input type='checkbox' id='planMatin'" + (per.indexOf("matin") !== -1 ? " checked" : "") + "> Matin (8h30 — 12h00)</label>" +
+      "<label><input type='checkbox' id='planAM'" + (per.indexOf("apres_midi") !== -1 ? " checked" : "") + "> Après-midi (13h00 — 17h00)</label></div>" +
+    "<div id='planHeures' style='display:" + (mode === "heures" ? "block" : "none") + ";'>" +
+      "<label>Durée d'un créneau<br><select id='planDuree' style='width:170px;" + st + "'>" + dureesHtml + "</select></label>" +
+      "<div style='margin-top:8px;'><label><input type='checkbox' id='planPMOn'" + (pm ? " checked" : "") + "> Matin : de <input type='time' id='planPMDeb' value='" + (pm ? pm.debut : "08:30") + "' style='" + st + "'> à <input type='time' id='planPMFin' value='" + (pm ? pm.fin : "12:00") + "' style='" + st + "'></label></div>" +
+      "<div style='margin-top:6px;'><label><input type='checkbox' id='planPAOn'" + (pa ? " checked" : "") + "> Après-midi : de <input type='time' id='planPADeb' value='" + (pa ? pa.debut : "13:00") + "' style='" + st + "'> à <input type='time' id='planPAFin' value='" + (pa ? pa.fin : "17:00") + "' style='" + st + "'></label></div>" +
+      "<div id='planApercu' style='font-size:11px;color:var(--texte-dim,#aaa);margin-top:6px;'></div></div>" +
     "<div style='display:flex;gap:10px;flex-wrap:wrap;margin-top:10px;'>" +
       "<label>Capacité (interventions simultanées)<br><input type='number' id='planCapacite' min='1' max='20' value='" + r.capacite + "' style='width:110px;" + st + "'></label>" +
       "<label>Délai minimum (jours)<br><input type='number' id='planDelai' min='0' max='60' value='" + r.delaiMinJours + "' style='width:110px;" + st + "'></label>" +
@@ -2328,12 +2344,66 @@ function planAfficher(agence){
     "<div style='display:flex;gap:8px;margin-top:14px;'><button type='button' class='primary' id='planSauver'>Enregistrer</button></div>" +
     "<div id='planMsg' style='margin-top:8px;'></div>";
   document.getElementById("planPortee").addEventListener("change", function(){ planAfficher(this.value); });
+  document.getElementById("planMode").addEventListener("change", function(){
+    var h = this.value === "heures";
+    document.getElementById("planHeures").style.display = h ? "block" : "none";
+    document.getElementById("planDemi").style.display = h ? "none" : "block";
+    planApercu();
+  });
+  ["planDuree", "planPMOn", "planPMDeb", "planPMFin", "planPAOn", "planPADeb", "planPAFin"].forEach(function(id){
+    var el = document.getElementById(id); el.addEventListener("change", planApercu); el.addEventListener("input", planApercu);
+  });
+  planApercu();
   document.getElementById("planAjouterFerm").addEventListener("click", function(){
     document.getElementById("planFermetures").insertAdjacentHTML("beforeend", planLigneFermeture({}));
     planBrancherSuppr();
   });
   planBrancherSuppr();
   document.getElementById("planSauver").addEventListener("click", function(){ planSauver(agence); });
+}
+
+function planHeureFr(hhmm){ var t = hhmm.split(":"); return parseInt(t[0], 10) + "h" + t[1]; }
+function planMin(hhmm){ var t = hhmm.split(":"); return parseInt(t[0], 10) * 60 + parseInt(t[1], 10); }
+
+// Plages saisies (matin / apres-midi) -> [{debut, fin}] ; null si une plage coche est incomplete.
+function planLirePlages(){
+  var plages = [];
+  var defs = [["planPMOn", "planPMDeb", "planPMFin"], ["planPAOn", "planPADeb", "planPAFin"]];
+  for (var i = 0; i < defs.length; i++) {
+    if (!document.getElementById(defs[i][0]).checked) continue;
+    var d = document.getElementById(defs[i][1]).value, f = document.getElementById(defs[i][2]).value;
+    if (!d || !f) return null;
+    plages.push({ debut: d, fin: f });
+  }
+  return plages;
+}
+
+// Liste des creneaux d'une journee (meme logique que le serveur) pour l'apercu.
+function planCreneauxJour(plages, duree){
+  var out = [];
+  plages.forEach(function(p){
+    for (var t = planMin(p.debut); t + duree <= planMin(p.fin); t += duree) {
+      var a = ("0" + Math.floor(t / 60)).slice(-2) + ":" + ("0" + (t % 60)).slice(-2);
+      var b = ("0" + Math.floor((t + duree) / 60)).slice(-2) + ":" + ("0" + ((t + duree) % 60)).slice(-2);
+      out.push(planHeureFr(a) + " — " + planHeureFr(b));
+    }
+  });
+  return out;
+}
+
+function planApercu(){
+  var el = document.getElementById("planApercu");
+  if (!el || document.getElementById("planMode").value !== "heures") return;
+  var plages = planLirePlages();
+  var duree = parseInt(document.getElementById("planDuree").value, 10);
+  if (plages === null) { el.style.color = "#FF9F0A"; el.textContent = "Complétez les heures de début et de fin."; return; }
+  if (!plages.length) { el.style.color = "#FF453A"; el.textContent = "Cochez au moins une plage (matin ou après-midi)."; return; }
+  for (var i = 0; i < plages.length; i++) if (plages[i].debut >= plages[i].fin) { el.style.color = "#FF453A"; el.textContent = "L'heure de début doit précéder l'heure de fin."; return; }
+  if (plages.length === 2 && plages[1].debut < plages[0].fin) { el.style.color = "#FF453A"; el.textContent = "Le matin et l'après-midi ne doivent pas se chevaucher."; return; }
+  var liste = planCreneauxJour(plages, duree);
+  if (!liste.length) { el.style.color = "#FF453A"; el.textContent = "Cette durée ne rentre dans aucune plage."; return; }
+  el.style.color = "var(--texte-dim,#aaa)";
+  el.textContent = liste.length + " créneau(x) par jour : " + liste.join(" · ");
 }
 
 function planBrancherSuppr(){
@@ -2347,12 +2417,20 @@ function planSauver(agence){
   var periodes = [];
   if (document.getElementById("planMatin").checked) periodes.push("matin");
   if (document.getElementById("planAM").checked) periodes.push("apres_midi");
+  var decoupage;
+  if (document.getElementById("planMode").value === "heures") {
+    var plages = planLirePlages();
+    if (!plages || !plages.length) { msg.style.color = "#FF453A"; msg.textContent = "Complétez au moins une plage horaire (matin ou après-midi)."; return; }
+    decoupage = { mode: "heures", plages: plages, dureeMinutes: parseInt(document.getElementById("planDuree").value, 10) };
+  } else {
+    decoupage = { mode: "demi-journees", periodes: periodes };
+  }
   var fermetures = Array.prototype.map.call(document.querySelectorAll(".planFerm"), function(l){
     return { du: l.querySelector(".fDu").value, au: l.querySelector(".fAu").value, motif: l.querySelector(".fMotif").value.trim() };
   });
   var reglages = {
     joursTravailles: Array.prototype.map.call(document.querySelectorAll(".planJour:checked"), function(c){ return parseInt(c.value, 10); }),
-    decoupage: { mode: "demi-journees", periodes: periodes },
+    decoupage: decoupage,
     capacite: parseInt(document.getElementById("planCapacite").value, 10),
     delaiMinJours: parseInt(document.getElementById("planDelai").value, 10),
     horizonSemaines: parseInt(document.getElementById("planHorizon").value, 10),

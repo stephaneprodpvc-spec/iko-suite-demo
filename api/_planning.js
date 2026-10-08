@@ -25,10 +25,12 @@ export const PERIODES = {
   apres_midi: { id: "apres_midi", label: "Après-midi (13h00 — 17h00)", debut: "13:00", fin: "17:00" },
 };
 
-// Phase 2 (heures precises) : la structure est prete (decoupage.mode = "heures",
-// plages + dureeMinutes) et decouper() sait la generer, mais la validation la
-// refuse tant que les ecrans ne savent pas la proposer.
-const HEURES_ACTIVEES = false;
+// Phase 2 (heures precises) : decoupage.mode = "heures" avec des plages horaires
+// (ex. 08:30-12:00 et 13:00-17:00) decoupees en creneaux de dureeMinutes.
+// Libelles generes : "9h00 — 10h00" (tiret cadratin U+2014).
+const HEURES_ACTIVEES = true;
+const MAX_PLAGES = 4;
+const MAX_CRENEAUX_PAR_JOUR = 24;
 
 export const REGLAGES_DEFAUT = Object.freeze({
   version: 1,
@@ -93,6 +95,11 @@ export function joursFeriesFR(an) {
 
 // ------------------------------------------------------------ reglages (purs)
 
+function heureValide(v) {
+  const m = /^(\d{2}):(\d{2})$/.exec(String(v || ""));
+  return !!m && Number(m[1]) <= 23 && Number(m[2]) <= 59;
+}
+
 function entierBorne(v, min, max, defaut) {
   const n = Number(v);
   return Number.isInteger(n) && n >= min && n <= max ? n : defaut;
@@ -119,10 +126,21 @@ export function validerReglages(brut, { partiel = true } = {}) {
       if (!periodes.length) return { ok: false, erreur: "Au moins une demi-journée (matin ou après-midi) est requise." };
       dec.periodes = Array.from(new Set(periodes));
     } else {
-      const plages = (Array.isArray(d.plages) ? d.plages : []).filter((p) => /^\d{2}:\d{2}$/.test(p && p.debut) && /^\d{2}:\d{2}$/.test(p && p.fin) && p.debut < p.fin);
-      if (!plages.length) return { ok: false, erreur: "Au moins une plage horaire valide est requise." };
+      const brutes = Array.isArray(d.plages) ? d.plages : [];
+      if (brutes.length > MAX_PLAGES) return { ok: false, erreur: "4 plages horaires maximum par jour." };
+      const plages = brutes.filter((p) => heureValide(p && p.debut) && heureValide(p && p.fin) && p.debut < p.fin);
+      if (!plages.length || plages.length !== brutes.length) return { ok: false, erreur: "Plage horaire invalide : heures HH:MM, début avant fin." };
+      plages.sort((a, b) => (a.debut < b.debut ? -1 : 1));
+      for (let i = 1; i < plages.length; i++) {
+        if (plages[i].debut < plages[i - 1].fin) return { ok: false, erreur: "Les plages horaires ne doivent pas se chevaucher." };
+      }
+      const duree = Number(d.dureeMinutes);
+      if (!Number.isInteger(duree) || duree < 15 || duree > 480) return { ok: false, erreur: "Durée de créneau invalide (15 à 480 minutes)." };
       dec.plages = plages.map((p) => ({ debut: p.debut, fin: p.fin }));
-      dec.dureeMinutes = entierBorne(d.dureeMinutes, 15, 480, 60);
+      dec.dureeMinutes = duree;
+      const nb = decouper({ decoupage: dec }).length;
+      if (nb < 1) return { ok: false, erreur: "La durée choisie ne rentre dans aucune plage horaire." };
+      if (nb > MAX_CRENEAUX_PAR_JOUR) return { ok: false, erreur: "Trop de créneaux par jour (" + nb + ", 24 maximum) : allongez la durée." };
     }
     out.decoupage = dec;
   }
@@ -209,10 +227,18 @@ export function creneauxTheoriques(reglages, du, au) {
   return out;
 }
 
+// Heure de debut (en minutes) d'un libelle "9h00 — 10h00", sinon null.
+export function heureDebutLabel(label) {
+  const m = /^\s*(\d{1,2})h(\d{2})/.exec(String(label || ""));
+  return m ? Number(m[1]) * 60 + Number(m[2]) : null;
+}
+
 export function periodeDepuisLabel(label) {
   const t = String(label || "");
   if (t.indexOf("Après-midi") === 0 || t.indexOf("Apres-midi") === 0) return "apres_midi";
   if (t.indexOf("Matin") === 0) return "matin";
+  const h = heureDebutLabel(t);
+  if (h !== null) return h < 13 * 60 ? "matin" : "apres_midi";
   return null;
 }
 
@@ -429,7 +455,12 @@ export async function creneauxLibres(ctx, ident, options) {
   const minimum = options.admin ? aujourdhui : ajouterJours(aujourdhui, reglages.delaiMinJours);
   if (f.du < minimum) f.du = minimum;
   if (f.du > f.au) return { creneaux: [], partiel: false, delaiMinJours: reglages.delaiMinJours };
-  const periode = options.periode || periodeDepuisLabel(options.creneau);
+  const modeHeures = (reglages.decoupage || {}).mode === "heures";
+  const labelsJour = decouper(reglages).map((c) => c.label);
+  // En mode heures, un libelle exact demande ("9h00 — 10h00") filtre ce creneau precis ;
+  // sinon matin / apres-midi se deduisent de l'heure de debut.
+  const labelExact = modeHeures && options.creneau && labelsJour.includes(String(options.creneau)) ? String(options.creneau) : null;
+  const periode = options.periode || (labelExact ? null : periodeDepuisLabel(options.creneau));
   let partiel = false;
 
   const cleCouv = (ident.demo ? "demo" : ident.clientId) + "|" + agence + "|" + f.du + "|" + f.au;
@@ -446,9 +477,22 @@ export async function creneauxLibres(ctx, ident, options) {
   }
 
   let formule = 'AND({Statut}="Libre",{Agence}="' + esc(agence) + '",{Date}>="' + f.du + '",{Date}<="' + f.au + '"';
-  if (periode && PERIODES[periode]) formule += ',{Créneau}="' + esc(PERIODES[periode].label) + '"';
+  if (labelExact) formule += ',{Créneau}="' + esc(labelExact) + '"';
+  else if (periode && PERIODES[periode] && !modeHeures) formule += ',{Créneau}="' + esc(PERIODES[periode].label) + '"';
   formule += "," + clauseClient(ident) + ")";
-  const recs = (await lister(ctx, formule, { max: options.max || 300 })).filter((r) => appartient(ident, r) && r.fields["Statut"] === "Libre");
+  let recs = (await lister(ctx, formule, { max: options.max || 600 })).filter((r) => appartient(ident, r) && r.fields["Statut"] === "Libre");
+  if (modeHeures) {
+    // Seuls les creneaux du decoupage ACTUEL sont proposes (d'anciennes lignes "Matin" /
+    // "Apres-midi" ou d'une autre duree restent en base mais ne sont plus offertes).
+    const valides = new Set(labelsJour);
+    recs = recs.filter((r) => valides.has(r.fields["Créneau"]));
+    if (periode && !labelExact) {
+      recs = recs.filter((r) => {
+        const h = heureDebutLabel(r.fields["Créneau"]);
+        return h !== null && (periode === "matin" ? h < 13 * 60 : h >= 13 * 60);
+      });
+    }
+  }
   // Un jour ferme / ferie / non travaille apres coup n'est jamais propose, meme si la ligne existe.
   const creneaux = recs
     .filter((r) => r.fields["Date"] && dateValide(r.fields["Date"]) && jourOuvert(reglages, r.fields["Date"]))
