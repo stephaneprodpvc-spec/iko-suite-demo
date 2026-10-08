@@ -379,6 +379,11 @@ async function executerOutil(nom, input, clientId, tradeId, agencesObjets) {
         if (!parDate[c.date]) parDate[c.date] = { date: c.date, planning_id: c.id, horaire: c.creneau, tous: [] };
         if (/^\d{1,2}h\d{2}/.test(c.creneau || "") && parDate[c.date].tous.length < 8) parDate[c.date].tous.push({ planning_id: c.id, horaire: c.creneau });
       });
+      const debutMin = function (h) { const m = /^(\d{1,2})h(\d{2})/.exec(h || ""); return m ? parseInt(m[1], 10) * 60 + parseInt(m[2], 10) : 0; };
+      Object.values(parDate).forEach(function (j) {
+        j.tous.sort(function (a, b) { return debutMin(a.horaire) - debutMin(b.horaire); });
+        if (j.tous.length) { j.planning_id = j.tous[0].planning_id; j.horaire = j.tous[0].horaire; }
+      });
       const creneaux = Object.values(parDate).slice(0, 5).map(function (c) {
         const d = new Date(c.date + "T12:00:00");
         return {

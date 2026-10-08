@@ -23,6 +23,13 @@
         index[c.date].ids.push(c.id);
         index[c.date].creneaux.push({ id: c.id, horaire: c.creneau || '' });
       });
+      // Heures dans l'ordre chronologique ; le jour est represente par son premier horaire.
+      var debut = function (h) { var m = /^(\d{1,2})h(\d{2})/.exec(h || ''); return m ? parseInt(m[1], 10) * 60 + parseInt(m[2], 10) : 0; };
+      out.forEach(function (d) {
+        d.creneaux.sort(function (a, b) { return debut(a.horaire) - debut(b.horaire); });
+        d.ids = d.creneaux.map(function (c) { return c.id; });
+        d.horaire = d.creneaux[0].horaire;
+      });
       return out;
     },
     // Horaire precis ("9h00 — 10h00") d'un jour propose, uniquement en mode heures precises ;
