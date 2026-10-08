@@ -50,6 +50,26 @@ async function compterDispos(ident, agence, periode, moisSouhaite) {
   return r.creneaux.length;
 }
 
+// Repli sans IA (crédit Anthropic épuisé, panne réseau...) : détection simple par mots-clés,
+// pour que le client puisse quand même choisir une nouvelle date.
+const MOIS_FR = ["janvier","fevrier","mars","avril","mai","juin","juillet","aout","septembre","octobre","novembre","decembre"];
+function classifierSansIA(texte) {
+  const t = String(texte || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  const verbe = /(chang|deplac|decal|report|avanc|recul|modifi)/;
+  const objet = /(date|rdv|rendez|intervention|passage)/;
+  if (!(verbe.test(t) && objet.test(t))) return { intention: "autre", reponse: null };
+  let mois = null;
+  const idx = MOIS_FR.findIndex(function (m) { return t.indexOf(m) !== -1; });
+  if (idx >= 0) {
+    const maintenant = new Date();
+    let annee = maintenant.getFullYear();
+    if (idx < maintenant.getMonth()) annee += 1;
+    mois = annee + "-" + String(idx + 1).padStart(2, "0");
+  }
+  const periode = /apres[- ]?midi/.test(t) ? "apres_midi" : (/matin/.test(t) ? "matin" : null);
+  return { intention: "changement_date", periode_souhaitee: periode, mois_souhaite: mois, reponse: "Bonjour, nous avons bien reçu votre demande de changement de date." };
+}
+
 async function classifierMessage(texte, creneauActuelLabel) {
   const reponse = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
@@ -84,17 +104,17 @@ async function classifierMessage(texte, creneauActuelLabel) {
       messages: [{ role: "user", content: texte.slice(0, MAX_CHARS_MESSAGE) }],
     }),
   });
-  if (!reponse.ok) return { intention: "autre", reponse: null };
+  if (!reponse.ok) return classifierSansIA(texte);
   const data = await reponse.json();
   const bloc = (data.content || []).find(function (b) { return b.type === "text"; });
-  if (!bloc) return { intention: "autre", reponse: null };
+  if (!bloc) return classifierSansIA(texte);
   try {
     const nettoye = bloc.text.replace(/```json|```/g, "").trim();
     const parsed = JSON.parse(nettoye);
     if (parsed.intention !== "changement_date") parsed.intention = "autre";
     return parsed;
   } catch (e) {
-    return { intention: "autre", reponse: null };
+    return classifierSansIA(texte);
   }
 }
 
