@@ -216,8 +216,12 @@ const PROGRESSION = {
 };
 const ETAPES_PROGRESSION = ["Demande reçue", "Prise en charge", "Terminée"];
 
-function BandeauProgression({ statut, propositionEnAttente, devisId }) {
-  const info = PROGRESSION[statut] || PROGRESSION["Nouveau"];
+function BandeauProgression({ statut, propositionEnAttente, devisId, rdvConfirme }) {
+  let info = PROGRESSION[statut] || PROGRESSION["Nouveau"];
+  // Un rendez-vous est déjà accepté (créneau réservé) : la demande est prise en charge.
+  if (statut === "Nouveau" && rdvConfirme) {
+    info = { etape: 2, titre: "Rendez-vous confirmé", message: "Votre rendez-vous est confirmé : un technicien interviendra sur le créneau indiqué ci-dessous." };
+  }
   const annule = statut === "Annulé";
   return (
     <div style={{marginBottom:"16px"}}>
@@ -706,7 +710,7 @@ function App() {
                 <span style={{fontSize:"10px",fontWeight:"800",color:sc.color,background:sc.bg,borderRadius:"20px",padding:"3px 10px"}}>{statut}</span>
               </div>
 
-              <BandeauProgression statut={statut} propositionEnAttente={!!ticket.fields?.["Proposition auto en attente"]} devisId={devisId}/>
+              <BandeauProgression statut={statut} propositionEnAttente={!!ticket.fields?.["Proposition auto en attente"]} devisId={devisId} rdvConfirme={!!ticket.fields?.Créneau}/>
 
               {!isStatutClos(statut) && ticket.fields?.Créneau && (
                 <div style={{background:F.marine,borderRadius:"10px",padding:"12px 14px",marginBottom:"14px",display:"flex",alignItems:"center",gap:"10px"}}>
