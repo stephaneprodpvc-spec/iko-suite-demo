@@ -11,6 +11,7 @@
 // Amandine ; dans les deux cas, le meme systeme derriere est utilise.
 
 import { verifierOrigine, verifierDebit } from "./_securite.js";
+import { lienSuivi } from "./_suivi.js";
 import vocabMenuiserie from "./_trades/menuiserie.js";
 import vocabPlomberieChauffage from "./_trades/plomberie_chauffage.js";
 import { extraireConnaissanceDuRecord, blocPromptConnaissance, affinerPourPrompt } from "./_connaissance.js";
@@ -420,6 +421,9 @@ async function executerOutil(nom, input, clientId, tradeId, agencesObjets) {
       facture_photo: "",
       planningId: input.planning_id || "",
       source: "Amandine (IA)",
+      // Lien de suivi personnel (jeton chiffre), a inserer dans le mail Make.
+      // Jamais renvoye au navigateur : seul le numero de ticket l'est.
+      lien_suivi: (input.email ? lienSuivi(null, { email: input.email, tel: input.telephone, ticket: numero }) : ""),
       // Emails specifiques a cette agence (table Agences), si ce client en a
       // configure. A brancher cote scenario Make pour le routage des
       // notifications par agence (mapping non fait dans cette session).

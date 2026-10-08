@@ -349,6 +349,8 @@ function ChangerDatePanel({ agenceVille, onChoisir, onFermer, appliqueEnCours, p
 
 function App() {
   const [numero, setNumero] = useState("");
+  const [contact, setContact] = useState("");
+  const [liste, setListe] = useState(null); // demandes du client (null = pas encore identifie)
   const [loading, setLoading] = useState(false);
   const [erreur, setErreur] = useState("");
   const [ticket, setTicket] = useState(null);
@@ -422,46 +424,62 @@ function App() {
     return () => { annule = true; };
   }, [ticket?.id, ticket?.fields?.["Montant devis"]]);
 
-  const rechercher = async (numeroForce) => {
-    const num = (typeof numeroForce === "string" ? numeroForce : numero).trim();
-    if (!num) { setErreur("Merci de saisir votre numéro de ticket."); return; }
-    setLoading(true); setErreur(""); setTicket(null); setEnvoi(null); setMessage("");
+  // Ouvre une demande de la liste (mêmes contrôles qu'avant : annulée / accès bloqué).
+  const ouvrirTicket = async (found) => {
+    setErreur(""); setEnvoi(null); setMessage("");
+    if (found.fields?.Statut === 'Annulé') {
+      setErreur("Cette demande a été annulée. Merci d'effectuer une nouvelle demande SAV pour obtenir un nouveau numéro de suivi.");
+      return;
+    }
+    const compteClientIdSuivi = (found.fields?.["Compte client"] || [])[0];
+    let bloque = false;
+    if (compteClientIdSuivi) {
+      try {
+        const respClient = await fetch('/api/airtable/Clients/' + compteClientIdSuivi);
+        const dataClient = await respClient.json();
+        bloque = dataClient?.fields?.["Accès bloqué"] === true;
+      } catch (e) {}
+    }
+    if (bloque) {
+      setErreur("Ce service est temporairement suspendu. Merci de contacter votre interlocuteur pour régulariser la situation.");
+    } else {
+      setTicket(found);
+    }
+  };
+
+  // Identification : jeton du mail, ou numéro + e-mail/téléphone (jamais le numéro seul).
+  // Le serveur renvoie toutes les demandes du même client.
+  const identifier = async (corps, ouvrirNumero) => {
+    setLoading(true); setErreur(""); setTicket(null); setListe(null);
     try {
-      const formula = encodeURIComponent('UPPER({Name})=UPPER("' + num.replace(/"/g, '') + '")');
-      const resp = await fetch('/api/airtable/Tickets%20SAV?filterByFormula=' + formula + '&maxRecords=1');
-      if (resp.status === 429) {
-        setErreur("Trop de tentatives de recherche depuis cet appareil. Merci de réessayer dans quelques minutes.");
-        setLoading(false);
-        return;
-      }
-      const data = await resp.json();
-      if (data.records && data.records.length > 0) {
-        const found = data.records[0];
-        if (found.fields?.Statut === 'Annulé') {
-          setErreur("Cette demande a été annulée. Merci d'effectuer une nouvelle demande SAV pour obtenir un nouveau numéro de suivi.");
-        } else {
-          const compteClientIdSuivi = (found.fields?.["Compte client"] || [])[0];
-          let bloque = false;
-          if (compteClientIdSuivi) {
-            try {
-              const respClient = await fetch('/api/airtable/Clients/' + compteClientIdSuivi);
-              const dataClient = await respClient.json();
-              bloque = dataClient?.fields?.["Accès bloqué"] === true;
-            } catch (e) {}
-          }
-          if (bloque) {
-            setErreur("Ce service est temporairement suspendu. Merci de contacter votre interlocuteur pour régulariser la situation.");
-          } else {
-            setTicket(found);
-          }
-        }
+      const resp = await fetch('/api/airtable/suivi', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(corps)
+      });
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok) {
+        setErreur(resp.status === 429
+          ? "Trop de tentatives de recherche depuis cet appareil. Merci de réessayer dans quelques minutes."
+          : (data.error || "Erreur de connexion. Réessayez dans un instant."));
       } else {
-        setErreur("Aucune demande trouvée avec ce numéro. Vérifiez le numéro reçu par e-mail (ex : SAV-2026-1234).");
+        const tickets = data.tickets || [];
+        // La demande saisie passe en tête de liste.
+        const cible = (data.numero || ouvrirNumero || "").toUpperCase();
+        tickets.sort((a, b) => (b.fields?.Name?.toUpperCase() === cible) - (a.fields?.Name?.toUpperCase() === cible));
+        setListe(tickets);
+        const voulue = tickets.find(t => cible && t.fields?.Name?.toUpperCase() === cible);
+        if (ouvrirNumero && voulue) await ouvrirTicket(voulue);
+        else if (tickets.length === 1) await ouvrirTicket(tickets[0]);
       }
     } catch (e) {
       setErreur("Erreur de connexion. Réessayez dans un instant.");
     }
     setLoading(false);
+  };
+
+  const rechercher = () => {
+    const num = numero.trim();
+    if (!num || !contact.trim()) { setErreur("Merci de saisir votre numéro de ticket et l'e-mail ou le téléphone donné à la déclaration."); return; }
+    identifier({ numero: num, contact: contact.trim() });
   };
 
   // Lien profond depuis index.html (bouton "Suivre ma demande" après
@@ -471,9 +489,21 @@ function App() {
   React.useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const ticketUrl = (params.get('ticket') || '').trim();
-    if (ticketUrl) {
-      setNumero(ticketUrl);
-      rechercher(ticketUrl);
+    const jetonUrl = (params.get('t') || '').trim();
+    if (ticketUrl) setNumero(ticketUrl);
+    // Lien du mail : le jeton identifie le client, ?ticket= ouvre directement la demande.
+    // Sans jeton, le numéro seul ne lance plus rien (le formulaire attend l'e-mail/téléphone).
+    if (jetonUrl) identifier({ jeton: jetonUrl }, ticketUrl);
+    // Saisie venant de l'accueil Amandine (numéro + e-mail/téléphone), à usage unique.
+    else {
+      try {
+        const saisie = JSON.parse(sessionStorage.getItem('iko_suivi_saisie') || 'null');
+        sessionStorage.removeItem('iko_suivi_saisie');
+        if (saisie && saisie.numero && saisie.contact) {
+          setNumero(saisie.numero); setContact(saisie.contact);
+          identifier({ numero: saisie.numero, contact: saisie.contact });
+        }
+      } catch (e) {}
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -518,7 +548,8 @@ function App() {
   };
 
   const nouvelleRecherche = () => {
-    setTicket(null); setNumero(""); setErreur(""); setMessage(""); setEnvoi(null);
+    // Retour à la liste des demandes du client si elle est chargée.
+    setTicket(null); if (!liste) setNumero(""); setErreur(""); setMessage(""); setEnvoi(null);
     setShowAnnulerConfirm(false); setShowChanger(false); setChangeOk(false);
     setRaisonAnnulation(""); setRaisonManquante(false);
   };
@@ -610,14 +641,38 @@ function App() {
           <div style={{color:F.blanc,fontWeight:"900",fontSize:"16px"}}>Iko</div>
           <div style={{color:"rgba(255,255,255,0.5)",fontSize:"9px",letterSpacing:"1.5px",textTransform:"uppercase",marginTop:"2px"}}>Suivi de ma demande SAV</div>
         </div>
-        <a href="index.html" style={{marginLeft:"auto",color:"rgba(255,255,255,0.7)",fontSize:"12px",textDecoration:"none",border:"1px solid rgba(255,255,255,0.25)",borderRadius:"8px",padding:"6px 12px"}}>← Retour</a>
+        <a href="amandine.html" style={{marginLeft:"auto",color:"rgba(255,255,255,0.7)",fontSize:"12px",textDecoration:"none",border:"1px solid rgba(255,255,255,0.25)",borderRadius:"8px",padding:"6px 12px"}}>← Retour</a>
       </div>
 
       <div style={{width:"100%",maxWidth:"520px",padding:"28px 20px"}}>
-        {!ticket && (
+        {!ticket && liste && (
+          <div style={{background:F.blanc,border:"1px solid "+F.grisBord,borderRadius:"14px",padding:"22px",boxShadow:"0 4px 20px rgba(0,0,0,0.05)"}}>
+            <h1 style={{fontSize:"18px",color:F.marine,marginBottom:"4px"}}>Mes demandes SAV</h1>
+            <p style={{fontSize:"12px",color:"#6B7280",marginBottom:"14px"}}>{liste.length} demande{liste.length > 1 ? "s" : ""} — touchez-en une pour ouvrir son suivi.</p>
+            {erreur && <div style={{marginBottom:"10px",fontSize:"12px",color:F.rouge,background:F.rougeClair,borderRadius:"8px",padding:"8px 10px"}}>{erreur}</div>}
+            <div style={{display:"flex",flexDirection:"column",gap:"8px"}}>
+              {liste.map(t => {
+                const st = t.fields?.Statut || "Nouveau";
+                const c = STATUT_STYLE[st] || STATUT_STYLE["Nouveau"];
+                return (
+                  <button key={t.id} onClick={() => ouvrirTicket(t)}
+                    style={{textAlign:"left",background:F.grisClair,border:"1px solid "+F.grisBord,borderRadius:"10px",padding:"12px",cursor:"pointer"}}>
+                    <div style={{display:"flex",alignItems:"center",gap:"8px",flexWrap:"wrap"}}>
+                      <span style={{fontSize:"13px",fontWeight:"900",color:F.or,fontFamily:"monospace"}}>{t.fields?.Name}</span>
+                      <span style={{fontSize:"10px",fontWeight:"800",color:c.color,background:c.bg,borderRadius:"20px",padding:"3px 10px"}}>{st}</span>
+                    </div>
+                    <div style={{fontSize:"11px",color:"#4B5563",marginTop:"4px"}}>{[t.fields?.Produit, t.fields?.["Problème"]].filter(Boolean).join(" — ")}</div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {!ticket && !liste && (
           <div style={{background:F.blanc,border:"1px solid "+F.grisBord,borderRadius:"14px",padding:"28px 22px",boxShadow:"0 4px 20px rgba(0,0,0,0.05)"}}>
-            <h1 style={{fontSize:"18px",color:F.marine,marginBottom:"6px"}}>Suivre ma demande SAV</h1>
-            <p style={{fontSize:"12px",color:"#6B7280",marginBottom:"18px"}}>Saisissez le numéro de ticket reçu par e-mail lors de votre demande (ex : SAV-2026-1234).</p>
+            <h1 style={{fontSize:"18px",color:F.marine,marginBottom:"6px"}}>Suivre mes demandes SAV</h1>
+            <p style={{fontSize:"12px",color:"#6B7280",marginBottom:"18px"}}>Saisissez le numéro de ticket reçu par e-mail (ex : SAV-2026-1234) et l'e-mail ou le téléphone donné lors de votre demande. Vous pouvez aussi utiliser directement le lien de votre e-mail.</p>
             <label style={{fontSize:"11px",fontWeight:"700",color:F.marine,display:"block",marginBottom:"6px"}}>N° de ticket</label>
             <input
               value={numero}
@@ -625,6 +680,14 @@ function App() {
               onKeyDown={e => e.key === 'Enter' && rechercher()}
               placeholder="SAV-2026-1234"
               style={{width:"100%",border:"1px solid "+F.grisBord,borderRadius:"8px",padding:"11px 12px",fontSize:"14px",fontWeight:"700",letterSpacing:"0.5px",color:F.marine,textTransform:"uppercase"}}
+            />
+            <label style={{fontSize:"11px",fontWeight:"700",color:F.marine,display:"block",margin:"12px 0 6px"}}>E-mail ou téléphone de la demande</label>
+            <input
+              value={contact}
+              onChange={e => setContact(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && rechercher()}
+              placeholder="prenom@exemple.fr ou 06 12 34 56 78"
+              style={{width:"100%",border:"1px solid "+F.grisBord,borderRadius:"8px",padding:"11px 12px",fontSize:"14px",color:F.marine}}
             />
             {erreur && <div style={{marginTop:"10px",fontSize:"12px",color:F.rouge,background:F.rougeClair,borderRadius:"8px",padding:"8px 10px"}}>{erreur}</div>}
             <button
@@ -768,7 +831,7 @@ function App() {
             </div>
 
             <button onClick={nouvelleRecherche} style={{marginTop:"16px",width:"100%",background:"transparent",border:"1px solid "+F.grisBord,color:"#6B7280",borderRadius:"10px",padding:"11px",fontWeight:"700",fontSize:"12px",cursor:"pointer"}}>
-              ↩ Rechercher un autre ticket
+              {liste ? "↩ Mes autres demandes" : "↩ Rechercher un autre ticket"}
             </button>
           </div>
         )}

@@ -913,6 +913,11 @@ function App() {
               </div>
               <div style={{fontSize:"11px",color:"#475569",marginTop:"2px"}}>Créneau : {creneau}</div>
             </div>
+            {envoi === 'ok' && (
+              <div style={{background:F.vertClair,border:"1px solid #86EFAC",borderRadius:"9px",padding:"8px 12px",fontSize:"11px",color:F.vert,fontWeight:"600"}}>
+                ✉️ Un e-mail vous est envoyé avec votre numéro et un lien direct vers votre suivi.
+              </div>
+            )}
             <a href={"suivi.html?ticket=" + encodeURIComponent(ticket)}
               style={{display:"block",width:"100%",padding:"13px",background:F.marine,color:F.blanc,border:"2px solid " + F.or,borderRadius:"10px",fontSize:"13px",fontWeight:"700",textAlign:"center",textDecoration:"none",boxSizing:"border-box"}}>
               📋 Suivre ma demande

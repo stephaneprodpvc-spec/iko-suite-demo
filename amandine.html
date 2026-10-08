@@ -285,7 +285,17 @@
 <div id="amandine-landing">
   <div class="amandine-sphere" id="amandine-sphere-btn"></div>
   <div class="amandine-landing-texte" id="amandine-landing-texte">Bonjour, je suis Amandine. Dites-moi ce qui vous amène, ou tapez votre message.</div>
-  <button class="amandine-landing-bouton" id="amandine-landing-bouton">💬 Voir la conversation</button>
+  <div id="amandine-choix" style="display:flex;flex-direction:column;gap:10px;align-items:center;">
+    <button class="amandine-landing-bouton" id="amandine-landing-bouton" style="margin-top:26px;">💬 Déclarer une demande</button>
+    <button class="amandine-landing-bouton" id="amandine-suivre-bouton" style="margin-top:0;background:transparent;color:var(--orange);border:2px solid var(--orange);">📋 Suivre mes demandes</button>
+  </div>
+  <form id="amandine-suivi-form" style="display:none;margin-top:22px;width:min(320px,86vw);flex-direction:column;gap:9px;">
+    <input id="amandine-suivi-numero" placeholder="N° de ticket (SAV-2026-1234)" autocomplete="off" style="padding:12px;border-radius:10px;border:none;font-size:14px;text-transform:uppercase;">
+    <input id="amandine-suivi-contact" placeholder="E-mail ou téléphone de la demande" autocomplete="off" style="padding:12px;border-radius:10px;border:none;font-size:14px;">
+    <div id="amandine-suivi-erreur" style="color:#FCA5A5;font-size:12px;display:none;"></div>
+    <button type="submit" class="amandine-landing-bouton" style="margin-top:4px;">🔍 Voir mes demandes</button>
+    <button type="button" id="amandine-suivi-annuler" style="background:none;border:none;color:#9CA3AF;font-size:12px;cursor:pointer;">← Retour</button>
+  </form>
 </div>
 
 <header>
@@ -694,6 +704,34 @@ window.IKO_CLIENT_READY = (async function () {
   if (sphereBtn) sphereBtn.addEventListener('click', function () { debloquerAudioIOS(); if (boutonMicro) boutonMicro.click(); });
   if (landingBtn) landingBtn.addEventListener('click', ouvrirConversation);
   if (retourBtn) retourBtn.addEventListener('click', retournerSphere);
+
+  // ---- Accueil : "Suivre mes demandes" = numéro + e-mail/téléphone (jamais le
+  // numéro seul), vérifiés côté serveur par suivi.html. ----
+  const choixEl = document.getElementById('amandine-choix');
+  const suiviForm = document.getElementById('amandine-suivi-form');
+  const suiviErreur = document.getElementById('amandine-suivi-erreur');
+  const afficherSuivi = function (voir) {
+    if (choixEl) choixEl.style.display = voir ? 'none' : 'flex';
+    if (suiviForm) suiviForm.style.display = voir ? 'flex' : 'none';
+  };
+  const suivreBtn = document.getElementById('amandine-suivre-bouton');
+  if (suivreBtn) suivreBtn.addEventListener('click', function () { afficherSuivi(true); });
+  const suiviAnnuler = document.getElementById('amandine-suivi-annuler');
+  if (suiviAnnuler) suiviAnnuler.addEventListener('click', function () { afficherSuivi(false); });
+  if (suiviForm) suiviForm.addEventListener('submit', function (ev) {
+    ev.preventDefault();
+    var num = document.getElementById('amandine-suivi-numero').value.trim();
+    var contact = document.getElementById('amandine-suivi-contact').value.trim();
+    suiviErreur.style.display = 'none';
+    if (!num || !contact) {
+      suiviErreur.textContent = "Merci de saisir le numéro de ticket et l'e-mail ou le téléphone de la demande.";
+      suiviErreur.style.display = 'block';
+      return;
+    }
+    // Le serveur vérifie numéro + contact dans suivi.html (une seule requête, une seule tentative comptée).
+    try { sessionStorage.setItem('iko_suivi_saisie', JSON.stringify({ numero: num, contact: contact })); } catch (e) {}
+    window.location.href = 'suivi.html';
+  });
 })();
 </script>
 <script>

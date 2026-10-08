@@ -25,6 +25,78 @@
 
 import webpush from 'web-push';
 import { verifierSession, verifierDebit, verifierOrigine } from './_securite.js';
+import { lienSuivi, lireJeton, normaliserEmail, normaliserTel } from './_suivi.js';
+
+// Champs d'un ticket renvoyes au client par la route publique "suivi"
+// (liste blanche : ni e-mail, ni telephone, ni adresse, ni notes internes).
+const CHAMPS_SUIVI = [
+  'Name', 'Statut', 'Produit', 'Problème', 'Créneau', 'Agence', 'Diagnostic', 'Montant devis',
+  'Message client', 'Réponse agence', 'Proposition auto en attente', 'Proposition auto créneau',
+  'Proposition auto mois', 'PlanningID', 'Compte client',
+];
+
+// Formule Airtable : tickets d'un meme client (meme e-mail OU meme telephone).
+function formuleClient({ email, tel }) {
+  const parts = [];
+  if (email) parts.push('LOWER(TRIM({Email}))="' + email + '"');
+  if (tel) parts.push('RIGHT(SUBSTITUTE(SUBSTITUTE(SUBSTITUTE(SUBSTITUTE(SUBSTITUTE({Téléphone}," ",""),".",""),"-",""),"+",""),"/",""),9)="' + tel + '"');
+  return parts.length === 1 ? parts[0] : 'OR(' + parts.join(',') + ')';
+}
+
+// Route publique /api/airtable/suivi (POST). Deux entrees, jamais un numero seul :
+//   a) { jeton }            : lien recu par e-mail ;
+//   b) { numero, contact }  : numero de ticket + e-mail OU telephone donne a la declaration.
+// Renvoie toutes les demandes du meme client. Message d'echec unique (pas
+// d'indication sur ce qui est faux) + limite de debit stricte.
+async function handlerSuivi(req, res, baseId, headers) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  if (!verifierOrigine(req)) return res.status(403).json({ error: 'Origine non autorisée.' });
+  if (!verifierDebit(req, { max: 8, fenetreMs: 10 * 60 * 1000, cle: 'suivi-client' })) {
+    return res.status(429).json({ error: 'Trop de tentatives. Réessayez dans quelques minutes.' });
+  }
+  const ECHEC = { error: 'Aucune demande trouvée. Vérifiez le lien reçu par e-mail, ou le numéro de ticket et l\'e-mail / téléphone saisis à la déclaration.' };
+  const body = req.body || {};
+  const airtable = async (formule, max) => {
+    const url = 'https://api.airtable.com/v0/' + baseId + '/Tickets%20SAV?filterByFormula=' + encodeURIComponent(formule) +
+      '&maxRecords=' + max + '&sort[0][field]=Name&sort[0][direction]=desc';
+    const r = await fetch(url, { headers });
+    if (!r.ok) throw new Error('airtable ' + r.status);
+    return (await r.json()).records || [];
+  };
+  try {
+    let identite = null;
+    let numeroDemande = '';
+    if (typeof body.jeton === 'string' && body.jeton) {
+      identite = lireJeton(body.jeton);
+    } else if (typeof body.numero === 'string' && typeof body.contact === 'string') {
+      const numero = body.numero.trim().toUpperCase();
+      const email = normaliserEmail(body.contact);
+      const tel = email ? '' : normaliserTel(body.contact);
+      if (/^[A-Z0-9-]{4,30}$/.test(numero) && (email || tel)) {
+        const trouves = await airtable('AND(UPPER({Name})="' + numero + '",' + formuleClient({ email, tel }) + ')', 1);
+        if (trouves.length) {
+          // L'identite du client vient du ticket lui-meme (e-mail ET telephone),
+          // pour regrouper toutes ses demandes.
+          const f = trouves[0].fields || {};
+          identite = { email: normaliserEmail(f.Email), tel: normaliserTel(f['Téléphone']) };
+          numeroDemande = numero;
+        }
+      }
+    }
+    if (!identite || (!identite.email && !identite.tel)) return res.status(404).json(ECHEC);
+    const records = await airtable(formuleClient(identite), 50);
+    if (!records.length) return res.status(404).json(ECHEC);
+    const tickets = records.map(r => {
+      const fields = {};
+      CHAMPS_SUIVI.forEach(c => { if (r.fields && c in r.fields) fields[c] = r.fields[c]; });
+      return { id: r.id, createdTime: r.createdTime, fields };
+    });
+    return res.status(200).json({ tickets, numero: numeroDemande });
+  } catch (err) {
+    console.error('Erreur route suivi:', err);
+    return res.status(502).json({ error: 'Erreur de connexion. Réessayez dans un instant.' });
+  }
+}
 
 // AUTH #004 — sécurisation serveur de ce proxy -------------------------------
 // Principe retenu (mode de COEXISTENCE, volontairement non strict) :
@@ -259,11 +331,24 @@ async function relayerWebhook(req, res, urlCible, actionsAutorisees) {
   if (actionDemandee !== undefined && !actionsAutorisees.includes(actionDemandee)) {
     return res.status(400).json({ error: 'Action non reconnue.' });
   }
+  // Nouvelle demande SAV (pas de champ "action") : on ajoute au payload Make le
+  // lien de suivi personnel du client, genere ICI (cle serveur). Toujours
+  // ecrase (une valeur envoyee par le navigateur n'est jamais relayee) et
+  // JAMAIS renvoye au navigateur : il part uniquement par e-mail via Make.
+  const corpsRelaye = Object.assign({}, req.body || {});
+  if (actionsAutorisees === ACTIONS_WEBHOOK_AUTORISEES && actionDemandee === undefined) {
+    delete corpsRelaye.lien_suivi;
+    const emailClient = corpsRelaye['e-mail'];
+    if (emailClient && corpsRelaye.ticket) {
+      const lien = lienSuivi(req, { email: emailClient, tel: corpsRelaye.tel, ticket: corpsRelaye.ticket });
+      if (lien) corpsRelaye.lien_suivi = lien;
+    }
+  }
   try {
     const webhookRes = await fetch(urlCible, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(req.body || {}),
+      body: JSON.stringify(corpsRelaye),
     });
     return res.status(webhookRes.ok ? 200 : 502).json({ ok: webhookRes.ok });
   } catch (err) {
@@ -417,6 +502,18 @@ export default async function handler(req, res) {
   // trompe une ou deux fois, mais qui rend un balayage des ~9000
   // combinaisons totalement impraticable (des jours de tentatives continues
   // depuis la meme IP, deja tres au-dela de tout usage legitime).
+  // Module Amandine : un numero de ticket seul ne suffit plus. Sans session,
+  // la recherche par {Name} est refusee ; les pages publiques passent par la
+  // route /suivi (numero + e-mail/telephone, ou jeton du mail).
+  if (
+    req.method === 'GET' &&
+    !session &&
+    premierSegment === 'Tickets SAV' &&
+    typeof rest.filterByFormula === 'string' &&
+    rest.filterByFormula.includes('{Name}')
+  ) {
+    return res.status(403).json({ error: 'Recherche par numéro seul désactivée. Utilisez le lien reçu par e-mail ou saisissez aussi votre e-mail / téléphone.' });
+  }
   const SEUIL_RECHERCHE_TICKET = 5;
   const FENETRE_RECHERCHE_TICKET_MS = 10 * 60 * 1000; // 10 minutes
   if (
@@ -432,6 +529,10 @@ export default async function handler(req, res) {
 
   if (subPathRaw === 'webhook') {
     return relayerWebhook(req, res, MAKE_WEBHOOK_URL, ACTIONS_WEBHOOK_AUTORISEES);
+  }
+
+  if (subPathRaw === 'suivi') {
+    return handlerSuivi(req, res, baseId, headers);
   }
 
   if (subPathRaw === 'webhook-metreur') {
