@@ -18,4 +18,16 @@
   --iko-erreur-clair: #FEE2E2;
   --iko-erreur-bord: #FCA5A5;
   --iko-erreur-fonce: #991B1B;
+  /* Couleurs fonctionnelles (statuts) : variables pour rester coherentes avec le theme */
+  --iko-statut-info: #2563EB;
+  --iko-statut-info-rgb: 37, 99, 235;
+  --iko-statut-info-clair: #EFF6FF;
+  --iko-statut-attention: #D97706;
+  --iko-statut-attention-rgb: 217, 119, 6;
+  --iko-statut-attention-clair: #FFFBEB;
+  --iko-statut-attention-fonce: #92400E;
+  --iko-statut-special: #7C3AED;
+  --iko-statut-special-rgb: 124, 58, 237;
+  --iko-statut-neutre: #6B7280;
+  --iko-statut-neutre-rgb: 107, 114, 128;
 }

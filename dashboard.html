@@ -167,7 +167,7 @@ const CONFIG_RECORD_ID = "rec45X231n9dXnyaU";
 let CONFIG_ENTREPRISE = { emailsTechnicien: {}, couleurAccent: "#FF6B00", logoUrl: "", techniciens: {} };
 
 function hexVersRgba(hex, alpha) {
-  const h = (hex || "#FF6B00").replace('#','');
+  const h = (hex || "var(--iko-primary)").replace('#','');
   const r = parseInt(h.substring(0,2),16), g = parseInt(h.substring(2,4),16), b = parseInt(h.substring(4,6),16);
   return 'rgba(' + r + ',' + g + ',' + b + ',' + alpha + ')';
 }
@@ -178,10 +178,13 @@ function appliquerConfigEntreprise(cfg) {
   CONFIG_ENTREPRISE.couleurAccent = cfg.couleurAccent || "#FF6B00";
   CONFIG_ENTREPRISE.logoUrl = cfg.logoUrl || "";
   CONFIG_ENTREPRISE.techniciens = cfg.techniciens || {};
-  C.or = CONFIG_ENTREPRISE.couleurAccent;
-  C.orDim = hexVersRgba(CONFIG_ENTREPRISE.couleurAccent, 0.12);
-  C.orBord = hexVersRgba(CONFIG_ENTREPRISE.couleurAccent, 0.3);
-  C.jaune = CONFIG_ENTREPRISE.couleurAccent;
+  // window.IKO_THEME.couleur (theme.js) reste prioritaire : les variables --iko-* pilotent alors C.or.
+  if (!(window.IKO_THEME && window.IKO_THEME.couleur)) {
+    C.or = CONFIG_ENTREPRISE.couleurAccent;
+    C.orDim = hexVersRgba(CONFIG_ENTREPRISE.couleurAccent, 0.12);
+    C.orBord = hexVersRgba(CONFIG_ENTREPRISE.couleurAccent, 0.3);
+    C.jaune = CONFIG_ENTREPRISE.couleurAccent;
+  }
 }
 
 // Combine une formule Airtable existante avec le filtre "appartient au
@@ -218,8 +221,8 @@ const C = {
   text: "#374151", muted: "#5B6472", white: "var(--iko-bg-sombre)",
   rouge: "var(--iko-erreur)", rougeDim: "rgba(var(--iko-erreur-rgb),0.12)",
   vert: "var(--iko-primary)", vertDim: "rgba(var(--iko-primary-rgb),0.12)",
-  bleu: "#2563eb", bleuDim: "rgba(37,99,235,0.12)",
-  jaune: "var(--iko-primary)", jauneDim: "rgba(217,119,6,0.12)",
+  bleu: "var(--iko-statut-info)", bleuDim: "rgba(var(--iko-statut-info-rgb),0.12)",
+  jaune: "var(--iko-primary)", jauneDim: "rgba(var(--iko-statut-attention-rgb),0.12)",
 };
 
 // ---- TRI PAR DATE ----
@@ -442,7 +445,7 @@ function MessageThread({ ticket }) {
             maxWidth:"80%",
             background:e.sender==='agence'?"var(--iko-bg-sombre)":"#FFFFFF",
             color:e.sender==='agence'?"#FFFFFF":"var(--iko-dark)",
-            border:e.sender==='agence'?"none":"1px solid rgba(217,119,6,0.35)",
+            border:e.sender==='agence'?"none":"1px solid rgba(var(--iko-statut-attention-rgb),0.35)",
             borderRadius:e.sender==='agence'?"12px 12px 2px 12px":"12px 12px 12px 2px",
             padding:"7px 11px",fontSize:"11px",whiteSpace:"pre-wrap",lineHeight:"1.4"
           }}>
@@ -523,7 +526,7 @@ function PhoneChatModal({ clientName, entries, texteReponse, onChangeTexte, onEn
           </div>
           {nonLu && (
             <div style={{padding:"0 12px 8px",flexShrink:0}}>
-              <button onClick={onMarquerLu} style={{width:"100%",background:"#FEF3C7",border:"1px solid rgba(217,119,6,0.3)",color:"#92400E",borderRadius:"10px",padding:"7px",fontSize:"11px",fontWeight:"700",cursor:"pointer"}}>
+              <button onClick={onMarquerLu} style={{width:"100%",background:"var(--iko-statut-attention-clair)",border:"1px solid rgba(var(--iko-statut-attention-rgb),0.3)",color:"var(--iko-statut-attention-fonce)",borderRadius:"10px",padding:"7px",fontSize:"11px",fontWeight:"700",cursor:"pointer"}}>
                 ✓ Marquer comme lu
               </button>
             </div>
@@ -1835,12 +1838,12 @@ function ModalGestionDevis({ tickets, onClose, onRefresh }) {
   const [chargementSignes, setChargementSignes] = React.useState(false);
 
   const STATUTS_DEVIS = [
-    { id: "a_faire", label: "À faire", statut: "Devis à faire", couleur: "#FF6B00" },
-    { id: "envoye", label: "Envoyé", statut: "Devis envoyé", couleur: "#2563eb" },
-    { id: "suivi", label: "Suivi", statut: "Devis - Suivi", couleur: "#FF6B00" },
-    { id: "fournisseur", label: "Attente fournisseur", statut: "Devis - Attente fournisseur", couleur: "#7c3aed" },
-    { id: "refuse", label: "Refusé", statut: "Devis refusé", couleur: "#DC2626" },
-    { id: "signe", label: "Signés", statut: null, couleur: "#FF6B00" },
+    { id: "a_faire", label: "À faire", statut: "Devis à faire", couleur: "var(--iko-primary)" },
+    { id: "envoye", label: "Envoyé", statut: "Devis envoyé", couleur: "var(--iko-statut-info)" },
+    { id: "suivi", label: "Suivi", statut: "Devis - Suivi", couleur: "var(--iko-primary)" },
+    { id: "fournisseur", label: "Attente fournisseur", statut: "Devis - Attente fournisseur", couleur: "var(--iko-statut-special)" },
+    { id: "refuse", label: "Refusé", statut: "Devis refusé", couleur: "var(--iko-erreur)" },
+    { id: "signe", label: "Signés", statut: null, couleur: "var(--iko-primary)" },
   ];
 
   // Onglet "Signés" : les tickets liés repassent en statut "Nouveau" après
@@ -1937,7 +1940,7 @@ function ModalGestionDevis({ tickets, onClose, onRefresh }) {
         <div style={{display:"flex",gap:"6px",marginBottom:"18px",flexWrap:"wrap"}}>
           {STATUTS_DEVIS.map(s => (
             <button key={s.id} onClick={() => setSousOnglet(s.id)}
-              style={{padding:"8px 14px",borderRadius:"20px",border:"2px solid "+(sousOnglet===s.id?s.couleur:C.border),background:sousOnglet===s.id?s.couleur+"22":"transparent",color:sousOnglet===s.id?s.couleur:C.muted,fontSize:"12px",fontWeight:"700",cursor:"pointer",display:"flex",alignItems:"center",gap:"6px"}}>
+              style={{padding:"8px 14px",borderRadius:"20px",border:"2px solid "+(sousOnglet===s.id?s.couleur:C.border),background:sousOnglet===s.id?"color-mix(in srgb, "+s.couleur+" 14%, transparent)":"transparent",color:sousOnglet===s.id?s.couleur:C.muted,fontSize:"12px",fontWeight:"700",cursor:"pointer",display:"flex",alignItems:"center",gap:"6px"}}>
               {s.label}
               <span style={{background:sousOnglet===s.id?s.couleur:C.border,color:sousOnglet===s.id?"#fff":C.muted,borderRadius:"10px",padding:"1px 7px",fontSize:"10px"}}>{compteur(s.id)}</span>
             </button>
@@ -2001,18 +2004,18 @@ function ModalGestionDevis({ tickets, onClose, onRefresh }) {
                 {sousOnglet === "envoye" && (
                   <>
                     <button disabled={changing===t.id} onClick={() => changerStatut(t.id, "Devis - Suivi")}
-                      style={{background:"rgba(217,119,6,0.12)",color:"var(--iko-primary)",border:"1px solid rgba(217,119,6,0.4)",borderRadius:"8px",padding:"7px 12px",fontSize:"11px",fontWeight:"700",cursor:"pointer"}}>
+                      style={{background:"rgba(var(--iko-statut-attention-rgb),0.12)",color:"var(--iko-primary)",border:"1px solid rgba(var(--iko-statut-attention-rgb),0.4)",borderRadius:"8px",padding:"7px 12px",fontSize:"11px",fontWeight:"700",cursor:"pointer"}}>
                       → Marquer en suivi
                     </button>
                     <button disabled={changing===t.id} onClick={() => changerStatut(t.id, "Devis - Attente fournisseur")}
-                      style={{background:"rgba(124,58,237,0.12)",color:"#7c3aed",border:"1px solid rgba(124,58,237,0.4)",borderRadius:"8px",padding:"7px 12px",fontSize:"11px",fontWeight:"700",cursor:"pointer"}}>
+                      style={{background:"rgba(var(--iko-statut-special-rgb),0.12)",color:"var(--iko-statut-special)",border:"1px solid rgba(var(--iko-statut-special-rgb),0.4)",borderRadius:"8px",padding:"7px 12px",fontSize:"11px",fontWeight:"700",cursor:"pointer"}}>
                       → Attente fournisseur
                     </button>
                   </>
                 )}
                 {(sousOnglet === "suivi" || sousOnglet === "fournisseur") && (
                   <button disabled={changing===t.id} onClick={() => changerStatut(t.id, "Devis envoyé")}
-                    style={{background:"rgba(37,99,235,0.12)",color:"#2563eb",border:"1px solid rgba(37,99,235,0.4)",borderRadius:"8px",padding:"7px 12px",fontSize:"11px",fontWeight:"700",cursor:"pointer"}}>
+                    style={{background:"rgba(var(--iko-statut-info-rgb),0.12)",color:"var(--iko-statut-info)",border:"1px solid rgba(var(--iko-statut-info-rgb),0.4)",borderRadius:"8px",padding:"7px 12px",fontSize:"11px",fontWeight:"700",cursor:"pointer"}}>
                     ← Revenir à "Envoyé"
                   </button>
                 )}
@@ -2235,9 +2238,9 @@ function ModalAnalyticsSAV({ tickets, onClose }) {
     performanceTechniciens: perfEtResolution ? perfEtResolution.performanceTechniciens : [],
   });
   const NIVEAU_SIGNAL_STYLE = {
-    fort: { couleur: "#DC2626", fond: "rgba(220,38,38,0.08)", label: "Signal fort" },
-    moyen: { couleur: "#D97706", fond: "rgba(217,119,6,0.08)", label: "Signal moyen" },
-    faible: { couleur: "#6B7280", fond: "rgba(107,114,128,0.08)", label: "Signal faible" },
+    fort: { couleur: "var(--iko-erreur)", fond: "rgba(var(--iko-erreur-rgb),0.08)", label: "Signal fort" },
+    moyen: { couleur: "var(--iko-statut-attention)", fond: "rgba(var(--iko-statut-attention-rgb),0.08)", label: "Signal moyen" },
+    faible: { couleur: "var(--iko-texte-clair)", fond: "rgba(var(--iko-statut-neutre-rgb),0.08)", label: "Signal faible" },
   };
 
   // ---- Socle IA : synthèse direction (mode "synthese_direction") ----
@@ -5096,7 +5099,7 @@ function Dashboard({ agenceAccess, onClose }) {
           {agenceFilter === "global" ? "Toutes agences" : agenceFilter}
         </div>
         <div style={{width:"220px",height:"220px",borderRadius:"50%",
-          background:"radial-gradient(circle at 35% 30%, var(--iko-primary-pale), var(--iko-primary) 55%, #7a3200 100%)",
+          background:"radial-gradient(circle at 35% 30%, var(--iko-primary-pale), var(--iko-primary) 55%, var(--iko-primary-fonce) 100%)",
           boxShadow:"0 0 90px rgba(var(--iko-primary-rgb),0.45)",
           animation: amandineEcoute ? "ikoPulseRapide 1s ease-in-out infinite" : "ikoRespire 3.2s ease-in-out infinite"}}/>
         <div style={{marginTop:"32px",color:"#b8b8b8",fontSize:"14px",maxWidth:"320px",textAlign:"center",minHeight:"40px",lineHeight:"1.5"}}>
@@ -5239,7 +5242,7 @@ function Dashboard({ agenceAccess, onClose }) {
       <div style={{background:C.card,borderBottom:"1px solid "+C.border,padding:"12px 24px",display:"flex",alignItems:"center",justifyContent:"space-between",position:"sticky",top:0,zIndex:100}}>
         <div style={{display:"flex",alignItems:"center",gap:"12px"}}>
           <div style={{width:"96px",height:"46px",background:"#FFFFFF",borderRadius:"8px",display:"flex",alignItems:"center",justifyContent:"center",padding:"3px",boxSizing:"border-box"}}>
-            <img src={CONFIG_ENTREPRISE.logoUrl || IKO_LOGO} alt="Iko" style={{width:"100%",height:"100%",objectFit:"contain"}}/>
+            <img data-iko-logo src={CONFIG_ENTREPRISE.logoUrl || IKO_LOGO} alt="Iko" style={{width:"100%",height:"100%",objectFit:"contain"}}/>
           </div>
           <div>
             <div style={{fontSize:"13px",fontWeight:"700",color:C.muted}}>Dashboard SAV</div>
@@ -5297,7 +5300,7 @@ function Dashboard({ agenceAccess, onClose }) {
               <button key={a} onClick={() => setAgenceFilter(a)}
                 style={{padding:"7px 16px",borderRadius:"20px",border:"1px solid "+(agenceFilter===a?C.or:C.border),background:agenceFilter===a?C.or:"transparent",color:agenceFilter===a?"var(--iko-dark)":C.muted,fontSize:"12px",fontWeight:"700",cursor:"pointer",display:"flex",alignItems:"center",gap:"6px"}}>
                 {a==="global"?"🌐 Toutes agences":a}
-                <span style={{background:"#2563EB",color:"#fff",borderRadius:"10px",padding:"1px 7px",fontSize:"10px",fontWeight:"900"}}>
+                <span style={{background:"var(--iko-statut-info)",color:"#fff",borderRadius:"10px",padding:"1px 7px",fontSize:"10px",fontWeight:"900"}}>
                   {a==="global"?stats.total:byAgence[a]}
                 </span>
               </button>
@@ -5467,7 +5470,7 @@ function Dashboard({ agenceAccess, onClose }) {
       <div style={{position:"fixed",bottom:"24px",right:"24px",zIndex:200,display:"flex",flexDirection:"column",alignItems:"flex-end",gap:"10px"}}>
         {amandineOuverte && (
           <div style={{width:"280px",background:C.card,border:"1px solid "+C.orBord,borderRadius:"14px",padding:"16px",boxShadow:"0 10px 40px rgba(0,0,0,0.35)"}}>
-            <div style={{fontSize:"12px",fontWeight:"800",color:C.or,marginBottom:"8px",letterSpacing:"1px"}}>IKO</div>
+            <div style={{fontSize:"12px",fontWeight:"800",color:C.or,marginBottom:"8px",letterSpacing:"1px"}} data-iko-nom>IKO</div>
             <div style={{fontSize:"12px",color:C.muted,minHeight:"36px"}}>
               {amandineEcoute ? "Je vous écoute... (relâchez le micro pour terminer)" : amandineEnCours ? "..." : amandineDernier ? amandineDernier : "Dites par exemple : \"Filtre sur Agence 2\" ou \"Passe le ticket SAV-2026-1552 en terminé\"."}
             </div>
@@ -5496,7 +5499,7 @@ function Dashboard({ agenceAccess, onClose }) {
             onPointerUp={arreterEcouteAmandine}
             onPointerLeave={arreterEcouteAmandine}
             onPointerCancel={arreterEcouteAmandine}
-            style={{width:"58px",height:"58px",borderRadius:"50%",background:amandineEcoute?C.rouge:"radial-gradient(circle at 35% 30%, var(--iko-primary-pale), var(--iko-primary) 55%, #7a3200 100%)",border:"none",color:"var(--iko-dark)",cursor:"pointer",fontSize:"24px",boxShadow:"0 0 26px rgba(var(--iko-primary-rgb),0.4)",animation:amandineEcoute?"pulse 1.2s infinite":"none",touchAction:"none",userSelect:"none"}}>
+            style={{width:"58px",height:"58px",borderRadius:"50%",background:amandineEcoute?C.rouge:"radial-gradient(circle at 35% 30%, var(--iko-primary-pale), var(--iko-primary) 55%, var(--iko-primary-fonce) 100%)",border:"none",color:"var(--iko-dark)",cursor:"pointer",fontSize:"24px",boxShadow:"0 0 26px rgba(var(--iko-primary-rgb),0.4)",animation:amandineEcoute?"pulse 1.2s infinite":"none",touchAction:"none",userSelect:"none"}}>
             🎙️
           </button>
         </div>

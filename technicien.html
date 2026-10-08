@@ -584,7 +584,7 @@ const C = {
   text: "#374151", muted: "#5B6472", white: "var(--iko-bg-sombre)",
   rouge: "var(--iko-erreur)", rougeDim: "rgba(var(--iko-erreur-rgb),0.12)",
   vert: "var(--iko-primary)", vertDim: "rgba(var(--iko-primary-rgb),0.15)",
-  jaune: "var(--iko-primary)", jauneDim: "rgba(217,119,6,0.12)",
+  jaune: "var(--iko-primary)", jauneDim: "rgba(var(--iko-statut-attention-rgb),0.12)",
 };
 
 // Branding dynamique par client (couleurs + logo), applique une fois le
@@ -592,7 +592,7 @@ const C = {
 let CONFIG_ENTREPRISE = { couleurAccent: "#FF6B00", logoUrl: "" };
 
 function hexVersRgba(hex, alpha) {
-  const h = (hex || "#FF6B00").replace('#', '');
+  const h = (hex || "var(--iko-primary)").replace('#', '');
   const r = parseInt(h.substring(0,2),16), g = parseInt(h.substring(2,4),16), b = parseInt(h.substring(4,6),16);
   return 'rgba(' + r + ',' + g + ',' + b + ',' + alpha + ')';
 }
@@ -601,10 +601,13 @@ function appliquerConfigEntreprise(cfg) {
   if (!cfg) return;
   CONFIG_ENTREPRISE.couleurAccent = cfg.couleurAccent || "#FF6B00";
   CONFIG_ENTREPRISE.logoUrl = cfg.logoUrl || "";
-  C.or = CONFIG_ENTREPRISE.couleurAccent;
-  C.orDim = hexVersRgba(CONFIG_ENTREPRISE.couleurAccent, 0.12);
-  C.orBord = hexVersRgba(CONFIG_ENTREPRISE.couleurAccent, 0.3);
-  C.jaune = CONFIG_ENTREPRISE.couleurAccent;
+  // window.IKO_THEME.couleur (theme.js) reste prioritaire : les variables --iko-* pilotent alors C.or.
+  if (!(window.IKO_THEME && window.IKO_THEME.couleur)) {
+    C.or = CONFIG_ENTREPRISE.couleurAccent;
+    C.orDim = hexVersRgba(CONFIG_ENTREPRISE.couleurAccent, 0.12);
+    C.orBord = hexVersRgba(CONFIG_ENTREPRISE.couleurAccent, 0.3);
+    C.jaune = CONFIG_ENTREPRISE.couleurAccent;
+  }
 }
 
 // Nom affiche pour Max, personnalisable par client via le champ Airtable
@@ -1528,10 +1531,10 @@ function ModalAction({ ticket, onClose, onDone }) {
                 <div style={{fontSize:"10px",color:"rgba(var(--iko-primary-rgb),0.7)",marginTop:"3px"}}>Intervention réalisée</div>
               </button>
               <button onClick={() => setMode("replanifier")}
-                style={{padding:"20px 16px",background:C.jauneDim,border:"2px solid rgba(217,119,6,0.4)",borderRadius:"14px",color:C.jaune,cursor:"pointer",textAlign:"center"}}>
+                style={{padding:"20px 16px",background:C.jauneDim,border:"2px solid rgba(var(--iko-statut-attention-rgb),0.4)",borderRadius:"14px",color:C.jaune,cursor:"pointer",textAlign:"center"}}>
                 <div style={{fontSize:"28px",marginBottom:"6px"}}>🔄</div>
                 <div style={{fontSize:"13px",fontWeight:"900"}}>Replanifier</div>
-                <div style={{fontSize:"10px",color:"rgba(217,119,6,0.7)",marginTop:"3px"}}>Choisir une autre date</div>
+                <div style={{fontSize:"10px",color:"rgba(var(--iko-statut-attention-rgb),0.7)",marginTop:"3px"}}>Choisir une autre date</div>
               </button>
             </div>
             <button onClick={() => setMode("devis_choix")}
@@ -2003,7 +2006,7 @@ function ItineraireModal({ agence, tickets, onClose }) {
         {step === "result" && (
           <>
             {nbFailed > 0 && (
-              <div style={{background:C.jauneDim,border:"1px solid rgba(217,119,6,0.3)",borderRadius:"8px",padding:"8px 12px",fontSize:"11px",color:C.jaune,marginBottom:"12px"}}>
+              <div style={{background:C.jauneDim,border:"1px solid rgba(var(--iko-statut-attention-rgb),0.3)",borderRadius:"8px",padding:"8px 12px",fontSize:"11px",color:C.jaune,marginBottom:"12px"}}>
                 ⚠️ {nbFailed} adresse(s) n'ont pas pu être localisée(s) et sont exclues de l'itinéraire.
               </div>
             )}
@@ -2588,7 +2591,7 @@ function Technicien({ agence, onClose }) {
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
           <div style={{display:"flex",alignItems:"center",gap:"12px"}}>
             <div style={{width:"100px",height:"48px",background:"#FFFFFF",borderRadius:"10px",display:"flex",alignItems:"center",justifyContent:"center",padding:"3px",boxSizing:"border-box"}}>
-              <img src={CONFIG_ENTREPRISE.logoUrl || IKO_LOGO} alt="Iko" style={{width:"100%",height:"100%",objectFit:"contain"}}/>
+              <img data-iko-logo src={CONFIG_ENTREPRISE.logoUrl || IKO_LOGO} alt="Iko" style={{width:"100%",height:"100%",objectFit:"contain"}}/>
             </div>
             <div>
               <div style={{fontSize:"13px",fontWeight:"700",color:C.muted}}>Technicien</div>
@@ -2606,7 +2609,7 @@ function Technicien({ agence, onClose }) {
             <button onClick={() => setOnglet("devis")} title="Devis en attente" style={{background:onglet==="devis"?"var(--iko-primary)":"rgba(var(--iko-primary-rgb),0.12)",border:"1px solid var(--iko-primary)",color:onglet==="devis"?"var(--iko-dark)":"var(--iko-primary-fonce)",borderRadius:"10px",padding:"0 14px",height:"40px",fontSize:"12px",fontWeight:"700",cursor:"pointer",display:"flex",alignItems:"center",gap:"5px",whiteSpace:"nowrap",flexShrink:0}}>
               📋 Devis {nbDevisAttente > 0 && <span style={{background:onglet==="devis"?"var(--iko-bg-sombre)":"var(--iko-primary)",color:"#fff",borderRadius:"10px",padding:"0 5px",fontSize:"10px"}}>{nbDevisAttente}</span>}
             </button>
-            <button onClick={() => setNoteOpen(true)} title="Ma note client" style={{background:"rgba(217,119,6,0.12)",border:"1px solid var(--iko-primary)",color:"#8a5a06",borderRadius:"10px",padding:"0 14px",height:"40px",fontSize:"12px",fontWeight:"700",cursor:"pointer",display:"flex",alignItems:"center",gap:"5px",whiteSpace:"nowrap",flexShrink:0}}>
+            <button onClick={() => setNoteOpen(true)} title="Ma note client" style={{background:"rgba(var(--iko-statut-attention-rgb),0.12)",border:"1px solid var(--iko-primary)",color:"var(--iko-primary-fonce)",borderRadius:"10px",padding:"0 14px",height:"40px",fontSize:"12px",fontWeight:"700",cursor:"pointer",display:"flex",alignItems:"center",gap:"5px",whiteSpace:"nowrap",flexShrink:0}}>
               ⭐ {moyenneAgence ? moyenneAgence.toFixed(1) : "—"}
             </button>
             {noteOpen && (
@@ -2744,7 +2747,7 @@ function Login({ onLogin }) {
       <div style={{width:"100%",maxWidth:"340px"}}>
         <div style={{textAlign:"center",marginBottom:"36px"}}>
           <div style={{width:"190px",height:"100px",background:"#FFFFFF",borderRadius:"16px",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 16px",boxShadow:"0 8px 32px rgba(var(--iko-primary-rgb),0.3)",padding:"8px",boxSizing:"border-box"}}>
-            <img src={CONFIG_ENTREPRISE.logoUrl || IKO_LOGO} alt="Iko" style={{width:"100%",height:"100%",objectFit:"contain"}}/>
+            <img data-iko-logo src={CONFIG_ENTREPRISE.logoUrl || IKO_LOGO} alt="Iko" style={{width:"100%",height:"100%",objectFit:"contain"}}/>
           </div>
           <div style={{fontSize:"11px",color:C.muted,marginTop:"6px",letterSpacing:"2px",textTransform:"uppercase"}}>Espace Technicien</div>
         </div>

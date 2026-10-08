@@ -47,7 +47,7 @@ const F = {
   marine: "var(--iko-bg-sombre)", or: "var(--iko-primary)", orClair: "var(--iko-primary-pale)",
   blanc: "#FFFFFF", grisClair: "var(--iko-bg-clair)", grisBord: "var(--iko-bordure)",
   rouge: "var(--iko-erreur)", rougeClair: "var(--iko-erreur-clair)", vert: "var(--iko-dark)", vertClair: "var(--iko-primary-clair)",
-  bleu: "#2563EB", bleuClair: "#EFF6FF", jaune: "#D97706", jauneClair: "#FFFBEB",
+  bleu: "var(--iko-statut-info)", bleuClair: "var(--iko-statut-info-clair)", jaune: "var(--iko-statut-attention)", jauneClair: "var(--iko-statut-attention-clair)",
 };
 
 function parseMessageEntries(raw, sender) {
@@ -243,9 +243,9 @@ function BandeauProgression({ statut, propositionEnAttente, devisId }) {
         <div style={{fontSize:"11px",color:"#4B5563",lineHeight:"1.4"}}>{info.message}</div>
       </div>
       {(info.actionAttendue || propositionEnAttente) && (
-        <div style={{marginTop:"8px",background:F.jauneClair,border:"1px solid rgba(217,119,6,0.3)",borderRadius:"10px",padding:"10px 12px",display:"flex",gap:"8px",alignItems:"flex-start"}}>
+        <div style={{marginTop:"8px",background:F.jauneClair,border:"1px solid rgba(var(--iko-statut-attention-rgb),0.3)",borderRadius:"10px",padding:"10px 12px",display:"flex",gap:"8px",alignItems:"flex-start"}}>
           <span style={{fontSize:"14px"}}>⚡</span>
-          <div style={{fontSize:"11px",color:"#92400E",fontWeight:"700",lineHeight:"1.4"}}>
+          <div style={{fontSize:"11px",color:"var(--iko-statut-attention-fonce)",fontWeight:"700",lineHeight:"1.4"}}>
             {propositionEnAttente
               ? "Une proposition de nouveau créneau vous attend — répondez dans la conversation ci-dessous pour la confirmer."
               : info.actionAttendue}
@@ -648,7 +648,7 @@ function App() {
           <div data-iko-nom style={{color:F.blanc,fontWeight:"900",fontSize:"16px"}}>Iko</div>
           <div style={{color:"rgba(255,255,255,0.5)",fontSize:"9px",letterSpacing:"1.5px",textTransform:"uppercase",marginTop:"2px"}}>Suivi de ma demande SAV</div>
         </div>
-        <a href="amandine.html" style={{marginLeft:"auto",color:"rgba(255,255,255,0.7)",fontSize:"12px",textDecoration:"none",border:"1px solid rgba(255,255,255,0.25)",borderRadius:"8px",padding:"6px 12px"}}>← Retour</a>
+        <a href="index.html" style={{marginLeft:"auto",color:"rgba(255,255,255,0.7)",fontSize:"12px",textDecoration:"none",border:"1px solid rgba(255,255,255,0.25)",borderRadius:"8px",padding:"6px 12px"}}>← Retour</a>
       </div>
 
       <div style={{width:"100%",maxWidth:"520px",padding:"28px 20px"}}>
@@ -700,7 +700,7 @@ function App() {
             <button
               onClick={rechercher}
               disabled={loading}
-              style={{marginTop:"16px",width:"100%",background:loading?"#B8951F":F.or,color:F.marine,border:"none",borderRadius:"10px",padding:"13px",fontWeight:"800",fontSize:"13px",cursor:loading?"default":"pointer"}}
+              style={{marginTop:"16px",width:"100%",background:loading?"var(--iko-primary-fonce)":F.or,color:F.marine,border:"none",borderRadius:"10px",padding:"13px",fontWeight:"800",fontSize:"13px",cursor:loading?"default":"pointer"}}
             >
               {loading ? "Recherche…" : "🔍 Voir ma demande"}
             </button>
