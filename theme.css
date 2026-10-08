@@ -1,0 +1,21 @@
+/* Theme IKO (demo) : orange et noir, partage par tous les modules.
+   Les valeurs peuvent etre surchargees par client via theme.js (window.IKO_THEME). */
+:root {
+  --iko-primary: #FF6B00;
+  --iko-primary-rgb: 255, 107, 0;
+  --iko-primary-clair: #FFF3EB;   /* fond tres clair teinte (messages de reussite, badges) */
+  --iko-primary-pale: #FFD9BF;    /* teinte claire (texte sur fond sombre, degrades) */
+  --iko-primary-fonce: #C2410C;   /* teinte foncee (texte, survol) */
+  --iko-dark: #111111;
+  --iko-dark-rgb: 17, 17, 17;
+  --iko-bg-clair: #F5F5F5;
+  --iko-bg-sombre: #0D0D0D;
+  --iko-texte: #111111;
+  --iko-texte-clair: #6B7280;
+  --iko-bordure: #E5E5E5;
+  --iko-erreur: #DC2626;          /* rouge lisible : reserve aux erreurs */
+  --iko-erreur-rgb: 220, 38, 38;
+  --iko-erreur-clair: #FEE2E2;
+  --iko-erreur-bord: #FCA5A5;
+  --iko-erreur-fonce: #991B1B;
+}

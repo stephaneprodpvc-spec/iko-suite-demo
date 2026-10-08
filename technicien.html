@@ -2,6 +2,8 @@
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
+<link rel="stylesheet" href="/theme.css">
+<script src="/theme.js"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Iko Suite — Espace Technicien</title>
 <link rel="manifest" href="/manifest-technicien.json">
@@ -16,15 +18,15 @@
 <script src="https://unpkg.com/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
-body { font-family: 'Segoe UI', sans-serif; background: #F5F5F5; color: #374151; min-height: 100vh; }
+body { font-family: 'Segoe UI', sans-serif; background: var(--iko-bg-clair); color: #374151; min-height: 100vh; }
 button, a, label, [onClick] { touch-action: manipulation; }
-::-webkit-scrollbar { width: 4px; } ::-webkit-scrollbar-thumb { background: #22C55E; border-radius: 2px; }
+::-webkit-scrollbar { width: 4px; } ::-webkit-scrollbar-thumb { background: var(--iko-primary); border-radius: 2px; }
 .modal-overlay { position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.9);z-index:1000;display:flex;align-items:flex-end;justify-content:center;padding:0; }
 @media(min-width:600px){ .modal-overlay { align-items:center; padding:20px; } }
-.modal-box { background:#FFFFFF;border:1px solid rgba(218,178,57,0.4);border-radius:20px 20px 0 0;padding:24px;width:100%;max-width:520px;max-height:85vh;overflow-y:auto;box-shadow:0 -4px 30px rgba(0,0,0,0.12); }
+.modal-box { background:#FFFFFF;border:1px solid rgba(var(--iko-primary-rgb),0.4);border-radius:20px 20px 0 0;padding:24px;width:100%;max-width:520px;max-height:85vh;overflow-y:auto;box-shadow:0 -4px 30px rgba(0,0,0,0.12); }
 @media(min-width:600px){ .modal-box { border-radius:16px; } }
 input, select, textarea { background:#FFFFFF;border:1px solid #D1D5DB;color:#1F2937;border-radius:8px;padding:10px 12px;font-size:13px;width:100%;outline:none;font-family:'Segoe UI',sans-serif; }
-input:focus, select:focus, textarea:focus { border-color:rgba(218,178,57,0.5); }
+input:focus, select:focus, textarea:focus { border-color:rgba(var(--iko-primary-rgb),0.5); }
 </style>
 </head>
 <body>
@@ -228,7 +230,7 @@ async function chargerCatalogueDevisTech(clientNom) {
     produits: jProd.records || [],
     mo: jMo.records || [],
     mep: {
-      couleur: mepRec?.fields?.["Couleur primaire"] || "#22C55E",
+      couleur: mepRec?.fields?.["Couleur primaire"] || "#FF6B00",
       piedPage: mepRec?.fields?.["Texte pied de page"] || "",
       dureeValidite: mepRec?.fields?.["Durée validité devis (jours)"] || 30,
       logoUrl: (mepRec?.fields?.["Logo"]?.[0]?.url) || identite.logoUrl || "",
@@ -577,27 +579,27 @@ function optimiserOrdre(start, stops) {
 const AGENCES_DEFAUT = ["Agence 1", "Agence 2", "Agence 3", "Agence 4"];
 
 const C = {
-  bg: "#F5F5F5", card: "#FFFFFF", card2: "#F3F4F6", border: "#E2E2E2",
-  or: "#22C55E", orDim: "rgba(218,178,57,0.12)", orBord: "rgba(218,178,57,0.3)",
-  text: "#374151", muted: "#5B6472", white: "#0D0D0D",
-  rouge: "#DC2626", rougeDim: "rgba(220,38,38,0.12)",
-  vert: "#16a34a", vertDim: "rgba(22,163,74,0.15)",
-  jaune: "#22C55E", jauneDim: "rgba(217,119,6,0.12)",
+  bg: "var(--iko-bg-clair)", card: "#FFFFFF", card2: "#F3F4F6", border: "#E2E2E2",
+  or: "var(--iko-primary)", orDim: "rgba(var(--iko-primary-rgb),0.12)", orBord: "rgba(var(--iko-primary-rgb),0.3)",
+  text: "#374151", muted: "#5B6472", white: "var(--iko-bg-sombre)",
+  rouge: "var(--iko-erreur)", rougeDim: "rgba(var(--iko-erreur-rgb),0.12)",
+  vert: "var(--iko-primary)", vertDim: "rgba(var(--iko-primary-rgb),0.15)",
+  jaune: "var(--iko-primary)", jauneDim: "rgba(217,119,6,0.12)",
 };
 
 // Branding dynamique par client (couleurs + logo), applique une fois le
 // contexte client charge (voir window.IKO_CLIENT_READY plus haut).
-let CONFIG_ENTREPRISE = { couleurAccent: "#22C55E", logoUrl: "" };
+let CONFIG_ENTREPRISE = { couleurAccent: "#FF6B00", logoUrl: "" };
 
 function hexVersRgba(hex, alpha) {
-  const h = (hex || "#22C55E").replace('#', '');
+  const h = (hex || "#FF6B00").replace('#', '');
   const r = parseInt(h.substring(0,2),16), g = parseInt(h.substring(2,4),16), b = parseInt(h.substring(4,6),16);
   return 'rgba(' + r + ',' + g + ',' + b + ',' + alpha + ')';
 }
 
 function appliquerConfigEntreprise(cfg) {
   if (!cfg) return;
-  CONFIG_ENTREPRISE.couleurAccent = cfg.couleurAccent || "#22C55E";
+  CONFIG_ENTREPRISE.couleurAccent = cfg.couleurAccent || "#FF6B00";
   CONFIG_ENTREPRISE.logoUrl = cfg.logoUrl || "";
   C.or = CONFIG_ENTREPRISE.couleurAccent;
   C.orDim = hexVersRgba(CONFIG_ENTREPRISE.couleurAccent, 0.12);
@@ -705,11 +707,11 @@ const LABELS_ACTION_MAX = {
 };
 
 const LABELS_CONFIANCE_MAX = { faible: "Confiance faible", moyenne: "Confiance moyenne", elevee: "Confiance élevée" };
-const COULEURS_CONFIANCE_MAX = { faible: "#DC2626", moyenne: "#DAB239", elevee: "#22C55E" };
+const COULEURS_CONFIANCE_MAX = { faible: "var(--iko-erreur)", moyenne: "var(--iko-primary)", elevee: "var(--iko-primary)" };
 // Suggestions d'action technicien V1 : affichage lecture seule uniquement,
 // jamais persisté (comme action_suggeree, voir formaterTexteDiagnosticMax).
 const LABELS_PRIORITE_ACTION = { faible: "Priorité faible", moyenne: "Priorité moyenne", forte: "Priorité forte" };
-const COULEURS_PRIORITE_ACTION = { faible: "#8a8a8a", moyenne: "#DAB239", forte: "#DC2626" };
+const COULEURS_PRIORITE_ACTION = { faible: "#8a8a8a", moyenne: "var(--iko-primary)", forte: "var(--iko-erreur)" };
 const SEUIL_RDV_MODIFIE_JOURS = 2; // extension Bloc 5, même seuil que dashboard.html
 
 // Bloc 4 - point 1 : fonction partagée entre DiagnosticMaxCard (sauvegarde
@@ -802,9 +804,9 @@ function DiagnosticMaxCard({ ticket, resultat, setResultat, diagnosticGarde, set
   };
 
   return (
-    <div style={{border:"1px solid rgba(34,197,94,0.35)",borderRadius:"12px",padding:"12px",marginBottom:"14px",background:"rgba(34,197,94,0.05)"}}>
+    <div style={{border:"1px solid rgba(var(--iko-primary-rgb),0.35)",borderRadius:"12px",padding:"12px",marginBottom:"14px",background:"rgba(var(--iko-primary-rgb),0.05)"}}>
       <div onClick={() => setOuvert(!ouvert)} style={{display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer"}}>
-        <span style={{fontSize:"12px",fontWeight:"800",color:"#22C55E"}}>
+        <span style={{fontSize:"12px",fontWeight:"800",color:"var(--iko-primary)"}}>
           🧠 Diagnostic Max {diagnosticGarde && <span style={{fontSize:"10px",color:C.muted,fontWeight:"400"}}>· déjà enregistré</span>}
         </span>
         <span style={{fontSize:"11px",color:C.muted}}>{ouvert ? "▲" : "▼"}</span>
@@ -820,10 +822,10 @@ function DiagnosticMaxCard({ ticket, resultat, setResultat, diagnosticGarde, set
             </label>
           )}
           <button type="button" onClick={lancerDiagnostic} disabled={enCours}
-            style={{width:"100%",marginTop:"8px",padding:"10px",background:enCours?"#D1D5DB":"#22C55E",color:enCours?"#666":"#111",border:"none",borderRadius:"8px",fontSize:"12px",fontWeight:"800",cursor:enCours?"not-allowed":"pointer"}}>
+            style={{width:"100%",marginTop:"8px",padding:"10px",background:enCours?"#D1D5DB":"var(--iko-primary)",color:enCours?"#666":"var(--iko-dark)",border:"none",borderRadius:"8px",fontSize:"12px",fontWeight:"800",cursor:enCours?"not-allowed":"pointer"}}>
             {enCours ? "⏳ Max réfléchit..." : "Demander à Max"}
           </button>
-          {erreur && <div style={{fontSize:"11px",color:"#DC2626",marginTop:"8px"}}>{erreur}</div>}
+          {erreur && <div style={{fontSize:"11px",color:"var(--iko-erreur)",marginTop:"8px"}}>{erreur}</div>}
           {resultat && (
             <div style={{marginTop:"10px",fontSize:"11px",color:C.text,display:"flex",flexDirection:"column",gap:"6px"}}>
               {resultat.confiance && (
@@ -831,10 +833,10 @@ function DiagnosticMaxCard({ ticket, resultat, setResultat, diagnosticGarde, set
                   {LABELS_CONFIANCE_MAX[resultat.confiance] || "Confiance moyenne"}
                 </div>
               )}
-              {resultat.fait && <div><b style={{color:"#22C55E"}}>FAIT · </b>{resultat.fait}</div>}
-              {resultat.signal && <div><b style={{color:"#DAB239"}}>SIGNAL · </b>{resultat.signal}</div>}
+              {resultat.fait && <div><b style={{color:"var(--iko-primary)"}}>FAIT · </b>{resultat.fait}</div>}
+              {resultat.signal && <div><b style={{color:"var(--iko-primary)"}}>SIGNAL · </b>{resultat.signal}</div>}
               {resultat.piste && <div><b style={{color:"#8a8a8a"}}>PISTE · </b>{resultat.piste}</div>}
-              {resultat.proposition && <div><b style={{color:"#0D0D0D"}}>PROPOSITION · </b>{resultat.proposition}</div>}
+              {resultat.proposition && <div><b style={{color:"var(--iko-bg-sombre)"}}>PROPOSITION · </b>{resultat.proposition}</div>}
               {resultat.action_suggeree && resultat.action_suggeree !== "aucune" && (
                 <div style={{fontSize:"10px",color:C.muted,fontStyle:"italic",marginTop:"2px"}}>
                   Max suggère : {LABELS_ACTION_MAX[resultat.action_suggeree] || resultat.action_suggeree} — à toi de choisir.
@@ -842,7 +844,7 @@ function DiagnosticMaxCard({ ticket, resultat, setResultat, diagnosticGarde, set
               )}
               {Array.isArray(resultat.actions_suggerees) && resultat.actions_suggerees.length > 0 && (
                 <div style={{marginTop:"4px",display:"flex",flexDirection:"column",gap:"6px"}}>
-                  <b style={{color:"#0D0D0D",fontSize:"11px"}}>🎯 Actions suggérées par IKO</b>
+                  <b style={{color:"var(--iko-bg-sombre)",fontSize:"11px"}}>🎯 Actions suggérées par IKO</b>
                   {resultat.actions_suggerees.map((a, i) => (
                     <div key={i} style={{background:"#fff",border:"1px solid rgba(0,0,0,0.08)",borderRadius:"8px",padding:"8px",display:"flex",flexDirection:"column",gap:"3px"}}>
                       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:"6px"}}>
@@ -859,7 +861,7 @@ function DiagnosticMaxCard({ ticket, resultat, setResultat, diagnosticGarde, set
                 </div>
               )}
               <button type="button" onClick={garderDiagnostic} disabled={enregistrementDiagEnCours}
-                style={{marginTop:"4px",padding:"7px 12px",borderRadius:"8px",background:enregistrementDiagEnCours?"#D1D5DB":"#0D0D0D",color:"#fff",border:"none",fontSize:"11px",fontWeight:"700",cursor:enregistrementDiagEnCours?"not-allowed":"pointer",alignSelf:"flex-start"}}>
+                style={{marginTop:"4px",padding:"7px 12px",borderRadius:"8px",background:enregistrementDiagEnCours?"#D1D5DB":"var(--iko-bg-sombre)",color:"#fff",border:"none",fontSize:"11px",fontWeight:"700",cursor:enregistrementDiagEnCours?"not-allowed":"pointer",alignSelf:"flex-start"}}>
                 {enregistrementDiagEnCours ? "⏳..." : diagnosticGarde ? "📌 Mettre à jour le diagnostic gardé" : "📌 Garder ce diagnostic"}
               </button>
             </div>
@@ -884,7 +886,7 @@ function BlocCompteRenduMax({ commentaire, setCommentaire, placeholder, rows,
       <textarea rows={rows || 3} placeholder={placeholder}
         value={commentaire} onChange={e => setCommentaire(e.target.value)} style={{resize:"none"}}/>
       <button type="button" onClick={enregistrementCREnCours ? arreterDicteeCompteRendu : dicterCompteRendu}
-        style={{marginTop:"6px",padding:"7px 12px",borderRadius:"8px",background:enregistrementCREnCours?"#DC2626":"#0D0D0D",color:"#fff",border:"none",fontSize:"11px",fontWeight:"700",cursor:"pointer"}}>
+        style={{marginTop:"6px",padding:"7px 12px",borderRadius:"8px",background:enregistrementCREnCours?"var(--iko-erreur)":"var(--iko-bg-sombre)",color:"#fff",border:"none",fontSize:"11px",fontWeight:"700",cursor:"pointer"}}>
         {enregistrementCREnCours ? "⏹️ Arrêter la dictée" : "🎙️ Dicter le compte-rendu"}
       </button>
       {texteDicteBrut && (
@@ -892,13 +894,13 @@ function BlocCompteRenduMax({ commentaire, setCommentaire, placeholder, rows,
           <label style={{fontSize:"10px",color:C.muted,display:"block",marginBottom:"4px",fontWeight:"700"}}>Texte dicté (toujours visible, modifiable)</label>
           <textarea rows={2} value={texteDicteBrut} onChange={e => setTexteDicteBrut(e.target.value)} style={{resize:"none",fontSize:"11px"}}/>
           <button type="button" onClick={structurerCompteRendu} disabled={structurationEnCours}
-            style={{marginTop:"6px",padding:"7px 12px",borderRadius:"8px",background:structurationEnCours?"#D1D5DB":"#22C55E",color:"#111",border:"none",fontSize:"11px",fontWeight:"800",cursor:structurationEnCours?"not-allowed":"pointer"}}>
+            style={{marginTop:"6px",padding:"7px 12px",borderRadius:"8px",background:structurationEnCours?"#D1D5DB":"var(--iko-primary)",color:"var(--iko-dark)",border:"none",fontSize:"11px",fontWeight:"800",cursor:structurationEnCours?"not-allowed":"pointer"}}>
             {structurationEnCours ? "⏳ Structuration..." : "🧠 Structurer avec Max"}
           </button>
         </div>
       )}
       {compteRenduStructure && (
-        <div style={{marginTop:"10px",border:"1px solid rgba(34,197,94,0.3)",borderRadius:"8px",padding:"10px",fontSize:"11px",display:"flex",flexDirection:"column",gap:"4px"}}>
+        <div style={{marginTop:"10px",border:"1px solid rgba(var(--iko-primary-rgb),0.3)",borderRadius:"8px",padding:"10px",fontSize:"11px",display:"flex",flexDirection:"column",gap:"4px"}}>
           {compteRenduStructure.fait_constate && <div><b>Constat</b> · {compteRenduStructure.fait_constate}</div>}
           {compteRenduStructure.diagnostic && <div><b>Diagnostic</b> · {compteRenduStructure.diagnostic}</div>}
           {compteRenduStructure.intervention_realisee && <div><b>Intervention réalisée</b> · {compteRenduStructure.intervention_realisee}</div>}
@@ -906,7 +908,7 @@ function BlocCompteRenduMax({ commentaire, setCommentaire, placeholder, rows,
           {compteRenduStructure.resultat && <div><b>Résultat</b> · {compteRenduStructure.resultat}</div>}
           {compteRenduStructure.suite_a_donner && <div><b>Suite à donner</b> · {compteRenduStructure.suite_a_donner}</div>}
           <button type="button" onClick={utiliserCompteRenduStructure}
-            style={{marginTop:"4px",padding:"7px 12px",borderRadius:"8px",background:"#0D0D0D",color:"#fff",border:"none",fontSize:"11px",fontWeight:"700",cursor:"pointer"}}>
+            style={{marginTop:"4px",padding:"7px 12px",borderRadius:"8px",background:"var(--iko-bg-sombre)",color:"#fff",border:"none",fontSize:"11px",fontWeight:"700",cursor:"pointer"}}>
             ✓ Utiliser ce texte pour le commentaire
           </button>
         </div>
@@ -1472,7 +1474,7 @@ function ModalAction({ ticket, onClose, onDone }) {
           <div style={{fontSize:"12px",color:C.text,marginTop:"6px"}}>📅 {ticket.fields?.["Créneau"]}</div>
           {ticket.fields?.Adresse && <div style={{fontSize:"12px",color:C.muted,marginTop:"2px"}}>📍 {ticket.fields?.Adresse}</div>}
           {erreurFermeture && (
-            <div style={{marginTop:"8px",padding:"8px 10px",background:"rgba(220,38,38,0.1)",border:"1px solid #DC2626",borderRadius:"8px",fontSize:"11px",color:"#DC2626",fontWeight:"700"}}>
+            <div style={{marginTop:"8px",padding:"8px 10px",background:"rgba(var(--iko-erreur-rgb),0.1)",border:"1px solid var(--iko-erreur)",borderRadius:"8px",fontSize:"11px",color:"var(--iko-erreur)",fontWeight:"700"}}>
               ⚠️ {erreurFermeture}
             </div>
           )}
@@ -1480,18 +1482,18 @@ function ModalAction({ ticket, onClose, onDone }) {
             <input id={"photoTerrain-" + ticket.id} type="file" accept="image/*" capture="environment" multiple style={{display:"none"}}
               onChange={e => { const f = Array.from(e.target.files || []); e.target.value = ""; if (f.length) ajouterPhotosTerrain(f); }}/>
             <label htmlFor={"photoTerrain-" + ticket.id}
-              style={{display:"flex",alignItems:"center",justifyContent:"center",width:"100%",padding:"14px",borderRadius:"12px",background:photoEnCoursUpload?"#D1D5DB":"rgba(34,197,94,0.1)",border:"2px solid #22C55E",color:"#16A34A",fontSize:"14px",fontWeight:"900",cursor:photoEnCoursUpload?"not-allowed":"pointer"}}>
+              style={{display:"flex",alignItems:"center",justifyContent:"center",width:"100%",padding:"14px",borderRadius:"12px",background:photoEnCoursUpload?"#D1D5DB":"rgba(var(--iko-primary-rgb),0.1)",border:"2px solid var(--iko-primary)",color:"var(--iko-primary)",fontSize:"14px",fontWeight:"900",cursor:photoEnCoursUpload?"not-allowed":"pointer"}}>
               {photoEnCoursUpload ? (progressionPhotos ? "⏳ Envoi " + (progressionPhotos.fait + 1) + "/" + progressionPhotos.total + "..." : "⏳ Envoi...") : "📷 Ajouter des photos"}
             </label>
             {photosTicket && <div style={{fontSize:"11px",color:C.muted,marginTop:"6px",textAlign:"center"}}>{photosTicket.split(",").filter(Boolean).length} photo(s) sur ce ticket</div>}
           </div>
-          {erreurPhoto && <div style={{fontSize:"11px",color:"#DC2626",marginTop:"6px"}}>{erreurPhoto}</div>}
+          {erreurPhoto && <div style={{fontSize:"11px",color:"var(--iko-erreur)",marginTop:"6px"}}>{erreurPhoto}</div>}
           {analysePhotoEnCours && <div style={{fontSize:"11px",color:C.muted,marginTop:"8px",textAlign:"center"}}>⏳ Max regarde la photo...</div>}
-          {erreurAnalysePhoto && <div style={{fontSize:"11px",color:"#DC2626",marginTop:"8px"}}>{erreurAnalysePhoto}</div>}
+          {erreurAnalysePhoto && <div style={{fontSize:"11px",color:"var(--iko-erreur)",marginTop:"8px"}}>{erreurAnalysePhoto}</div>}
           {analysePhotoResultat && (
-            <div style={{marginTop:"10px",border:"1px solid rgba(34,197,94,0.3)",borderRadius:"10px",padding:"10px 12px",fontSize:"11px",color:C.text,display:"flex",flexDirection:"column",gap:"5px",background:"rgba(34,197,94,0.04)"}}>
+            <div style={{marginTop:"10px",border:"1px solid rgba(var(--iko-primary-rgb),0.3)",borderRadius:"10px",padding:"10px 12px",fontSize:"11px",color:C.text,display:"flex",flexDirection:"column",gap:"5px",background:"rgba(var(--iko-primary-rgb),0.04)"}}>
               <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-                <span style={{fontSize:"11px",fontWeight:"800",color:"#22C55E"}}>📷 Lecture rapide de la photo</span>
+                <span style={{fontSize:"11px",fontWeight:"800",color:"var(--iko-primary)"}}>📷 Lecture rapide de la photo</span>
                 {analysePhotoResultat.confiance && (
                   <span style={{fontSize:"10px",fontWeight:"700",color:COULEURS_CONFIANCE_MAX[analysePhotoResultat.confiance]||C.muted,border:"1px solid "+(COULEURS_CONFIANCE_MAX[analysePhotoResultat.confiance]||C.muted),borderRadius:"10px",padding:"2px 7px"}}>
                     {LABELS_CONFIANCE_MAX[analysePhotoResultat.confiance] || "Confiance moyenne"}
@@ -1499,7 +1501,7 @@ function ModalAction({ ticket, onClose, onDone }) {
                 )}
               </div>
               {analysePhotoResultat.limites ? (
-                <div style={{color:"#DAB239"}}>⚠️ {analysePhotoResultat.limites}</div>
+                <div style={{color:"var(--iko-primary)"}}>⚠️ {analysePhotoResultat.limites}</div>
               ) : (
                 <>
                   {analysePhotoResultat.elements_visibles && <div><b>Éléments visibles</b> · {analysePhotoResultat.elements_visibles}</div>}
@@ -1520,10 +1522,10 @@ function ModalAction({ ticket, onClose, onDone }) {
             <div style={{fontSize:"12px",color:C.muted,marginBottom:"12px",textAlign:"center"}}>Que souhaitez-vous faire ?</div>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"10px",marginBottom:"10px"}}>
               <button onClick={() => setMode("terminer")}
-                style={{padding:"20px 16px",background:C.vertDim,border:"2px solid rgba(22,163,74,0.4)",borderRadius:"14px",color:C.vert,cursor:"pointer",textAlign:"center"}}>
-                <div style={{fontSize:"28px",marginBottom:"6px"}}>✅</div>
+                style={{padding:"20px 16px",background:C.vertDim,border:"2px solid rgba(var(--iko-primary-rgb),0.4)",borderRadius:"14px",color:C.vert,cursor:"pointer",textAlign:"center"}}>
+                <div style={{fontSize:"28px",marginBottom:"6px",color:"var(--iko-primary)",fontWeight:"900"}}>✓</div>
                 <div style={{fontSize:"13px",fontWeight:"900"}}>SAV terminé</div>
-                <div style={{fontSize:"10px",color:"rgba(22,163,74,0.7)",marginTop:"3px"}}>Intervention réalisée</div>
+                <div style={{fontSize:"10px",color:"rgba(var(--iko-primary-rgb),0.7)",marginTop:"3px"}}>Intervention réalisée</div>
               </button>
               <button onClick={() => setMode("replanifier")}
                 style={{padding:"20px 16px",background:C.jauneDim,border:"2px solid rgba(217,119,6,0.4)",borderRadius:"14px",color:C.jaune,cursor:"pointer",textAlign:"center"}}>
@@ -1533,19 +1535,19 @@ function ModalAction({ ticket, onClose, onDone }) {
               </button>
             </div>
             <button onClick={() => setMode("devis_choix")}
-              style={{width:"100%",padding:"14px",background:"rgba(0,26,66,0.06)",border:"2px solid rgba(0,26,66,0.3)",borderRadius:"14px",color:"#0D0D0D",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:"10px",marginBottom:"10px"}}>
+              style={{width:"100%",padding:"14px",background:"rgba(var(--iko-dark-rgb),0.06)",border:"2px solid rgba(var(--iko-dark-rgb),0.3)",borderRadius:"14px",color:"var(--iko-bg-sombre)",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:"10px",marginBottom:"10px"}}>
               <span style={{fontSize:"20px"}}>💶</span>
               <div style={{textAlign:"left"}}>
                 <div style={{fontSize:"13px",fontWeight:"900"}}>Devis</div>
-                <div style={{fontSize:"10px",color:"rgba(0,26,66,0.7)"}}>Client payant</div>
+                <div style={{fontSize:"10px",color:"rgba(var(--iko-dark-rgb),0.7)"}}>Client payant</div>
               </div>
             </button>
             <button onClick={() => setMode("annuler")}
-              style={{width:"100%",padding:"14px",background:C.rougeDim,border:"2px solid rgba(220,38,38,0.4)",borderRadius:"14px",color:C.rouge,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:"10px",marginBottom:"10px"}}>
+              style={{width:"100%",padding:"14px",background:C.rougeDim,border:"2px solid rgba(var(--iko-erreur-rgb),0.4)",borderRadius:"14px",color:C.rouge,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:"10px",marginBottom:"10px"}}>
               <span style={{fontSize:"20px"}}>❌</span>
               <div style={{textAlign:"left"}}>
                 <div style={{fontSize:"13px",fontWeight:"900"}}>Annuler le RDV</div>
-                <div style={{fontSize:"10px",color:"rgba(220,38,38,0.7)"}}>Client absent / annulation</div>
+                <div style={{fontSize:"10px",color:"rgba(var(--iko-erreur-rgb),0.7)"}}>Client absent / annulation</div>
               </div>
             </button>
             <button onClick={onClose}
@@ -1562,14 +1564,14 @@ function ModalAction({ ticket, onClose, onDone }) {
             </div>
             <div style={{fontSize:"12px",color:C.muted,marginBottom:"14px",textAlign:"center"}}>As-tu le matériel disponible pour le poser aujourd'hui ?</div>
             <button onClick={() => setMode("devis_place")}
-              style={{width:"100%",padding:"16px",background:C.vertDim,border:"2px solid rgba(22,163,74,0.4)",borderRadius:"14px",color:C.vert,cursor:"pointer",textAlign:"center",marginBottom:"10px"}}>
-              <div style={{fontSize:"13px",fontWeight:"900"}}>✅ Oui, j'ai le matériel</div>
-              <div style={{fontSize:"10px",color:"rgba(22,163,74,0.7)",marginTop:"3px"}}>Devis + signature immédiate sur place</div>
+              style={{width:"100%",padding:"16px",background:C.vertDim,border:"2px solid rgba(var(--iko-primary-rgb),0.4)",borderRadius:"14px",color:C.vert,cursor:"pointer",textAlign:"center",marginBottom:"10px"}}>
+              <div style={{fontSize:"13px",fontWeight:"900"}}>✓ Oui, j'ai le matériel</div>
+              <div style={{fontSize:"10px",color:"rgba(var(--iko-primary-rgb),0.7)",marginTop:"3px"}}>Devis + signature immédiate sur place</div>
             </button>
             <button onClick={() => setMode("devis")}
-              style={{width:"100%",padding:"16px",background:"rgba(0,26,66,0.06)",border:"2px solid rgba(0,26,66,0.3)",borderRadius:"14px",color:"#0D0D0D",cursor:"pointer",textAlign:"center",marginBottom:"10px"}}>
+              style={{width:"100%",padding:"16px",background:"rgba(var(--iko-dark-rgb),0.06)",border:"2px solid rgba(var(--iko-dark-rgb),0.3)",borderRadius:"14px",color:"var(--iko-bg-sombre)",cursor:"pointer",textAlign:"center",marginBottom:"10px"}}>
               <div style={{fontSize:"13px",fontWeight:"900"}}>📋 Non, réparation impossible sur place</div>
-              <div style={{fontSize:"10px",color:"rgba(0,26,66,0.7)",marginTop:"3px"}}>Diagnostic transmis, devis établi ensuite</div>
+              <div style={{fontSize:"10px",color:"rgba(var(--iko-dark-rgb),0.7)",marginTop:"3px"}}>Diagnostic transmis, devis établi ensuite</div>
             </button>
           </>
         )}
@@ -1577,9 +1579,9 @@ function ModalAction({ ticket, onClose, onDone }) {
           <>
             <div style={{display:"flex",alignItems:"center",gap:"8px",marginBottom:"16px"}}>
               <button onClick={() => setMode(null)} style={{background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:"18px"}}>←</button>
-              <span style={{fontSize:"14px",fontWeight:"700",color:C.white}}>✅ Valider l'intervention</span>
+              <span style={{fontSize:"14px",fontWeight:"700",color:C.white}}>✓ Valider l'intervention</span>
             </div>
-            <div style={{background:C.vertDim,border:"1px solid rgba(22,163,74,0.3)",borderRadius:"10px",padding:"10px 14px",marginBottom:"14px",fontSize:"12px",color:C.vert}}>
+            <div style={{background:C.vertDim,border:"1px solid rgba(var(--iko-primary-rgb),0.3)",borderRadius:"10px",padding:"10px 14px",marginBottom:"14px",fontSize:"12px",color:C.vert}}>
               Intervention sous garantie — rien à facturer au client.
             </div>
             <BlocCompteRenduMax commentaire={commentaire} setCommentaire={setCommentaire}
@@ -1590,7 +1592,7 @@ function ModalAction({ ticket, onClose, onDone }) {
               compteRenduStructure={compteRenduStructure} utiliserCompteRenduStructure={utiliserCompteRenduStructure}/>
             <button onClick={confirmer} disabled={saving}
               style={{width:"100%",padding:"14px",background:saving?"#D1D5DB":C.vert,color:saving?C.muted:"#fff",border:"none",borderRadius:"12px",fontSize:"14px",fontWeight:"900",cursor:saving?"not-allowed":"pointer"}}>
-              {saving ? "⏳ Enregistrement..." : "✅ Confirmer — SAV terminé"}
+              {saving ? "⏳ Enregistrement..." : "✓ Confirmer — SAV terminé"}
             </button>
           </>
         )}
@@ -1600,7 +1602,7 @@ function ModalAction({ ticket, onClose, onDone }) {
               <button onClick={() => setMode(null)} style={{background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:"18px"}}>←</button>
               <span style={{fontSize:"14px",fontWeight:"700",color:C.white}}>💶 Devis sur place</span>
             </div>
-            <div style={{background:C.vertDim,border:"1px solid rgba(22,163,74,0.3)",borderRadius:"10px",padding:"10px 14px",marginBottom:"14px",fontSize:"12px",color:C.vert}}>
+            <div style={{background:C.vertDim,border:"1px solid rgba(var(--iko-primary-rgb),0.3)",borderRadius:"10px",padding:"10px 14px",marginBottom:"14px",fontSize:"12px",color:C.vert}}>
               Sélectionnez les pièces/actions posées, faites signer le client, encaissez, puis intervenez.
             </div>
 
@@ -1613,7 +1615,7 @@ function ModalAction({ ticket, onClose, onDone }) {
               {!chargementCatalogueAuto && clientInfoAuto && (
                 <>
                   <button type="button" onClick={demanderSuggestionsDevis} disabled={chargementSuggestionsDevis}
-                    style={{width:"100%",padding:"8px",marginBottom:"8px",borderRadius:"8px",background:"rgba(34,197,94,0.1)",border:"1px solid #22C55E",color:"#16A34A",fontSize:"11px",fontWeight:"700",cursor:chargementSuggestionsDevis?"not-allowed":"pointer"}}>
+                    style={{width:"100%",padding:"8px",marginBottom:"8px",borderRadius:"8px",background:"rgba(var(--iko-primary-rgb),0.1)",border:"1px solid var(--iko-primary)",color:"var(--iko-primary)",fontSize:"11px",fontWeight:"700",cursor:chargementSuggestionsDevis?"not-allowed":"pointer"}}>
                     {chargementSuggestionsDevis ? "⏳ Max réfléchit..." : "🧠 Suggestions Max"}
                   </button>
                   {suggestionsDevis && suggestionsDevis.length === 0 && (
@@ -1622,13 +1624,13 @@ function ModalAction({ ticket, onClose, onDone }) {
                   {suggestionsDevis && suggestionsDevis.length > 0 && (
                     <div style={{marginBottom:"8px",display:"flex",flexDirection:"column",gap:"5px"}}>
                       {suggestionsDevis.map(l => (
-                        <div key={l.catalogue_id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:"6px",fontSize:"10px",background:"rgba(34,197,94,0.06)",borderRadius:"6px",padding:"6px 8px"}}>
+                        <div key={l.catalogue_id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:"6px",fontSize:"10px",background:"rgba(var(--iko-primary-rgb),0.06)",borderRadius:"6px",padding:"6px 8px"}}>
                           <div>
                             <b>{l.designation}</b> ×{l.quantite} — {Number(l.prix).toFixed(2)} €
                             {l.justification && <div style={{color:C.muted,fontStyle:"italic",marginTop:"2px"}}>{l.justification}</div>}
                           </div>
                           <button type="button" onClick={() => ajouterLigneSuggeree(l)}
-                            style={{flexShrink:0,padding:"5px 10px",borderRadius:"6px",background:"#22C55E",color:"#111",border:"none",fontWeight:"800",cursor:"pointer",fontSize:"10px"}}>
+                            style={{flexShrink:0,padding:"5px 10px",borderRadius:"6px",background:"var(--iko-primary)",color:"var(--iko-dark)",border:"none",fontWeight:"800",cursor:"pointer",fontSize:"10px"}}>
                             + Ajouter
                           </button>
                         </div>
@@ -1674,7 +1676,7 @@ function ModalAction({ ticket, onClose, onDone }) {
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"8px"}}>
                 {["CB","Chèque","Virement","Signature électronique"].map(m => (
                   <button key={m} type="button" onClick={() => setModePaiementPlace(m)}
-                    style={{padding:"10px 8px",borderRadius:"8px",border:"1px solid "+(modePaiementPlace===m?"#16A34A":C.border),background:modePaiementPlace===m?C.vert:"#F3F4F6",color:modePaiementPlace===m?"#fff":C.text,fontSize:"11px",fontWeight:"700",cursor:"pointer"}}>
+                    style={{padding:"10px 8px",borderRadius:"8px",border:"1px solid "+(modePaiementPlace===m?"var(--iko-primary)":C.border),background:modePaiementPlace===m?C.vert:"#F3F4F6",color:modePaiementPlace===m?"#fff":C.text,fontSize:"11px",fontWeight:"700",cursor:"pointer"}}>
                     {m}
                   </button>
                 ))}
@@ -1700,7 +1702,7 @@ function ModalAction({ ticket, onClose, onDone }) {
               <button onClick={() => setMode(null)} style={{background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:"18px"}}>←</button>
               <span style={{fontSize:"14px",fontWeight:"700",color:C.white}}>❌ Annuler le RDV</span>
             </div>
-            <div style={{background:C.rougeDim,border:"1px solid rgba(220,38,38,0.3)",borderRadius:"10px",padding:"10px 14px",marginBottom:"14px",fontSize:"12px",color:C.rouge}}>
+            <div style={{background:C.rougeDim,border:"1px solid rgba(var(--iko-erreur-rgb),0.3)",borderRadius:"10px",padding:"10px 14px",marginBottom:"14px",fontSize:"12px",color:C.rouge}}>
               ⚠️ Le ticket sera marqué comme annulé.
             </div>
             <div style={{marginBottom:"14px"}}>
@@ -1739,7 +1741,7 @@ function ModalAction({ ticket, onClose, onDone }) {
                 value={commentaire} onChange={e => setCommentaire(e.target.value)} style={{resize:"none"}}/>
             </div>
             <button onClick={confirmer} disabled={saving||!newDate}
-              style={{width:"100%",padding:"14px",background:saving||!newDate?"#D1D5DB":C.jaune,color:"#111",border:"none",borderRadius:"12px",fontSize:"14px",fontWeight:"900",cursor:saving||!newDate?"not-allowed":"pointer"}}>
+              style={{width:"100%",padding:"14px",background:saving||!newDate?"#D1D5DB":C.jaune,color:"var(--iko-dark)",border:"none",borderRadius:"12px",fontSize:"14px",fontWeight:"900",cursor:saving||!newDate?"not-allowed":"pointer"}}>
               {saving ? "⏳ Enregistrement..." : "🔄 Confirmer la replanification"}
             </button>
           </>
@@ -1749,7 +1751,7 @@ function ModalAction({ ticket, onClose, onDone }) {
             <div style={{marginBottom:"16px"}}>
               <span style={{fontSize:"14px",fontWeight:"700",color:C.white}}>🔓 Débloquer un créneau plus tôt</span>
             </div>
-            <div style={{background:"rgba(0,26,66,0.05)",border:"1px solid rgba(0,26,66,0.2)",borderRadius:"10px",padding:"10px 14px",marginBottom:"14px",fontSize:"12px",color:"#0D0D0D"}}>
+            <div style={{background:"rgba(var(--iko-dark-rgb),0.05)",border:"1px solid rgba(var(--iko-dark-rgb),0.2)",borderRadius:"10px",padding:"10px 14px",marginBottom:"14px",fontSize:"12px",color:"var(--iko-bg-sombre)"}}>
               Le client attend normalement au moins 7 jours. En confirmant une date plus proche ici, le client, l'agence et le dashboard seront notifiés automatiquement.
             </div>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"10px",marginBottom:"12px"}}>
@@ -1771,7 +1773,7 @@ function ModalAction({ ticket, onClose, onDone }) {
                 value={commentaire} onChange={e => setCommentaire(e.target.value)} style={{resize:"none"}}/>
             </div>
             <button onClick={confirmer} disabled={saving||!newDate}
-              style={{width:"100%",padding:"14px",background:saving||!newDate?"#D1D5DB":"#0D0D0D",color:"#fff",border:"none",borderRadius:"12px",fontSize:"14px",fontWeight:"900",cursor:saving||!newDate?"not-allowed":"pointer"}}>
+              style={{width:"100%",padding:"14px",background:saving||!newDate?"#D1D5DB":"var(--iko-bg-sombre)",color:"#fff",border:"none",borderRadius:"12px",fontSize:"14px",fontWeight:"900",cursor:saving||!newDate?"not-allowed":"pointer"}}>
               {saving ? "⏳ Enregistrement..." : "🔓 Confirmer et prévenir tout le monde"}
             </button>
             <button onClick={onClose} style={{width:"100%",marginTop:"10px",padding:"11px",background:"transparent",color:C.muted,border:"1px solid "+C.border,borderRadius:"10px",fontSize:"12px",cursor:"pointer"}}>
@@ -1785,7 +1787,7 @@ function ModalAction({ ticket, onClose, onDone }) {
               <button onClick={() => setMode(null)} style={{background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:"18px"}}>←</button>
               <span style={{fontSize:"14px",fontWeight:"700",color:C.white}}>📋 Demande de devis</span>
             </div>
-            <div style={{background:"rgba(0,26,66,0.05)",border:"1px solid rgba(0,26,66,0.2)",borderRadius:"10px",padding:"10px 14px",marginBottom:"14px",fontSize:"12px",color:"#0D0D0D"}}>
+            <div style={{background:"rgba(var(--iko-dark-rgb),0.05)",border:"1px solid rgba(var(--iko-dark-rgb),0.2)",borderRadius:"10px",padding:"10px 14px",marginBottom:"14px",fontSize:"12px",color:"var(--iko-bg-sombre)"}}>
               Le ticket passera en "Devis à faire" — le SAV établira le devis et le transmettra au client.
             </div>
             {nonGarantiTicket && (
@@ -1793,16 +1795,16 @@ function ModalAction({ ticket, onClose, onDone }) {
                 <label style={{fontSize:"11px",color:C.muted,display:"block",marginBottom:"8px",fontWeight:"700"}}>Ce client est-il déjà client de l'entreprise ?</label>
                 <div style={{display:"flex",gap:"8px"}}>
                   <button type="button" onClick={() => setClientExistantDevis(true)}
-                    style={{flex:1,padding:"10px",borderRadius:"8px",border:"1px solid "+(clientExistantDevis?"#0D0D0D":C.border),background:clientExistantDevis?"#0D0D0D":"#F3F4F6",color:clientExistantDevis?"#fff":C.text,fontSize:"12px",fontWeight:"700",cursor:"pointer"}}>
+                    style={{flex:1,padding:"10px",borderRadius:"8px",border:"1px solid "+(clientExistantDevis?"var(--iko-bg-sombre)":C.border),background:clientExistantDevis?"var(--iko-bg-sombre)":"#F3F4F6",color:clientExistantDevis?"#fff":C.text,fontSize:"12px",fontWeight:"700",cursor:"pointer"}}>
                     Oui, déjà client
                   </button>
                   <button type="button" onClick={() => setClientExistantDevis(false)}
-                    style={{flex:1,padding:"10px",borderRadius:"8px",border:"1px solid "+(!clientExistantDevis?"#0D0D0D":C.border),background:!clientExistantDevis?"#0D0D0D":"#F3F4F6",color:!clientExistantDevis?"#fff":C.text,fontSize:"12px",fontWeight:"700",cursor:"pointer"}}>
+                    style={{flex:1,padding:"10px",borderRadius:"8px",border:"1px solid "+(!clientExistantDevis?"var(--iko-bg-sombre)":C.border),background:!clientExistantDevis?"var(--iko-bg-sombre)":"#F3F4F6",color:!clientExistantDevis?"#fff":C.text,fontSize:"12px",fontWeight:"700",cursor:"pointer"}}>
                     Non / nouveau
                   </button>
                 </div>
                 {fraisDiagnosticApplicable && (
-                  <div style={{marginTop:"10px",background:"rgba(34,197,94,0.08)",border:"1px solid #22C55E",borderRadius:"10px",padding:"10px 14px",fontSize:"12px",color:"#0D0D0D"}}>
+                  <div style={{marginTop:"10px",background:"rgba(var(--iko-primary-rgb),0.08)",border:"1px solid var(--iko-primary)",borderRadius:"10px",padding:"10px 14px",fontSize:"12px",color:"var(--iko-bg-sombre)"}}>
                     💶 Client non garanti et non existant, sans matériel sur place : <strong>{montantDiagnostic.toFixed(2)} € HT</strong> de frais de déplacement/diagnostic à faire régler au client (CB, chèque ou virement). Ce montant sera automatiquement déduit du devis si le client l'accepte ensuite.
                   </div>
                 )}
@@ -1817,7 +1819,7 @@ function ModalAction({ ticket, onClose, onDone }) {
               <label style={{fontSize:"11px",color:C.muted,display:"block",marginBottom:"8px",fontWeight:"700"}}>Ce qui explique le devis (plusieurs choix possibles)</label>
               <div style={{display:"flex",flexDirection:"column",gap:"6px"}}>
                 {TAGS_DEVIS.map(t => (
-                  <label key={t} style={{display:"flex",alignItems:"center",gap:"8px",background:tags.includes(t)?"rgba(0,26,66,0.06)":"#F3F4F6",border:"1px solid "+(tags.includes(t)?"#0D0D0D":C.border),borderRadius:"8px",padding:"9px 12px",cursor:"pointer",fontSize:"12px",color:C.text}}>
+                  <label key={t} style={{display:"flex",alignItems:"center",gap:"8px",background:tags.includes(t)?"rgba(var(--iko-dark-rgb),0.06)":"#F3F4F6",border:"1px solid "+(tags.includes(t)?"var(--iko-bg-sombre)":C.border),borderRadius:"8px",padding:"9px 12px",cursor:"pointer",fontSize:"12px",color:C.text}}>
                     <input type="checkbox" checked={tags.includes(t)} onChange={() => toggleTag(t)} style={{width:"16px",height:"16px",cursor:"pointer"}}/>
                     {t}
                   </label>
@@ -1830,7 +1832,7 @@ function ModalAction({ ticket, onClose, onDone }) {
                 value={explication} onChange={e => setExplication(e.target.value)} style={{resize:"none"}}/>
             </div>
             <button onClick={confirmer} disabled={saving||!explication.trim()}
-              style={{width:"100%",padding:"14px",background:saving||!explication.trim()?"#D1D5DB":"#0D0D0D",color:"#fff",border:"none",borderRadius:"12px",fontSize:"14px",fontWeight:"900",cursor:saving||!explication.trim()?"not-allowed":"pointer"}}>
+              style={{width:"100%",padding:"14px",background:saving||!explication.trim()?"#D1D5DB":"var(--iko-bg-sombre)",color:"#fff",border:"none",borderRadius:"12px",fontSize:"14px",fontWeight:"900",cursor:saving||!explication.trim()?"not-allowed":"pointer"}}>
               {saving ? "⏳ Enregistrement..." : "📋 Envoyer la demande de devis"}
             </button>
           </>
@@ -1931,10 +1933,10 @@ function ItineraireModal({ agence, tickets, onClose }) {
         td{border-bottom:1px solid #ddd;padding:7px 9px;vertical-align:top;}
         tr:nth-child(even){background:#f7f7f7;}
         .footer{margin-top:16px;font-size:9px;color:#999;}
-        .toolbar{display:flex;gap:10px;margin-bottom:24px;padding-bottom:16px;border-bottom:2px solid #F0DFA8;flex-wrap:wrap;}
+        .toolbar{display:flex;gap:10px;margin-bottom:24px;padding-bottom:16px;border-bottom:2px solid #FFD9BF;flex-wrap:wrap;}
         .toolbar button, .toolbar a{font-family:'Segoe UI',Arial,sans-serif;font-size:13px;font-weight:700;padding:11px 20px;border-radius:10px;border:none;cursor:pointer;display:inline-flex;align-items:center;gap:8px;text-decoration:none;line-height:1;}
         .btn-close{background:#F3F4F6;color:#374151;border:1px solid #E2E2E2 !important;}
-        .btn-print{background:#0D0D0D;color:#fff;box-shadow:0 2px 10px rgba(0,26,66,0.25);}
+        .btn-print{background:#0D0D0D;color:#fff;box-shadow:0 2px 10px rgba(17,17,17,0.25);}
         @media print { @page { size: landscape; margin: 12mm; } .toolbar{display:none;} }
       </style></head><body>
       <div class="toolbar">
@@ -1972,9 +1974,9 @@ function ItineraireModal({ agence, tickets, onClose }) {
             {AGENCE_ADRESSES[agence] && startAddress !== AGENCE_ADRESSES[agence] && (
               <button onClick={() => setStartAddress(AGENCE_ADRESSES[agence])} style={{background:"none",border:"none",color:C.or,fontSize:"10px",cursor:"pointer",textDecoration:"underline",padding:0,marginBottom:"14px",display:"block"}}>↺ Repartir de l'adresse de l'agence</button>
             )}
-            {errorMsg && <div style={{background:C.rougeDim,border:"1px solid rgba(220,38,38,0.3)",borderRadius:"8px",padding:"10px 14px",fontSize:"12px",color:C.rouge,marginBottom:"14px"}}>{errorMsg}</div>}
+            {errorMsg && <div style={{background:C.rougeDim,border:"1px solid rgba(var(--iko-erreur-rgb),0.3)",borderRadius:"8px",padding:"10px 14px",fontSize:"12px",color:C.rouge,marginBottom:"14px"}}>{errorMsg}</div>}
             <button onClick={calculer} disabled={eligibles.length===0}
-              style={{width:"100%",padding:"14px",background:eligibles.length===0?"#D1D5DB":C.or,color:"#111",border:"none",borderRadius:"12px",fontSize:"14px",fontWeight:"900",cursor:eligibles.length===0?"not-allowed":"pointer"}}>
+              style={{width:"100%",padding:"14px",background:eligibles.length===0?"#D1D5DB":C.or,color:"var(--iko-dark)",border:"none",borderRadius:"12px",fontSize:"14px",fontWeight:"900",cursor:eligibles.length===0?"not-allowed":"pointer"}}>
               🧭 Calculer l'itinéraire
             </button>
             <div style={{display:"flex",alignItems:"center",gap:"10px",margin:"14px 0"}}>
@@ -1983,7 +1985,7 @@ function ItineraireModal({ agence, tickets, onClose }) {
               <div style={{flex:1,height:"1px",background:C.border}}/>
             </div>
             <button onClick={calculerDepuisGPS} disabled={eligibles.length===0||gpsLoading}
-              style={{width:"100%",padding:"14px",background:"#FFFFFF",color:"#0D0D0D",border:"2px solid #0D0D0D",borderRadius:"12px",fontSize:"14px",fontWeight:"900",cursor:eligibles.length===0?"not-allowed":"pointer"}}>
+              style={{width:"100%",padding:"14px",background:"#FFFFFF",color:"var(--iko-bg-sombre)",border:"2px solid var(--iko-bg-sombre)",borderRadius:"12px",fontSize:"14px",fontWeight:"900",cursor:eligibles.length===0?"not-allowed":"pointer"}}>
               {gpsLoading ? "⏳ Localisation..." : "📍 Utiliser ma position actuelle"}
             </button>
             <div style={{fontSize:"10px",color:C.muted,marginTop:"6px",textAlign:"center"}}>Pratique si tu n'es pas parti de chez toi ou de l'agence.</div>
@@ -2008,7 +2010,7 @@ function ItineraireModal({ agence, tickets, onClose }) {
             <div style={{display:"flex",flexDirection:"column",gap:"8px",marginBottom:"16px",maxHeight:"320px",overflowY:"auto"}}>
               {route.map((s, i) => (
                 <div key={s.ticket.id} style={{display:"flex",gap:"10px",background:"#F8FAFC",border:"1px solid "+C.border,borderRadius:"10px",padding:"10px 12px"}}>
-                  <div style={{width:"24px",height:"24px",borderRadius:"50%",background:C.or,color:"#111",fontWeight:"900",fontSize:"12px",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{i+1}</div>
+                  <div style={{width:"24px",height:"24px",borderRadius:"50%",background:C.or,color:"var(--iko-dark)",fontWeight:"900",fontSize:"12px",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{i+1}</div>
                   <div style={{flex:1,minWidth:0}}>
                     <div style={{fontSize:"12px",fontWeight:"700",color:C.text}}>{s.ticket.fields?.Client}</div>
                     <div style={{fontSize:"11px",color:C.muted}}>{s.ticket.fields?.Adresse}</div>
@@ -2019,7 +2021,7 @@ function ItineraireModal({ agence, tickets, onClose }) {
             </div>
             <div style={{display:"flex",gap:"10px"}}>
               <button onClick={imprimer} style={{flex:1,padding:"13px",background:"#F3F4F6",color:C.text,border:"1px solid "+C.border,borderRadius:"10px",fontSize:"12px",fontWeight:"700",cursor:"pointer"}}>🖨️ Imprimer</button>
-              <a href={mapsUrl} target="_blank" style={{flex:1,padding:"13px",background:C.or,color:"#111",border:"none",borderRadius:"10px",fontSize:"12px",fontWeight:"900",cursor:"pointer",textAlign:"center",textDecoration:"none",display:"flex",alignItems:"center",justifyContent:"center"}}>🧭 Ouvrir dans Maps</a>
+              <a href={mapsUrl} target="_blank" style={{flex:1,padding:"13px",background:C.or,color:"var(--iko-dark)",border:"none",borderRadius:"10px",fontSize:"12px",fontWeight:"900",cursor:"pointer",textAlign:"center",textDecoration:"none",display:"flex",alignItems:"center",justifyContent:"center"}}>🧭 Ouvrir dans Maps</a>
             </div>
             <button onClick={() => setStep("form")} style={{width:"100%",marginTop:"10px",padding:"10px",background:"transparent",color:C.muted,border:"none",fontSize:"11px",cursor:"pointer",textDecoration:"underline"}}>← Recalculer avec un autre départ</button>
           </>
@@ -2051,17 +2053,17 @@ function TicketCard({ ticket, onAction, onAcquitterRdv }) {
   const diagnosticMaxAFinaliser = ticket.fields?.["IKO Utilisé"] === true && !isTermine && !isAnnule;
 
   return (
-    <div style={{background:C.card,border:"2px solid "+(urgent?"rgba(220,38,38,0.35)":isTermine?"rgba(22,163,74,0.25)":isAnnule||isDevisRefuse?"rgba(220,38,38,0.2)":isEnAttenteDevis?"rgba(0,26,66,0.3)":C.border),borderRadius:"14px",overflow:"hidden",opacity:(isTermine||isAnnule)?0.6:1}}>
-      <div style={{background:urgent?"rgba(220,38,38,0.08)":isTermine?C.vertDim:isAnnule?C.rougeDim:isEnAttenteDevis?"rgba(0,26,66,0.06)":C.orDim,padding:"12px 16px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+    <div style={{background:C.card,border:"2px solid "+(urgent?"rgba(var(--iko-erreur-rgb),0.35)":isTermine?"rgba(var(--iko-primary-rgb),0.25)":isAnnule||isDevisRefuse?"rgba(var(--iko-erreur-rgb),0.2)":isEnAttenteDevis?"rgba(var(--iko-dark-rgb),0.3)":C.border),borderRadius:"14px",overflow:"hidden",opacity:(isTermine||isAnnule)?0.6:1}}>
+      <div style={{background:urgent?"rgba(var(--iko-erreur-rgb),0.08)":isTermine?C.vertDim:isAnnule?C.rougeDim:isEnAttenteDevis?"rgba(var(--iko-dark-rgb),0.06)":C.orDim,padding:"12px 16px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
         <div style={{display:"flex",alignItems:"center",gap:"8px",flexWrap:"wrap"}}>
           <span style={{fontSize:"11px",fontWeight:"900",color:C.or,fontFamily:"monospace"}}>{ticket.fields?.Name}</span>
           {urgent && <span style={{background:C.rougeDim,color:C.rouge,fontSize:"9px",fontWeight:"700",padding:"2px 7px",borderRadius:"20px",animation:"clignoteUrgent 1.1s ease-in-out infinite"}}>URGENT</span>}
           {rdvModifie && <span onClick={() => onAcquitterRdv && onAcquitterRdv(ticket)} title="Cliquer pour marquer comme vu" style={{background:C.rougeDim,color:C.rouge,fontSize:"9px",fontWeight:"700",padding:"2px 7px",borderRadius:"20px",animation:"clignoteUrgent 1.1s ease-in-out infinite",cursor:"pointer"}}>📅 RDV MODIFIÉ{ageJoursRdv !== null && ageJoursRdv >= SEUIL_RDV_MODIFIE_JOURS ? " (" + ageJoursRdv + "j)" : ""} — cliquer pour valider</span>}
-          {diagnosticMaxAFinaliser && <span title="Un diagnostic Max existe déjà sur ce ticket" style={{background:"rgba(34,197,94,0.12)",color:"#16A34A",fontSize:"9px",fontWeight:"700",padding:"2px 7px",borderRadius:"20px"}}>🧠 DIAGNOSTIC MAX À FINALISER</span>}
-          {isTermine && <span style={{background:C.vertDim,color:C.vert,fontSize:"9px",fontWeight:"700",padding:"2px 7px",borderRadius:"20px"}}>✅ TERMINÉ</span>}
+          {diagnosticMaxAFinaliser && <span title="Un diagnostic Max existe déjà sur ce ticket" style={{background:"rgba(var(--iko-primary-rgb),0.12)",color:"var(--iko-primary)",fontSize:"9px",fontWeight:"700",padding:"2px 7px",borderRadius:"20px"}}>🧠 DIAGNOSTIC MAX À FINALISER</span>}
+          {isTermine && <span style={{background:C.vertDim,color:C.vert,fontSize:"9px",fontWeight:"700",padding:"2px 7px",borderRadius:"20px"}}>✓ TERMINÉ</span>}
           {isAnnule && <span style={{background:C.rougeDim,color:C.rouge,fontSize:"9px",fontWeight:"700",padding:"2px 7px",borderRadius:"20px"}}>❌ ANNULÉ</span>}
-          {isDevisAFaire && <span style={{background:"rgba(0,26,66,0.1)",color:"#0D0D0D",fontSize:"9px",fontWeight:"700",padding:"2px 7px",borderRadius:"20px"}}>📋 DEVIS À FAIRE</span>}
-          {isDevisEnvoye && <span style={{background:"rgba(0,26,66,0.1)",color:"#0D0D0D",fontSize:"9px",fontWeight:"700",padding:"2px 7px",borderRadius:"20px"}}>📤 DEVIS ENVOYÉ AU CLIENT</span>}
+          {isDevisAFaire && <span style={{background:"rgba(var(--iko-dark-rgb),0.1)",color:"var(--iko-bg-sombre)",fontSize:"9px",fontWeight:"700",padding:"2px 7px",borderRadius:"20px"}}>📋 DEVIS À FAIRE</span>}
+          {isDevisEnvoye && <span style={{background:"rgba(var(--iko-dark-rgb),0.1)",color:"var(--iko-bg-sombre)",fontSize:"9px",fontWeight:"700",padding:"2px 7px",borderRadius:"20px"}}>📤 DEVIS ENVOYÉ AU CLIENT</span>}
           {isDevisRefuse && <span style={{background:C.rougeDim,color:C.rouge,fontSize:"9px",fontWeight:"700",padding:"2px 7px",borderRadius:"20px"}}>📋 DEVIS REFUSÉ</span>}
           {isReplanifie && <span style={{background:C.jauneDim,color:C.jaune,fontSize:"9px",fontWeight:"700",padding:"2px 7px",borderRadius:"20px"}}>🔄 REPLANIFIÉ</span>}
         </div>
@@ -2103,7 +2105,7 @@ function TicketCard({ ticket, onAction, onAcquitterRdv }) {
           </div>
         )}
         {diagnostic && (
-          <div style={{background:"rgba(0,26,66,0.04)",border:"1px solid rgba(0,26,66,0.15)",borderRadius:"8px",padding:"8px 12px",marginBottom:"12px",fontSize:"11px",color:"#0D0D0D"}}>
+          <div style={{background:"rgba(var(--iko-dark-rgb),0.04)",border:"1px solid rgba(var(--iko-dark-rgb),0.15)",borderRadius:"8px",padding:"8px 12px",marginBottom:"12px",fontSize:"11px",color:"var(--iko-bg-sombre)"}}>
             📋 {diagnostic}
           </div>
         )}
@@ -2112,13 +2114,13 @@ function TicketCard({ ticket, onAction, onAcquitterRdv }) {
         )}
         {!isTermine && !isAnnule && !isEnAttenteDevis && (
           <button onClick={() => onAction(ticket)}
-            style={{width:"100%",padding:"16px",background:C.or,color:"#111",border:"none",borderRadius:"12px",fontSize:"15px",fontWeight:"900",cursor:"pointer"}}>
+            style={{width:"100%",padding:"16px",background:C.or,color:"var(--iko-dark)",border:"none",borderRadius:"12px",fontSize:"15px",fontWeight:"900",cursor:"pointer"}}>
             Gérer cette intervention →
           </button>
         )}
         {isDevisEnvoye && (
           <button onClick={() => onAction(ticket)}
-            style={{width:"100%",padding:"11px",background:"#0D0D0D",color:"#fff",border:"none",borderRadius:"10px",fontSize:"12px",fontWeight:"900",cursor:"pointer"}}>
+            style={{width:"100%",padding:"11px",background:"var(--iko-bg-sombre)",color:"#fff",border:"none",borderRadius:"10px",fontSize:"12px",fontWeight:"900",cursor:"pointer"}}>
             🔓 Débloquer et intervenir plus tôt
           </button>
         )}
@@ -2323,11 +2325,11 @@ function Technicien({ agence, onClose }) {
         td{border-bottom:1px solid #ddd;padding:6px 8px;vertical-align:top;}
         tr:nth-child(even){background:#f7f7f7;}
         .footer{margin-top:16px;font-size:9px;color:#999;}
-        .toolbar{display:flex;gap:10px;margin-bottom:24px;padding-bottom:16px;border-bottom:2px solid #F0DFA8;flex-wrap:wrap;}
+        .toolbar{display:flex;gap:10px;margin-bottom:24px;padding-bottom:16px;border-bottom:2px solid #FFD9BF;flex-wrap:wrap;}
         .toolbar button, .toolbar a{font-family:'Segoe UI',Arial,sans-serif;font-size:13px;font-weight:700;padding:11px 20px;border-radius:10px;border:none;cursor:pointer;display:inline-flex;align-items:center;gap:8px;text-decoration:none;line-height:1;}
         .btn-close{background:#F3F4F6;color:#374151;border:1px solid #E2E2E2 !important;}
-        .btn-print{background:#0D0D0D;color:#fff;box-shadow:0 2px 10px rgba(0,26,66,0.25);}
-        .btn-mail{background:#22C55E;color:#111;box-shadow:0 2px 10px rgba(218,178,57,0.35);}
+        .btn-print{background:#0D0D0D;color:#fff;box-shadow:0 2px 10px rgba(17,17,17,0.25);}
+        .btn-mail{background:#FF6B00;color:#111;box-shadow:0 2px 10px rgba(255,107,0,0.35);}
         @media print { @page { size: landscape; margin: 12mm; } .toolbar{display:none;} }
       </style></head><body>
       <div class="toolbar">
@@ -2527,34 +2529,34 @@ function Technicien({ agence, onClose }) {
 
   if (vueMode === "vocal") {
     return (
-      <div style={{position:"fixed",inset:0,background:"#0D0D0D",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",zIndex:100,WebkitUserSelect:"none",userSelect:"none",WebkitTouchCallout:"none"}}
+      <div style={{position:"fixed",inset:0,background:"var(--iko-bg-sombre)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",zIndex:100,WebkitUserSelect:"none",userSelect:"none",WebkitTouchCallout:"none"}}
         onContextMenu={e => e.preventDefault()}>
         <audio ref={maxAudioRef} style={{display:"none"}}/>
         <div style={{position:"absolute",top:"20px",left:"20px",color:"#8a8a8a",fontSize:"12px",letterSpacing:"2px",textTransform:"uppercase"}}>
           {agence === "global" ? "Toutes agences" : agence}
         </div>
         <button onClick={() => setVueMode("liste")}
-          style={{position:"absolute",top:"14px",right:"14px",padding:"10px 16px",borderRadius:"20px",background:"#1a1a1a",border:"1px solid rgba(34,197,94,0.35)",color:"#fff",cursor:"pointer",fontSize:"12px",fontWeight:"700"}}>
+          style={{position:"absolute",top:"14px",right:"14px",padding:"10px 16px",borderRadius:"20px",background:"#1a1a1a",border:"1px solid rgba(var(--iko-primary-rgb),0.35)",color:"#fff",cursor:"pointer",fontSize:"12px",fontWeight:"700"}}>
           📋 Mes tickets
         </button>
         <div style={{width:"220px",height:"220px",borderRadius:"50%",
-          background:"radial-gradient(circle at 35% 30%, #4a4a4a, #0D0D0D 55%, #000000 100%)",
-          border:"2px solid #22C55E",
-          boxShadow:"0 0 90px rgba(34,197,94,0.35)",
+          background:"radial-gradient(circle at 35% 30%, #4a4a4a, var(--iko-bg-sombre) 55%, #000000 100%)",
+          border:"2px solid var(--iko-primary)",
+          boxShadow:"0 0 90px rgba(var(--iko-primary-rgb),0.35)",
           animation: maxEcoute ? "pulseMaxEcran 1s ease-in-out infinite" : "respireMax 3.2s ease-in-out infinite"}}/>
         <div style={{marginTop:"32px",color:"#b8b8b8",fontSize:"14px",maxWidth:"320px",textAlign:"center",minHeight:"40px",lineHeight:"1.5",padding:"0 16px"}}>
           {maxEcoute ? "Je vous écoute... (relâchez le micro pour terminer)" : maxEnCours ? "..." : maxDernier ? maxDernier : `Dites une commande à ${nomMaxLocal()} : "Montre les urgents", "Ouvre l'itinéraire"...`}
         </div>
-        {maxErreur && <div style={{color:"#DC2626",fontSize:"12px",marginTop:"10px",padding:"0 16px",textAlign:"center"}}>{maxErreur}</div>}
+        {maxErreur && <div style={{color:"var(--iko-erreur)",fontSize:"12px",marginTop:"10px",padding:"0 16px",textAlign:"center"}}>{maxErreur}</div>}
 
         <div style={{position:"fixed",bottom:"28px",left:"16px",right:"16px",display:"flex",gap:"10px",alignItems:"center"}}>
           <input id="maxChampTexte" type="text" value={maxTexte}
             onChange={e => setMaxTexte(e.target.value)}
             onKeyDown={e => { if (e.key === "Enter" && maxTexte.trim()) { debloquerVoixIOS(); envoyerMax(maxTexte.trim()); setMaxTexte(""); } }}
             placeholder="Tapez ou dictez..."
-            style={{flex:1,minWidth:0,padding:"14px",borderRadius:"12px",background:"#1a1a1a",border:"1px solid rgba(34,197,94,0.3)",color:"#fff",fontSize:"14px"}}/>
+            style={{flex:1,minWidth:0,padding:"14px",borderRadius:"12px",background:"#1a1a1a",border:"1px solid rgba(var(--iko-primary-rgb),0.3)",color:"#fff",fontSize:"14px"}}/>
           <button onClick={() => { if (maxTexte.trim()) { debloquerVoixIOS(); envoyerMax(maxTexte.trim()); setMaxTexte(""); } }}
-            style={{flexShrink:0,width:"48px",height:"48px",borderRadius:"12px",background:"#22C55E",border:"none",color:"#111",fontWeight:"800",cursor:"pointer",fontSize:"18px"}}>
+            style={{flexShrink:0,width:"48px",height:"48px",borderRadius:"12px",background:"var(--iko-primary)",border:"none",color:"var(--iko-dark)",fontWeight:"800",cursor:"pointer",fontSize:"18px"}}>
             →
           </button>
           <button
@@ -2562,7 +2564,7 @@ function Technicien({ agence, onClose }) {
             onPointerUp={arreterEcouteMax}
             onPointerLeave={arreterEcouteMax}
             onPointerCancel={arreterEcouteMax}
-            style={{flexShrink:0,width:"48px",height:"48px",borderRadius:"50%",background:maxEcoute?"#DC2626":"radial-gradient(circle at 35% 30%, #4a4a4a, #0D0D0D 55%, #000000 100%)",border:"2px solid #22C55E",color:"#fff",cursor:"pointer",fontSize:"20px",boxShadow:"0 6px 24px rgba(34,197,94,0.35)",touchAction:"none",userSelect:"none"}}>
+            style={{flexShrink:0,width:"48px",height:"48px",borderRadius:"50%",background:maxEcoute?"var(--iko-erreur)":"radial-gradient(circle at 35% 30%, #4a4a4a, var(--iko-bg-sombre) 55%, #000000 100%)",border:"2px solid var(--iko-primary)",color:"#fff",cursor:"pointer",fontSize:"20px",boxShadow:"0 6px 24px rgba(var(--iko-primary-rgb),0.35)",touchAction:"none",userSelect:"none"}}>
             🎙️
           </button>
         </div>
@@ -2595,16 +2597,16 @@ function Technicien({ agence, onClose }) {
           </div>
           <div style={{display:"flex",alignItems:"center",gap:"8px"}}>
             <button onClick={charger} title="Rafraîchir" style={{background:C.orDim,border:"1px solid "+C.orBord,color:C.or,borderRadius:"10px",width:"44px",height:"44px",fontSize:"17px",fontWeight:"700",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>↺</button>
-            <button onClick={onClose} title="Fermer la session" style={{background:"rgba(220,38,38,0.08)",border:"1px solid rgba(220,38,38,0.25)",color:"rgba(220,38,38,0.85)",borderRadius:"10px",width:"44px",height:"44px",cursor:"pointer",fontSize:"17px",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>✕</button>
+            <button onClick={onClose} title="Fermer la session" style={{background:"rgba(var(--iko-erreur-rgb),0.08)",border:"1px solid rgba(var(--iko-erreur-rgb),0.25)",color:"rgba(var(--iko-erreur-rgb),0.85)",borderRadius:"10px",width:"44px",height:"44px",cursor:"pointer",fontSize:"17px",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>✕</button>
           </div>
         </div>
         <div style={{display:"flex",alignItems:"center",gap:"6px",marginTop:"10px",flexWrap:"wrap"}}>
           <button onClick={imprimerSemaine} title="Imprimer ma semaine" style={{background:C.orDim,border:"1px solid "+C.orBord,color:C.or,borderRadius:"10px",padding:"0 14px",height:"40px",fontSize:"12px",fontWeight:"700",cursor:"pointer",display:"flex",alignItems:"center",gap:"5px",whiteSpace:"nowrap",flexShrink:0}}>🖨️ Ma semaine</button>
-            <button onClick={() => setItineraireOpen(true)} title="Itinéraire optimisé" style={{background:"#0D0D0D",border:"1px solid #0D0D0D",color:"#fff",borderRadius:"10px",padding:"0 14px",height:"40px",fontSize:"12px",fontWeight:"700",cursor:"pointer",display:"flex",alignItems:"center",gap:"5px",whiteSpace:"nowrap",flexShrink:0}}>🗺️ Itinéraire</button>
-            <button onClick={() => setOnglet("devis")} title="Devis en attente" style={{background:onglet==="devis"?"#22C55E":"rgba(218,178,57,0.12)",border:"1px solid #22C55E",color:onglet==="devis"?"#111":"#8a6d1f",borderRadius:"10px",padding:"0 14px",height:"40px",fontSize:"12px",fontWeight:"700",cursor:"pointer",display:"flex",alignItems:"center",gap:"5px",whiteSpace:"nowrap",flexShrink:0}}>
-              📋 Devis {nbDevisAttente > 0 && <span style={{background:onglet==="devis"?"#0D0D0D":"#22C55E",color:"#fff",borderRadius:"10px",padding:"0 5px",fontSize:"10px"}}>{nbDevisAttente}</span>}
+            <button onClick={() => setItineraireOpen(true)} title="Itinéraire optimisé" style={{background:"var(--iko-bg-sombre)",border:"1px solid var(--iko-bg-sombre)",color:"#fff",borderRadius:"10px",padding:"0 14px",height:"40px",fontSize:"12px",fontWeight:"700",cursor:"pointer",display:"flex",alignItems:"center",gap:"5px",whiteSpace:"nowrap",flexShrink:0}}>🗺️ Itinéraire</button>
+            <button onClick={() => setOnglet("devis")} title="Devis en attente" style={{background:onglet==="devis"?"var(--iko-primary)":"rgba(var(--iko-primary-rgb),0.12)",border:"1px solid var(--iko-primary)",color:onglet==="devis"?"var(--iko-dark)":"var(--iko-primary-fonce)",borderRadius:"10px",padding:"0 14px",height:"40px",fontSize:"12px",fontWeight:"700",cursor:"pointer",display:"flex",alignItems:"center",gap:"5px",whiteSpace:"nowrap",flexShrink:0}}>
+              📋 Devis {nbDevisAttente > 0 && <span style={{background:onglet==="devis"?"var(--iko-bg-sombre)":"var(--iko-primary)",color:"#fff",borderRadius:"10px",padding:"0 5px",fontSize:"10px"}}>{nbDevisAttente}</span>}
             </button>
-            <button onClick={() => setNoteOpen(true)} title="Ma note client" style={{background:"rgba(217,119,6,0.12)",border:"1px solid #22C55E",color:"#8a5a06",borderRadius:"10px",padding:"0 14px",height:"40px",fontSize:"12px",fontWeight:"700",cursor:"pointer",display:"flex",alignItems:"center",gap:"5px",whiteSpace:"nowrap",flexShrink:0}}>
+            <button onClick={() => setNoteOpen(true)} title="Ma note client" style={{background:"rgba(217,119,6,0.12)",border:"1px solid var(--iko-primary)",color:"#8a5a06",borderRadius:"10px",padding:"0 14px",height:"40px",fontSize:"12px",fontWeight:"700",cursor:"pointer",display:"flex",alignItems:"center",gap:"5px",whiteSpace:"nowrap",flexShrink:0}}>
               ⭐ {moyenneAgence ? moyenneAgence.toFixed(1) : "—"}
             </button>
             {noteOpen && (
@@ -2613,13 +2615,13 @@ function Technicien({ agence, onClose }) {
                   <div style={{fontSize:"14px",fontWeight:"900",color:C.white,marginBottom:"14px"}}>⭐ Note client — {agenceShort}</div>
                   {moyenneAgence ? (
                     <>
-                      <div style={{fontSize:"40px",fontWeight:"900",color:"#22C55E",marginBottom:"6px"}}>{moyenneAgence.toFixed(1)} / 5</div>
+                      <div style={{fontSize:"40px",fontWeight:"900",color:"var(--iko-primary)",marginBottom:"6px"}}>{moyenneAgence.toFixed(1)} / 5</div>
                       <div style={{fontSize:"20px",marginBottom:"10px"}}>{"⭐".repeat(Math.round(moyenneAgence))}{"☆".repeat(5-Math.round(moyenneAgence))}</div>
                       <div style={{fontSize:"11px",color:C.muted,marginBottom:"18px"}}>Basé sur {notesAgence.length} avis client{notesAgence.length>1?"s":""}</div>
                       <div style={{display:"flex",flexDirection:"column",gap:"8px",maxHeight:"220px",overflowY:"auto",textAlign:"left"}}>
                         {notesAgence.filter(t => t.fields?.["Note Commentaire"]).slice(0,5).map(t => (
                           <div key={t.id} style={{background:C.card2,border:"1px solid "+C.border,borderRadius:"8px",padding:"8px 10px",fontSize:"11px"}}>
-                            <div style={{color:"#22C55E",marginBottom:"3px"}}>{"⭐".repeat(t.fields.Note)}</div>
+                            <div style={{color:"var(--iko-primary)",marginBottom:"3px"}}>{"⭐".repeat(t.fields.Note)}</div>
                             <div style={{color:C.muted,fontStyle:"italic"}}>{t.fields["Note Commentaire"]}</div>
                           </div>
                         ))}
@@ -2647,7 +2649,7 @@ function Technicien({ agence, onClose }) {
         {loading && <div style={{textAlign:"center",padding:"60px",color:C.muted}}>Chargement...</div>}
         {!loading && filtered.length===0 && (
           <div style={{textAlign:"center",padding:"60px 20px",color:C.muted}}>
-            <div style={{fontSize:"40px",marginBottom:"12px"}}>{onglet==="aujourd_hui"?"🎉":onglet==="urgent"?"✅":onglet==="devis"?"📋":onglet==="termines"?"📋":onglet==="annules"?"🚫":"📭"}</div>
+            <div style={{fontSize:"40px",marginBottom:"12px"}}>{onglet==="aujourd_hui"?"🎉":onglet==="urgent"?"✓":onglet==="devis"?"📋":onglet==="termines"?"📋":onglet==="annules"?"🚫":"📭"}</div>
             <div style={{fontSize:"14px",fontWeight:"700",color:C.text}}>
               {onglet==="aujourd_hui"?"Aucune intervention aujourd'hui":onglet==="urgent"?"Aucune intervention urgente":onglet==="devis"?"Aucun devis en attente":onglet==="termines"?"Aucune intervention terminée":onglet==="annules"?"Aucune intervention annulée":"Aucune intervention à venir"}
             </div>
@@ -2675,9 +2677,9 @@ function Technicien({ agence, onClose }) {
                 onChange={e => setMaxTexte(e.target.value)}
                 onKeyDown={e => { if (e.key === "Enter" && maxTexte.trim()) { debloquerVoixIOS(); envoyerMax(maxTexte.trim()); setMaxTexte(""); } }}
                 placeholder="Tapez ou dictez (🎤 clavier)"
-                style={{flex:1,padding:"8px 10px",borderRadius:"8px",background:"#0D0D0D",border:"1px solid "+C.border,color:"#fff",fontSize:"12px"}}/>
+                style={{flex:1,padding:"8px 10px",borderRadius:"8px",background:"var(--iko-bg-sombre)",border:"1px solid "+C.border,color:"#fff",fontSize:"12px"}}/>
               <button onClick={() => { if (maxTexte.trim()) { debloquerVoixIOS(); envoyerMax(maxTexte.trim()); setMaxTexte(""); } }}
-                style={{padding:"8px 12px",borderRadius:"8px",background:"#fff",border:"none",color:"#111",fontWeight:"800",cursor:"pointer"}}>→</button>
+                style={{padding:"8px 12px",borderRadius:"8px",background:"#fff",border:"none",color:"var(--iko-dark)",fontWeight:"800",cursor:"pointer"}}>→</button>
             </div>
           </div>
         )}
@@ -2686,7 +2688,7 @@ function Technicien({ agence, onClose }) {
             <button onClick={() => setMaxOuvert(false)} style={{width:"36px",height:"36px",borderRadius:"50%",background:C.card,border:"1px solid "+C.border,color:C.muted,cursor:"pointer",fontSize:"14px"}}>✕</button>
           )}
           <button onClick={() => setVueMode("vocal")} title={"Écran vocal " + nomMaxLocal()}
-            style={{width:"36px",height:"36px",borderRadius:"50%",background:C.card,border:"2px solid #22C55E",color:"#22C55E",cursor:"pointer",fontSize:"15px"}}>
+            style={{width:"36px",height:"36px",borderRadius:"50%",background:C.card,border:"2px solid var(--iko-primary)",color:"var(--iko-primary)",cursor:"pointer",fontSize:"15px"}}>
             🔮
           </button>
           <button
@@ -2694,7 +2696,7 @@ function Technicien({ agence, onClose }) {
             onPointerUp={arreterEcouteMax}
             onPointerLeave={arreterEcouteMax}
             onPointerCancel={arreterEcouteMax}
-            style={{width:"58px",height:"58px",borderRadius:"50%",background:"radial-gradient(circle at 35% 30%, #4a4a4a, #0D0D0D 55%, #000000 100%)",border:"2px solid #22C55E",color:"#fff",cursor:"pointer",fontSize:"24px",boxShadow:"0 0 26px rgba(34,197,94,0.35)",animation:maxEcoute?"pulseMax 1.2s infinite":"none",touchAction:"none",userSelect:"none"}}>
+            style={{width:"58px",height:"58px",borderRadius:"50%",background:"radial-gradient(circle at 35% 30%, #4a4a4a, var(--iko-bg-sombre) 55%, #000000 100%)",border:"2px solid var(--iko-primary)",color:"#fff",cursor:"pointer",fontSize:"24px",boxShadow:"0 0 26px rgba(var(--iko-primary-rgb),0.35)",animation:maxEcoute?"pulseMax 1.2s infinite":"none",touchAction:"none",userSelect:"none"}}>
             🎙️
           </button>
         </div>
@@ -2741,7 +2743,7 @@ function Login({ onLogin }) {
     <div style={{minHeight:"100vh",background:C.bg,display:"flex",alignItems:"center",justifyContent:"center",padding:"24px",position:"relative"}}>
       <div style={{width:"100%",maxWidth:"340px"}}>
         <div style={{textAlign:"center",marginBottom:"36px"}}>
-          <div style={{width:"190px",height:"100px",background:"#FFFFFF",borderRadius:"16px",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 16px",boxShadow:"0 8px 32px rgba(218,178,57,0.3)",padding:"8px",boxSizing:"border-box"}}>
+          <div style={{width:"190px",height:"100px",background:"#FFFFFF",borderRadius:"16px",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 16px",boxShadow:"0 8px 32px rgba(var(--iko-primary-rgb),0.3)",padding:"8px",boxSizing:"border-box"}}>
             <img src={CONFIG_ENTREPRISE.logoUrl || IKO_LOGO} alt="Iko" style={{width:"100%",height:"100%",objectFit:"contain"}}/>
           </div>
           <div style={{fontSize:"11px",color:C.muted,marginTop:"6px",letterSpacing:"2px",textTransform:"uppercase"}}>Espace Technicien</div>
@@ -2751,7 +2753,7 @@ function Login({ onLogin }) {
           <select value={agenceChoisie} onChange={e => setAgenceChoisie(e.target.value)} style={{marginBottom:"14px"}}>
             {AGENCES_DEFAUT.map(a => <option key={a} value={a}>{a}</option>)}
           </select>
-          <button onClick={() => onLogin(agenceChoisie)} style={{width:"100%",padding:"14px",background:C.or,color:"#111",border:"none",borderRadius:"10px",fontSize:"14px",fontWeight:"900",cursor:"pointer"}}>
+          <button onClick={() => onLogin(agenceChoisie)} style={{width:"100%",padding:"14px",background:C.or,color:"var(--iko-dark)",border:"none",borderRadius:"10px",fontSize:"14px",fontWeight:"900",cursor:"pointer"}}>
             Accéder →
           </button>
         </div>
@@ -2762,7 +2764,7 @@ function Login({ onLogin }) {
 
 function BlocageAcces() {
   return (
-    <div style={{minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',flexDirection:'column',gap:'14px',padding:'24px',textAlign:'center',background:'#0A0A0A',color:'#F5F5F5',fontFamily:'-apple-system,BlinkMacSystemFont,"SF Pro Display","SF Pro Text","Segoe UI",sans-serif'}}>
+    <div style={{minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',flexDirection:'column',gap:'14px',padding:'24px',textAlign:'center',background:'#0A0A0A',color:'var(--iko-bg-clair)',fontFamily:'-apple-system,BlinkMacSystemFont,"SF Pro Display","SF Pro Text","Segoe UI",sans-serif'}}>
       <div style={{fontSize:'40px'}}>🔒</div>
       <div style={{fontSize:'18px',fontWeight:700}}>Accès suspendu</div>
       <div style={{fontSize:'14px',opacity:0.75,maxWidth:'380px'}}>L'accès à cet espace est temporairement suspendu. Merci de contacter votre interlocuteur RSIA Conseil pour régulariser la situation.</div>

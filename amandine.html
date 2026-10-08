@@ -2,6 +2,8 @@
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
+<link rel="stylesheet" href="/theme.css">
+<script src="/theme.js"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Iko Suite — Amandine SAV</title>
 <link rel="manifest" href="/manifest-amandine.json">
@@ -13,11 +15,11 @@
 <meta name="apple-mobile-web-app-title" content="Iko Amandine">
 <style>
   :root {
-    --noir: #111111;
+    --noir: var(--iko-dark);
     --noir-doux: #1C1C1C;
-    --orange: #22C55E;
-    --orange-pale: #E8FBF0;
-    --gris: #6B7280;
+    --orange: var(--iko-primary);
+    --orange-pale: var(--iko-primary-clair);
+    --gris: var(--iko-texte-clair);
     --gris-clair: #E8E8E8;
     --blanc: #FFFFFF;
   }
@@ -61,7 +63,7 @@
     background: var(--orange);
     margin-left: auto;
     flex-shrink: 0;
-    box-shadow: 0 0 0 3px rgba(34,197,94,0.18);
+    box-shadow: 0 0 0 3px rgba(var(--iko-primary-rgb),0.18);
   }
 
   /* Fil de conversation */
@@ -106,9 +108,9 @@
   }
   .erreur {
     align-self: center;
-    background: #FEF2F2;
-    border: 1px solid #FECACA;
-    color: #B91C1C;
+    background: var(--iko-erreur-clair);
+    border: 1px solid var(--iko-erreur-bord);
+    color: var(--iko-erreur-fonce);
     font-size: 13px;
     max-width: 92%;
     text-align: center;
@@ -217,8 +219,8 @@
     animation: pulse 1.4s infinite;
   }
   @keyframes pulse {
-    0%, 100% { box-shadow: 0 0 0 0 rgba(34,197,94,0.45); }
-    50% { box-shadow: 0 0 0 8px rgba(34,197,94,0); }
+    0%, 100% { box-shadow: 0 0 0 0 rgba(var(--iko-primary-rgb),0.45); }
+    50% { box-shadow: 0 0 0 8px rgba(var(--iko-primary-rgb),0); }
   }
   @media (prefers-reduced-motion: reduce) {
     #micro.ecoute { animation: none; }
@@ -257,8 +259,8 @@
   }
   .amandine-sphere {
     width: 200px; height: 200px; border-radius: 50%;
-    background: radial-gradient(circle at 35% 30%, #FFFFFF, #FDEBF1 45%, #F5A9C5 78%, #22C55E 135%);
-    box-shadow: 0 0 90px rgba(34,197,94,0.35);
+    background: radial-gradient(circle at 35% 30%, #FFFFFF, #FDEBF1 45%, #F5A9C5 78%, var(--iko-primary) 135%);
+    box-shadow: 0 0 90px rgba(var(--iko-primary-rgb),0.35);
     animation: respireAmandine 3.2s ease-in-out infinite;
     cursor: pointer;
   }
@@ -268,7 +270,7 @@
   }
   .amandine-landing-bouton {
     margin-top: 26px; padding: 14px 26px; border-radius: 30px;
-    background: var(--orange); color: #111; border: none; font-weight: 800; font-size: 14px; cursor: pointer;
+    background: var(--orange); color: var(--iko-dark); border: none; font-weight: 800; font-size: 14px; cursor: pointer;
   }
   body.amandine-mode-chat #amandine-landing { display: none; }
   body:not(.amandine-mode-chat) header,
@@ -292,15 +294,15 @@
   <form id="amandine-suivi-form" style="display:none;margin-top:22px;width:min(320px,86vw);flex-direction:column;gap:9px;">
     <input id="amandine-suivi-numero" placeholder="N° de ticket (SAV-2026-1234)" autocomplete="off" style="padding:12px;border-radius:10px;border:none;font-size:14px;text-transform:uppercase;">
     <input id="amandine-suivi-contact" placeholder="E-mail ou téléphone de la demande" autocomplete="off" style="padding:12px;border-radius:10px;border:none;font-size:14px;">
-    <div id="amandine-suivi-erreur" style="color:#FCA5A5;font-size:12px;display:none;"></div>
+    <div id="amandine-suivi-erreur" style="color:var(--iko-erreur-bord);font-size:12px;display:none;"></div>
     <button type="submit" class="amandine-landing-bouton" style="margin-top:4px;">🔍 Voir mes demandes</button>
     <button type="button" id="amandine-suivi-annuler" style="background:none;border:none;color:#9CA3AF;font-size:12px;cursor:pointer;">← Retour</button>
   </form>
 </div>
 
 <header>
-  <button id="amandine-retour-sphere" title="Retour à la sphère" style="background:var(--orange);color:#111;border:none;border-radius:20px;padding:7px 14px 7px 10px;font-size:12.5px;font-weight:700;display:flex;align-items:center;gap:5px;cursor:pointer;flex-shrink:0;">← Retour</button>
-  <div class="logo">Iko</div>
+  <button id="amandine-retour-sphere" title="Retour à la sphère" style="background:var(--orange);color:var(--iko-dark);border:none;border-radius:20px;padding:7px 14px 7px 10px;font-size:12.5px;font-weight:700;display:flex;align-items:center;gap:5px;cursor:pointer;flex-shrink:0;">← Retour</button>
+  <div class="logo" data-iko-nom>Iko</div>
   <div>
     <div class="titre">Amandine — SAV</div>
     <div class="sous-titre">Suivi de dossier · Prise de rendez-vous · Assistance</div>

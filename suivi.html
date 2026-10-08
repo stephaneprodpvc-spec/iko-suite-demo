@@ -2,6 +2,8 @@
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
+<link rel="stylesheet" href="/theme.css">
+<script src="/theme.js"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Iko Suite — Suivi de ma demande SAV</title>
 <link rel="manifest" href="/manifest.json">
@@ -15,9 +17,9 @@
 <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
-body { font-family: 'Segoe UI', sans-serif; background: #F5F5F5; min-height: 100vh; }
+body { font-family: 'Segoe UI', sans-serif; background: var(--iko-bg-clair); min-height: 100vh; }
 input, textarea { font-family: 'Segoe UI', sans-serif; outline: none; }
-input:focus, textarea:focus { border-color: #22C55E !important; }
+input:focus, textarea:focus { border-color: var(--iko-primary) !important; }
 </style>
 </head>
 <body>
@@ -42,9 +44,9 @@ input:focus, textarea:focus { border-color: #22C55E !important; }
 const { useState } = React;
 
 const F = {
-  marine: "#0D0D0D", or: "#22C55E", orClair: "#F0DFA8",
-  blanc: "#FFFFFF", grisClair: "#F5F5F5", grisBord: "#E5E5E5",
-  rouge: "#DC2626", rougeClair: "#FEE2E2", vert: "#15803D", vertClair: "#F0FDF4",
+  marine: "var(--iko-bg-sombre)", or: "var(--iko-primary)", orClair: "var(--iko-primary-pale)",
+  blanc: "#FFFFFF", grisClair: "var(--iko-bg-clair)", grisBord: "var(--iko-bordure)",
+  rouge: "var(--iko-erreur)", rougeClair: "var(--iko-erreur-clair)", vert: "var(--iko-dark)", vertClair: "var(--iko-primary-clair)",
   bleu: "#2563EB", bleuClair: "#EFF6FF", jaune: "#D97706", jauneClair: "#FFFBEB",
 };
 
@@ -133,7 +135,7 @@ function PhoneChat({ ticket, message, onChangeMessage, onEnvoyer, envoi, proposi
         <div style={{position:"absolute",top:"0",left:"50%",transform:"translateX(-50%)",width:"110px",height:"22px",background:"#0B0B0F",borderRadius:"0 0 16px 16px",zIndex:2}}/>
         <div style={{background:"#ECE9E4",borderRadius:"28px",overflow:"hidden",display:"flex",flexDirection:"column",height:"600px"}}>
           <div style={{background:F.marine,padding:"20px 14px 10px",display:"flex",alignItems:"center",gap:"10px",flexShrink:0}}>
-            <div style={{width:"30px",height:"30px",borderRadius:"50%",background:F.or,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:"900",color:"#111",fontSize:"13px"}}>
+            <div style={{width:"30px",height:"30px",borderRadius:"50%",background:F.or,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:"900",color:"var(--iko-dark)",fontSize:"13px"}}>
               F
             </div>
             <div style={{flex:1,minWidth:0}}>
@@ -149,8 +151,8 @@ function PhoneChat({ ticket, message, onChangeMessage, onEnvoyer, envoi, proposi
               <div key={i} style={{display:"flex",flexDirection:"column",alignItems:e.sender==='agence'?"flex-start":"flex-end"}}>
                 <div style={{
                   maxWidth:"78%",
-                  background:e.sender==='agence'?"#FFFFFF":"linear-gradient(135deg,#0A84FF,#0066DD)",
-                  color:e.sender==='agence'?"#111":"#fff",
+                  background:e.sender==='agence'?"#FFFFFF":"linear-gradient(135deg,var(--iko-primary),var(--iko-primary-fonce))",
+                  color:e.sender==='agence'?"var(--iko-dark)":"#fff",
                   borderRadius:e.sender==='agence'?"18px 18px 18px 4px":"18px 18px 4px 18px",
                   padding:"8px 12px",fontSize:"12px",whiteSpace:"pre-wrap",lineHeight:"1.35",
                   boxShadow:"0 1px 2px rgba(0,0,0,0.08)"
@@ -170,7 +172,7 @@ function PhoneChat({ ticket, message, onChangeMessage, onEnvoyer, envoi, proposi
               placeholder="Votre message..."
               style={{flex:1,border:"1px solid #E5E7EB",borderRadius:"18px",padding:"8px 13px",fontSize:"12px",outline:"none",background:"#F3F4F6"}}/>
             <button onClick={onEnvoyer} disabled={!message.trim()||envoi==='sending'}
-              style={{width:"32px",height:"32px",borderRadius:"50%",background:message.trim()?"#0A84FF":"#D1D5DB",border:"none",color:"#fff",cursor:message.trim()?"pointer":"not-allowed",fontSize:"14px",flexShrink:0}}>
+              style={{width:"32px",height:"32px",borderRadius:"50%",background:message.trim()?"var(--iko-primary)":"#D1D5DB",border:"none",color:"#fff",cursor:message.trim()?"pointer":"not-allowed",fontSize:"14px",flexShrink:0}}>
               ↑
             </button>
           </div>
@@ -183,13 +185,13 @@ function PhoneChat({ ticket, message, onChangeMessage, onEnvoyer, envoi, proposi
 const STATUT_STYLE = {
   "Nouveau": { color: F.bleu, bg: F.bleuClair },
   "En cours": { color: F.jaune, bg: F.jauneClair },
-  "Devis à faire": { color: F.marine, bg: "rgba(0,26,66,0.08)" },
-  "Devis envoyé": { color: F.marine, bg: "rgba(0,26,66,0.08)" },
-  "Devis - Suivi": { color: F.marine, bg: "rgba(0,26,66,0.08)" },
-  "Devis - Attente fournisseur": { color: F.marine, bg: "rgba(0,26,66,0.08)" },
+  "Devis à faire": { color: F.marine, bg: "rgba(var(--iko-dark-rgb),0.08)" },
+  "Devis envoyé": { color: F.marine, bg: "rgba(var(--iko-dark-rgb),0.08)" },
+  "Devis - Suivi": { color: F.marine, bg: "rgba(var(--iko-dark-rgb),0.08)" },
+  "Devis - Attente fournisseur": { color: F.marine, bg: "rgba(var(--iko-dark-rgb),0.08)" },
   "Devis refusé": { color: F.rouge, bg: F.rougeClair },
   "Terminé": { color: F.vert, bg: F.vertClair },
-  "Annulé": { color: "#6B7280", bg: "#F3F4F6" },
+  "Annulé": { color: "var(--iko-texte-clair)", bg: "#F3F4F6" },
 };
 
 const isStatutClos = (statut) => statut === "Terminé" || statut === "Annulé";
@@ -226,7 +228,7 @@ function BandeauProgression({ statut, propositionEnAttente, devisId }) {
               <React.Fragment key={label}>
                 {i > 0 && <div style={{flex:1,height:"2px",background:atteinte?F.or:F.grisBord}}/>}
                 <div style={{display:"flex",flexDirection:"column",alignItems:"center",flexShrink:0}}>
-                  <div style={{width:"22px",height:"22px",borderRadius:"50%",background:atteinte?F.or:F.grisClair,border:"2px solid "+(atteinte?F.or:F.grisBord),display:"flex",alignItems:"center",justifyContent:"center",fontSize:"10px",fontWeight:"900",color:atteinte?"#111":"#9CA3AF"}}>
+                  <div style={{width:"22px",height:"22px",borderRadius:"50%",background:atteinte?F.or:F.grisClair,border:"2px solid "+(atteinte?F.or:F.grisBord),display:"flex",alignItems:"center",justifyContent:"center",fontSize:"10px",fontWeight:"900",color:atteinte?"var(--iko-dark)":"#9CA3AF"}}>
                     {n < info.etape ? "✓" : n}
                   </div>
                   <span style={{fontSize:"9px",color:atteinte?F.marine:"#9CA3AF",fontWeight:atteinte?"700":"400",marginTop:"4px",textAlign:"center",maxWidth:"70px"}}>{label}</span>
@@ -236,7 +238,7 @@ function BandeauProgression({ statut, propositionEnAttente, devisId }) {
           })}
         </div>
       )}
-      <div style={{background:annule?"#F3F4F6":"rgba(34,197,94,0.06)",border:"1px solid "+(annule?F.grisBord:"rgba(34,197,94,0.25)"),borderRadius:"10px",padding:"10px 12px"}}>
+      <div style={{background:annule?"#F3F4F6":"rgba(var(--iko-primary-rgb),0.06)",border:"1px solid "+(annule?F.grisBord:"rgba(var(--iko-primary-rgb),0.25)"),borderRadius:"10px",padding:"10px 12px"}}>
         <div style={{fontSize:"12px",fontWeight:"800",color:F.marine,marginBottom:"3px"}}>{info.titre}</div>
         <div style={{fontSize:"11px",color:"#4B5563",lineHeight:"1.4"}}>{info.message}</div>
       </div>
@@ -252,7 +254,7 @@ function BandeauProgression({ statut, propositionEnAttente, devisId }) {
       )}
       {devisId && (
         <a href={"devis.html?devisId=" + encodeURIComponent(devisId)}
-          style={{display:"block",marginTop:"8px",padding:"12px",background:F.or,color:"#111",borderRadius:"10px",fontSize:"13px",fontWeight:"900",textAlign:"center",textDecoration:"none"}}>
+          style={{display:"block",marginTop:"8px",padding:"12px",background:F.or,color:"var(--iko-dark)",borderRadius:"10px",fontSize:"13px",fontWeight:"900",textAlign:"center",textDecoration:"none"}}>
           ✍️ Voir et signer mon devis
         </a>
       )}
@@ -640,10 +642,10 @@ function App() {
     <div style={{minHeight:"100vh",display:"flex",flexDirection:"column",alignItems:"center",padding:"0 0 40px"}}>
       <div style={{width:"100%",background:F.marine,padding:"18px 20px",display:"flex",alignItems:"center",gap:"12px"}}>
         <div style={{width:"42px",height:"42px",background:F.blanc,borderRadius:"10px",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,overflow:"hidden"}}>
-          <img src="/icon-192.png" alt="Iko" style={{width:"100%",height:"100%",objectFit:"contain"}}/>
+          <img data-iko-logo src="/icon-192.png" alt="Iko" style={{width:"100%",height:"100%",objectFit:"contain"}}/>
         </div>
         <div>
-          <div style={{color:F.blanc,fontWeight:"900",fontSize:"16px"}}>Iko</div>
+          <div data-iko-nom style={{color:F.blanc,fontWeight:"900",fontSize:"16px"}}>Iko</div>
           <div style={{color:"rgba(255,255,255,0.5)",fontSize:"9px",letterSpacing:"1.5px",textTransform:"uppercase",marginTop:"2px"}}>Suivi de ma demande SAV</div>
         </div>
         <a href="amandine.html" style={{marginLeft:"auto",color:"rgba(255,255,255,0.7)",fontSize:"12px",textDecoration:"none",border:"1px solid rgba(255,255,255,0.25)",borderRadius:"8px",padding:"6px 12px"}}>← Retour</a>
@@ -653,7 +655,7 @@ function App() {
         {!ticket && liste && (
           <div style={{background:F.blanc,border:"1px solid "+F.grisBord,borderRadius:"14px",padding:"22px",boxShadow:"0 4px 20px rgba(0,0,0,0.05)"}}>
             <h1 style={{fontSize:"18px",color:F.marine,marginBottom:"4px"}}>Mes demandes SAV</h1>
-            <p style={{fontSize:"12px",color:"#6B7280",marginBottom:"14px"}}>{liste.length} demande{liste.length > 1 ? "s" : ""} — touchez-en une pour ouvrir son suivi.</p>
+            <p style={{fontSize:"12px",color:"var(--iko-texte-clair)",marginBottom:"14px"}}>{liste.length} demande{liste.length > 1 ? "s" : ""} — touchez-en une pour ouvrir son suivi.</p>
             {erreur && <div style={{marginBottom:"10px",fontSize:"12px",color:F.rouge,background:F.rougeClair,borderRadius:"8px",padding:"8px 10px"}}>{erreur}</div>}
             <div style={{display:"flex",flexDirection:"column",gap:"8px"}}>
               {liste.map(t => {
@@ -677,7 +679,7 @@ function App() {
         {!ticket && !liste && (
           <div style={{background:F.blanc,border:"1px solid "+F.grisBord,borderRadius:"14px",padding:"28px 22px",boxShadow:"0 4px 20px rgba(0,0,0,0.05)"}}>
             <h1 style={{fontSize:"18px",color:F.marine,marginBottom:"6px"}}>Suivre mes demandes SAV</h1>
-            <p style={{fontSize:"12px",color:"#6B7280",marginBottom:"18px"}}>Saisissez le numéro de ticket reçu par e-mail (ex : SAV-2026-1234) et l'e-mail ou le téléphone donné lors de votre demande. Vous pouvez aussi utiliser directement le lien de votre e-mail.</p>
+            <p style={{fontSize:"12px",color:"var(--iko-texte-clair)",marginBottom:"18px"}}>Saisissez le numéro de ticket reçu par e-mail (ex : SAV-2026-1234) et l'e-mail ou le téléphone donné lors de votre demande. Vous pouvez aussi utiliser directement le lien de votre e-mail.</p>
             <label style={{fontSize:"11px",fontWeight:"700",color:F.marine,display:"block",marginBottom:"6px"}}>N° de ticket</label>
             <input
               value={numero}
@@ -749,7 +751,7 @@ function App() {
               </div>
 
               {ticket.fields?.Diagnostic && (
-                <div style={{marginTop:"14px",background:"rgba(0,26,66,0.04)",border:"1px solid rgba(0,26,66,0.15)",borderRadius:"8px",padding:"10px 12px",fontSize:"12px",color:F.marine}}>
+                <div style={{marginTop:"14px",background:"rgba(var(--iko-dark-rgb),0.04)",border:"1px solid rgba(var(--iko-dark-rgb),0.15)",borderRadius:"8px",padding:"10px 12px",fontSize:"12px",color:F.marine}}>
                   📋 <strong>Diagnostic technicien :</strong> {ticket.fields.Diagnostic}
                 </div>
               )}
@@ -762,7 +764,7 @@ function App() {
               <div style={{background:F.blanc,border:"1px solid "+F.grisBord,borderRadius:"14px",padding:"22px",boxShadow:"0 4px 20px rgba(0,0,0,0.05)",marginBottom:"16px"}}>
                 <h2 style={{fontSize:"14px",color:F.marine,marginBottom:"12px"}}>🛠️ Gérer ma demande</h2>
 
-                {changeOk && <div style={{marginBottom:"10px",fontSize:"12px",color:F.vert,background:F.vertClair,borderRadius:"8px",padding:"8px 10px"}}>✅ Nouvelle date d'intervention confirmée.</div>}
+                {changeOk && <div style={{marginBottom:"10px",fontSize:"12px",color:F.vert,background:F.vertClair,borderRadius:"8px",padding:"8px 10px"}}>✓ Nouvelle date d'intervention confirmée.</div>}
                 {changeErr && <div style={{marginBottom:"10px",fontSize:"12px",color:F.rouge,background:F.rougeClair,borderRadius:"8px",padding:"8px 10px"}}>⚠️ Erreur, réessayez.</div>}
 
                 {!showChanger && !showAnnulerConfirm && (
@@ -772,7 +774,7 @@ function App() {
                       📅 Changer la date d'intervention
                     </button>
                     <button onClick={() => setShowAnnulerConfirm(true)}
-                      style={{width:"100%",background:F.rougeClair,color:F.rouge,border:"1px solid rgba(220,38,38,0.3)",borderRadius:"10px",padding:"12px",fontWeight:"700",fontSize:"12px",cursor:"pointer"}}>
+                      style={{width:"100%",background:F.rougeClair,color:F.rouge,border:"1px solid rgba(var(--iko-erreur-rgb),0.3)",borderRadius:"10px",padding:"12px",fontWeight:"700",fontSize:"12px",cursor:"pointer"}}>
                       ❌ Annuler ma demande
                     </button>
                   </div>
@@ -789,9 +791,9 @@ function App() {
                 )}
 
                 {showAnnulerConfirm && (
-                  <div style={{background:F.rougeClair,border:"1px solid rgba(220,38,38,0.3)",borderRadius:"10px",padding:"14px"}}>
-                    <p style={{fontSize:"12px",color:"#7F1D1D",marginBottom:"10px"}}>Confirmez-vous l'annulation de cette demande SAV ? Cette action libérera votre créneau.</p>
-                    <label style={{fontSize:"11px",fontWeight:"700",color:"#7F1D1D",display:"block",marginBottom:"4px"}}>Motif de l'annulation *</label>
+                  <div style={{background:F.rougeClair,border:"1px solid rgba(var(--iko-erreur-rgb),0.3)",borderRadius:"10px",padding:"14px"}}>
+                    <p style={{fontSize:"12px",color:"var(--iko-erreur-fonce)",marginBottom:"10px"}}>Confirmez-vous l'annulation de cette demande SAV ? Cette action libérera votre créneau.</p>
+                    <label style={{fontSize:"11px",fontWeight:"700",color:"var(--iko-erreur-fonce)",display:"block",marginBottom:"4px"}}>Motif de l'annulation *</label>
                     <textarea value={raisonAnnulation}
                       onChange={e => { setRaisonAnnulation(e.target.value); if (e.target.value.trim()) setRaisonManquante(false); }}
                       placeholder="Ex : intervention n'est plus nécessaire, changement de date impossible…"
@@ -816,7 +818,7 @@ function App() {
 
             <div style={{background:F.blanc,border:"1px solid "+F.grisBord,borderRadius:"14px",padding:"22px",boxShadow:"0 4px 20px rgba(0,0,0,0.05)"}}>
               <h2 style={{fontSize:"14px",color:F.marine,marginBottom:"4px",textAlign:"center"}}>✉️ Échanger avec votre agence</h2>
-              <p style={{fontSize:"11px",color:"#6B7280",marginBottom:"16px",textAlign:"center"}}>Vos messages sont transmis directement à l'agence en charge de votre dossier.</p>
+              <p style={{fontSize:"11px",color:"var(--iko-texte-clair)",marginBottom:"16px",textAlign:"center"}}>Vos messages sont transmis directement à l'agence en charge de votre dossier.</p>
 
               <PhoneChat
                 ticket={ticket}
@@ -831,11 +833,11 @@ function App() {
                 changeEnCours={changeEnCours}
               />
 
-              {envoi === 'ok' && <div style={{marginTop:"10px",fontSize:"12px",color:F.vert,textAlign:"center"}}>✅ Message envoyé à l'agence.</div>}
+              {envoi === 'ok' && <div style={{marginTop:"10px",fontSize:"12px",color:F.vert,textAlign:"center"}}>✓ Message envoyé à l'agence.</div>}
               {envoi === 'err' && <div style={{marginTop:"10px",fontSize:"12px",color:F.rouge,textAlign:"center"}}>⚠️ Erreur d'envoi, réessayez.</div>}
             </div>
 
-            <button onClick={nouvelleRecherche} style={{marginTop:"16px",width:"100%",background:"transparent",border:"1px solid "+F.grisBord,color:"#6B7280",borderRadius:"10px",padding:"11px",fontWeight:"700",fontSize:"12px",cursor:"pointer"}}>
+            <button onClick={nouvelleRecherche} style={{marginTop:"16px",width:"100%",background:"transparent",border:"1px solid "+F.grisBord,color:"var(--iko-texte-clair)",borderRadius:"10px",padding:"11px",fontWeight:"700",fontSize:"12px",cursor:"pointer"}}>
               {liste ? "↩ Mes autres demandes" : "↩ Rechercher un autre ticket"}
             </button>
           </div>
