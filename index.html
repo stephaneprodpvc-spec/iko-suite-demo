@@ -39,7 +39,7 @@ body { font-family: 'Segoe UI', sans-serif; background: var(--iko-bg-clair); min
 }
 #rsia-widget-actions a.secondary-link:hover { transform: scale(1.04); }
 #rsia-widget-btn {
-  position: static; bottom: auto; right: auto; height: 58px; padding: 0 28px;
+  position: static; bottom: auto; right: auto; height: 64px; padding: 0 28px;
   background: rgba(28,28,32,0.42); -webkit-backdrop-filter: blur(22px) saturate(180%); backdrop-filter: blur(22px) saturate(180%);
   border-radius: 34px; display: flex; align-items: center;
   justify-content: center; gap: 10px; cursor: pointer;
@@ -143,11 +143,11 @@ body { font-family: 'Segoe UI', sans-serif; background: var(--iko-bg-clair); min
   </div>
 
 <div id="rsia-widget-actions">
-  <button id="rsia-widget-btn" onclick="toggleWidget()" title="Signaler un problème : remplir le formulaire SAV">
+  <button id="rsia-widget-btn" onclick="toggleWidget()" title="Remplir le formulaire de demande SAV (sans passer par Amandine)">
     <svg id="icon-chat" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+      <path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M8 13h8M8 17h5"/>
     </svg>
-    <span id="btn-label">Signaler un problème</span>
+    <span id="btn-label" style="display:flex;flex-direction:column;align-items:flex-start;line-height:1.15;"><span>Remplir un formulaire</span><span style="font-size:11.5px;font-weight:500;opacity:.85;letter-spacing:.1px;">Déclarer ma demande moi-même</span></span>
     <svg id="icon-close" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" style="display:none">
       <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
     </svg>
@@ -208,7 +208,7 @@ function toggleWidget() {
   } else {
     panel.classList.remove('open');
     iconChat.style.display = 'block';
-    btnLabel.style.display = 'inline';
+    btnLabel.style.display = 'flex';
     iconClose.style.display = 'none';
     if (window.__rsiaReset) window.__rsiaReset();
     // Fermer le formulaire (croix ou "Retour a Amandine") rouvre la carte Amandine.
