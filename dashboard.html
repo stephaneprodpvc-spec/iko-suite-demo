@@ -950,7 +950,7 @@ function ModalRdv({ agenceAccess, onClose, onSuccess, initialAgence }) {
   );
 }
 
-const MOTIFS_BLOCAGE = ["Congé", "Congé payé", "Maladie", "Autre"];
+const MOTIFS_BLOCAGE = ["Congés", "Long week-end", "Jour férié", "Fermeture exceptionnelle", "Autre (à préciser)"];
 
 // ---- MODAL BLOCAGE DATES (congés / absences techniciens par agence) ----
 function ModalBlocage({ agenceAccess, onClose, onSuccess, initialAgence, initialDateDebut, initialDateFin, initialMotif }) {
@@ -958,7 +958,8 @@ function ModalBlocage({ agenceAccess, onClose, onSuccess, initialAgence, initial
   const [agence, setAgence] = React.useState(agenceAccess !== "global" ? agenceAccess : (initialAgence || AGENCES[0]));
   const [dateDebut, setDateDebut] = React.useState(initialDateDebut || today);
   const [dateFin, setDateFin] = React.useState(initialDateFin || today);
-  const [motif, setMotif] = React.useState(initialMotif || MOTIFS_BLOCAGE[0]);
+  const [motif, setMotif] = React.useState(initialMotif && MOTIFS_BLOCAGE.includes(initialMotif) ? initialMotif : MOTIFS_BLOCAGE[0]);
+  const [motifLibre, setMotifLibre] = React.useState(initialMotif && !MOTIFS_BLOCAGE.includes(initialMotif) ? initialMotif : "");
   const [saving, setSaving] = React.useState(false);
   const [error, setError] = React.useState("");
 
@@ -968,6 +969,8 @@ function ModalBlocage({ agenceAccess, onClose, onSuccess, initialAgence, initial
 
   const bloquer = async () => {
     if (dateFin < dateDebut) { setError("La date de fin doit être après la date de début."); return; }
+    const motifFinal = motif.startsWith("Autre") ? motifLibre.trim() : motif;
+    if (!motifFinal) { setError("Précisez le motif de la fermeture."); return; }
     setSaving(true); setError("");
     try {
       await window.IKO_CLIENT_READY;
@@ -985,7 +988,7 @@ function ModalBlocage({ agenceAccess, onClose, onSuccess, initialAgence, initial
         await fetch('/api/airtable/Planning/' + c.id, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ fields: { Statut: 'Bloqué - ' + motif } })
+          body: JSON.stringify({ fields: { Statut: 'Bloqué - ' + motifFinal } })
         });
       }
       onSuccess(creneaux.length);
@@ -1026,6 +1029,9 @@ function ModalBlocage({ agenceAccess, onClose, onSuccess, initialAgence, initial
           <select value={motif} onChange={e => setMotif(e.target.value)} style={inputStyle}>
             {MOTIFS_BLOCAGE.map(m => <option key={m} value={m}>{m}</option>)}
           </select>
+          {motif.startsWith("Autre") && (
+            <input value={motifLibre} onChange={e => setMotifLibre(e.target.value)} placeholder="Expliquez la raison de la fermeture…" style={{...inputStyle,marginTop:"8px"}}/>
+          )}
         </div>
 
         <div style={{fontSize:"11px",color:C.muted,marginBottom:"14px"}}>
@@ -3526,7 +3532,7 @@ function ModalIntelligenceCommerciale({ onClose }) {
    Analytics opérationnel) et le socle IA synthese_direction déjà validé.
    Aucune donnée inventée : tout indicateur sans champ Airtable fiable
    est affiché "non disponible" plutôt qu'estimé. ---- */
-function ModalTableauBordDirigeant({ tickets, stats, onClose, onOpenAnalytics, onOpenIntelCom }) {
+function ModalTableauBordDirigeant({ tickets, stats, onClose, onOpenAnalytics, onOpenIntelCom, onOpenBlocage }) {
   const { topProduits, totalAvecAgence, repartitionAgences, repartitionStatuts, tauxUrgents, tendance, maxTendance, estimationMoisSuivant, produitsRisque, topCauses, coutSAVGlobal } = window.AnalyticsSAV.calculerAnalyticsSAV(tickets);
 
   const ticketsDevisPipeline = tickets.filter(t => ["Devis à faire","Devis envoyé","Devis - Suivi","Devis - Attente fournisseur"].includes(t.fields?.Statut));
@@ -3599,6 +3605,7 @@ function ModalTableauBordDirigeant({ tickets, stats, onClose, onOpenAnalytics, o
         <div style={{fontSize:"11px",color:C.muted,marginBottom:"12px"}}>Vue consolidée toutes agences — {tickets.length} ticket(s) chargé(s), lecture seule</div>
         <div style={{display:"flex",gap:"8px",flexWrap:"wrap",marginBottom:"18px"}}>
           {onOpenAnalytics && <button onClick={onOpenAnalytics} style={{background:C.or,border:"none",color:"#fff",borderRadius:"10px",padding:"9px 16px",fontSize:"12px",fontWeight:"800",cursor:"pointer"}}>📊 Analytics SAV</button>}
+          {onOpenBlocage && <button onClick={onOpenBlocage} style={{background:C.or,border:"none",color:"#fff",borderRadius:"10px",padding:"9px 16px",fontSize:"12px",fontWeight:"800",cursor:"pointer"}}>🔒 Bloquer des dates (fermeture)</button>}
           {onOpenIntelCom && <button onClick={onOpenIntelCom} style={{background:C.or,border:"none",color:"#fff",borderRadius:"10px",padding:"9px 16px",fontSize:"12px",fontWeight:"800",cursor:"pointer"}}>💼 Intelligence commerciale</button>}
         </div>
 
@@ -5250,6 +5257,7 @@ function Dashboard({ agenceAccess, onClose }) {
           onClose={() => setShowModalDirigeant(false)}
           onOpenAnalytics={() => { setShowModalDirigeant(false); setShowModalAnalytics(true); }}
           onOpenIntelCom={() => { setShowModalDirigeant(false); setShowModalIntelligenceCommerciale(true); }}
+          onOpenBlocage={() => { setShowModalDirigeant(false); setShowModalBlocage(true); }}
         />
       )}
       {showModalGestionDevis && (
@@ -5342,7 +5350,6 @@ function Dashboard({ agenceAccess, onClose }) {
           </button>
           )}
           <button onClick={() => setShowModalRdv(true)} style={{background:C.or,border:"none",color:"var(--iko-dark)",borderRadius:"8px",padding:"8px 16px",fontSize:"12px",fontWeight:"900",cursor:"pointer",display:"flex",alignItems:"center",gap:"6px"}}>📞 + Nouveau RDV</button>
-          <button onClick={() => setShowModalBlocage(true)} style={{background:"#fff",border:"1px solid "+C.border,color:C.white,borderRadius:"8px",padding:"8px 14px",fontSize:"12px",fontWeight:"900",cursor:"pointer",display:"flex",alignItems:"center",gap:"6px"}}>🔒 Bloquer dates</button>
           {/* Concepteur / Pilotage / Métreur retirés du bandeau : accès centralisé uniquement via le Module Contrôle (admin.html). */}
           <button onClick={charger} style={{background:C.orDim,border:"1px solid "+C.orBord,color:C.or,borderRadius:"8px",padding:"6px 14px",fontSize:"12px",fontWeight:"700",cursor:"pointer"}}>↺</button>
           <div style={{width:"1px",height:"24px",background:C.border,margin:"0 4px"}}/>
