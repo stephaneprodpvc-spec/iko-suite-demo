@@ -410,7 +410,7 @@ function CreneauPicker({ agenceVille, onSelect }) {
     } catch(e) { console.error(e); }
     const d = new Date(dateInfo.date + 'T12:00:00');
     const label = d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
-    onSelect(typeCreneau.label + ' (' + typeCreneau.heure + ') \u2014 ' + label, dateInfo.ids[0]);
+    onSelect(typeCreneau.label + ' (' + IKO_creneaux.heure(dateInfo, typeCreneau.heure) + ') \u2014 ' + label, dateInfo.ids[0]);
   };
 
   if (!typeCreneau) {
@@ -451,7 +451,7 @@ function CreneauPicker({ agenceVille, onSelect }) {
             return (
               <button key={i} onClick={() => choisir(d)}
                 style={{padding:"12px 14px",border:"2px solid " + F.grisBord,borderRadius:"10px",background:F.blanc,cursor:"pointer",textAlign:"left",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                <div style={{fontSize:"12px",fontWeight:"700",color:F.marine,textTransform:"capitalize"}}>{label}</div>
+                <div style={{fontSize:"12px",fontWeight:"700",color:F.marine,textTransform:"capitalize"}}>{label}{IKO_creneaux.heure(d, '') ? ' · ' + IKO_creneaux.heure(d, '') : ''}</div>
                 <span style={{color:F.or,fontSize:"16px"}}>→</span>
               </button>
             );

@@ -123,7 +123,9 @@ DEROULE POUR OUVRIR UN TICKET / PRENDRE RDV
             demander le numero de facture. Sinon note "hors garantie".
             5. Si le client veut un rendez-vous : demande la periode preferee (matin ou
                apres-midi), appelle lister_creneaux, propose 2-3 dates parmi celles
-                  renvoyees, puis appelle reserver_creneau une fois que le client a choisi.
+                  renvoyees en annoncant aussi l'horaire indique pour chacune (champ
+                  horaire), puis appelle reserver_creneau une fois que le client a choisi.
+                  Dans creneau_texte, note la date ET l'horaire du creneau choisi.
                      Si le client prefere etre rappele pour convenir d'un horaire plutot que de
                         choisir maintenant, c'est possible : n'appelle alors pas reserver_creneau.
                         6. Une fois toutes les infos reunies, appelle creer_ticket. Donne ensuite au
@@ -161,7 +163,7 @@ function buildTools(agencesNoms, vocab) {
   return [
   {
     name: "lister_creneaux",
-    description: "Liste les creneaux de rendez-vous disponibles pour une agence et une periode donnees (au moins " + DELAI_MIN_JOURS + " jours a l'avance). Retourne jusqu'a 5 dates avec leur identifiant interne a reutiliser dans reserver_creneau.",
+    description: "Liste les creneaux de rendez-vous disponibles pour une agence et une periode donnees (au moins " + DELAI_MIN_JOURS + " jours a l'avance). Retourne jusqu'a 5 dates avec leur horaire (ex. 9h00 — 10h00) et leur identifiant interne a reutiliser dans reserver_creneau.",
     input_schema: {
       type: "object",
       properties: {
@@ -371,12 +373,13 @@ async function executerOutil(nom, input, clientId, tradeId, agencesObjets) {
       if (ident.bloque) return { creneaux: [] };
       const dispo = await creneauxLibres(ctxPlanning, ident, { agence: input.agence, periode: input.periode });
       const parDate = {};
-      dispo.creneaux.forEach(function (c) { if (!parDate[c.date]) parDate[c.date] = { date: c.date, planning_id: c.id }; });
+      dispo.creneaux.forEach(function (c) { if (!parDate[c.date]) parDate[c.date] = { date: c.date, planning_id: c.id, horaire: c.creneau }; });
       const creneaux = Object.values(parDate).slice(0, 5).map(function (c) {
         const d = new Date(c.date + "T12:00:00");
         return {
           planning_id: c.planning_id,
           date_lisible: d.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" }),
+          horaire: c.horaire || "",
         };
       });
       return { creneaux: creneaux };

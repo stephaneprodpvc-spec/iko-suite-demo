@@ -19,10 +19,16 @@
     parDate: function (liste) {
       var index = {}, out = [];
       liste.forEach(function (c) {
-        if (!index[c.date]) { index[c.date] = { date: c.date, ids: [] }; out.push(index[c.date]); }
+        if (!index[c.date]) { index[c.date] = { date: c.date, ids: [], horaire: c.creneau || '' }; out.push(index[c.date]); }
         index[c.date].ids.push(c.id);
       });
       return out;
+    },
+    // Horaire precis ("9h00 — 10h00") d'un jour propose, uniquement en mode heures precises ;
+    // sinon renvoie la valeur par defaut (la plage matin / apres-midi deja affichee).
+    heure: function (dateInfo, defaut) {
+      var h = dateInfo && dateInfo.horaire;
+      return h && /^\d{1,2}h\d{2}/.test(h) ? h : defaut;
     }
   };
 })();
