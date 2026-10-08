@@ -30,6 +30,23 @@ input:focus, select:focus, textarea:focus { border-color:rgba(var(--iko-primary-
 .alert-blink { animation: alertBlink 1.1s ease-in-out infinite; }
 @keyframes ticketHighlightPulse { 0%,100% { box-shadow:0 0 0 0 rgba(var(--iko-primary-rgb),0.55); } 50% { box-shadow:0 0 0 6px rgba(var(--iko-primary-rgb),0); } }
 .ticket-highlight { animation: ticketHighlightPulse 1s ease-in-out 2; border-color:var(--iko-primary) !important; }
+
+/* ===== Style verre orange (comme le formulaire Amandine) ===== */
+body { background: linear-gradient(160deg, #ffa24d 0%, #ff6b00 52%, #b84300 100%) fixed !important; }
+div[style*="min-height: 100vh"][style*="var(--iko-bg-clair)"] { background: transparent !important; }
+div[style*="position: sticky"][style*="var(--iko-bg-clair)"] { background: rgba(255,107,0,0.10) !important; -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); box-shadow: none !important; border-radius: 14px; }
+div[style*="position: sticky"][style*="top: 0px"][style*="rgb(255, 255, 255)"] {
+  background: rgba(20,20,22,0.55) !important; -webkit-backdrop-filter: blur(22px) saturate(180%); backdrop-filter: blur(22px) saturate(180%);
+  border-bottom: 1px solid rgba(255,255,255,0.18) !important; }
+div[style*="background: rgb(255, 255, 255)"], button[style*="background: rgb(255, 255, 255)"], label[style*="background: rgb(255, 255, 255)"] {
+  background: rgba(255,255,255,0.58) !important; -webkit-backdrop-filter: blur(18px) saturate(170%); backdrop-filter: blur(18px) saturate(170%);
+  border: 1px solid rgba(255,255,255,0.7) !important; box-shadow: 0 6px 20px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.8) !important; color: #1c1c1e !important; }
+.modal-box { background: rgba(255,255,255,0.80) !important; -webkit-backdrop-filter: blur(26px) saturate(180%); backdrop-filter: blur(26px) saturate(180%);
+  border: 1px solid rgba(255,255,255,0.8) !important; box-shadow: 0 24px 70px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.9) !important; }
+.modal-overlay { background: rgba(60,20,0,0.55) !important; -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
+input, select, textarea { background: rgba(255,255,255,0.75) !important; border: 1px solid rgba(255,255,255,0.85) !important; border-radius: 12px !important; }
+button[style*="background: var(--iko-primary)"] { background: linear-gradient(180deg, rgba(255,150,60,0.95), rgba(255,107,0,0.85)) !important; border: 1px solid rgba(255,255,255,0.55) !important; box-shadow: 0 4px 14px rgba(255,107,0,0.35), inset 0 1px 0 rgba(255,255,255,0.5) !important; color: #fff !important; }
+button[style*="background: var(--iko-bg-sombre)"] { background: rgba(20,20,22,0.78) !important; -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); border: 1px solid rgba(255,255,255,0.3) !important; box-shadow: inset 0 1px 0 rgba(255,255,255,0.25) !important; }
 </style>
 </head>
 <body>
@@ -3506,7 +3523,7 @@ function ModalIntelligenceCommerciale({ onClose }) {
    Analytics opérationnel) et le socle IA synthese_direction déjà validé.
    Aucune donnée inventée : tout indicateur sans champ Airtable fiable
    est affiché "non disponible" plutôt qu'estimé. ---- */
-function ModalTableauBordDirigeant({ tickets, stats, onClose }) {
+function ModalTableauBordDirigeant({ tickets, stats, onClose, onOpenAnalytics, onOpenIntelCom }) {
   const { topProduits, totalAvecAgence, repartitionAgences, repartitionStatuts, tauxUrgents, tendance, maxTendance, estimationMoisSuivant, produitsRisque, topCauses, coutSAVGlobal } = window.AnalyticsSAV.calculerAnalyticsSAV(tickets);
 
   const ticketsDevisPipeline = tickets.filter(t => ["Devis à faire","Devis envoyé","Devis - Suivi","Devis - Attente fournisseur"].includes(t.fields?.Statut));
@@ -3576,7 +3593,11 @@ function ModalTableauBordDirigeant({ tickets, stats, onClose }) {
     <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
       <div className="modal-box" style={{maxWidth:"720px",maxHeight:"88vh",overflow:"auto"}}>
         <div style={{fontSize:"18px",fontWeight:"900",color:C.white,marginBottom:"2px"}}>🧭 Tableau de bord dirigeant</div>
-        <div style={{fontSize:"11px",color:C.muted,marginBottom:"18px"}}>Vue consolidée toutes agences — {tickets.length} ticket(s) chargé(s), lecture seule</div>
+        <div style={{fontSize:"11px",color:C.muted,marginBottom:"12px"}}>Vue consolidée toutes agences — {tickets.length} ticket(s) chargé(s), lecture seule</div>
+        <div style={{display:"flex",gap:"8px",flexWrap:"wrap",marginBottom:"18px"}}>
+          {onOpenAnalytics && <button onClick={onOpenAnalytics} style={{background:C.or,border:"none",color:"#fff",borderRadius:"10px",padding:"9px 16px",fontSize:"12px",fontWeight:"800",cursor:"pointer"}}>📊 Analytics SAV</button>}
+          {onOpenIntelCom && <button onClick={onOpenIntelCom} style={{background:C.or,border:"none",color:"#fff",borderRadius:"10px",padding:"9px 16px",fontSize:"12px",fontWeight:"800",cursor:"pointer"}}>💼 Intelligence commerciale</button>}
+        </div>
 
         <div style={{display:"flex",gap:"10px",flexWrap:"wrap",marginBottom:"20px"}}>
           <KpiCard label="Tickets actifs" value={stats.total} accent/>
@@ -5223,6 +5244,8 @@ function Dashboard({ agenceAccess, onClose }) {
           tickets={tickets}
           stats={stats}
           onClose={() => setShowModalDirigeant(false)}
+          onOpenAnalytics={() => { setShowModalDirigeant(false); setShowModalAnalytics(true); }}
+          onOpenIntelCom={() => { setShowModalDirigeant(false); setShowModalIntelligenceCommerciale(true); }}
         />
       )}
       {showModalGestionDevis && (
@@ -5307,18 +5330,12 @@ function Dashboard({ agenceAccess, onClose }) {
             style={{background:C.or,border:"none",color:"var(--iko-dark)",borderRadius:"8px",padding:"8px 14px",fontSize:"12px",fontWeight:"900",cursor:"pointer",display:"flex",alignItems:"center",gap:"6px"}}>
             📋 Devis {stats.devisEnAttente > 0 && <span style={{background:"var(--iko-bg-sombre)",color:"#fff",borderRadius:"10px",padding:"1px 6px",fontSize:"10px"}}>{stats.devisEnAttente}</span>}
           </button>
-          <button onClick={() => setShowModalAnalytics(true)}
-            style={{background:"#fff",border:"1px solid "+C.border,color:C.white,borderRadius:"8px",padding:"8px 14px",fontSize:"12px",fontWeight:"900",cursor:"pointer",display:"flex",alignItems:"center",gap:"6px"}}>
-            📊 Analytics
-          </button>
-          <button onClick={() => setShowModalIntelligenceCommerciale(true)}
-            style={{background:"#fff",border:"1px solid "+C.border,color:C.white,borderRadius:"8px",padding:"8px 14px",fontSize:"12px",fontWeight:"900",cursor:"pointer",display:"flex",alignItems:"center",gap:"6px"}}>
-            💼 Intelligence Commerciale
-          </button>
-          <button onClick={() => setShowModalDirigeant(true)}
+          {agenceAccess === "global" && (
+          <button onClick={() => setShowModalDirigeant(true)} title="Réservé à la direction : analytics, intelligence commerciale, vue toutes agences"
             style={{background:"var(--iko-bg-sombre)",border:"1px solid "+C.border,color:"#fff",borderRadius:"8px",padding:"8px 14px",fontSize:"12px",fontWeight:"900",cursor:"pointer",display:"flex",alignItems:"center",gap:"6px"}}>
             🧭 Dirigeant
           </button>
+          )}
           <button onClick={() => setShowModalRdv(true)} style={{background:C.or,border:"none",color:"var(--iko-dark)",borderRadius:"8px",padding:"8px 16px",fontSize:"12px",fontWeight:"900",cursor:"pointer",display:"flex",alignItems:"center",gap:"6px"}}>📞 + Nouveau RDV</button>
           <button onClick={() => setShowModalBlocage(true)} style={{background:"#fff",border:"1px solid "+C.border,color:C.white,borderRadius:"8px",padding:"8px 14px",fontSize:"12px",fontWeight:"900",cursor:"pointer",display:"flex",alignItems:"center",gap:"6px"}}>🔒 Bloquer dates</button>
           {/* Concepteur / Pilotage / Métreur retirés du bandeau : accès centralisé uniquement via le Module Contrôle (admin.html). */}
