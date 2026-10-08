@@ -1564,15 +1564,40 @@ async function creerDemandeSignatureYousign(pdfBlob, nomFichier, personneNom, em
   return { signatureRequestId: srId, signerId, lienSignature };
 }
 
+// Catalogue de démonstration (IKO DEMO uniquement, quand aucun catalogue client n'existe).
+const CATALOGUE_DEMO_IKO = {
+  produits: [
+    ["Fenêtre PVC 2 vantaux 120x135", 420, "10 %"], ["Porte-fenêtre PVC 215x140", 640, "10 %"],
+    ["Volet roulant électrique", 380, "10 %"], ["Vitrage double 4/16/4 (remplacement)", 160, "10 %"],
+    ["Serrure 3 points porte d'entrée", 290, "10 %"], ["Poignée de fenêtre", 35, "20 %"],
+    ["Joint de vitrage (ml)", 8, "20 %"], ["Moustiquaire sur mesure", 95, "20 %"],
+  ].map(([n,p,t],i) => ({ id:"demo-p"+i, fields:{ "Désignation":n, "Prix unitaire HT":p, "Taux TVA":t } })),
+  mo: [
+    ["Déplacement + diagnostic (forfait)", 60], ["Pose / remplacement fenêtre (forfait)", 180],
+    ["Réglage ouvrant (forfait)", 70], ["Remplacement joint / poignée (forfait)", 55],
+  ].map(([n,p],i) => ({ id:"demo-m"+i, fields:{ "Type d'action":n, "Prix forfait HT":p } })).concat([{ id:"demo-m9", fields:{ "Type d'action":"Main d'œuvre à l'heure", "Taux horaire HT":65 } }]),
+};
+
 function tauxTvaVersDecimal(label) {
   if (!label) return 0.20;
   const m = String(label).match(/([\d.,]+)/);
   return m ? parseFloat(m[1].replace(',', '.')) / 100 : 0.20;
 }
 
-function LigneDevisEditeur({ produits, mo, lignes, ticket, onAjouter, onSupprimer }) {
+function LigneDevisEditeur({ produits, mo, lignes, ticket, onAjouter, onSupprimer, demo }) {
   const [choix, setChoix] = React.useState("");
   const [qte, setQte] = React.useState(1);
+  const [libreOuvert, setLibreOuvert] = React.useState(false);
+  const [libre, setLibre] = React.useState({ designation: "", prix: "", qte: 1, tva: "0.2" });
+  const ajouterLibre = () => {
+    const pu = Number(String(libre.prix).replace(",", "."));
+    const q = Number(libre.qte) || 1;
+    if (!libre.designation.trim() || !(pu >= 0) || libre.prix === "") return;
+    const taux = Number(libre.tva);
+    const totalHT = q * pu;
+    onAjouter({ designation: libre.designation.trim(), qte: q, puHT: pu, tauxTva: taux, totalHT, totalTTC: totalHT * (1 + taux) });
+    setLibre({ designation: "", prix: "", qte: 1, tva: libre.tva });
+  };
 
   // ---- Suggestion IA (mode "devis_suggestion") ----
   // Meme principe que le Bloc 2C deja livre cote technicien/Max
@@ -1649,7 +1674,7 @@ function LigneDevisEditeur({ produits, mo, lignes, ticket, onAjouter, onSupprime
 
   return (
     <div style={{marginBottom:"14px"}}>
-      <label style={{fontSize:"11px",fontWeight:"700",color:C.muted,display:"block",marginBottom:"6px"}}>Lignes du devis (catalogue du client)</label>
+      <label style={{fontSize:"11px",fontWeight:"700",color:C.muted,display:"block",marginBottom:"6px"}}>Lignes du devis {demo ? "(catalogue démo)" : "(catalogue du client)"}</label>
       {(produits.length > 0 || mo.length > 0) && (
         <>
           <button type="button" onClick={demanderSuggestionsDevis} disabled={chargementSuggestions}
@@ -1715,9 +1740,28 @@ function LigneDevisEditeur({ produits, mo, lignes, ticket, onAjouter, onSupprime
         <input type="number" min="1" value={qte} onChange={e => setQte(e.target.value)} style={{width:"60px"}}/>
         <button type="button" onClick={ajouter} style={{padding:"0 14px",background:"#F3F4F6",border:"1px solid "+C.border,borderRadius:"8px",cursor:"pointer",fontSize:"13px",fontWeight:"700"}}>+</button>
       </div>
-      {(produits.length === 0 && mo.length === 0) && (
-        <div style={{fontSize:"11px",color:C.rouge,marginBottom:"10px"}}>⚠️ Aucun catalogue configuré pour ce client — configure-le dans le Poste de pilotage (fiche client → Devis &amp; Facturation).</div>
+      {demo && (
+        <div style={{fontSize:"11px",color:C.muted,marginBottom:"8px"}}>ℹ️ Catalogue de démonstration IKO (menuiserie). Pour un vrai client, le catalogue vient de sa fiche (Poste de pilotage → Devis &amp; Facturation).</div>
       )}
+      {(produits.length === 0 && mo.length === 0) && (
+        <div style={{fontSize:"11px",color:C.rouge,marginBottom:"8px"}}>⚠️ Aucun catalogue pour ce client : utilise « Ligne libre » ou configure-le dans le Poste de pilotage.</div>
+      )}
+      <div style={{marginBottom:"10px"}}>
+        <button type="button" onClick={() => setLibreOuvert(!libreOuvert)} style={{background:"none",border:"none",color:C.or,fontSize:"12px",fontWeight:"800",cursor:"pointer",padding:0}}>
+          ✏️ Ligne libre {libreOuvert ? "▴" : "▾"}
+        </button>
+        {libreOuvert && (
+          <div style={{display:"flex",gap:"6px",flexWrap:"wrap",marginTop:"8px",alignItems:"center"}}>
+            <input placeholder="Désignation" value={libre.designation} onChange={e => setLibre({...libre, designation:e.target.value})} style={{flex:"2 1 160px"}}/>
+            <input placeholder="Prix HT" inputMode="decimal" value={libre.prix} onChange={e => setLibre({...libre, prix:e.target.value})} style={{width:"80px"}}/>
+            <input type="number" min="1" value={libre.qte} onChange={e => setLibre({...libre, qte:e.target.value})} style={{width:"56px"}}/>
+            <select value={libre.tva} onChange={e => setLibre({...libre, tva:e.target.value})} style={{width:"84px"}}>
+              <option value="0.2">TVA 20 %</option><option value="0.1">TVA 10 %</option><option value="0.055">TVA 5,5 %</option>
+            </select>
+            <button type="button" onClick={ajouterLibre} style={{padding:"8px 14px",background:C.or,color:"#fff",border:"none",borderRadius:"8px",fontWeight:"800",cursor:"pointer",fontSize:"12px"}}>Ajouter</button>
+          </div>
+        )}
+      </div>
       {lignes.length > 0 && (
         <div style={{border:"1px solid "+C.border,borderRadius:"8px",overflow:"hidden",marginBottom:"6px"}}>
           {lignes.map((l, i) => (
@@ -1731,7 +1775,8 @@ function LigneDevisEditeur({ produits, mo, lignes, ticket, onAjouter, onSupprime
           ))}
         </div>
       )}
-      <div style={{textAlign:"right",fontSize:"13px",fontWeight:"900",color:C.white}}>Total HT : {total.toFixed(2)} €</div>
+      <div style={{textAlign:"right",fontSize:"12px",color:C.muted}}>Total HT : {total.toFixed(2)} € · TVA : {(lignes.reduce((s,l)=>s+((l.totalTTC!=null?l.totalTTC:l.totalHT*1.2)-l.totalHT),0)).toFixed(2)} €</div>
+      <div style={{textAlign:"right",fontSize:"14px",fontWeight:"900",color:C.white}}>Total TTC : {(lignes.reduce((s,l)=>s+(l.totalTTC!=null?l.totalTTC:l.totalHT*1.2),0)).toFixed(2)} €</div>
     </div>
   );
 }
@@ -1740,6 +1785,7 @@ function ModalDevis({ ticket, onClose, onSent }) {
   const [chargement, setChargement] = React.useState(true);
   const [catalogue, setCatalogue] = React.useState({ produits: [], mo: [], mep: null });
   const [clientInfo, setClientInfo] = React.useState(null);
+  const [demoCat, setDemoCat] = React.useState(false);
   const [lignes, setLignes] = React.useState([]);
   const [email, setEmail] = React.useState(ticket.fields?.Email || "");
   const [message, setMessage] = React.useState("");
@@ -1750,13 +1796,21 @@ function ModalDevis({ ticket, onClose, onSent }) {
 
   React.useEffect(() => {
     (async () => {
+      let cat = { produits: [], mo: [], mep: null };
       try {
         const resolu = await resoudreClientDepuisAgence(ticket.fields?.Agence);
-        if (!resolu) { setChargement(false); return; }
-        setClientInfo(resolu);
-        const cat = await chargerCatalogueDevis(resolu.clientNom);
-        setCatalogue(cat);
+        if (resolu) {
+          setClientInfo(resolu);
+          cat = await chargerCatalogueDevis(resolu.clientNom);
+        }
       } catch(e) { console.error(e); }
+      // IKO DEMO (pas de ?client=) : catalogue menuiserie de démonstration si rien n'est configuré.
+      const estDemo = !new URLSearchParams(window.location.search).get('client');
+      if (estDemo && !cat.produits.length && !cat.mo.length) {
+        cat = { ...cat, ...CATALOGUE_DEMO_IKO };
+        setDemoCat(true);
+      }
+      setCatalogue(cat);
       setChargement(false);
     })();
   }, []);
@@ -1896,7 +1950,7 @@ function ModalDevis({ ticket, onClose, onSent }) {
         {chargement && <div style={{textAlign:"center",padding:"20px 0",color:C.muted,fontSize:"12px"}}>⏳ Chargement du catalogue client...</div>}
 
         {!chargement && (
-          <LigneDevisEditeur produits={catalogue.produits} mo={catalogue.mo} lignes={lignes} ticket={ticket}
+          <LigneDevisEditeur demo={demoCat} produits={catalogue.produits} mo={catalogue.mo} lignes={lignes} ticket={ticket}
             onAjouter={l => setLignes([...lignes, l])} onSupprimer={i => setLignes(lignes.filter((_,idx) => idx!==i))}/>
         )}
 
@@ -4390,8 +4444,8 @@ function Dashboard({ agenceAccess, onClose }) {
   const [urgentOnly, setUrgentOnly] = React.useState(false);
   const [messagesOnly, setMessagesOnly] = React.useState(false);
   const [rdvModifieOnly, setRdvModifieOnly] = React.useState(false);
-  const [notifOuvert, setNotifOuvert] = React.useState(true);
-  const [suiviIKOOuvert, setSuiviIKOOuvert] = React.useState(true); // Bloc 5 : zone "À traiter", ouverte par défaut
+  const [notifOuvert, setNotifOuvert] = React.useState(false);
+  const [suiviIKOOuvert, setSuiviIKOOuvert] = React.useState(false); // Bloc 5 : zone "À traiter", ouverte par défaut
   const [openMessageTicketId, setOpenMessageTicketId] = React.useState(null);
   const [amandineOuverte, setAmandineOuverte] = React.useState(false);
   const [amandineEcoute, setAmandineEcoute] = React.useState(false);
