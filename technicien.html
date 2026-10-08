@@ -27,6 +27,26 @@ button, a, label, [onClick] { touch-action: manipulation; }
 @media(min-width:600px){ .modal-box { border-radius:16px; } }
 input, select, textarea { background:#FFFFFF;border:1px solid #D1D5DB;color:#1F2937;border-radius:8px;padding:10px 12px;font-size:13px;width:100%;outline:none;font-family:'Segoe UI',sans-serif; }
 input:focus, select:focus, textarea:focus { border-color:rgba(var(--iko-primary-rgb),0.5); }
+
+/* ===== Style verre orange (comme le formulaire Amandine) ===== */
+body { background: linear-gradient(160deg, #ffa24d 0%, #ff6b00 52%, #b84300 100%) fixed !important; }
+div[style*="min-height: 100vh"][style*="var(--iko-bg-clair)"] { background: transparent !important; }
+div[style*="background: rgb(243, 244, 246)"] { background: rgba(255,255,255,0.55) !important; border: 1px solid rgba(255,255,255,0.7) !important; }
+div[style*="position: sticky"][style*="var(--iko-bg-clair)"] { background: rgba(255,107,0,0.10) !important; -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); box-shadow: none !important; border-radius: 14px; }
+div[style*="position: sticky"][style*="top: 0px"][style*="rgb(255, 255, 255)"] {
+  background: rgba(255,255,255,0.62) !important; -webkit-backdrop-filter: blur(24px) saturate(180%); backdrop-filter: blur(24px) saturate(180%);
+  border-bottom: 1px solid rgba(255,255,255,0.8) !important; box-shadow: 0 8px 28px rgba(0,0,0,0.18) !important; }
+div[style*="background: rgb(255, 255, 255)"], button[style*="background: rgb(255, 255, 255)"], label[style*="background: rgb(255, 255, 255)"] {
+  background: rgba(255,255,255,0.74) !important; -webkit-backdrop-filter: blur(18px) saturate(170%); backdrop-filter: blur(18px) saturate(170%);
+  border: 1px solid rgba(255,255,255,0.7) !important; box-shadow: 0 6px 20px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.8) !important; color: #1c1c1e !important; }
+.modal-box { background: rgba(255,255,255,0.97) !important;
+  color: #1c1c1e;
+  border: 1px solid rgba(255,255,255,0.8) !important; box-shadow: 0 24px 70px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.9) !important; }
+.modal-box div[style*="background: rgb(255, 255, 255)"], .modal-box button[style*="background: rgb(255, 255, 255)"], .modal-box label[style*="background: rgb(255, 255, 255)"] { background: #fff !important; -webkit-backdrop-filter: none !important; backdrop-filter: none !important; box-shadow: none !important; border: 1px solid #E5E7EB !important; }
+.modal-overlay { background: rgba(60,20,0,0.55) !important; -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
+input, select, textarea { background: rgba(255,255,255,0.75) !important; border: 1px solid rgba(255,255,255,0.85) !important; border-radius: 12px !important; }
+button[style*="background: var(--iko-primary)"] { background: linear-gradient(180deg, rgba(255,150,60,0.95), rgba(255,107,0,0.85)) !important; border: 1px solid rgba(255,255,255,0.55) !important; box-shadow: 0 4px 14px rgba(255,107,0,0.35), inset 0 1px 0 rgba(255,255,255,0.5) !important; color: #fff !important; }
+button[style*="background: var(--iko-bg-sombre)"] { background: rgba(20,20,22,0.78) !important; -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); border: 1px solid rgba(255,255,255,0.3) !important; box-shadow: inset 0 1px 0 rgba(255,255,255,0.25) !important; }
 </style>
 </head>
 <body>
@@ -2625,6 +2645,14 @@ function Technicien({ agence, onClose }) {
             <div style={{width:"100px",height:"48px",background:"#FFFFFF",borderRadius:"10px",display:"flex",alignItems:"center",justifyContent:"center",padding:"3px",boxSizing:"border-box"}}>
               <img data-iko-logo src={CONFIG_ENTREPRISE.logoUrl || IKO_LOGO} alt="Iko" style={{width:"100%",height:"100%",objectFit:"contain"}}/>
             </div>
+            <button title="Maintenir pour parler"
+            onPointerDown={() => { debloquerVoixIOS(); setMaxOuvert(true); lancerEcouteMax(); }}
+            onPointerUp={arreterEcouteMax}
+            onPointerLeave={arreterEcouteMax}
+            onPointerCancel={arreterEcouteMax}
+            style={{width:"44px",height:"44px",borderRadius:"50%",background:"radial-gradient(circle at 35% 30%, var(--iko-primary-pale), var(--iko-primary) 55%, var(--iko-primary-fonce) 100%)",border:"2px solid var(--iko-primary)",color:"#fff",cursor:"pointer",fontSize:"20px",boxShadow:"0 0 26px rgba(var(--iko-primary-rgb),0.35)",animation:maxEcoute?"pulseMax 1.2s infinite":"none",touchAction:"none",userSelect:"none"}}>
+            🎙️
+          </button>
             <div>
               <div style={{fontSize:"13px",fontWeight:"700",color:C.muted}}>Technicien</div>
               <div style={{fontSize:"11px",color:C.or,marginTop:"1px",fontWeight:"700"}}>📍 {agenceShort}</div>
@@ -2698,11 +2726,11 @@ function Technicien({ agence, onClose }) {
 
       {/* Widget vocal Max */}
       <audio ref={maxAudioRef} style={{display:"none"}}/>
-      <div style={{position:"fixed",bottom:"24px",right:"24px",zIndex:200,display:"flex",flexDirection:"column",alignItems:"flex-end",gap:"10px",WebkitUserSelect:"none",userSelect:"none",WebkitTouchCallout:"none"}}
+      <div style={{position:"fixed",top:"84px",left:"16px",zIndex:200,display:"flex",flexDirection:"column",alignItems:"flex-start",gap:"10px",WebkitUserSelect:"none",userSelect:"none",WebkitTouchCallout:"none"}}
         onContextMenu={e => e.preventDefault()}>
         {maxOuvert && (
           <div style={{width:"270px",background:C.card,border:"1px solid "+C.border,borderRadius:"14px",padding:"16px",boxShadow:"0 10px 40px rgba(0,0,0,0.35)"}}>
-            <div style={{fontSize:"12px",fontWeight:"800",color:"#fff",marginBottom:"8px",letterSpacing:"1px"}}>{nomMaxLocal().toUpperCase()}</div>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"8px"}}><div style={{fontSize:"12px",fontWeight:"800",color:C.or,letterSpacing:"1px"}}>{nomMaxLocal().toUpperCase()}</div><button onClick={() => setMaxOuvert(false)} style={{background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:"14px"}}>✕</button></div>
             <div style={{fontSize:"12px",color:C.muted,minHeight:"36px"}}>
               {maxEcoute ? "Je vous écoute..." : maxEnCours ? "..." : maxDernier ? maxDernier : "Dites par exemple : \"Montre les urgents\" ou \"Ouvre l'itinéraire\"."}
             </div>
@@ -2712,29 +2740,12 @@ function Technicien({ agence, onClose }) {
                 onChange={e => setMaxTexte(e.target.value)}
                 onKeyDown={e => { if (e.key === "Enter" && maxTexte.trim()) { debloquerVoixIOS(); envoyerMax(maxTexte.trim()); setMaxTexte(""); } }}
                 placeholder="Tapez ou dictez (🎤 clavier)"
-                style={{flex:1,padding:"8px 10px",borderRadius:"8px",background:"var(--iko-bg-sombre)",border:"1px solid "+C.border,color:"#fff",fontSize:"12px"}}/>
+                style={{flex:1,padding:"8px 10px",borderRadius:"8px",border:"1px solid "+C.border,color:"#1c1c1e",fontSize:"12px"}}/>
               <button onClick={() => { if (maxTexte.trim()) { debloquerVoixIOS(); envoyerMax(maxTexte.trim()); setMaxTexte(""); } }}
                 style={{padding:"8px 12px",borderRadius:"8px",background:"#fff",border:"none",color:"var(--iko-dark)",fontWeight:"800",cursor:"pointer"}}>→</button>
             </div>
           </div>
         )}
-        <div style={{display:"flex",gap:"10px",alignItems:"center"}}>
-          {maxOuvert && (
-            <button onClick={() => setMaxOuvert(false)} style={{width:"36px",height:"36px",borderRadius:"50%",background:C.card,border:"1px solid "+C.border,color:C.muted,cursor:"pointer",fontSize:"14px"}}>✕</button>
-          )}
-          <button onClick={() => setVueMode("vocal")} title={"Écran vocal " + nomMaxLocal()}
-            style={{width:"36px",height:"36px",borderRadius:"50%",background:C.card,border:"2px solid var(--iko-primary)",color:"var(--iko-primary)",cursor:"pointer",fontSize:"15px"}}>
-            🔮
-          </button>
-          <button
-            onPointerDown={() => { debloquerVoixIOS(); setMaxOuvert(true); lancerEcouteMax(); }}
-            onPointerUp={arreterEcouteMax}
-            onPointerLeave={arreterEcouteMax}
-            onPointerCancel={arreterEcouteMax}
-            style={{width:"58px",height:"58px",borderRadius:"50%",background:"radial-gradient(circle at 35% 30%, #4a4a4a, var(--iko-bg-sombre) 55%, #000000 100%)",border:"2px solid var(--iko-primary)",color:"#fff",cursor:"pointer",fontSize:"24px",boxShadow:"0 0 26px rgba(var(--iko-primary-rgb),0.35)",animation:maxEcoute?"pulseMax 1.2s infinite":"none",touchAction:"none",userSelect:"none"}}>
-            🎙️
-          </button>
-        </div>
       </div>
       <style>{`@keyframes pulseMax{0%,100%{transform:scale(1);}50%{transform:scale(1.08);}}
 @keyframes clignoteUrgent{0%,100%{opacity:1;}50%{opacity:0.35;}}`}</style>

@@ -6054,7 +6054,7 @@ function Dashboard({ agenceAccess, onClose }) {
                 onChange={e => setAmandineTexte(e.target.value)}
                 onKeyDown={e => { if (e.key === "Enter" && amandineTexte.trim()) { debloquerVoixIOS(); envoyerAmandine(amandineTexte.trim()); setAmandineTexte(""); } }}
                 placeholder="Tapez ou dictez (🎤 clavier)"
-                style={{flex:1,padding:"8px 10px",borderRadius:"8px",background:"#1a1a1a",border:"1px solid "+C.orBord,color:"#fff",fontSize:"12px"}}/>
+                style={{flex:1,padding:"8px 10px",borderRadius:"8px",border:"1px solid "+C.orBord,color:"#1c1c1e",fontSize:"12px"}}/>
               <button onClick={() => { if (amandineTexte.trim()) { debloquerVoixIOS(); envoyerAmandine(amandineTexte.trim()); setAmandineTexte(""); } }}
                 style={{padding:"8px 12px",borderRadius:"8px",background:C.or,border:"none",color:"var(--iko-dark)",fontWeight:"800",cursor:"pointer"}}>→</button>
             </div>
