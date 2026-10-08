@@ -950,6 +950,8 @@ function ModalRdv({ agenceAccess, onClose, onSuccess, initialAgence }) {
   );
 }
 
+const TOUTES = "__toutes__";
+const fmtDateFR = (s) => { try { return s.split("-").reverse().join("/"); } catch(e) { return s; } };
 const MOTIFS_BLOCAGE = ["Congés", "Long week-end", "Jour férié", "Fermeture exceptionnelle", "Autre (à préciser)"];
 
 // ---- MODAL BLOCAGE DATES (congés / absences techniciens par agence) ----
@@ -962,6 +964,7 @@ function ModalBlocage({ agenceAccess, onClose, onSuccess, initialAgence, initial
   const [motifLibre, setMotifLibre] = React.useState(initialMotif && !MOTIFS_BLOCAGE.includes(initialMotif) ? initialMotif : "");
   const [saving, setSaving] = React.useState(false);
   const [error, setError] = React.useState("");
+  const [fait, setFait] = React.useState(null);
 
   const labelStyle = { fontSize:"11px", fontWeight:"700", color:C.muted, display:"block", marginBottom:"4px" };
   const groupStyle = { marginBottom:"14px" };
@@ -974,10 +977,15 @@ function ModalBlocage({ agenceAccess, onClose, onSuccess, initialAgence, initial
     setSaving(true); setError("");
     try {
       await window.IKO_CLIENT_READY;
-      const agenceReelle = AGENCE_VERS_AIRTABLE[agence] || agence;
+      const listeAgences = agence === TOUTES ? AGENCES : [agence];
       // Le champ Date est du texte au format AAAA-MM-JJ : la comparaison
       // lexicographique >= / <= fonctionne car le format est trié naturellement.
-      const creneaux = await IKO_creneaux.charger({ agence: agenceReelle, du: dateDebut, au: dateFin, admin: 1, clientId: window.IKO_CLIENT_ID });
+      let creneaux = [];
+      for (const ag of listeAgences) {
+        const agenceReelle = AGENCE_VERS_AIRTABLE[ag] || ag;
+        const l = await IKO_creneaux.charger({ agence: agenceReelle, du: dateDebut, au: dateFin, admin: 1, clientId: window.IKO_CLIENT_ID });
+        creneaux = creneaux.concat(l);
+      }
       if (creneaux.length === 0) {
         setError("Aucun créneau libre à bloquer sur cette période (déjà pris, déjà bloqué, ou hors planning existant).");
         setSaving(false); return;
@@ -991,12 +999,34 @@ function ModalBlocage({ agenceAccess, onClose, onSuccess, initialAgence, initial
           body: JSON.stringify({ fields: { Statut: 'Bloqué - ' + motifFinal } })
         });
       }
-      onSuccess(creneaux.length);
+      setFait({ n: creneaux.length, motifFinal, agencesTxt: listeAgences.join(', ') });
     } catch(e) {
       setError("Erreur lors du blocage. Vérifiez la connexion.");
     }
     setSaving(false);
   };
+
+  if (fait) {
+    const periode = dateDebut === dateFin ? "le " + fmtDateFR(dateDebut) : "du " + fmtDateFR(dateDebut) + " au " + fmtDateFR(dateFin);
+    const m = fait.motifFinal.toLowerCase();
+    const raison = m.includes("férié") ? "du jour férié" : m.includes("week") ? "du long week-end" : m.includes("congé") ? "des congés de la direction" : "d'une fermeture exceptionnelle (" + fait.motifFinal + ")";
+    const sujet = "Fermeture " + periode + " — " + fait.motifFinal;
+    const corps = "Bonjour,\n\nEn raison " + raison + ", " + (agence === TOUTES ? "toutes les agences seront fermées" : "l'" + fait.agencesTxt.toLowerCase() + " sera fermée") + " " + periode + ".\n\nAucun rendez-vous SAV ne sera planifié sur cette période : les créneaux ont été bloqués dans le planning. Merci d'en informer vos équipes et de prévenir les clients déjà concernés si besoin.\n\nCordialement,\nLa direction";
+    const lien = "mailto:?subject=" + encodeURIComponent(sujet) + "&body=" + encodeURIComponent(corps);
+    return (
+      <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onSuccess(fait.n)}>
+        <div className="modal-box">
+          <div style={{fontSize:"16px",fontWeight:"900",color:C.white,marginBottom:"10px"}}>✅ {fait.n} créneau(x) bloqué(s)</div>
+          <div style={{fontSize:"12px",color:C.muted,marginBottom:"14px"}}>{fait.agencesTxt} · {periode} · {fait.motifFinal}</div>
+          <div style={{fontSize:"12px",color:C.text,marginBottom:"14px"}}>Prévenir les agences ? L'e-mail est pré-rempli selon le motif, tu ajoutes seulement les destinataires.</div>
+          <div style={{display:"flex",gap:"10px"}}>
+            <button onClick={() => onSuccess(fait.n)} style={{flex:1,padding:"11px",background:"transparent",color:C.muted,border:"1px solid "+C.border,borderRadius:"10px",fontSize:"12px",cursor:"pointer"}}>Fermer</button>
+            <a href={lien} style={{flex:2,padding:"11px",background:C.or,color:"#fff",borderRadius:"10px",fontSize:"13px",fontWeight:"900",textAlign:"center",textDecoration:"none"}}>✉️ Ouvrir l'e-mail pré-rempli</a>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
@@ -1009,6 +1039,7 @@ function ModalBlocage({ agenceAccess, onClose, onSuccess, initialAgence, initial
         <div style={groupStyle}>
           <label style={labelStyle}>Agence</label>
           <select value={agence} onChange={e => setAgence(e.target.value)} disabled={agenceAccess !== "global" || AGENCES.length === 1} style={inputStyle}>
+            {agenceAccess === "global" && AGENCES.length > 1 && <option value={TOUTES}>🏢 Toutes les agences</option>}
             {AGENCES.map(a => <option key={a} value={a}>{a}</option>)}
           </select>
         </div>
@@ -4359,6 +4390,7 @@ function Dashboard({ agenceAccess, onClose }) {
   const [urgentOnly, setUrgentOnly] = React.useState(false);
   const [messagesOnly, setMessagesOnly] = React.useState(false);
   const [rdvModifieOnly, setRdvModifieOnly] = React.useState(false);
+  const [notifOuvert, setNotifOuvert] = React.useState(true);
   const [suiviIKOOuvert, setSuiviIKOOuvert] = React.useState(true); // Bloc 5 : zone "À traiter", ouverte par défaut
   const [openMessageTicketId, setOpenMessageTicketId] = React.useState(null);
   const [amandineOuverte, setAmandineOuverte] = React.useState(false);
@@ -5230,7 +5262,7 @@ function Dashboard({ agenceAccess, onClose }) {
           initialDateFin={blocagePrefill?.dateFin}
           initialMotif={blocagePrefill?.motif}
           onClose={() => { setShowModalBlocage(false); setBlocagePrefill(null); }}
-          onSuccess={(n) => { setShowModalBlocage(false); setBlocagePrefill(null); alert(n + " créneau(x) bloqué(s)."); charger(); }}
+          onSuccess={(n) => { setShowModalBlocage(false); setBlocagePrefill(null); charger(); }}
         />
       )}
       {showModalConcepteur && (
@@ -5316,6 +5348,14 @@ function Dashboard({ agenceAccess, onClose }) {
           <div style={{width:"96px",height:"46px",background:"#FFFFFF",borderRadius:"8px",display:"flex",alignItems:"center",justifyContent:"center",padding:"3px",boxSizing:"border-box"}}>
             <img data-iko-logo src={CONFIG_ENTREPRISE.logoUrl || IKO_LOGO} alt="Iko" style={{width:"100%",height:"100%",objectFit:"contain"}}/>
           </div>
+          <button title="Maintenir pour parler à IKO"
+            onPointerDown={() => { debloquerVoixIOS(); setAmandineOuverte(true); lancerEcouteAmandine(); }}
+            onPointerUp={arreterEcouteAmandine}
+            onPointerLeave={arreterEcouteAmandine}
+            onPointerCancel={arreterEcouteAmandine}
+            style={{width:"40px",height:"40px",borderRadius:"50%",background:amandineEcoute?C.rouge:"radial-gradient(circle at 35% 30%, var(--iko-primary-pale), var(--iko-primary) 55%, var(--iko-primary-fonce) 100%)",border:"none",color:"var(--iko-dark)",cursor:"pointer",fontSize:"18px",boxShadow:"0 0 26px rgba(var(--iko-primary-rgb),0.4)",animation:amandineEcoute?"pulse 1.2s infinite":"none",touchAction:"none",userSelect:"none"}}>
+            🎙️
+          </button>
           <div>
             <div style={{fontSize:"13px",fontWeight:"700",color:C.muted}}>Dashboard SAV</div>
           </div>
@@ -5414,16 +5454,17 @@ function Dashboard({ agenceAccess, onClose }) {
             incluant les signaux prédictifs SAV (absents du bloc "À
             traiter"). */}
         <div style={{background:"#fff",border:"1px solid "+C.border,borderRadius:"12px",marginBottom:"20px",padding:"14px 16px"}}>
-          <div style={{display:"flex",alignItems:"center",gap:"8px",marginBottom:"12px"}}>
+          <div onClick={() => setNotifOuvert(!notifOuvert)} style={{display:"flex",alignItems:"center",gap:"8px",marginBottom:notifOuvert?"12px":0,cursor:"pointer"}}>
             <span style={{fontSize:"13px",fontWeight:"900",color:C.white}}>🔔 Notifications IKO</span>
             {notificationsIKO.length > 0 && (
               <span style={{background:C.or,color:"var(--iko-dark)",borderRadius:"10px",padding:"1px 8px",fontSize:"11px",fontWeight:"900"}}>{notificationsIKO.length}</span>
             )}
+            <span style={{marginLeft:"auto",fontSize:"12px",color:C.muted}}>{notifOuvert ? "▲ réduire" : "▼ afficher"}</span>
           </div>
-          {notificationsIKO.length === 0 && (
+          {notifOuvert && notificationsIKO.length === 0 && (
             <div style={{fontSize:"12px",color:C.muted,fontStyle:"italic"}}>Aucune notification importante actuellement.</div>
           )}
-          {notificationsIKO.length > 0 && (
+          {notifOuvert && notificationsIKO.length > 0 && (
             <div style={{display:"flex",flexDirection:"column",gap:"8px"}}>
               {notificationsIKO.map((n, i) => (
                 <div key={i} style={{border:"1px solid "+C.border,borderRadius:"8px",padding:"9px 12px",background:"#FAFAFA"}}>
@@ -5535,10 +5576,10 @@ function Dashboard({ agenceAccess, onClose }) {
 
       {/* Widget vocal IKO */}
       <audio ref={ikoAudioRef} style={{display:"none"}}/>
-      <div style={{position:"fixed",bottom:"24px",right:"24px",zIndex:200,display:"flex",flexDirection:"column",alignItems:"flex-end",gap:"10px"}}>
+      <div style={{position:"fixed",top:"76px",left:"24px",zIndex:200,display:"flex",flexDirection:"column",alignItems:"flex-start",gap:"10px"}}>
         {amandineOuverte && (
           <div style={{width:"280px",background:C.card,border:"1px solid "+C.orBord,borderRadius:"14px",padding:"16px",boxShadow:"0 10px 40px rgba(0,0,0,0.35)"}}>
-            <div style={{fontSize:"12px",fontWeight:"800",color:C.or,marginBottom:"8px",letterSpacing:"1px"}} data-iko-nom>IKO</div>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"8px"}}><div style={{fontSize:"12px",fontWeight:"800",color:C.or,letterSpacing:"1px"}} data-iko-nom>IKO</div><button onClick={() => setAmandineOuverte(false)} style={{background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:"14px"}}>✕</button></div>
             <div style={{fontSize:"12px",color:C.muted,minHeight:"36px"}}>
               {amandineEcoute ? "Je vous écoute... (relâchez le micro pour terminer)" : amandineEnCours ? "..." : amandineDernier ? amandineDernier : "Dites par exemple : \"Filtre sur Agence 2\" ou \"Passe le ticket SAV-2026-1552 en terminé\"."}
             </div>
@@ -5554,23 +5595,6 @@ function Dashboard({ agenceAccess, onClose }) {
             </div>
           </div>
         )}
-        <div style={{display:"flex",gap:"10px",alignItems:"center"}}>
-          <button onClick={() => setVueMode("vocal")} title="Écran vocal IKO"
-            style={{width:"36px",height:"36px",borderRadius:"50%",background:C.card,border:"1px solid "+C.orBord,color:C.or,cursor:"pointer",fontSize:"15px"}}>
-            🔮
-          </button>
-          {amandineOuverte && (
-            <button onClick={() => setAmandineOuverte(false)} style={{width:"36px",height:"36px",borderRadius:"50%",background:C.card,border:"1px solid "+C.border,color:C.muted,cursor:"pointer",fontSize:"14px"}}>✕</button>
-          )}
-          <button
-            onPointerDown={() => { debloquerVoixIOS(); setAmandineOuverte(true); lancerEcouteAmandine(); }}
-            onPointerUp={arreterEcouteAmandine}
-            onPointerLeave={arreterEcouteAmandine}
-            onPointerCancel={arreterEcouteAmandine}
-            style={{width:"58px",height:"58px",borderRadius:"50%",background:amandineEcoute?C.rouge:"radial-gradient(circle at 35% 30%, var(--iko-primary-pale), var(--iko-primary) 55%, var(--iko-primary-fonce) 100%)",border:"none",color:"var(--iko-dark)",cursor:"pointer",fontSize:"24px",boxShadow:"0 0 26px rgba(var(--iko-primary-rgb),0.4)",animation:amandineEcoute?"pulse 1.2s infinite":"none",touchAction:"none",userSelect:"none"}}>
-            🎙️
-          </button>
-        </div>
       </div>
       <style>{`@keyframes pulse{0%,100%{transform:scale(1);}50%{transform:scale(1.08);}}
 @keyframes clignoteUrgent{0%,100%{opacity:1;}50%{opacity:0.35;}}`}</style>
