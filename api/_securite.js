@@ -19,6 +19,7 @@ import jwt from "jsonwebtoken";
 const ORIGINES_AUTORISEES = [
   "iko-suite-demo.vercel.app",
   "iko-suite-demo-git-main-akial.vercel.app",
+  "iko-suite-demo-git-feature-modules-actifs-akial.vercel.app",
 ];
 
 const compteurs = new Map(); // "cle:ip" -> { debut: timestamp, nb: compte }
