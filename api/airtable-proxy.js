@@ -33,7 +33,7 @@ import { creneauxLibres, identDepuisClientId, AGENCES_DEMO } from './_planning.j
 const CHAMPS_SUIVI = [
   'Name', 'Statut', 'Produit', 'Problème', 'Créneau', 'Agence', 'Diagnostic', 'Montant devis',
   'Message client', 'Réponse agence', 'Proposition auto en attente', 'Proposition auto créneau',
-  'Proposition auto mois', 'PlanningID', 'Compte client',
+  'Proposition auto mois', 'PlanningID', 'Compte client', 'Note', 'Note Commentaire',
 ];
 
 // Formule Airtable : tickets d'un meme client (meme e-mail OU meme telephone).
