@@ -92,6 +92,20 @@ function PropositionDateBubble({ agenceVille, clientId, creneauId, moisSouhaite,
         <div style={{display:"flex",flexDirection:"column",gap:"5px"}}>
           {dates.map((d, i) => {
             const label = new Date(d.date + 'T12:00:00').toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+            const opts = IKO_creneaux.options(d);
+            if (opts.length > 1) {
+              return (
+                <div key={i} style={{padding:"8px 10px",border:"1px solid "+F.grisBord,borderRadius:"8px",background:F.grisClair}}>
+                  <div style={{fontSize:"11px",fontWeight:"700",color:F.marine,textTransform:"capitalize",marginBottom:"6px"}}>{label}</div>
+                  <div style={{display:"flex",flexWrap:"wrap",gap:"5px"}}>
+                    {opts.map((o, j) => (
+                      <button key={j} disabled={enCours} onClick={() => onChoisir(creneau, o)}
+                        style={{padding:"6px 9px",border:"1px solid "+F.grisBord,borderRadius:"7px",background:F.blanc,cursor:enCours?"default":"pointer",fontSize:"11px",fontWeight:"700",color:F.marine}}>{IKO_creneaux.heure(o, '')}</button>
+                    ))}
+                  </div>
+                </div>
+              );
+            }
             return (
               <button key={i} disabled={enCours} onClick={() => onChoisir(creneau, d)}
                 style={{padding:"9px 10px",border:"1px solid "+F.grisBord,borderRadius:"8px",background:F.grisClair,cursor:enCours?"default":"pointer",textAlign:"left",fontSize:"11px",fontWeight:"700",color:F.marine,textTransform:"capitalize",display:"flex",justifyContent:"space-between"}}>

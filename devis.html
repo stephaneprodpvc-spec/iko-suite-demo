@@ -105,6 +105,19 @@ function CreneauPicker({ agenceVille, clientId, onSelect }) {
           {dates.map((d, i) => {
             const dateObj = new Date(d.date + 'T12:00:00');
             const label = dateObj.toLocaleDateString('fr-FR', { weekday:'long', day:'numeric', month:'long' });
+            const opts = IKO_creneaux.options(d);
+            if (opts.length > 1) {
+              return (
+                <div key={i} style={{padding:"10px 12px",border:"2px solid " + F.grisBord,borderRadius:"10px",background:F.blanc}}>
+                  <div style={{fontSize:"13px",fontWeight:"700",color:F.marine,textTransform:"capitalize",marginBottom:"7px"}}>{label}</div>
+                  <div style={{display:"flex",flexWrap:"wrap",gap:"6px"}}>
+                    {opts.map((o, j) => (
+                      <button key={j} onClick={() => choisir(o)} style={{padding:"8px 11px",border:"2px solid " + F.grisBord,borderRadius:"8px",background:F.blanc,cursor:"pointer",fontSize:"11px",fontWeight:"700",color:F.marine}}>{IKO_creneaux.heure(o, '')}</button>
+                    ))}
+                  </div>
+                </div>
+              );
+            }
             return (
               <button key={i} onClick={() => choisir(d)}
                 style={{padding:"12px 14px",border:"2px solid " + F.grisBord,borderRadius:"10px",background:F.blanc,cursor:"pointer",textAlign:"left",display:"flex",justifyContent:"space-between",alignItems:"center"}}>

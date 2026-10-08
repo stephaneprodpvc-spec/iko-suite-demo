@@ -31,7 +31,14 @@ const MAX_REQUETES_PAR_FENETRE = 12;
 export function verifierOrigine(req, options = {}) {
   const origine = req.headers.origin || req.headers.referer || "";
   if (!origine) return !options.strict; // mode historique : on laisse passer, le rate-limit prend le relais
-  return ORIGINES_AUTORISEES.some(d => origine.includes(d)) || origine.includes("localhost");
+  if (ORIGINES_AUTORISEES.some(d => origine.includes(d)) || origine.includes("localhost")) return true;
+  // Deploiements de test (previews) du MEME projet Vercel : iko-suite-demo-<hash ou branche>-akial.vercel.app
+  try {
+    const hote = new URL(origine).hostname;
+    return /^iko-suite-demo-[a-z0-9-]+-akial\.vercel\.app$/i.test(hote);
+  } catch (e) {
+    return false;
+  }
 }
 
 // Options optionnelles { max, fenetreMs, cle } : permet de réutiliser ce

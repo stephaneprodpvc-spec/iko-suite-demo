@@ -124,7 +124,9 @@ DEROULE POUR OUVRIR UN TICKET / PRENDRE RDV
             5. Si le client veut un rendez-vous : demande la periode preferee (matin ou
                apres-midi), appelle lister_creneaux, propose 2-3 dates parmi celles
                   renvoyees en annoncant aussi l'horaire indique pour chacune (champ
-                  horaire), puis appelle reserver_creneau une fois que le client a choisi.
+                  horaire). Si un jour a plusieurs horaires_disponibles, propose-les au
+                  client et utilise le planning_id de l'horaire qu'il choisit. Appelle
+                  reserver_creneau une fois que le client a choisi.
                   Dans creneau_texte, note la date ET l'horaire du creneau choisi.
                      Si le client prefere etre rappele pour convenir d'un horaire plutot que de
                         choisir maintenant, c'est possible : n'appelle alors pas reserver_creneau.
@@ -373,13 +375,18 @@ async function executerOutil(nom, input, clientId, tradeId, agencesObjets) {
       if (ident.bloque) return { creneaux: [] };
       const dispo = await creneauxLibres(ctxPlanning, ident, { agence: input.agence, periode: input.periode });
       const parDate = {};
-      dispo.creneaux.forEach(function (c) { if (!parDate[c.date]) parDate[c.date] = { date: c.date, planning_id: c.id, horaire: c.creneau }; });
+      dispo.creneaux.forEach(function (c) {
+        if (!parDate[c.date]) parDate[c.date] = { date: c.date, planning_id: c.id, horaire: c.creneau, tous: [] };
+        if (/^\d{1,2}h\d{2}/.test(c.creneau || "") && parDate[c.date].tous.length < 8) parDate[c.date].tous.push({ planning_id: c.id, horaire: c.creneau });
+      });
       const creneaux = Object.values(parDate).slice(0, 5).map(function (c) {
         const d = new Date(c.date + "T12:00:00");
         return {
           planning_id: c.planning_id,
           date_lisible: d.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" }),
           horaire: c.horaire || "",
+          // Mode heures precises : tous les horaires libres ce jour-la (chacun avec son planning_id).
+          ...(c.tous.length > 1 ? { horaires_disponibles: c.tous } : {}),
         };
       });
       return { creneaux: creneaux };
