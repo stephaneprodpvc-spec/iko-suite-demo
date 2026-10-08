@@ -241,7 +241,7 @@ async function handlerPush(req, res, baseId, headers, session) {
   // existe, on peut donc deja restreindre aux roles internes attendus, sans
   // casser aucun usage public legitime. Sans session (page pas encore
   // migree), comportement historique conserve (mode de coexistence).
-  if (session && session.role !== 'SUPER_ADMIN_IKO' && session.role !== 'TECHNICIEN') {
+  if (session && session.role !== 'SUPER_ADMIN_IKO' && session.role !== 'TECHNICIEN' && session.role !== 'TENANT_ADMIN') {
     return res.status(403).json({ error: 'Accès non autorisé.' });
   }
 

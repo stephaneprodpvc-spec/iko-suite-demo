@@ -44,6 +44,66 @@
   }
   window.IKO_applyTheme = appliquer;
   appliquer();
+
+  // ---- Theme du client (couleur, logo, nom) -------------------------------
+  // lireFicheClientPublic est le POINT UNIQUE de lecture de la fiche client par
+  // les pages publiques. Il ne demande que des champs non sensibles (liste ci-
+  // dessous). Quand la lecture publique de "Clients" sera fermee, il suffira de
+  // rebrancher cette seule fonction sur une route dediee.
+  var CHAMPS_FICHE_PUBLIQUE = ['Nom client', 'Slug', 'Couleur principale', 'Logo', 'Accès bloqué', 'Nombre agences'];
+  var cacheFiches = {};
+  function ficheDepuisFields(id, f) {
+    f = f || {};
+    var logo = f['Logo'] && f['Logo'][0] && f['Logo'][0].url;
+    return {
+      id: id || null,
+      nom: typeof f['Nom client'] === 'string' ? f['Nom client'].trim() : '',
+      slug: f['Slug'] || '',
+      couleur: typeof f['Couleur principale'] === 'string' ? f['Couleur principale'].trim() : '',
+      logo: logo || '',
+      bloque: f['Accès bloqué'] === true,
+      nombreAgences: parseInt(f['Nombre agences'], 10) || null
+    };
+  }
+  window.IKO_lireFicheClientPublic = function (slug) {
+    slug = String(slug || '').trim();
+    if (!/^[a-z0-9]+(-[a-z0-9]+)*$/i.test(slug)) return Promise.resolve(null);
+    if (cacheFiches[slug]) return cacheFiches[slug];
+    var url = '/api/airtable/Clients?filterByFormula=' + encodeURIComponent('{Slug}="' + slug + '"') + '&maxRecords=1' +
+      CHAMPS_FICHE_PUBLIQUE.map(function (c) { return '&fields%5B%5D=' + encodeURIComponent(c); }).join('');
+    cacheFiches[slug] = fetch(url)
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (j) {
+        var rec = j && j.records && j.records[0];
+        return rec ? ficheDepuisFields(rec.id, rec.fields) : null;
+      })
+      .catch(function () { return null; });
+    return cacheFiches[slug];
+  };
+  // Applique couleur / logo / nom d'une fiche (champs deja lus) ; sinon thème par défaut.
+  window.IKO_appliquerFiche = function (fields) {
+    var fiche = ficheDepuisFields(null, fields);
+    var t = {};
+    if (/^#[0-9a-f]{6}$/i.test(fiche.couleur)) t.couleur = fiche.couleur;
+    if (logoValide(fiche.logo)) t.logo = fiche.logo;
+    if (fiche.nom) t.nom = fiche.nom;
+    if (t.couleur || t.logo || t.nom) { window.IKO_THEME = t; appliquer(); }
+  };
+  // Pages publiques (<meta name="iko-theme-client">) : lit ?client=slug et applique le theme.
+  // Echec de lecture = theme orange/noir par defaut, rien ne casse.
+  window.IKO_chargerThemeClient = function () {
+    var slug = new URLSearchParams(window.location.search).get('client');
+    if (!slug) return Promise.resolve(null);
+    return window.IKO_lireFicheClientPublic(slug).then(function (fiche) {
+      if (!fiche) return null;
+      var f = { 'Nom client': fiche.nom, 'Couleur principale': fiche.couleur, 'Logo': fiche.logo ? [{ url: fiche.logo }] : [] };
+      window.IKO_appliquerFiche(f);
+      return fiche;
+    });
+  };
+  document.addEventListener('DOMContentLoaded', function () {
+    if (document.querySelector('meta[name="iko-theme-client"]')) window.IKO_chargerThemeClient();
+  });
   // Les pages React rendent leurs logos apres coup : on re-applique logo/nom.
   document.addEventListener('DOMContentLoaded', function () {
     appliquerElements();

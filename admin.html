@@ -798,7 +798,7 @@
 
         <label>Couleurs</label>
         <div class="row-inline">
-          <div><input type="color" id="fC1" value="#22C55E"><div class="lbl">Principale</div></div>
+          <div><input type="color" id="fC1" value="#FF6B00"><div class="lbl">Principale</div></div>
           <div><input type="color" id="fC2" value="#111111"><div class="lbl">Secondaire</div></div>
         </div>
 
@@ -918,6 +918,7 @@
         <div class="actions">
           <button type="submit" class="primary" id="submitBtn">Créer le client</button>
           <button type="button" class="secondary" id="cancelBtn" style="display:none;">Annuler</button>
+          <button type="button" class="primary" id="creerIkoBtn" style="display:none;">Créer son IKO</button>
           <button type="button" class="secondary" id="printBtn" style="display:none;">Imprimer</button>
           <button type="button" class="secondary" id="deleteBtn" style="display:none;color:#FF453A;border-color:rgba(255,69,58,0.3);">Supprimer</button>
         </div>
@@ -1861,7 +1862,7 @@ function chargerDansFormulaire(id){
   document.getElementById("fAdresse").value = f["Adresse"] || "";
   document.getElementById("fCodePostal").value = f["Code postal"] || "";
   document.getElementById("fVille").value = f["Ville"] || "";
-  document.getElementById("fC1").value = f["Couleur principale"] || "#22C55E";
+  document.getElementById("fC1").value = f["Couleur principale"] || "#FF6B00";
   document.getElementById("fC2").value = f["Couleur secondaire"] || "#111111";
   document.getElementById("fStatut").value = f["Statut client"] || "Actif";
   document.getElementById("fStatutCommercial").value = f["Statut commercial"] || "Prospection";
@@ -1873,6 +1874,7 @@ function chargerDansFormulaire(id){
   document.getElementById("submitBtn").textContent = "Enregistrer les modifications";
   document.getElementById("cancelBtn").style.display = "inline-block";
   document.getElementById("printBtn").style.display = "inline-block";
+  document.getElementById("creerIkoBtn").style.display = "inline-block";
   document.getElementById("deleteBtn").style.display = "inline-block";
   document.getElementById("formMsg").textContent = "";
   chargerActivite(id);
@@ -2068,6 +2070,175 @@ document.getElementById("creerUtilisateurBtn").addEventListener("click", functio
     })
     .catch(function(){ msg.style.color = "#FF453A"; msg.textContent = "Erreur de création."; });
 });
+
+// --- "Créer son IKO" : provisioning guidé d'un client pro (super admin) ----
+// Controle (lecture seule) -> recapitulatif -> creation manuelle validee.
+// Aucun envoi automatique : message d'acces a copier + lien mailto. Le mot de
+// passe temporaire n'est affiche qu'une fois, jamais stocke ni journalise.
+var ikoModal = null;
+
+function ikoAppel(action, extra){
+  var corps = { action: action, clientId: editingId };
+  Object.keys(extra || {}).forEach(function(k){ corps[k] = extra[k]; });
+  return fetch("/api/verif-securite", {
+    method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify(corps)
+  }).then(function(r){
+    return r.json().catch(function(){ return {}; }).then(function(d){ return { ok: r.ok, status: r.status, data: d }; });
+  });
+}
+
+function ikoLiens(slug, base){
+  var b = String(base || location.origin).replace(/\/+$/, "");
+  var q = "?client=" + encodeURIComponent(slug);
+  return [
+    ["Déclarer une demande SAV", b + "/index.html" + q],
+    ["Amandine (assistante)", b + "/amandine.html" + q],
+    ["Suivi de ma demande", b + "/suivi.html"],
+    ["Tableau de bord", b + "/dashboard.html" + q],
+    ["Espace technicien", b + "/technicien.html" + q]
+  ];
+}
+
+function ikoMessageAcces(nom, slug, base, identifiant){
+  var lignes = ["Bonjour,", "", "Votre espace IKO « " + nom + " » est prêt.", ""];
+  ikoLiens(slug, base).forEach(function(l){ lignes.push(l[0] + " : " + l[1]); });
+  lignes.push("", "Identifiant : " + identifiant,
+    "Le mot de passe provisoire vous est transmis séparément. Vous devrez le changer à votre première connexion.",
+    "", "Cordialement");
+  return lignes.join("\n");
+}
+
+function ikoCopier(texte, bouton){
+  function ok(){ var t = bouton.textContent; bouton.textContent = "Copié ✓"; setTimeout(function(){ bouton.textContent = t; }, 1500); }
+  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(texte).then(ok).catch(function(){});
+  else { var ta = document.createElement("textarea"); ta.value = texte; document.body.appendChild(ta); ta.select(); try { document.execCommand("copy"); ok(); } catch (e) {} document.body.removeChild(ta); }
+}
+
+function fermerCreerIko(){
+  if (ikoModal) { ikoModal.remove(); ikoModal = null; } // efface aussi le mot de passe affiche
+}
+
+function ouvrirCreerIko(){
+  if (!editingId) return;
+  fermerCreerIko();
+  ikoModal = document.createElement("div");
+  ikoModal.style.cssText = "position:fixed;inset:0;z-index:9000;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;padding:16px;";
+  ikoModal.innerHTML =
+    "<div style='background:var(--bg-card,#1c1c1e);color:var(--texte,#fff);border:1px solid var(--border);border-radius:16px;max-width:560px;width:100%;max-height:90vh;overflow:auto;padding:18px;'>" +
+      "<div style='display:flex;align-items:center;margin-bottom:10px;'><h2 style='flex:1;margin:0;font-size:17px;'>Créer son IKO</h2>" +
+      "<button type='button' id='ikoFermer' style='background:none;border:none;color:var(--texte-dim,#aaa);font-size:20px;cursor:pointer;'>✕</button></div>" +
+      "<div id='ikoCorps' style='font-size:13px;'>Contrôle en cours…</div>" +
+    "</div>";
+  document.body.appendChild(ikoModal);
+  document.getElementById("ikoFermer").addEventListener("click", fermerCreerIko);
+  ikoControler();
+}
+
+function ikoControler(){
+  var corps = document.getElementById("ikoCorps");
+  if (!corps) return;
+  var champId = document.getElementById("ikoIdentifiant");
+  var identifiant = champId ? champId.value.trim() : "";
+  corps.innerHTML = "Contrôle en cours…";
+  ikoAppel("preparer_iko", identifiant ? { identifiant: identifiant } : {}).then(function(res){
+    if (!document.getElementById("ikoCorps")) return;
+    if (!res.ok) { corps.innerHTML = "<div style='color:#FF453A;'>" + escHtml(res.data.erreur || "Contrôle impossible.") + "</div>"; return; }
+    ikoAfficherBilan(res.data);
+  }).catch(function(){ corps.innerHTML = "<div style='color:#FF453A;'>Erreur réseau.</div>"; });
+}
+
+function ikoListe(items, couleur, pastille){
+  if (!items.length) return "";
+  return "<ul style='margin:6px 0 10px;padding-left:18px;color:" + couleur + ";'>" + items.map(function(i){ return "<li>" + pastille + " " + escHtml(i) + "</li>"; }).join("") + "</ul>";
+}
+
+function ikoAfficherBilan(b){
+  var corps = document.getElementById("ikoCorps");
+  var ag = b.agences || {};
+  var compte = b.compte || {};
+  var etatCompte = { a_creer: "sera créé (rôle Admin client)", existe: "existe déjà pour ce client (rien à créer)", conflit: "identifiant déjà utilisé par un autre client : compte non créé", inconnu: "aucun identifiant : compte non créé", invalide: "identifiant invalide : compte non créé" }[compte.etat] || compte.etat;
+  var inputStyle = "width:100%;padding:8px 10px;border-radius:8px;border:1px solid var(--border);background:rgba(255,255,255,0.04);color:var(--texte,#fff);font-size:13px;margin:4px 0 8px;";
+  corps.innerHTML =
+    "<div style='margin-bottom:8px;'><b>" + escHtml(b.client.nom || "(sans nom)") + "</b> — slug : <code>" + escHtml(b.client.slug || "—") + "</code></div>" +
+    (b.bloquants.length ? "<div style='font-weight:700;color:#FF453A;'>À corriger avant de créer</div>" + ikoListe(b.bloquants, "#FF453A", "✗") : "<div style='color:#30D158;font-weight:700;margin-bottom:6px;'>✓ Contrôle bloquant satisfait</div>") +
+    (b.avertissements.length ? "<div style='font-weight:700;color:#FF9F0A;'>Avertissements (non bloquants)</div>" + ikoListe(b.avertissements, "#FF9F0A", "⚠") : "") +
+    "<div style='margin:8px 0 4px;font-weight:700;'>Agences</div>" +
+    "<div>Existantes : " + (ag.existantes && ag.existantes.length ? escHtml(ag.existantes.map(function(a){ return a.nom || "(sans nom)"; }).join(", ")) : "aucune") + "</div>" +
+    "<div>À créer : " + (ag.aCreer && ag.aCreer.length ? escHtml(ag.aCreer.join(", ")) : "aucune") + "</div>" +
+    "<div style='margin:10px 0 0;font-weight:700;'>Compte de connexion</div>" +
+    "<label style='font-size:11px;color:var(--texte-dim,#aaa);'>Identifiant (e-mail, modifiable)</label>" +
+    "<input type='email' id='ikoIdentifiant' value='" + escHtml(compte.identifiant || "") + "' style='" + inputStyle + "'>" +
+    "<div style='margin-bottom:8px;'>Compte : " + escHtml(etatCompte) + "</div>" +
+    "<label style='font-size:11px;color:var(--texte-dim,#aaa);'>Adresse du site pour les liens</label>" +
+    "<input type='text' id='ikoBase' value='" + escHtml(location.origin) + "' style='" + inputStyle + "'>" +
+    "<div style='display:flex;gap:8px;flex-wrap:wrap;'>" +
+      "<button type='button' class='secondary' id='ikoRecontroler'>Actualiser le contrôle</button>" +
+      "<button type='button' class='primary' id='ikoCreer'" + (b.pret ? "" : " disabled") + ">" + (compte.etat === "existe" && !(ag.aCreer && ag.aCreer.length) ? "Vérifier / générer l'accès" : "Créer / relancer") + "</button>" +
+      (compte.etat === "existe" ? "<button type='button' class='secondary' id='ikoRegenerer'>Régénérer le mot de passe</button>" : "") +
+    "</div>" +
+    "<div id='ikoResultat' style='margin-top:12px;'></div>";
+  document.getElementById("ikoRecontroler").addEventListener("click", ikoControler);
+  document.getElementById("ikoCreer").addEventListener("click", function(){ ikoCreer(b, false); });
+  var rg = document.getElementById("ikoRegenerer");
+  if (rg) rg.addEventListener("click", function(){
+    if (window.confirm("Générer un nouveau mot de passe temporaire ? L'ancien ne fonctionnera plus.")) ikoCreer(b, true);
+  });
+}
+
+function ikoCreer(bilan, regenerer){
+  var zone = document.getElementById("ikoResultat");
+  var identifiant = document.getElementById("ikoIdentifiant").value.trim();
+  var base = document.getElementById("ikoBase").value.trim();
+  ["ikoCreer", "ikoRegenerer", "ikoRecontroler"].forEach(function(id){ var b = document.getElementById(id); if (b) b.disabled = true; }); // anti double clic
+  zone.innerHTML = "Création en cours…";
+  ikoAppel("creer_iko", { identifiant: identifiant, regenererMotDePasse: regenerer === true }).then(function(res){
+    if (!document.getElementById("ikoResultat")) return;
+    if (!res.ok) {
+      var detail = (res.data.bloquants || []).join(" ");
+      zone.innerHTML = "<div style='color:#FF453A;'>" + escHtml((res.data.erreur || "Échec.") + (detail ? " " + detail : "")) + "</div>" +
+        "<div style='margin-top:6px;color:var(--texte-dim,#aaa);'>Relance possible : rien n'est dupliqué.</div>";
+      ["ikoCreer", "ikoRegenerer", "ikoRecontroler"].forEach(function(id){ var b = document.getElementById(id); if (b) b.disabled = false; });
+      return;
+    }
+    ikoAfficherResultat(bilan, res.data, base, identifiant);
+    chargerAgencesClient(editingId);
+  }).catch(function(){
+    zone.innerHTML = "<div style='color:#FF453A;'>Erreur réseau. Relance possible : rien n'est dupliqué.</div>";
+    ["ikoCreer", "ikoRegenerer", "ikoRecontroler"].forEach(function(id){ var b = document.getElementById(id); if (b) b.disabled = false; });
+  });
+}
+
+function ikoAfficherResultat(bilan, data, base, identifiant){
+  var zone = document.getElementById("ikoResultat");
+  var nom = bilan.client.nom, slug = bilan.client.slug;
+  var message = ikoMessageAcces(nom, slug, base, data.compte.identifiant || identifiant);
+  var mailto = "mailto:" + encodeURIComponent(data.compte.identifiant || identifiant) + "?subject=" + encodeURIComponent("Votre espace IKO est prêt") + "&body=" + encodeURIComponent(message);
+  zone.innerHTML =
+    "<div style='color:#30D158;font-weight:700;'>✓ Terminé" + (data.agencesCreees.length ? " — agences créées : " + escHtml(data.agencesCreees.join(", ")) : " — aucune agence à créer") + "</div>" +
+    "<div id='ikoMdp' style='margin:10px 0;'></div>" +
+    "<div style='font-weight:700;margin-bottom:4px;'>Message d'accès (sans mot de passe)</div>" +
+    "<textarea id='ikoMessage' readonly rows='11' style='width:100%;padding:8px;border-radius:8px;border:1px solid var(--border);background:rgba(255,255,255,0.04);color:var(--texte,#fff);font-size:12px;'></textarea>" +
+    "<div style='display:flex;gap:8px;margin-top:6px;flex-wrap:wrap;'>" +
+      "<button type='button' class='secondary' id='ikoCopierMsg'>Copier le message</button>" +
+      "<a class='secondary' id='ikoMailto' style='display:inline-flex;align-items:center;padding:10px 14px;border-radius:12px;text-decoration:none;border:1px solid var(--border);color:var(--texte,#fff);'>Ouvrir dans ma messagerie</a>" +
+    "</div>";
+  document.getElementById("ikoMessage").value = message;
+  document.getElementById("ikoMailto").setAttribute("href", mailto);
+  document.getElementById("ikoCopierMsg").addEventListener("click", function(){ ikoCopier(message, this); });
+  var zoneMdp = document.getElementById("ikoMdp");
+  var mdp = data.compte.motDePasseTemporaire;
+  if (mdp) {
+    zoneMdp.innerHTML = "<div style='border:1px solid #FF9F0A;border-radius:10px;padding:10px;'>" +
+      "<div style='font-weight:700;color:#FF9F0A;margin-bottom:4px;'>Mot de passe temporaire — affiché UNE seule fois</div>" +
+      "<code id='ikoMdpValeur' style='font-size:16px;user-select:all;'></code> " +
+      "<button type='button' class='secondary' id='ikoCopierMdp' style='margin-left:6px;'>Copier</button>" +
+      "<div style='font-size:11px;color:var(--texte-dim,#aaa);margin-top:6px;'>À transmettre séparément du message (SMS, téléphone…). Le client devra le changer à sa première connexion.</div></div>";
+    document.getElementById("ikoMdpValeur").textContent = mdp; // textContent : jamais interprete comme HTML
+    document.getElementById("ikoCopierMdp").addEventListener("click", function(){ ikoCopier(mdp, this); });
+  } else {
+    zoneMdp.innerHTML = "<div style='color:var(--texte-dim,#aaa);'>Le compte existait déjà : aucun mot de passe affiché. Utilisez « Régénérer le mot de passe » si besoin.</div>";
+  }
+}
 
 function toggleSection(btnId, bodyId, chevronId){
   var btn = document.getElementById(btnId), body = document.getElementById(bodyId), chev = document.getElementById(chevronId);
@@ -2340,6 +2511,8 @@ document.getElementById("cancelBtn").addEventListener("click", function(){
   fermerFicheModal();
 });
 
+document.getElementById("creerIkoBtn").addEventListener("click", ouvrirCreerIko);
+
 document.getElementById("printBtn").addEventListener("click", function(){
   if (!editingId) return;
   var nom = document.getElementById("fNom").value;
@@ -2394,6 +2567,7 @@ function reinitialiserFormulaire(){
   document.getElementById("submitBtn").textContent = "Créer l'entreprise";
   document.getElementById("cancelBtn").style.display = "none";
   document.getElementById("printBtn").style.display = "none";
+  document.getElementById("creerIkoBtn").style.display = "none";
   document.getElementById("deleteBtn").style.display = "none";
   fermerDevis();
   document.getElementById("formMsg").textContent = "";
@@ -3718,7 +3892,7 @@ document.getElementById("dpAccepteBtn").addEventListener("click", function(){
     "Nom client": nom,
     "Slug": slugifier(nom),
     "Métier": "Autre",
-    "Couleur principale": "#22C55E",
+    "Couleur principale": "#FF6B00",
     "Couleur secondaire": "#111111",
     "Modules actifs": mods,
     "Statut client": "Actif",

@@ -2,6 +2,7 @@
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
+<meta name="iko-theme-client" content="1">
 <link rel="stylesheet" href="/theme.css">
 <script src="/theme.js"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -265,14 +266,14 @@ const SLUG_CLIENT = (new URLSearchParams(window.location.search).get('client') |
 async function chargerAgencesClient() {
   if (!SLUG_CLIENT) return null;
   try {
-    const rc = await fetch('/api/airtable/Clients?filterByFormula=' + encodeURIComponent('{Slug}="' + SLUG_CLIENT.replace(/"/g, '') + '"') + '&maxRecords=1');
-    const rec = ((await rc.json()).records || [])[0];
+    // Lecture unique de la fiche client (theme.js) : champs non sensibles uniquement.
+    const rec = await window.IKO_lireFicheClientPublic(SLUG_CLIENT);
     if (!rec) return null;
-    const nbBrut = parseInt(rec.fields["Nombre agences"], 10);
+    const nbBrut = rec.nombreAgences;
     const plafond = Math.max(1, Math.min(10, nbBrut || 10));
     let noms = [];
-    if (rec.fields["Nom client"]) {
-      const f = 'AND(FIND("' + String(rec.fields["Nom client"]).replace(/"/g, '') + '", ARRAYJOIN({Client})), {Actif}=1)';
+    if (rec.nom) {
+      const f = 'AND(FIND("' + String(rec.nom).replace(/"/g, '') + '", ARRAYJOIN({Client})), {Actif}=1)';
       const ra = await fetch('/api/airtable/Agences?filterByFormula=' + encodeURIComponent(f) + '&maxRecords=50');
       noms = ((await ra.json()).records || [])
         .filter(a => Array.isArray(a.fields["Client"]) && a.fields["Client"].includes(rec.id) && a.fields["Nom agence"])

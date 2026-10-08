@@ -65,6 +65,12 @@ const DUREE_BLOCAGE_MIN = 15;
 // dans Airtable par RSIA.
 const ROLES_PROVISIONNABLES = ["TENANT_ADMIN", "TECHNICIEN", "COMMERCIAL", "CLIENT"];
 
+// Prefixe RESERVE aux mots de passe temporaires generes par "Creer son IKO".
+// Un mot de passe qui commence par ce prefixe est toujours traite comme
+// temporaire : changement impose a la connexion, et jamais accepte comme mot de
+// passe choisi par un utilisateur (evaluerMotDePasse le refuse).
+const PREFIXE_MDP_TEMPORAIRE = "Tmp-";
+
 // Mots/suites interdits (comparaison sans accents ni casse, "contient").
 const MOTS_INTERDITS = [
   "123456", "654321", "000000", "111111", "password", "passw0rd", "motdepasse", "mdp", "azerty", "qwerty",
@@ -77,6 +83,9 @@ function evaluerMotDePasse(motDePasse, identifiant) {
   const mdp = String(motDePasse || "");
   if (mdp.length < MOT_DE_PASSE_LONGUEUR_MIN) {
     return "Le mot de passe doit contenir au moins " + MOT_DE_PASSE_LONGUEUR_MIN + " caractères.";
+  }
+  if (mdp.toLowerCase().startsWith(PREFIXE_MDP_TEMPORAIRE.toLowerCase())) {
+    return "Ce mot de passe commence par un préfixe réservé aux mots de passe temporaires : choisissez-en un autre.";
   }
   const norm = mdp.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
   if (MOTS_INTERDITS.some((m) => norm.includes(m))) {
@@ -420,6 +429,247 @@ async function gererCreationUtilisateur(req, res) {
   return res.status(200).json({ id: rec ? rec.id : null, identifiant, role });
 }
 
+// --- "CREER SON IKO" : provisioning d'un client pro (super admin) -------------
+// preparer_iko : controle en LECTURE SEULE + recapitulatif de ce qui serait cree.
+// creer_iko    : cree les agences manquantes et le compte admin du client.
+// Idempotent : chaque etape compare a l'existant (agences par nom, compte par
+// identifiant) ; une interruption laisse un etat coherent et une relance
+// complete sans rien dupliquer. Le mot de passe temporaire n'est JAMAIS
+// journalise ni stocke en clair : il n'existe que dans la reponse HTTP
+// (Cache-Control: no-store), une seule fois.
+
+const ALPHABET_TEMPORAIRE = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789"; // sans 0/O/1/l/I
+const COULEURS_PAR_DEFAUT = ["#22c55e", "#ff6b00"];
+const NOMS_AGENCE_GENERIQUES = /^(agence\s*\d*|nouvelle agence)$/i;
+
+function genererMotDePasseTemporaire() {
+  let corps = "";
+  for (let i = 0; i < 16; i++) corps += ALPHABET_TEMPORAIRE[crypto.randomInt(ALPHABET_TEMPORAIRE.length)];
+  return PREFIXE_MDP_TEMPORAIRE + corps;
+}
+
+function normaliserNom(v) {
+  return String(v || "").trim().toLowerCase();
+}
+
+function premierEmail(texte) {
+  const m = String(texte || "").split(/[\n;,\s]+/).map((e) => e.trim()).find((e) => e.includes("@"));
+  return m || "";
+}
+
+function exigerSuperAdmin(req, res) {
+  const session = verifierSession(req);
+  if (!session || session.role !== "SUPER_ADMIN_IKO" || session.mdpAChanger) {
+    res.status(403).json({ erreur: "Accès refusé : droits administrateur requis." });
+    return null;
+  }
+  return session;
+}
+
+async function lireJsonAirtable(url) {
+  const r = await fetch(url, { headers: airtableHeaders() });
+  if (!r.ok) throw new Error("airtable " + r.status);
+  return r.json();
+}
+
+// Controle + etat des lieux. Ne fait AUCUNE ecriture.
+async function preparerIko(clientId, identifiantDemande) {
+  const base = "https://api.airtable.com/v0/" + AIRTABLE_BASE + "/";
+  const rec = await lireJsonAirtable(base + CLIENTS_TABLE + "/" + clientId);
+  const f = rec.fields || {};
+  const bloquants = [];
+  const avertissements = [];
+
+  // --- Bloquant : nom, slug unique, Nombre agences 1-10, module, metier ---
+  const nom = String(f["Nom client"] || "").trim();
+  if (!nom) bloquants.push("Nom du client manquant.");
+  const slug = String(f["Slug"] || "").trim();
+  if (!slug) bloquants.push("Slug manquant.");
+  else if (!/^[a-z0-9]+(-[a-z0-9]+)*$/.test(slug)) bloquants.push("Slug invalide (minuscules, chiffres et tirets uniquement).");
+  else {
+    const formule = 'AND(LOWER({Slug})="' + slug + '", RECORD_ID()!="' + clientId + '")';
+    const dup = await lireJsonAirtable(base + CLIENTS_TABLE + "?filterByFormula=" + encodeURIComponent(formule) + "&maxRecords=1");
+    if ((dup.records || []).length) bloquants.push("Le slug « " + slug + " » est déjà utilisé par un autre client.");
+  }
+  const nbBrut = f["Nombre agences"];
+  const nombre = Number(nbBrut);
+  if (!Number.isInteger(nombre) || nombre < 1 || nombre > 10) bloquants.push("Nombre d'agences invalide (entier de 1 à 10 requis).");
+  if (!Array.isArray(f["Modules actifs"]) || f["Modules actifs"].length === 0) bloquants.push("Aucun module actif.");
+  if (!f["Métier"]) bloquants.push("Métier non renseigné.");
+
+  // --- Avertissements (non bloquants) ---
+  const logo = f["Logo"] && f["Logo"][0] && f["Logo"][0].url;
+  if (!logo) avertissements.push("Aucun logo : le logo IKO par défaut sera affiché.");
+  const couleur = String(f["Couleur principale"] || "").toLowerCase();
+  if (!couleur || COULEURS_PAR_DEFAUT.includes(couleur)) avertissements.push("Couleur principale non personnalisée (orange IKO par défaut).");
+  if (f["Statut client"] && f["Statut client"] !== "Actif") avertissements.push("Statut client « " + f["Statut client"] + " » (et non « Actif »).");
+  if (f["Accès bloqué"] === true) avertissements.push("Accès bloqué : le client n'aura pas accès aux modules.");
+  const emailContact = premierEmail(f["Emails contact"]);
+  if (!emailContact) avertissements.push("Aucun e-mail de contact : à saisir pour l'identifiant du compte.");
+
+  // --- Agences : etat des lieux (comparaison par nom + lien Client verifie par ID) ---
+  let existantes = [];
+  if (nom) {
+    const formuleAg = 'FIND("' + nom.replace(/"/g, '\\"') + '", ARRAYJOIN({Client}))';
+    const dataAg = await lireJsonAirtable(base + encodeURIComponent("Agences") + "?filterByFormula=" + encodeURIComponent(formuleAg) + "&maxRecords=50");
+    existantes = (dataAg.records || [])
+      .filter((a) => Array.isArray(a.fields && a.fields["Client"]) && a.fields["Client"].includes(clientId))
+      .map((a) => ({
+        id: a.id,
+        nom: String(a.fields["Nom agence"] || "").trim(),
+        emailAgence: a.fields["Email agence"] || "",
+        emailTechnicien: a.fields["Email technicien SAV"] || "",
+        actif: a.fields["Actif"] !== false,
+      }));
+  }
+  const noms = new Set();
+  existantes.forEach((a) => { if (a.nom) noms.add(normaliserNom(a.nom)); });
+  const aCreer = [];
+  if (Number.isInteger(nombre) && nombre >= 1 && nombre <= 10) {
+    for (let k = 1; noms.size + aCreer.length < nombre && k <= 50; k++) {
+      const candidat = "Agence " + k;
+      if (!noms.has(normaliserNom(candidat))) aCreer.push(candidat);
+    }
+  }
+  const enTrop = Math.max(0, noms.size - (Number.isInteger(nombre) ? nombre : noms.size));
+  if (enTrop > 0) avertissements.push(enTrop + " agence(s) en base au-delà de « Nombre agences » : rien ne sera supprimé.");
+  existantes.forEach((a) => {
+    if (!a.nom || NOMS_AGENCE_GENERIQUES.test(a.nom)) avertissements.push("Agence « " + (a.nom || "sans nom") + " » : nom générique à renommer.");
+    if (!a.emailAgence) avertissements.push("Agence « " + (a.nom || "sans nom") + " » : e-mail agence manquant.");
+    if (!a.emailTechnicien) avertissements.push("Agence « " + (a.nom || "sans nom") + " » : e-mail technicien manquant.");
+  });
+  if (aCreer.length) avertissements.push(aCreer.length + " agence(s) seront créées avec un nom générique (« " + aCreer.join(" », « ") + " ») : e-mails et noms à renseigner ensuite.");
+
+  // --- Compte admin du client ---
+  const identifiant = String(identifiantDemande || emailContact || "").trim();
+  const compte = { identifiant, role: "TENANT_ADMIN", etat: "a_creer" };
+  if (!identifiant) {
+    // Identifiant manquant / invalide / deja pris : NON bloquant (avertissement) ;
+    // les agences sont creees, le compte est ignore jusqu'a correction.
+    avertissements.push("Aucun identifiant de compte : le compte ne sera pas créé (saisir un e-mail puis relancer).");
+    compte.etat = "inconnu";
+  } else if (!/^[^\s"'\\<>@]+@[^\s"'\\<>@]+\.[^\s"'\\<>@]+$/.test(identifiant)) {
+    avertissements.push("L'identifiant du compte doit être une adresse e-mail valide : le compte ne sera pas créé.");
+    compte.etat = "invalide";
+  } else {
+    const existant = await lireUtilisateurParIdentifiant(identifiant);
+    if (existant) {
+      if (existant.tenantId === clientId) compte.etat = "existe";
+      else {
+        compte.etat = "conflit";
+        avertissements.push("L'identifiant « " + identifiant + " » est déjà utilisé par un autre client : le compte ne sera pas créé, choisissez-en un autre.");
+      }
+    }
+  }
+
+  return {
+    pret: bloquants.length === 0,
+    bloquants,
+    avertissements,
+    client: { id: clientId, nom, slug },
+    agences: { existantes, aCreer, enTrop },
+    compte,
+  };
+}
+
+function validerClientId(valeur) {
+  return typeof valeur === "string" && /^rec[A-Za-z0-9]{14}$/.test(valeur);
+}
+
+async function gererPreparerIko(req, res) {
+  if (!exigerSuperAdmin(req, res)) return;
+  const { clientId, identifiant } = req.body || {};
+  if (!validerClientId(clientId)) return res.status(400).json({ erreur: "Client invalide." });
+  try {
+    const bilan = await preparerIko(clientId, identifiant);
+    res.setHeader("Cache-Control", "no-store");
+    return res.status(200).json(bilan);
+  } catch (e) {
+    console.error("preparer_iko erreur:", e && e.message);
+    return res.status(502).json({ erreur: "Lecture impossible (Airtable)." });
+  }
+}
+
+async function gererCreerIko(req, res) {
+  if (!exigerSuperAdmin(req, res)) return;
+  const { clientId, identifiant, regenererMotDePasse } = req.body || {};
+  if (!validerClientId(clientId)) return res.status(400).json({ erreur: "Client invalide." });
+  res.setHeader("Cache-Control", "no-store");
+
+  let bilan;
+  try {
+    bilan = await preparerIko(clientId, identifiant);
+  } catch (e) {
+    console.error("creer_iko controle erreur:", e && e.message);
+    return res.status(502).json({ erreur: "Lecture impossible (Airtable)." });
+  }
+  if (!bilan.pret) return res.status(400).json({ erreur: "Contrôle préalable non satisfait.", bloquants: bilan.bloquants, bilan });
+
+  const base = "https://api.airtable.com/v0/" + AIRTABLE_BASE + "/";
+  const resultat = { ok: true, agencesCreees: [], compte: { identifiant: bilan.compte.identifiant, role: "TENANT_ADMIN", cree: false, motDePasseTemporaire: null }, avertissements: bilan.avertissements };
+
+  // Etape 1 : agences manquantes (jamais de suppression, jamais de doublon de nom).
+  if (bilan.agences.aCreer.length) {
+    try {
+      const r = await fetch(base + encodeURIComponent("Agences"), {
+        method: "POST",
+        headers: airtableHeaders(),
+        body: JSON.stringify({ records: bilan.agences.aCreer.map((n) => ({ fields: { "Client": [clientId], "Nom agence": n, "Actif": true } })) }),
+      });
+      if (!r.ok) {
+        console.error("creer_iko agences HTTP", r.status);
+        return res.status(502).json({ ok: false, etape: "agences", erreur: "Création des agences impossible. Rien d'autre n'a été fait ; relance possible.", bilan });
+      }
+      const j = await r.json();
+      resultat.agencesCreees = (j.records || []).map((a) => (a.fields && a.fields["Nom agence"]) || "");
+    } catch (e) {
+      console.error("creer_iko agences erreur:", e && e.message);
+      return res.status(502).json({ ok: false, etape: "agences", erreur: "Création des agences impossible. Relance possible.", bilan });
+    }
+  }
+
+  // Etape 2 : compte admin du client (mot de passe temporaire, hache cote serveur).
+  const etat = bilan.compte.etat;
+  if (etat === "a_creer" || (etat === "existe" && regenererMotDePasse === true)) {
+    const temporaire = genererMotDePasseTemporaire();
+    const hash = await bcrypt.hash(temporaire, 12);
+    try {
+      let r;
+      if (etat === "a_creer") {
+        r = await fetch(base + encodeURIComponent(UTILISATEURS_TABLE), {
+          method: "POST",
+          headers: airtableHeaders(),
+          body: JSON.stringify({ records: [{ fields: {
+            "Identifiant": bilan.compte.identifiant,
+            "Hash mot de passe": hash,
+            "tenantId": [clientId],
+            "Rôle": "TENANT_ADMIN",
+            "Statut": "Actif",
+            "Échecs de connexion": 0,
+          } }] }),
+        });
+      } else {
+        const existant = await lireUtilisateurParIdentifiant(bilan.compte.identifiant);
+        r = await fetch(base + encodeURIComponent(UTILISATEURS_TABLE) + "/" + existant.userId, {
+          method: "PATCH",
+          headers: airtableHeaders(),
+          body: JSON.stringify({ fields: { "Hash mot de passe": hash, "Échecs de connexion": 0, "Bloqué jusqu'à": null, "Dernier tokenId refresh valide": null } }),
+        });
+      }
+      if (!r.ok) {
+        console.error("creer_iko compte HTTP", r.status);
+        return res.status(502).json({ ok: false, etape: "compte", erreur: "Création du compte impossible. Les agences sont à jour ; relance possible.", agencesCreees: resultat.agencesCreees });
+      }
+      resultat.compte.cree = etat === "a_creer";
+      resultat.compte.motDePasseTemporaire = temporaire;
+    } catch (e) {
+      console.error("creer_iko compte erreur:", e && e.message);
+      return res.status(502).json({ ok: false, etape: "compte", erreur: "Création du compte impossible. Relance possible.", agencesCreees: resultat.agencesCreees });
+    }
+  }
+  return res.status(200).json(resultat);
+}
+
 async function gererSession(req, res) {
   const accessBrut = lireCookie(req, "iko_access");
   if (accessBrut) {
@@ -587,6 +837,16 @@ export default async function handler(req, res) {
         if (!verifierOrigine(req)) return reponseBloquee(res, "origine");
         if (!verifierDebit(req)) return reponseBloquee(res, "debit");
         return gererReinitialisationMotDePasse(req, res);
+      }
+      if (action === "preparer_iko") {
+        if (!verifierOrigine(req)) return reponseBloquee(res, "origine");
+        if (!verifierDebit(req)) return reponseBloquee(res, "debit");
+        return gererPreparerIko(req, res);
+      }
+      if (action === "creer_iko") {
+        if (!verifierOrigine(req)) return reponseBloquee(res, "origine");
+        if (!verifierDebit(req, { max: 10, fenetreMs: 10 * 60_000, cle: "creer-iko" })) return reponseBloquee(res, "debit");
+        return gererCreerIko(req, res);
       }
       if (action === "creer_utilisateur") {
         if (!verifierOrigine(req)) return reponseBloquee(res, "origine");

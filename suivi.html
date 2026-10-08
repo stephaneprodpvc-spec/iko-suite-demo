@@ -2,6 +2,7 @@
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
+<meta name="iko-theme-client" content="1">
 <link rel="stylesheet" href="/theme.css">
 <script src="/theme.js"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -440,6 +441,8 @@ function App() {
         const respClient = await fetch('/api/airtable/Clients/' + compteClientIdSuivi);
         const dataClient = await respClient.json();
         bloque = dataClient?.fields?.["Accès bloqué"] === true;
+        // Theme du client (couleur, logo, nom) : seuls ces champs sont utilises.
+        if (window.IKO_appliquerFiche) window.IKO_appliquerFiche(dataClient?.fields);
       } catch (e) {}
     }
     if (bloque) {

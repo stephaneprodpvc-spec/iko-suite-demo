@@ -302,7 +302,7 @@
 
 <header>
   <button id="amandine-retour-sphere" title="Retour à la sphère" style="background:var(--orange);color:var(--iko-dark);border:none;border-radius:20px;padding:7px 14px 7px 10px;font-size:12.5px;font-weight:700;display:flex;align-items:center;gap:5px;cursor:pointer;flex-shrink:0;">← Retour</button>
-  <div class="logo" data-iko-nom>Iko</div>
+  <div class="logo">Iko</div>
   <div>
     <div class="titre">Amandine — SAV</div>
     <div class="sous-titre">Suivi de dossier · Prise de rendez-vous · Assistance</div>
@@ -354,6 +354,7 @@ window.IKO_CLIENT_READY = (async function () {
         if (nomPerso) window.IKO_NOM_AMANDINE = nomPerso;
       }
     } catch (e) { /* JSON invalide : repli silencieux sur "Amandine" */ }
+    if (window.IKO_appliquerFiche) window.IKO_appliquerFiche(rec.fields);
     var couleur = rec.fields && rec.fields["Couleur principale"];
     var logo = rec.fields && rec.fields["Logo"] && rec.fields["Logo"][0] && rec.fields["Logo"][0].url;
     var nom = rec.fields && rec.fields["Nom client"];

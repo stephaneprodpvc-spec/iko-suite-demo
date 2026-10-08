@@ -68,12 +68,12 @@ window.IKO_CLIENT_READY = (async function () {
     // interventions crees dans ce cas n'auront pas de technicien lie,
     // gere plus bas (creerInterventionAuto).
     window.IKO_USER_ID = session.userId || null;
-    if (session.role !== "SUPER_ADMIN_IKO" && session.role !== "TECHNICIEN") {
+    if (session.role !== "SUPER_ADMIN_IKO" && session.role !== "TECHNICIEN" && session.role !== "TENANT_ADMIN") {
       window.IKO_ACCES_REFUSE = true;
       return null;
     }
 
-    if (session.role === "TECHNICIEN") {
+    if (session.role === "TECHNICIEN" || session.role === "TENANT_ADMIN") {
       // tenantId de la session = seule autorite. ?client=slug n'a plus
       // aucun pouvoir d'autorisation pour ce role.
       if (!session.tenantId) { window.IKO_ACCES_REFUSE = true; return null; }
