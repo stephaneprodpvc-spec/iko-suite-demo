@@ -27,8 +27,10 @@ if (/Android/i.test(navigator.userAgent)) document.documentElement.classList.add
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body { font-family: 'Segoe UI', sans-serif; background: var(--iko-bg-clair); min-height: 100vh; }
 #rsia-widget-actions {
-  position: fixed; bottom: 28px; right: 28px; z-index: 10001;
-  display: flex; align-items: center; gap: 12px;
+  position: fixed; z-index: 10001;
+  right: 8%; width: min(400px, 40vw);
+  bottom: max(12px, calc(50vh - min(300px, 37.5vh) - 82px));
+  display: flex; align-items: center; justify-content: center; gap: 12px;
 }
 #rsia-widget-actions a.secondary-link {
   height: 58px; padding: 0 28px; background: var(--iko-dark); border: none;
@@ -60,7 +62,7 @@ body { font-family: 'Segoe UI', sans-serif; background: var(--iko-bg-clair); min
    d'accueil, pas pendant que le client remplit le formulaire de demande. */
 #rsia-widget-panel.open ~ #rsia-widget-actions a.secondary-link { display: none; }
 @media (max-width: 700px) {
-  #rsia-widget-actions { bottom: 16px; right: 16px; left: 16px; justify-content: flex-end; flex-wrap: wrap; gap: 8px; }
+  #rsia-widget-actions { bottom: 16px; right: 16px; left: 16px; width: auto; justify-content: flex-end; flex-wrap: wrap; gap: 8px; }
   #rsia-widget-actions a.secondary-link { height: 50px; padding: 0 20px; font-size: 14px; }
   #rsia-widget-btn { height: 50px; padding: 0 20px; font-size: 14px; }
   /* 100vh sur Chrome Android = hauteur de l'ecran SANS la barre d'adresse
