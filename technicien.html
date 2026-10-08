@@ -27,6 +27,9 @@ button, a, label, [onClick] { touch-action: manipulation; }
 @media(min-width:600px){ .modal-box { border-radius:16px; } }
 input, select, textarea { background:#FFFFFF;border:1px solid #D1D5DB;color:#1F2937;border-radius:8px;padding:10px 12px;font-size:13px;width:100%;outline:none;font-family:'Segoe UI',sans-serif; }
 input:focus, select:focus, textarea:focus { border-color:rgba(var(--iko-primary-rgb),0.5); }
+* { accent-color: #ff6b00; }
+a { color: inherit; }
+::selection { background: rgba(255,107,0,0.3); }
 
 /* ===== Style verre orange (comme le formulaire Amandine) ===== */
 body { background: linear-gradient(160deg, #ffa24d 0%, #ff6b00 52%, #b84300 100%) fixed !important; }
@@ -654,7 +657,8 @@ function appliquerConfigEntreprise(cfg) {
   CONFIG_ENTREPRISE.couleurAccent = cfg.couleurAccent || "#FF6B00";
   CONFIG_ENTREPRISE.logoUrl = cfg.logoUrl || "";
   // window.IKO_THEME.couleur (theme.js) reste prioritaire : les variables --iko-* pilotent alors C.or.
-  if (!(window.IKO_THEME && window.IKO_THEME.couleur)) {
+  // IKO DEMO (pas de ?client=) : toujours orange, jamais une couleur de test enregistree.
+  if (!(window.IKO_THEME && window.IKO_THEME.couleur) && new URLSearchParams(window.location.search).get('client')) {
     C.or = CONFIG_ENTREPRISE.couleurAccent;
     C.orDim = hexVersRgba(CONFIG_ENTREPRISE.couleurAccent, 0.12);
     C.orBord = hexVersRgba(CONFIG_ENTREPRISE.couleurAccent, 0.3);
