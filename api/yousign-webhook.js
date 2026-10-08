@@ -12,6 +12,7 @@
 // requises ont été apposées). Les autres événements sont accusés
 // (HTTP 200) mais ignorés, pour éviter que Yousign ne les retente en boucle.
 
+import { creneauxLibres, identDepuisClientId } from './_planning.js';
 import crypto from 'crypto';
 
 export const config = {
@@ -189,11 +190,14 @@ export default async function handler(req, res) {
           }
 
           if (agence) {
-            const planFilter = encodeURIComponent('AND({Agence}="' + agence + '",{Statut}="Libre")');
-            const planUrl = 'https://api.airtable.com/v0/' + baseId + '/Planning?filterByFormula=' + planFilter + '&sort[0][field]=Date&sort[0][direction]=asc&maxRecords=1';
-            const planRes = await fetch(planUrl, { headers });
-            const planJson = await planRes.json();
-            const slot = planJson.records?.[0];
+            // Premier creneau libre du bon client ET de la bonne agence (api/_planning.js).
+            const ctxPlan = { baseId, headers, finAt: Date.now() + 6000 };
+            const identPlan = await identDepuisClientId(ctxPlan, (ticketJson.fields?.['Compte client'] || [])[0]);
+            const dispoPlan = identPlan && !identPlan.bloque
+              ? await creneauxLibres(ctxPlan, identPlan, { agence, admin: true })
+              : { creneaux: [] };
+            const premier = dispoPlan.creneaux[0];
+            const slot = premier ? { id: premier.id, fields: { Date: premier.date, Créneau: premier.creneau } } : null;
             if (slot) {
               const dateObj = new Date((slot.fields.Date || '') + 'T12:00:00');
               const dateLabel = isNaN(dateObj) ? slot.fields.Date : dateObj.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });

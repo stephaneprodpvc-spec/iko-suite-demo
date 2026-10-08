@@ -5,6 +5,7 @@
 <meta name="iko-theme-client" content="1">
 <link rel="stylesheet" href="/theme.css">
 <script src="/theme.js"></script>
+<script src="/creneaux.js"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Iko Suite — SAV Menuiserie</title>
 <link rel="manifest" href="/manifest.json">
@@ -392,21 +393,9 @@ function CreneauPicker({ agenceVille, onSelect }) {
     setLoading(true);
     setDates([]);
     try {
-      const f = encodeURIComponent('AND({Agence}="' + agenceVille + '",{Créneau}="' + c.valeur + '",{Statut}="Libre")');
-      const url = '/api/airtable/Planning?filterByFormula=' + f + '&sort[0][field]=Date&sort[0][direction]=asc&maxRecords=60';
-      const r = await fetch(url, { });
-      const json = await r.json();
-      const auPlusTot = new Date();
-      auPlusTot.setDate(auPlusTot.getDate() + DELAI_MIN_JOURS);
-      const auPlusTotStr = auPlusTot.toISOString().split('T')[0];
-      const map = {};
-      (json.records || []).forEach(rec => {
-        const d = rec.fields.Date;
-        if (d < auPlusTotStr) return;
-        if (!map[d]) map[d] = { date: d, ids: [] };
-        map[d].ids.push(rec.id);
-      });
-      setDates(Object.values(map).slice(0, 5));
+      // Creneaux du bon client ET de la bonne agence (route serveur, delai minimum applique cote serveur).
+      const liste = await IKO_creneaux.charger({ agence: agenceVille, periode: c.id, client: SLUG_CLIENT });
+      setDates(IKO_creneaux.parDate(liste).slice(0, 5));
     } catch(e) { console.error(e); }
     setLoading(false);
   };

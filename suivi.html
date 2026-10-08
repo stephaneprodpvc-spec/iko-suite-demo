@@ -5,6 +5,7 @@
 <meta name="iko-theme-client" content="1">
 <link rel="stylesheet" href="/theme.css">
 <script src="/theme.js"></script>
+<script src="/creneaux.js"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Iko Suite — Suivi de ma demande SAV</title>
 <link rel="manifest" href="/manifest.json">
@@ -65,7 +66,7 @@ function parseMessageEntries(raw, sender) {
 
 // Carte "choix de date" affichée comme un message de l'agence dans le fil SMS,
 // quand Iko a detecte une demande de changement de date et trouve des dispos.
-function PropositionDateBubble({ agenceVille, creneauId, moisSouhaite, onChoisir, enCours }) {
+function PropositionDateBubble({ agenceVille, clientId, creneauId, moisSouhaite, onChoisir, enCours }) {
   const creneau = CRENEAUX.find(c => c.id === creneauId) || CRENEAUX[0];
   const [dates, setDates] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -74,22 +75,8 @@ function PropositionDateBubble({ agenceVille, creneauId, moisSouhaite, onChoisir
     let annule = false;
     (async () => {
       try {
-        const f = encodeURIComponent('AND({Agence}="' + agenceVille + '",{Créneau}="' + creneau.valeur + '",{Statut}="Libre")');
-        const url = '/api/airtable/Planning?filterByFormula=' + f + '&sort[0][field]=Date&sort[0][direction]=asc&maxRecords=60';
-        const r = await fetch(url);
-        const json = await r.json();
-        const auPlusTot = new Date();
-        auPlusTot.setDate(auPlusTot.getDate() + DELAI_MIN_JOURS);
-        const auPlusTotStr = auPlusTot.toISOString().split('T')[0];
-        const map = {};
-        (json.records || []).forEach(rec => {
-          const d = rec.fields.Date;
-          if (!d || d < auPlusTotStr) return;
-          if (moisSouhaite && d.slice(0, 7) !== moisSouhaite) return;
-          if (!map[d]) map[d] = { date: d, ids: [] };
-          map[d].ids.push(rec.id);
-        });
-        if (!annule) setDates(Object.values(map).slice(0, 3));
+        const liste = await IKO_creneaux.charger({ agence: agenceVille, periode: creneau.id, mois: moisSouhaite || undefined, clientId });
+        if (!annule) setDates(IKO_creneaux.parDate(liste).slice(0, 3));
       } catch (e) { console.error(e); }
       if (!annule) setLoading(false);
     })();
@@ -164,7 +151,7 @@ function PhoneChat({ ticket, message, onChangeMessage, onEnvoyer, envoi, proposi
               </div>
             ))}
             {propositionEnAttente && (
-              <PropositionDateBubble agenceVille={ticket.fields?.Agence} creneauId={propositionCreneau} moisSouhaite={propositionMois} onChoisir={onChoisirProposition} enCours={changeEnCours}/>
+              <PropositionDateBubble agenceVille={ticket.fields?.Agence} clientId={(ticket.fields?.["Compte client"] || [])[0]} creneauId={propositionCreneau} moisSouhaite={propositionMois} onChoisir={onChoisirProposition} enCours={changeEnCours}/>
             )}
           </div>
           <div style={{background:"#fff",borderTop:"1px solid #E5E7EB",padding:"9px",display:"flex",gap:"8px",alignItems:"center",flexShrink:0}}>
@@ -269,7 +256,7 @@ const CRENEAUX = [
 ];
 const DELAI_MIN_JOURS = 7;
 
-function ChangerDatePanel({ agenceVille, onChoisir, onFermer, appliqueEnCours, periodePreremplie }) {
+function ChangerDatePanel({ agenceVille, clientId, onChoisir, onFermer, appliqueEnCours, periodePreremplie }) {
   const preremplie = CRENEAUX.find(c => c.id === periodePreremplie) || null;
   const [typeCreneau, setTypeCreneau] = useState(preremplie);
   React.useEffect(() => { if (preremplie) charger(preremplie); }, []);
@@ -280,21 +267,8 @@ function ChangerDatePanel({ agenceVille, onChoisir, onFermer, appliqueEnCours, p
     setLoadingDates(true);
     setDates([]);
     try {
-      const f = encodeURIComponent('AND({Agence}="' + agenceVille + '",{Créneau}="' + c.valeur + '",{Statut}="Libre")');
-      const url = '/api/airtable/Planning?filterByFormula=' + f + '&sort[0][field]=Date&sort[0][direction]=asc&maxRecords=60';
-      const r = await fetch(url);
-      const json = await r.json();
-      const auPlusTot = new Date();
-      auPlusTot.setDate(auPlusTot.getDate() + DELAI_MIN_JOURS);
-      const auPlusTotStr = auPlusTot.toISOString().split('T')[0];
-      const map = {};
-      (json.records || []).forEach(rec => {
-        const d = rec.fields.Date;
-        if (d < auPlusTotStr) return;
-        if (!map[d]) map[d] = { date: d, ids: [] };
-        map[d].ids.push(rec.id);
-      });
-      setDates(Object.values(map).slice(0, 5));
+      const liste = await IKO_creneaux.charger({ agence: agenceVille, periode: c.id, clientId });
+      setDates(IKO_creneaux.parDate(liste).slice(0, 5));
     } catch (e) { console.error(e); }
     setLoadingDates(false);
   };
@@ -786,6 +760,7 @@ function App() {
                 {showChanger && (
                   <ChangerDatePanel
                     agenceVille={ticket.fields?.Agence}
+                    clientId={(ticket.fields?.["Compte client"] || [])[0]}
                     onChoisir={appliquerNouvelleDate}
                     onFermer={() => setShowChanger(false)}
                     appliqueEnCours={changeEnCours}

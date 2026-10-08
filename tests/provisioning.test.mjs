@@ -7,6 +7,7 @@ import { test, before, beforeEach } from "node:test";
 import assert from "node:assert/strict";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
+import { creerFaux } from "./fake-airtable.mjs";
 
 process.env.JWT_ACCESS_SECRET = "test-access-secret";
 process.env.JWT_REFRESH_SECRET = "test-refresh-secret";
@@ -14,7 +15,7 @@ process.env.AIRTABLE_TOKEN = "test-token";
 
 const { default: handler } = await import("../api/verif-securite.js");
 
-// ---------- faux Airtable en memoire ----------
+// ---------- faux Airtable en memoire (tests/fake-airtable.mjs) ----------
 let db;
 let echecPostUtilisateurs;
 let journal; // tout ce qui passe par console.* (pour verifier l'absence de mot de passe)
@@ -33,56 +34,9 @@ function reinitialiser() {
     ],
     Agences: [],
     Utilisateurs: [],
+    Planning: [],
   };
-  let n = 0;
-  globalThis.fetch = async (url, init = {}) => {
-    const u = new URL(url);
-    const parties = decodeURIComponent(u.pathname).split("/").filter(Boolean).slice(2); // apres /v0/<base>
-    const table = parties[0];
-    const id = parties[1];
-    const methode = init.method || "GET";
-    const filtre = u.searchParams.get("filterByFormula") || "";
-    const reponse = (corps, ok = true, status = 200) => ({ ok, status, json: async () => corps, text: async () => JSON.stringify(corps) });
-    if (!db[table]) return reponse({ error: "table inconnue" }, false, 404);
-
-    if (methode === "GET" && id) {
-      const rec = db[table].find((r) => r.id === id);
-      return rec ? reponse(rec) : reponse({ error: "introuvable" }, false, 404);
-    }
-    if (methode === "GET") {
-      let recs = db[table];
-      if (table === "Clients") {
-        const m = filtre.match(/LOWER\(\{Slug\}\)="([^"]*)"/);
-        const ex = filtre.match(/RECORD_ID\(\)!="([^"]*)"/);
-        recs = recs.filter((r) => String(r.fields["Slug"] || "").toLowerCase() === m[1] && (!ex || r.id !== ex[1]));
-      } else if (table === "Agences") {
-        const m = filtre.match(/FIND\("((?:[^"\\]|\\.)*)"/);
-        const nom = m[1].replace(/\\"/g, '"');
-        recs = recs.filter((r) => (r._clientNom || "") === nom);
-      } else if (table === "Utilisateurs") {
-        const m = filtre.match(/LOWER\(\{Identifiant\}\)="([^"]*)"/);
-        recs = recs.filter((r) => String(r.fields["Identifiant"] || "").toLowerCase() === m[1]);
-      }
-      return reponse({ records: recs });
-    }
-    if (methode === "POST") {
-      if (table === "Utilisateurs" && echecPostUtilisateurs) return reponse({ error: "panne" }, false, 500);
-      const corps = JSON.parse(init.body);
-      const crees = corps.records.map((r) => {
-        const rec = { id: "rec" + String(++n).padStart(14, "0"), fields: r.fields };
-        if (table === "Agences") rec._clientNom = db.Clients.find((c) => c.id === r.fields["Client"][0]).fields["Nom client"];
-        db[table].push(rec);
-        return rec;
-      });
-      return reponse({ records: crees });
-    }
-    if (methode === "PATCH") {
-      const rec = db[table].find((r) => r.id === id);
-      Object.assign(rec.fields, JSON.parse(init.body).fields);
-      return reponse(rec);
-    }
-    return reponse({ error: "methode non geree" }, false, 400);
-  };
+  globalThis.fetch = creerFaux(db, { echec: (methode, table) => echecPostUtilisateurs && methode === "POST" && table === "Utilisateurs" });
 }
 
 // journal : capture console.* pour verifier qu'aucun mot de passe n'y apparait
@@ -141,7 +95,7 @@ test("controle : le reste est un avertissement non bloquant", async () => {
 });
 
 test("agences : crees jusqu'a Nombre agences, comparaison par nom, jamais de doublon", async () => {
-  db.Agences.push({ id: "recAG1", _clientNom: "Test Menuiserie", fields: { "Client": [CLIENT_OK], "Nom agence": "agence 2", "Actif": true, "Email agence": "a@t.fr" } });
+  db.Agences.push({ id: "recAG1", fields: { "Client": [CLIENT_OK], "Nom agence": "agence 2", "Actif": true, "Email agence": "a@t.fr" } });
   const r = await preparer();
   assert.deepEqual(r.corps.agences.aCreer, ["Agence 1", "Agence 3"]); // « agence 2 » existe deja (casse ignoree)
   const c = await creer();
@@ -152,14 +106,14 @@ test("agences : crees jusqu'a Nombre agences, comparaison par nom, jamais de dou
 });
 
 test("agences d'un autre client ignorees (lien verifie par identifiant)", async () => {
-  db.Agences.push({ id: "recAGX", _clientNom: "Test Menuiserie", fields: { "Client": [AUTRE_CLIENT], "Nom agence": "Agence 1" } });
+  db.Agences.push({ id: "recAGX", fields: { "Client": [AUTRE_CLIENT], "Nom agence": "Agence 1" } });
   const r = await preparer();
   assert.equal(r.corps.agences.existantes.length, 0);
   assert.equal(r.corps.agences.aCreer.length, 3);
 });
 
 test("agences en trop : rien n'est supprime, simple avertissement", async () => {
-  for (let i = 1; i <= 5; i++) db.Agences.push({ id: "recAG" + i, _clientNom: "Test Menuiserie", fields: { "Client": [CLIENT_OK], "Nom agence": "Site " + i } });
+  for (let i = 1; i <= 5; i++) db.Agences.push({ id: "recAG" + i, fields: { "Client": [CLIENT_OK], "Nom agence": "Site " + i } });
   const r = await preparer();
   assert.equal(r.corps.agences.aCreer.length, 0);
   assert.match(r.corps.avertissements.join(" "), /au-delà/);
@@ -283,4 +237,31 @@ test("politique : 12 caracteres minimum et mots interdits", async () => {
   assert.equal((await essai("123")).code, 400);
   assert.equal((await essai("password1234")).code, 400);
   assert.equal((await essai("Cheval-Bleu-Lune-7x")).code, 200);
+});
+
+test("planning initial : reglages par defaut + horizon court pour chaque agence, idempotent", async () => {
+  const c = await creer();
+  assert.equal(c.code, 200);
+  assert.equal(c.corps.planning.reglagesCrees, true);
+  const cfg = db.Planning.filter((r) => r.fields.Date === "CONFIG-PLANNING");
+  assert.equal(cfg.length, 1);
+  assert.equal(cfg[0].fields["Compte client"][0], CLIENT_OK);
+  const creneaux = db.Planning.filter((r) => r.fields.Statut === "Libre");
+  assert.ok(creneaux.length > 0);
+  assert.ok(creneaux.every((r) => r.fields["Compte client"][0] === CLIENT_OK));
+  assert.equal(new Set(creneaux.map((r) => r.fields.Agence)).size, 3);
+  const avant = db.Planning.length;
+  const c2 = await creer();
+  assert.equal(c2.corps.planning.reglagesCrees, false);
+  assert.equal(db.Planning.length, avant, "relance : aucun creneau ni reglage en double");
+});
+
+test("le nom de client doit etre unique (bloquant)", async () => {
+  db.Clients.push({ id: "recCLIENT0000003C", fields: { "Nom client": "  test menuiserie ", "Slug": "doublon", "Métier": "Menuiserie", "Modules actifs": ["SAV"], "Nombre agences": 1 } });
+  const r = await preparer();
+  assert.equal(r.corps.pret, false);
+  assert.match(r.corps.bloquants.join(" "), /doit être unique/);
+  assert.equal((await creer()).code, 400);
+  assert.equal(db.Planning.length, 0);
+  assert.equal(db.Agences.length, 0);
 });

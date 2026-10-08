@@ -34,6 +34,7 @@ input, textarea { background:#FFFFFF;border:1px solid #D1D5DB;color:#1F2937;bord
   };
 })();
 </script>
+<script src="/creneaux.js"></script>
 <script type="text/babel">
 
 const WEBHOOK = '/api/airtable/webhook';
@@ -45,7 +46,7 @@ const F = {
   rouge: "#DC2626", rougeClair: "#FEE2E2", vert: "#15803D", vertClair: "#F0FDF4",
 };
 
-function CreneauPicker({ agenceVille, onSelect }) {
+function CreneauPicker({ agenceVille, clientId, onSelect }) {
   const [typeCreneau, setTypeCreneau] = React.useState(null);
   const [dates, setDates] = React.useState([]);
   const [loading, setLoading] = React.useState(false);
@@ -59,21 +60,8 @@ function CreneauPicker({ agenceVille, onSelect }) {
   const charger = async (c) => {
     setLoading(true); setDates([]);
     try {
-      const f = encodeURIComponent('AND({Agence}="' + agenceVille + '",{Créneau}="' + c.valeur + '",{Statut}="Libre")');
-      const url = '/api/airtable/Planning?filterByFormula=' + f + '&sort[0][field]=Date&sort[0][direction]=asc&maxRecords=60';
-      const r = await fetch(url);
-      const json = await r.json();
-      const auPlusTot = new Date();
-      auPlusTot.setDate(auPlusTot.getDate() + DELAI_MIN_JOURS);
-      const auPlusTotStr = auPlusTot.toISOString().split('T')[0];
-      const map = {};
-      (json.records || []).forEach(rec => {
-        const d = rec.fields.Date;
-        if (d < auPlusTotStr) return;
-        if (!map[d]) map[d] = { date: d, ids: [] };
-        map[d].ids.push(rec.id);
-      });
-      setDates(Object.values(map).slice(0, 5));
+      const liste = await IKO_creneaux.charger({ agence: agenceVille, periode: c.id, clientId });
+      setDates(IKO_creneaux.parDate(liste).slice(0, 5));
     } catch(e) { console.error(e); }
     setLoading(false);
   };
@@ -595,7 +583,7 @@ function DecisionZone({ ticket, onAccepterCreneau, onOuvrirRefus, saving, onRefr
   }
 
   if (modeAcceptation) {
-    return <CreneauPicker agenceVille={ticket.fields?.Agence} onSelect={onAccepterCreneau}/>;
+    return <CreneauPicker agenceVille={ticket.fields?.Agence} clientId={(ticket.fields?.["Compte client"] || [])[0]} onSelect={onAccepterCreneau}/>;
   }
 
   return (

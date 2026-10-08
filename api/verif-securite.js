@@ -47,6 +47,7 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
 import { verifierOrigine, verifierDebit, reponseBloquee, verifierSession } from "./_securite.js";
+import { initialiserPlanning, lireReglagesBruts, enregistrerReglages, REGLAGES_DEFAUT } from "./_planning.js";
 
 const AIRTABLE_BASE = "appkI8RKHkYNWY86U";
 const CONFIG_RECORD_ID = "rec45X231n9dXnyaU";
@@ -483,6 +484,12 @@ async function preparerIko(clientId, identifiantDemande) {
   // --- Bloquant : nom, slug unique, Nombre agences 1-10, module, metier ---
   const nom = String(f["Nom client"] || "").trim();
   if (!nom) bloquants.push("Nom du client manquant.");
+  else {
+    // Le planning et les filtres identifient le client par son nom : il doit etre unique.
+    const formuleNom = 'AND(LOWER(TRIM({Nom client}))="' + nom.toLowerCase().replace(/\\/g, "\\\\").replace(/"/g, '\\"') + '", RECORD_ID()!="' + clientId + '")';
+    const doublon = await lireJsonAirtable(base + CLIENTS_TABLE + "?filterByFormula=" + encodeURIComponent(formuleNom) + "&maxRecords=1");
+    if ((doublon.records || []).length) bloquants.push("Le nom de client « " + nom + " » existe déjà : le nom doit être unique.");
+  }
   const slug = String(f["Slug"] || "").trim();
   if (!slug) bloquants.push("Slug manquant.");
   else if (!/^[a-z0-9]+(-[a-z0-9]+)*$/.test(slug)) bloquants.push("Slug invalide (minuscules, chiffres et tirets uniquement).");
@@ -567,6 +574,7 @@ async function preparerIko(clientId, identifiantDemande) {
     bloquants,
     avertissements,
     client: { id: clientId, nom, slug },
+    nombreAgences: Number.isInteger(nombre) ? nombre : null,
     agences: { existantes, aCreer, enTrop },
     compte,
   };
@@ -628,6 +636,21 @@ async function gererCreerIko(req, res) {
     }
   }
 
+  // Etape 1 bis : planning du client (reglages par defaut + premier horizon COURT ; le reste
+  // se genere a la demande). Un echec ici ne bloque jamais la creation (relance possible).
+  try {
+    const ctxPlan = { baseId: AIRTABLE_BASE, headers: airtableHeaders(), finAt: Date.now() + 5000 };
+    const identPlan = { clientId, clientNom: bilan.client.nom };
+    const nombre = Number(bilan.client && bilan.nombreAgences) || 10;
+    const noms = bilan.agences.existantes.filter((a) => a.actif && a.nom).map((a) => a.nom).concat(bilan.agences.aCreer).slice(0, nombre);
+    resultat.planning = await initialiserPlanning(ctxPlan, identPlan, noms);
+    if (resultat.planning.partiel) resultat.avertissements = resultat.avertissements.concat(["Planning : premier horizon partiel, la suite se génère automatiquement à la première consultation."]);
+  } catch (e) {
+    console.error("creer_iko planning erreur:", e && e.message);
+    resultat.planning = { erreur: true };
+    resultat.avertissements = resultat.avertissements.concat(["Planning non généré (erreur) : relancer « Créer son IKO »."]);
+  }
+
   // Etape 2 : compte admin du client (mot de passe temporaire, hache cote serveur).
   const etat = bilan.compte.etat;
   if (etat === "a_creer" || (etat === "existe" && regenererMotDePasse === true)) {
@@ -668,6 +691,45 @@ async function gererCreerIko(req, res) {
     }
   }
   return res.status(200).json(resultat);
+}
+
+async function gererLireReglagesPlanning(req, res) {
+  if (!exigerSuperAdmin(req, res)) return;
+  const { clientId } = req.body || {};
+  if (!validerClientId(clientId)) return res.status(400).json({ erreur: "Client invalide." });
+  try {
+    const rec = await lireJsonAirtable("https://api.airtable.com/v0/" + AIRTABLE_BASE + "/" + CLIENTS_TABLE + "/" + clientId);
+    const nom = String((rec.fields && rec.fields["Nom client"]) || "").trim();
+    if (!nom) return res.status(404).json({ erreur: "Client introuvable." });
+    const ctx = { baseId: AIRTABLE_BASE, headers: airtableHeaders() };
+    const bruts = await lireReglagesBruts(ctx, { clientId, clientNom: nom });
+    res.setHeader("Cache-Control", "no-store");
+    return res.status(200).json({ defaut: REGLAGES_DEFAUT, client: bruts.client, agences: bruts.agences });
+  } catch (e) {
+    console.error("lire_reglages_planning erreur:", e && e.message);
+    return res.status(502).json({ erreur: "Lecture impossible (Airtable)." });
+  }
+}
+
+async function gererEnregistrerReglagesPlanning(req, res) {
+  if (!exigerSuperAdmin(req, res)) return;
+  const { clientId, agence, reglages } = req.body || {};
+  if (!validerClientId(clientId)) return res.status(400).json({ erreur: "Client invalide." });
+  if (agence !== undefined && agence !== null && (typeof agence !== "string" || !agence.trim() || agence.length > 60)) {
+    return res.status(400).json({ erreur: "Agence invalide." });
+  }
+  try {
+    const rec = await lireJsonAirtable("https://api.airtable.com/v0/" + AIRTABLE_BASE + "/" + CLIENTS_TABLE + "/" + clientId);
+    const nom = String((rec.fields && rec.fields["Nom client"]) || "").trim();
+    if (!nom) return res.status(404).json({ erreur: "Client introuvable." });
+    const ctx = { baseId: AIRTABLE_BASE, headers: airtableHeaders() };
+    const r = await enregistrerReglages(ctx, { clientId, clientNom: nom }, agence ? agence.trim() : null, reglages);
+    if (!r.ok) return res.status(400).json({ erreur: r.erreur });
+    return res.status(200).json({ ok: true, reglages: r.reglages });
+  } catch (e) {
+    console.error("enregistrer_reglages_planning erreur:", e && e.message);
+    return res.status(502).json({ erreur: "Enregistrement impossible (Airtable)." });
+  }
 }
 
 async function gererSession(req, res) {
@@ -842,6 +904,16 @@ export default async function handler(req, res) {
         if (!verifierOrigine(req)) return reponseBloquee(res, "origine");
         if (!verifierDebit(req)) return reponseBloquee(res, "debit");
         return gererPreparerIko(req, res);
+      }
+      if (action === "lire_reglages_planning") {
+        if (!verifierOrigine(req)) return reponseBloquee(res, "origine");
+        if (!verifierDebit(req)) return reponseBloquee(res, "debit");
+        return gererLireReglagesPlanning(req, res);
+      }
+      if (action === "enregistrer_reglages_planning") {
+        if (!verifierOrigine(req)) return reponseBloquee(res, "origine");
+        if (!verifierDebit(req)) return reponseBloquee(res, "debit");
+        return gererEnregistrerReglagesPlanning(req, res);
       }
       if (action === "creer_iko") {
         if (!verifierOrigine(req)) return reponseBloquee(res, "origine");

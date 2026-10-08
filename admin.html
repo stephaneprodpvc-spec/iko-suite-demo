@@ -919,6 +919,7 @@
           <button type="submit" class="primary" id="submitBtn">Créer le client</button>
           <button type="button" class="secondary" id="cancelBtn" style="display:none;">Annuler</button>
           <button type="button" class="primary" id="creerIkoBtn" style="display:none;">Créer son IKO</button>
+          <button type="button" class="secondary" id="planningBtn" style="display:none;">Planning</button>
           <button type="button" class="secondary" id="printBtn" style="display:none;">Imprimer</button>
           <button type="button" class="secondary" id="deleteBtn" style="display:none;color:#FF453A;border-color:rgba(255,69,58,0.3);">Supprimer</button>
         </div>
@@ -1875,6 +1876,7 @@ function chargerDansFormulaire(id){
   document.getElementById("cancelBtn").style.display = "inline-block";
   document.getElementById("printBtn").style.display = "inline-block";
   document.getElementById("creerIkoBtn").style.display = "inline-block";
+  document.getElementById("planningBtn").style.display = "inline-block";
   document.getElementById("deleteBtn").style.display = "inline-block";
   document.getElementById("formMsg").textContent = "";
   chargerActivite(id);
@@ -2240,6 +2242,132 @@ function ikoAfficherResultat(bilan, data, base, identifiant){
   }
 }
 
+// --- Reglages du planning (client puis agence) ----------------------------
+// Les reglages d'une agence REMPLACENT champ par champ ceux du client. Stockes dans
+// des lignes Planning "CONFIG-PLANNING" (aucun champ Airtable ajoute).
+var planModal = null;
+var planDonnees = null;
+var JOURS_PLAN = [[1, "Lun"], [2, "Mar"], [3, "Mer"], [4, "Jeu"], [5, "Ven"], [6, "Sam"], [0, "Dim"]];
+
+function planAppel(action, extra){
+  var corps = { action: action, clientId: editingId };
+  Object.keys(extra || {}).forEach(function(k){ corps[k] = extra[k]; });
+  return fetch("/api/verif-securite", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify(corps) })
+    .then(function(r){ return r.json().catch(function(){ return {}; }).then(function(d){ return { ok: r.ok, data: d }; }); });
+}
+
+function fermerPlanning(){ if (planModal) { planModal.remove(); planModal = null; } }
+
+function ouvrirPlanning(){
+  if (!editingId) return;
+  fermerPlanning();
+  planModal = document.createElement("div");
+  planModal.style.cssText = "position:fixed;inset:0;z-index:9000;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;padding:16px;";
+  planModal.innerHTML =
+    "<div style='background:var(--bg-card,#1c1c1e);color:var(--texte,#fff);border:1px solid var(--border);border-radius:16px;max-width:560px;width:100%;max-height:90vh;overflow:auto;padding:18px;'>" +
+      "<div style='display:flex;align-items:center;margin-bottom:10px;'><h2 style='flex:1;margin:0;font-size:17px;'>Planning d'interventions</h2>" +
+      "<button type='button' id='planFermer' style='background:none;border:none;color:var(--texte-dim,#aaa);font-size:20px;cursor:pointer;'>✕</button></div>" +
+      "<div id='planCorps' style='font-size:13px;'>Chargement…</div></div>";
+  document.body.appendChild(planModal);
+  document.getElementById("planFermer").addEventListener("click", fermerPlanning);
+  planAppel("lire_reglages_planning").then(function(res){
+    if (!document.getElementById("planCorps")) return;
+    if (!res.ok) { document.getElementById("planCorps").innerHTML = "<div style='color:#FF453A;'>" + escHtml(res.data.erreur || "Lecture impossible.") + "</div>"; return; }
+    planDonnees = res.data;
+    planAfficher("");
+  }).catch(function(){ document.getElementById("planCorps").innerHTML = "<div style='color:#FF453A;'>Erreur réseau.</div>"; });
+}
+
+// Reglages effectifs de la portee choisie ("" = client) : defaut <- client <- agence.
+function planEffectifs(agence){
+  var d = planDonnees.defaut, c = planDonnees.client || {}, a = (agence && planDonnees.agences[agence]) || {};
+  var r = {}; Object.keys(d).forEach(function(k){ r[k] = d[k]; });
+  [c, a].forEach(function(src){ Object.keys(src).forEach(function(k){ r[k] = src[k]; }); });
+  r.decoupage = Object.assign({}, d.decoupage, c.decoupage || {}, a.decoupage || {});
+  return r;
+}
+
+function planLigneFermeture(f){
+  var st = "padding:6px 8px;border-radius:8px;border:1px solid var(--border);background:rgba(255,255,255,0.04);color:var(--texte,#fff);font-size:12px;";
+  return "<div class='planFerm' style='display:flex;gap:6px;margin-bottom:6px;align-items:center;'>" +
+    "<input type='date' class='fDu' value='" + escHtml(f.du || "") + "' style='" + st + "'>" +
+    "<input type='date' class='fAu' value='" + escHtml(f.au || "") + "' style='" + st + "'>" +
+    "<input type='text' class='fMotif' placeholder='Motif' value='" + escHtml(f.motif || "") + "' style='flex:1;" + st + "'>" +
+    "<button type='button' class='planFermDel' style='background:none;border:none;color:#FF453A;cursor:pointer;'>✕</button></div>";
+}
+
+function planAfficher(agence){
+  var corps = document.getElementById("planCorps");
+  var r = planEffectifs(agence);
+  var noms = (agencesActuelles || []).map(function(a){ return (a.fields && a.fields["Nom agence"]) || ""; }).filter(Boolean);
+  var st = "padding:6px 8px;border-radius:8px;border:1px solid var(--border);background:rgba(255,255,255,0.04);color:var(--texte,#fff);font-size:13px;";
+  var optionsPortee = "<option value=''>Tout le client (réglages par défaut)</option>" + noms.map(function(n){
+    return "<option value='" + escHtml(n) + "'" + (n === agence ? " selected" : "") + ">Agence : " + escHtml(n) + (planDonnees.agences[n] ? " (réglages propres)" : "") + "</option>";
+  }).join("");
+  var jours = JOURS_PLAN.map(function(j){
+    return "<label style='margin-right:10px;'><input type='checkbox' class='planJour' value='" + j[0] + "'" + (r.joursTravailles.indexOf(j[0]) !== -1 ? " checked" : "") + "> " + j[1] + "</label>";
+  }).join("");
+  var per = r.decoupage.periodes || ["matin", "apres_midi"];
+  corps.innerHTML =
+    "<label style='font-size:11px;color:var(--texte-dim,#aaa);'>Portée</label>" +
+    "<select id='planPortee' style='width:100%;" + st + "margin:4px 0 6px;'>" + optionsPortee + "</select>" +
+    (agence ? "<div style='font-size:11px;color:var(--texte-dim,#aaa);margin-bottom:8px;'>Les réglages de l'agence remplacent ceux du client, champ par champ. Enregistrer ici crée des réglages propres à cette agence.</div>" : "") +
+    "<div style='margin:8px 0 4px;font-weight:700;'>Jours travaillés</div><div>" + jours + "</div>" +
+    "<div style='margin:10px 0 4px;font-weight:700;'>Découpage de la journée</div>" +
+    "<label style='margin-right:12px;'><input type='checkbox' id='planMatin'" + (per.indexOf("matin") !== -1 ? " checked" : "") + "> Matin (8h30 — 12h00)</label>" +
+    "<label><input type='checkbox' id='planAM'" + (per.indexOf("apres_midi") !== -1 ? " checked" : "") + "> Après-midi (13h00 — 17h00)</label>" +
+    "<div style='font-size:11px;color:var(--texte-dim,#aaa);margin-top:2px;'>Les heures précises avec durée de créneau arriveront dans une prochaine phase.</div>" +
+    "<div style='display:flex;gap:10px;flex-wrap:wrap;margin-top:10px;'>" +
+      "<label>Capacité (interventions simultanées)<br><input type='number' id='planCapacite' min='1' max='20' value='" + r.capacite + "' style='width:110px;" + st + "'></label>" +
+      "<label>Délai minimum (jours)<br><input type='number' id='planDelai' min='0' max='60' value='" + r.delaiMinJours + "' style='width:110px;" + st + "'></label>" +
+      "<label>Horizon (semaines)<br><input type='number' id='planHorizon' min='1' max='12' value='" + r.horizonSemaines + "' style='width:110px;" + st + "'></label>" +
+    "</div>" +
+    "<label style='display:block;margin-top:10px;'><input type='checkbox' id='planFeries'" + (r.joursFeries ? " checked" : "") + "> Exclure les jours fériés français</label>" +
+    "<div style='margin:10px 0 4px;font-weight:700;'>Fermetures (congés…)</div><div id='planFermetures'>" + (r.fermetures || []).map(planLigneFermeture).join("") + "</div>" +
+    "<button type='button' class='secondary' id='planAjouterFerm'>+ Ajouter une fermeture</button>" +
+    "<div style='display:flex;gap:8px;margin-top:14px;'><button type='button' class='primary' id='planSauver'>Enregistrer</button></div>" +
+    "<div id='planMsg' style='margin-top:8px;'></div>";
+  document.getElementById("planPortee").addEventListener("change", function(){ planAfficher(this.value); });
+  document.getElementById("planAjouterFerm").addEventListener("click", function(){
+    document.getElementById("planFermetures").insertAdjacentHTML("beforeend", planLigneFermeture({}));
+    planBrancherSuppr();
+  });
+  planBrancherSuppr();
+  document.getElementById("planSauver").addEventListener("click", function(){ planSauver(agence); });
+}
+
+function planBrancherSuppr(){
+  Array.prototype.forEach.call(document.querySelectorAll(".planFermDel"), function(b){
+    b.onclick = function(){ b.parentNode.remove(); };
+  });
+}
+
+function planSauver(agence){
+  var msg = document.getElementById("planMsg");
+  var periodes = [];
+  if (document.getElementById("planMatin").checked) periodes.push("matin");
+  if (document.getElementById("planAM").checked) periodes.push("apres_midi");
+  var fermetures = Array.prototype.map.call(document.querySelectorAll(".planFerm"), function(l){
+    return { du: l.querySelector(".fDu").value, au: l.querySelector(".fAu").value, motif: l.querySelector(".fMotif").value.trim() };
+  });
+  var reglages = {
+    joursTravailles: Array.prototype.map.call(document.querySelectorAll(".planJour:checked"), function(c){ return parseInt(c.value, 10); }),
+    decoupage: { mode: "demi-journees", periodes: periodes },
+    capacite: parseInt(document.getElementById("planCapacite").value, 10),
+    delaiMinJours: parseInt(document.getElementById("planDelai").value, 10),
+    horizonSemaines: parseInt(document.getElementById("planHorizon").value, 10),
+    joursFeries: document.getElementById("planFeries").checked,
+    fermetures: fermetures
+  };
+  msg.style.color = "var(--texte-dim,#aaa)"; msg.textContent = "Enregistrement…";
+  planAppel("enregistrer_reglages_planning", { agence: agence || null, reglages: reglages }).then(function(res){
+    if (!res.ok) { msg.style.color = "#FF453A"; msg.textContent = res.data.erreur || "Erreur."; return; }
+    if (agence) planDonnees.agences[agence] = res.data.reglages; else planDonnees.client = res.data.reglages;
+    msg.style.color = "#30D158";
+    msg.textContent = "✓ Enregistré. Les créneaux se génèrent à la demande ; les créneaux déjà pris ne sont jamais modifiés.";
+  }).catch(function(){ msg.style.color = "#FF453A"; msg.textContent = "Erreur réseau."; });
+}
+
 function toggleSection(btnId, bodyId, chevronId){
   var btn = document.getElementById(btnId), body = document.getElementById(bodyId), chev = document.getElementById(chevronId);
   btn.addEventListener("click", function(){
@@ -2512,6 +2640,7 @@ document.getElementById("cancelBtn").addEventListener("click", function(){
 });
 
 document.getElementById("creerIkoBtn").addEventListener("click", ouvrirCreerIko);
+document.getElementById("planningBtn").addEventListener("click", ouvrirPlanning);
 
 document.getElementById("printBtn").addEventListener("click", function(){
   if (!editingId) return;
@@ -2568,6 +2697,7 @@ function reinitialiserFormulaire(){
   document.getElementById("cancelBtn").style.display = "none";
   document.getElementById("printBtn").style.display = "none";
   document.getElementById("creerIkoBtn").style.display = "none";
+  document.getElementById("planningBtn").style.display = "none";
   document.getElementById("deleteBtn").style.display = "none";
   fermerDevis();
   document.getElementById("formMsg").textContent = "";

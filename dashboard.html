@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <link rel="stylesheet" href="/theme.css">
 <script src="/theme.js"></script>
+<script src="/creneaux.js"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Iko Suite — Dashboard Agences</title>
 <link rel="manifest" href="/manifest-dashboard.json">
@@ -226,6 +227,13 @@ function appliquerConfigEntreprise(cfg) {
 // primaire) des enregistrements lies, jamais leur record ID — confirme en
 // prod (requete 200 OK, 0 resultat avec un filtre par ID). Le filtre doit
 // donc porter sur le NOM du client, pas sur window.IKO_CLIENT_ID.
+// Verifie par IDENTIFIANT que l'enregistrement appartient au client charge (ARRAYJOIN ne renvoie que
+// le nom). Sans client charge (demo) : seuls les enregistrements sans "Compte client" sont acceptes.
+function appartientAuClient(rec) {
+  const liens = (rec && rec.fields && rec.fields["Compte client"]) || [];
+  return window.IKO_CLIENT_ID ? (Array.isArray(liens) && liens.includes(window.IKO_CLIENT_ID)) : liens.length === 0;
+}
+
 function filtreAvecClient(baseFormula) {
   var nom = window.IKO_CLIENT_INFO && window.IKO_CLIENT_INFO["Nom client"];
   if (!nom) return baseFormula;
@@ -801,9 +809,9 @@ function ModalRdv({ agenceAccess, onClose, onSuccess, initialAgence }) {
       const adresseComplete = form.adresse.trim() + (form.codePostal || form.ville ? ', ' + form.codePostal + ' ' + form.ville : '');
       const num = 'SAV-' + new Date().getFullYear() + '-' + (Math.floor(Math.random()*9000)+1000);
       const dateLabel = form.creneau === "Matin (8h30 — 12h00)" ? "Matin (8h30 — 12h00)" : "Après-midi (13h00 — 17h00)";
-      const filterPlanning = encodeURIComponent(filtreAvecClient('AND({Agence}="'+AGENCE_VERS_AIRTABLE[form.agence]+'",{Créneau}="'+dateLabel+'",{Date}="'+form.date+'",{Statut}="Libre")'));
-      const planResp = await fetch('/api/airtable/Planning?filterByFormula=' + filterPlanning + '&maxRecords=1', {});
-      const planJson = await planResp.json();
+      // Creneau libre du bon client ET de la bonne agence (route serveur /api/airtable/creneaux).
+      const dispoRdv = await IKO_creneaux.charger({ agence: AGENCE_VERS_AIRTABLE[form.agence], creneau: dateLabel, date: form.date, admin: 1, clientId: window.IKO_CLIENT_ID });
+      const planJson = { records: dispoRdv.map(c => ({ id: c.id })) };
       let planningId = '';
       if (planJson.records?.length > 0) {
         planningId = planJson.records[0].id;
@@ -946,10 +954,7 @@ function ModalBlocage({ agenceAccess, onClose, onSuccess, initialAgence, initial
       const agenceReelle = AGENCE_VERS_AIRTABLE[agence] || agence;
       // Le champ Date est du texte au format AAAA-MM-JJ : la comparaison
       // lexicographique >= / <= fonctionne car le format est trié naturellement.
-      const formule = filtreAvecClient('AND({Agence}="'+agenceReelle+'",{Date}>="'+dateDebut+'",{Date}<="'+dateFin+'",{Statut}="Libre")');
-      const r = await fetch('/api/airtable/Planning?filterByFormula=' + encodeURIComponent(formule) + '&maxRecords=500');
-      const json = await r.json();
-      const creneaux = json.records || [];
+      const creneaux = await IKO_creneaux.charger({ agence: agenceReelle, du: dateDebut, au: dateFin, admin: 1, clientId: window.IKO_CLIENT_ID });
       if (creneaux.length === 0) {
         setError("Aucun créneau libre à bloquer sur cette période (déjà pris, déjà bloqué, ou hors planning existant).");
         setSaving(false); return;
@@ -4103,7 +4108,7 @@ function PlanningView({ agenceFilter, onOpenTicket }) {
       const filter = encodeURIComponent(filtreAvecClient(rawFilter));
       const r = await fetch('/api/airtable/Planning?filterByFormula='+filter+'&sort[0][field]=Date&sort[0][direction]=asc&maxRecords=1000', {});
       const json = await r.json();
-      const slotsData = json.records||[];
+      const slotsData = (json.records||[]).filter(appartientAuClient);
       setSlots(slotsData);
 
       // Charger les tickets SAV liés à un créneau (champ PlanningID = ID du record Planning)

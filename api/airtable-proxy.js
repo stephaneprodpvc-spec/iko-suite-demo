@@ -26,6 +26,7 @@
 import webpush from 'web-push';
 import { verifierSession, verifierDebit, verifierOrigine } from './_securite.js';
 import { lienSuivi, lireJeton, normaliserEmail, normaliserTel } from './_suivi.js';
+import { creneauxLibres, identDepuisClientId, AGENCES_DEMO } from './_planning.js';
 
 // Champs d'un ticket renvoyes au client par la route publique "suivi"
 // (liste blanche : ni e-mail, ni telephone, ni adresse, ni notes internes).
@@ -334,6 +335,7 @@ async function relayerWebhook(req, res, urlCible, actionsAutorisees, ctx) {
   // ecrase (une valeur envoyee par le navigateur n'est jamais relayee) et
   // JAMAIS renvoye au navigateur : il part uniquement par e-mail via Make.
   const corpsRelaye = Object.assign({}, req.body || {});
+  let clientARattacher = null; // slug puis identifiant du client (nouvelle demande d'un client pro)
   if (actionsAutorisees === ACTIONS_WEBHOOK_AUTORISEES && actionDemandee === undefined) {
     delete corpsRelaye.lien_suivi;
     // E-mails de l'agence choisie (Make les utilise pour notifier l'agence) :
@@ -344,12 +346,14 @@ async function relayerWebhook(req, res, urlCible, actionsAutorisees, ctx) {
     delete corpsRelaye.client_slug;
     delete corpsRelaye.email_agence;
     delete corpsRelaye.email_technicien;
+    if (slugClient && ctx) clientARattacher = slugClient; // resolu ci-dessous
     if (slugClient && corpsRelaye.agence && ctx) {
       try {
         const echap = (v) => String(v).replace(/"/g, '\\"');
         const rc = await fetch('https://api.airtable.com/v0/' + ctx.baseId + '/Clients?filterByFormula=' + encodeURIComponent('{Slug}="' + echap(slugClient) + '"') + '&maxRecords=1', { headers: ctx.headers });
         const recClient = ((await rc.json()).records || [])[0];
         if (recClient && recClient.fields && recClient.fields['Nom client']) {
+          clientARattacher = recClient.id;
           const formule = 'AND(FIND("' + echap(recClient.fields['Nom client']) + '", ARRAYJOIN({Client})), {Actif}=1, {Nom agence}="' + echap(corpsRelaye.agence) + '")';
           const ra = await fetch('https://api.airtable.com/v0/' + ctx.baseId + '/Agences?filterByFormula=' + encodeURIComponent(formule) + '&maxRecords=10', { headers: ctx.headers });
           const recAgence = ((await ra.json()).records || []).find(r => Array.isArray(r.fields.Client) && r.fields.Client.includes(recClient.id));
@@ -374,6 +378,10 @@ async function relayerWebhook(req, res, urlCible, actionsAutorisees, ctx) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(corpsRelaye),
     });
+    // Nouvelle demande d'un client pro : rattache le ticket au client (best-effort, non bloquant).
+    if (webhookRes.ok && ctx && clientARattacher && /^rec[A-Za-z0-9]{14}$/.test(clientARattacher) && corpsRelaye.ticket && actionDemandee === undefined) {
+      await rattacherTicketAuClient(ctx.baseId, ctx.headers, corpsRelaye.ticket, clientARattacher);
+    }
     return res.status(webhookRes.ok ? 200 : 502).json({ ok: webhookRes.ok });
   } catch (err) {
     // Ne jamais renvoyer le detail brut de l'erreur au client : un message
@@ -383,6 +391,86 @@ async function relayerWebhook(req, res, urlCible, actionsAutorisees, ctx) {
     console.error('Erreur relais webhook Make (POST):', err);
     return res.status(502).json({ error: 'Erreur webhook' });
   }
+}
+
+// ---- Route publique /api/airtable/creneaux (Bloc 3 : planning par client et agence) ----
+// GET ?agence=...&(client=slug | clientId=rec...)&periode=matin|apres_midi&mois=AAAA-MM&date=AAAA-MM-JJ
+// Renvoie les creneaux LIBRES du bon client ET de la bonne agence ; genere a la
+// demande les creneaux manquants (voir api/_planning.js). Sans client : demo.
+// Une session non super-admin impose SON client (le parametre navigateur est ignore).
+const cacheSlugClient = new Map();
+async function identDepuisSlug(baseId, headers, slug) {
+  if (!/^[a-z0-9]+(-[a-z0-9]+)*$/i.test(slug)) return null;
+  const c = cacheSlugClient.get(slug);
+  if (c && Date.now() - c.t < 60000) return c.ident;
+  const r = await fetch('https://api.airtable.com/v0/' + baseId + '/Clients?filterByFormula=' + encodeURIComponent('{Slug}="' + slug + '"') + '&maxRecords=1', { headers });
+  if (!r.ok) return null;
+  const rec = ((await r.json()).records || [])[0];
+  const nom = rec && rec.fields && rec.fields['Nom client'];
+  const ident = nom ? { clientId: rec.id, clientNom: String(nom).trim(), bloque: rec.fields['Accès bloqué'] === true } : null;
+  cacheSlugClient.set(slug, { t: Date.now(), ident });
+  return ident;
+}
+
+async function handlerCreneaux(req, res, baseId, headers, session) {
+  if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
+  if (!verifierOrigine(req)) return res.status(403).json({ error: 'Origine non autorisée.' });
+  if (!verifierDebit(req, { max: 90, fenetreMs: 60 * 1000, cle: 'creneaux' })) {
+    return res.status(429).json({ error: 'Trop de requêtes, réessayez dans une minute.' });
+  }
+  const q = req.query || {};
+  const agence = String(q.agence || '').trim().slice(0, 60);
+  if (!agence) return res.status(400).json({ error: 'Agence requise.' });
+  const ctx = { baseId, headers: { Authorization: headers.Authorization }, finAt: Date.now() + 7000 };
+  try {
+    let ident;
+    if (session && session.tenantId && session.role !== 'SUPER_ADMIN_IKO') ident = await identDepuisClientId(ctx, session.tenantId);
+    else if (q.client) ident = await identDepuisSlug(baseId, headers, String(q.client).trim());
+    else if (/^rec[A-Za-z0-9]{14}$/.test(String(q.clientId || ''))) ident = await identDepuisClientId(ctx, String(q.clientId));
+    else ident = { demo: true };
+    if (!ident) return res.status(404).json({ error: 'Client introuvable.' });
+    res.setHeader('Cache-Control', 'no-store');
+    if (ident.demo && !AGENCES_DEMO.includes(agence)) return res.status(200).json({ creneaux: [] });
+    if (ident.bloque) return res.status(200).json({ creneaux: [], bloque: true });
+    const admin = q.admin === '1' && !!session && ['SUPER_ADMIN_IKO', 'TENANT_ADMIN', 'TECHNICIEN'].includes(session.role);
+    const r = await creneauxLibres(ctx, ident, {
+      agence,
+      periode: q.periode ? String(q.periode) : undefined,
+      creneau: q.creneau ? String(q.creneau) : undefined,
+      mois: q.mois ? String(q.mois) : undefined,
+      date: q.date ? String(q.date) : undefined,
+      du: q.du ? String(q.du) : undefined,
+      au: q.au ? String(q.au) : undefined,
+      admin,
+    });
+    return res.status(200).json(r);
+  } catch (err) {
+    console.error('Erreur route creneaux:', err && err.message);
+    return res.status(502).json({ error: 'Planning indisponible.' });
+  }
+}
+
+// Rattache le ticket tout juste cree (par Make) au client : sans "Compte client", ni son
+// tableau de bord ni le planning du bon client ne le retrouvent. Meme principe que
+// api/chat-amandine.js : le ticket est cree de facon asynchrone, on attend un court instant.
+async function rattacherTicketAuClient(baseId, headers, numero, clientId) {
+  const num = String(numero || '').trim().toUpperCase();
+  if (!/^[A-Z0-9-]{4,30}$/.test(num)) return false;
+  for (let essai = 0; essai < 2; essai++) {
+    await new Promise((r) => setTimeout(r, essai === 0 ? 2500 : 2000));
+    try {
+      const r = await fetch('https://api.airtable.com/v0/' + baseId + '/Tickets%20SAV?filterByFormula=' + encodeURIComponent('UPPER({Name})="' + num + '"') + '&maxRecords=1', { headers });
+      const rec = r.ok ? ((await r.json()).records || [])[0] : null;
+      if (rec) {
+        const p = await fetch('https://api.airtable.com/v0/' + baseId + '/Tickets%20SAV/' + rec.id, {
+          method: 'PATCH', headers: { ...headers, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fields: { 'Compte client': [clientId] } }),
+        });
+        return p.ok;
+      }
+    } catch (e) { /* non bloquant : nouvel essai puis abandon */ }
+  }
+  return false;
 }
 
 // ETAPE 1 SECURITE (journalisation, aucun blocage) : trace chaque appel du
@@ -589,6 +677,10 @@ export default async function handler(req, res) {
 
   if (subPathRaw === 'webhook') {
     return relayerWebhook(req, res, MAKE_WEBHOOK_URL, ACTIONS_WEBHOOK_AUTORISEES, { baseId, headers });
+  }
+
+  if (subPathRaw === 'creneaux') {
+    return handlerCreneaux(req, res, baseId, headers, session);
   }
 
   if (subPathRaw === 'suivi') {

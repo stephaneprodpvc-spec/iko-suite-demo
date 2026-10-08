@@ -12,6 +12,7 @@
 
 import { limiterChat } from "./_securite.js";
 import { lienSuivi } from "./_suivi.js";
+import { creneauxLibres, identDepuisClientId } from "./_planning.js";
 import vocabMenuiserie from "./_trades/menuiserie.js";
 import vocabPlomberieChauffage from "./_trades/plomberie_chauffage.js";
 import { extraireConnaissanceDuRecord, blocPromptConnaissance, affinerPourPrompt } from "./_connaissance.js";
@@ -362,25 +363,16 @@ async function executerOutil(nom, input, clientId, tradeId, agencesObjets) {
       if (!agencesNoms.includes(input.agence) || !valeurCreneau) {
         return { erreur: "Agence ou periode invalide." };
       }
-      const agenceAirtable = input.agence;
-      const formuleBase = "AND({Agence}=\"" + agenceAirtable + "\",{Créneau}=\"" + valeurCreneau + "\",{Statut}=\"Libre\")";
-      const formule = filtreAvecClientServeur(formuleBase, clientId);
-      const url = "https://api.airtable.com/v0/" + AIRTABLE_BASE + "/Planning?filterByFormula=" + encodeURIComponent(formule) + "&sort[0][field]=Date&sort[0][direction]=asc&maxRecords=60";
-      const r = await fetch(url, { headers: airtableHeaders() });
-      const json = await r.json();
-      if (!r.ok) { console.error("Airtable lister_creneaux erreur:", r.status, JSON.stringify(json)); return { erreur: "Impossible de recuperer les creneaux.", detail: json }; }
-
-    const auPlusTot = new Date();
-      auPlusTot.setDate(auPlusTot.getDate() + DELAI_MIN_JOURS);
-      const auPlusTotStr = auPlusTot.toISOString().split("T")[0];
-
-    const map = {};
-      (json.records || []).forEach(function(rec) {
-        const d = rec.fields.Date;
-        if (!d || d < auPlusTotStr) return;
-        if (!map[d]) map[d] = { date: d, planning_id: rec.id };
-      });
-      const creneaux = Object.values(map).slice(0, 5).map(function(c) {
+      // Creneaux du bon client ET de la bonne agence (module partage api/_planning.js :
+      // lien client verifie par identifiant, generation a la demande, delai minimum du client).
+      const ctxPlanning = { baseId: AIRTABLE_BASE, headers: airtableHeaders(), finAt: Date.now() + 7000 };
+      const ident = await identDepuisClientId(ctxPlanning, clientId); // sans client = demo
+      if (!ident) return { erreur: "Client introuvable." };
+      if (ident.bloque) return { creneaux: [] };
+      const dispo = await creneauxLibres(ctxPlanning, ident, { agence: input.agence, periode: input.periode });
+      const parDate = {};
+      dispo.creneaux.forEach(function (c) { if (!parDate[c.date]) parDate[c.date] = { date: c.date, planning_id: c.id }; });
+      const creneaux = Object.values(parDate).slice(0, 5).map(function (c) {
         const d = new Date(c.date + "T12:00:00");
         return {
           planning_id: c.planning_id,

@@ -6,6 +6,7 @@
 // modifiés qu'à ce moment-là, jamais ici).
 
 import { verifierOrigine, verifierDebit } from "./_securite.js";
+import { creneauxLibres, identDepuisClientId } from "./_planning.js";
 
 const MODELE = "claude-haiku-4-5-20251001";
 const AIRTABLE_BASE = "appkI8RKHkYNWY86U"; // base démo Iko Suite
@@ -31,19 +32,22 @@ function periodeDepuisCreneauTexte(texte) {
   return null;
 }
 
-async function compterDispos(agence, periode, moisSouhaite) {
-  const valeurCreneau = CRENEAUX[periode];
-  const formule = "AND({Agence}=\"" + agence + "\",{Créneau}=\"" + valeurCreneau + "\",{Statut}=\"Libre\")";
-  const url = "https://api.airtable.com/v0/" + AIRTABLE_BASE + "/Planning?filterByFormula=" + encodeURIComponent(formule) + "&sort[0][field]=Date&sort[0][direction]=asc&maxRecords=60";
-  const r = await fetch(url, { headers: airtableHeaders() });
-  const json = await r.json();
-  if (!r.ok) return 0;
-  const auPlusTot = new Date();
-  auPlusTot.setDate(auPlusTot.getDate() + DELAI_MIN_JOURS);
-  const auPlusTotStr = auPlusTot.toISOString().split("T")[0];
-  const dispos = (json.records || []).filter(function (rec) { return rec.fields.Date && rec.fields.Date >= auPlusTotStr; });
-  if (moisSouhaite) return dispos.filter(function (rec) { return rec.fields.Date.slice(0, 7) === moisSouhaite; }).length;
-  return dispos.length;
+// Identite du client du ticket (lien "Compte client" du ticket) ; sans lien = demo.
+async function identDepuisTicket(ticketId) {
+  const ctx = { baseId: AIRTABLE_BASE, headers: airtableHeaders() };
+  const r = await fetch("https://api.airtable.com/v0/" + AIRTABLE_BASE + "/Tickets%20SAV/" + encodeURIComponent(ticketId), { headers: airtableHeaders() });
+  if (!r.ok) return { demo: true };
+  const ticket = await r.json();
+  const clientId = ((ticket.fields && ticket.fields["Compte client"]) || [])[0];
+  return (await identDepuisClientId(ctx, clientId)) || { demo: true };
+}
+
+// Nombre de creneaux libres du bon client et de la bonne agence (delai minimum et
+// generation a la demande geres par api/_planning.js).
+async function compterDispos(ident, agence, periode, moisSouhaite) {
+  const ctx = { baseId: AIRTABLE_BASE, headers: airtableHeaders(), finAt: Date.now() + 7000 };
+  const r = await creneauxLibres(ctx, ident, { agence, periode, mois: moisSouhaite || undefined });
+  return r.creneaux.length;
 }
 
 async function classifierMessage(texte, creneauActuelLabel) {
@@ -129,6 +133,7 @@ export default async function handler(req, res) {
     const { ticketId, texte, agence, creneauActuel } = req.body || {};
     if (!ticketId || !texte || !agence) return res.status(400).json({ error: "Parametres manquants" });
 
+    const identClient = await identDepuisTicket(ticketId);
     const classification = await classifierMessage(String(texte), creneauActuel);
 
     if (classification.intention !== "changement_date") {
@@ -153,19 +158,19 @@ export default async function handler(req, res) {
     let moisTrouve = false;
     let nbDispos = 0;
     if (moisSouhaite) {
-      nbDispos = await compterDispos(agence, periode, moisSouhaite);
+      nbDispos = await compterDispos(identClient, agence, periode, moisSouhaite);
       if (nbDispos === 0) {
         const autrePeriode = periode === "matin" ? "apres_midi" : "matin";
-        const nbAutre = await compterDispos(agence, autrePeriode, moisSouhaite);
+        const nbAutre = await compterDispos(identClient, agence, autrePeriode, moisSouhaite);
         if (nbAutre > 0) { periode = autrePeriode; nbDispos = nbAutre; }
       }
       moisTrouve = nbDispos > 0;
     }
     if (!moisTrouve) {
-      nbDispos = await compterDispos(agence, periode);
+      nbDispos = await compterDispos(identClient, agence, periode);
       if (nbDispos === 0) {
         const autrePeriode = periode === "matin" ? "apres_midi" : "matin";
-        const nbAutre = await compterDispos(agence, autrePeriode);
+        const nbAutre = await compterDispos(identClient, agence, autrePeriode);
         if (nbAutre > 0) periode = autrePeriode;
         nbDispos = nbAutre;
       }
