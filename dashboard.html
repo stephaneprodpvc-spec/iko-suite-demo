@@ -1409,6 +1409,11 @@ async function genererPdfDevis({ numero, ticket, client, lignes, montantHT, mont
   doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(100, 100, 100);
   doc.text('N° ' + numero, 210 - mR, y + 5, { align: 'right' });
   y += 18;
+  if (logoInfo && logoInfo.url) {
+    const lw = mep.logoW || 30;
+    const bas = (mep.logoY != null ? mep.logoY : (mHaut - 6)) + lw / (logoInfo.ratio || (30 / 16)) + 4;
+    if (bas > y) y = bas;
+  }
 
   doc.setDrawColor(220, 220, 220); doc.setLineWidth(0.3);
   doc.line(mL, y, 210 - mR, y); y += 7;
@@ -1624,6 +1629,7 @@ function LigneDevisEditeur({ produits, mo, lignes, ticket, onAjouter, onSupprime
   const [suggestionsDevis, setSuggestionsDevis] = React.useState(null);
   const [elementsSansCorrespondance, setElementsSansCorrespondance] = React.useState([]);
   const [chargementSuggestions, setChargementSuggestions] = React.useState(false);
+  const [erreurSuggestion, setErreurSuggestion] = React.useState("");
   // Devis assisté depuis SAV V1 : quantité "à confirmer" (l.quantite === null,
   // jamais inventée côté serveur) saisie ici par le responsable avant de
   // pouvoir ajouter la ligne — jamais de valeur par défaut silencieuse.
@@ -1632,6 +1638,7 @@ function LigneDevisEditeur({ produits, mo, lignes, ticket, onAjouter, onSupprime
   const demanderSuggestionsDevis = async () => {
     if (!produits.length && !mo.length) return;
     setChargementSuggestions(true);
+    setErreurSuggestion("");
     setSuggestionsDevis(null);
     setElementsSansCorrespondance([]);
     setQteAConfirmer({});
@@ -1654,8 +1661,10 @@ function LigneDevisEditeur({ produits, mo, lignes, ticket, onAjouter, onSupprime
       if (r.ok && !data.erreur) {
         setSuggestionsDevis(data.lignes || []);
         setElementsSansCorrespondance(data.elements_sans_correspondance || []);
+      } else {
+        setErreurSuggestion((data && data.erreur) || ("IKO n'a pas pu répondre (code " + r.status + "). Réessaie dans un instant."));
       }
-    } catch (e) {}
+    } catch (e) { setErreurSuggestion("IKO est injoignable pour le moment. Réessaie, ou ajoute les lignes à la main."); }
     setChargementSuggestions(false);
   };
 
@@ -1691,12 +1700,33 @@ function LigneDevisEditeur({ produits, mo, lignes, ticket, onAjouter, onSupprime
   return (
     <div style={{marginBottom:"14px"}}>
       <label style={{fontSize:"11px",fontWeight:"700",color:C.muted,display:"block",marginBottom:"6px"}}>Lignes du devis {demo ? "(catalogue démo)" : "(catalogue du client)"}</label>
+      {lignes.length === 0 && (
+        <div style={{border:"1px dashed "+C.border,borderRadius:"8px",padding:"12px",textAlign:"center",fontSize:"12px",color:C.muted,marginBottom:"10px"}}>Aucune ligne pour le moment — ajoute une prestation ci-dessous.</div>
+      )}
+      {lignes.length > 0 && (
+        <div style={{border:"1px solid "+C.border,borderRadius:"8px",overflow:"hidden",marginBottom:"6px"}}>
+          {lignes.map((l, i) => (
+            <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 12px",borderBottom:i<lignes.length-1?"1px solid "+C.border:"none",fontSize:"12px"}}>
+              <span>{l.designation} <span style={{color:C.muted}}>×{l.qte}</span></span>
+              <span style={{display:"flex",alignItems:"center",gap:"10px"}}>
+                <b>{l.totalHT.toFixed(2)} €</b>
+                <span onClick={() => onSupprimer(i)} style={{cursor:"pointer",color:C.muted}}>✕</span>
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+      <div style={{textAlign:"right",fontSize:"12px",color:C.muted}}>Total HT : {total.toFixed(2)} € · TVA : {(lignes.reduce((s,l)=>s+((l.totalTTC!=null?l.totalTTC:l.totalHT*1.2)-l.totalHT),0)).toFixed(2)} €</div>
+      <div style={{textAlign:"right",fontSize:"14px",fontWeight:"900",color:C.white}}>Total TTC : {(lignes.reduce((s,l)=>s+(l.totalTTC!=null?l.totalTTC:l.totalHT*1.2),0)).toFixed(2)} €</div>
+      <div style={{fontSize:"11px",fontWeight:"700",color:C.muted,margin:"14px 0 6px"}}>➕ Ajouter une prestation</div>
+      <div style={{background:"rgba(0,0,0,0.03)",border:"1px solid "+C.border,borderRadius:"10px",padding:"10px"}}>
       {(produits.length > 0 || mo.length > 0) && (
         <>
           <button type="button" onClick={demanderSuggestionsDevis} disabled={chargementSuggestions}
             style={{width:"100%",padding:"8px",marginBottom:"8px",borderRadius:"8px",background:"rgba(var(--iko-primary-rgb),0.1)",border:"1px solid var(--iko-primary)",color:"var(--iko-primary)",fontSize:"11px",fontWeight:"700",cursor:chargementSuggestions?"not-allowed":"pointer"}}>
-            {chargementSuggestions ? "⏳ IKO prépare la proposition..." : "🧾 Préparer un devis avec IKO"}
+            {chargementSuggestions ? "⏳ IKO prépare la proposition..." : "🧾 Laisser IKO proposer des lignes (selon le problème du ticket)"}
           </button>
+          {erreurSuggestion && <div style={{fontSize:"11px",color:C.rouge,marginBottom:"8px"}}>⚠️ {erreurSuggestion}</div>}
           {suggestionsDevis && (
             <div style={{marginBottom:"8px",fontSize:"10px",color:C.muted}}>
               🔎 Éléments identifiés : {ticket?.fields?.Produit || "produit non précisé"} — {ticket?.fields?.Problème || "problème non précisé"}
@@ -1778,21 +1808,7 @@ function LigneDevisEditeur({ produits, mo, lignes, ticket, onAjouter, onSupprime
           </div>
         )}
       </div>
-      {lignes.length > 0 && (
-        <div style={{border:"1px solid "+C.border,borderRadius:"8px",overflow:"hidden",marginBottom:"6px"}}>
-          {lignes.map((l, i) => (
-            <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 12px",borderBottom:i<lignes.length-1?"1px solid "+C.border:"none",fontSize:"12px"}}>
-              <span>{l.designation} <span style={{color:C.muted}}>×{l.qte}</span></span>
-              <span style={{display:"flex",alignItems:"center",gap:"10px"}}>
-                <b>{l.totalHT.toFixed(2)} €</b>
-                <span onClick={() => onSupprimer(i)} style={{cursor:"pointer",color:C.muted}}>✕</span>
-              </span>
-            </div>
-          ))}
-        </div>
-      )}
-      <div style={{textAlign:"right",fontSize:"12px",color:C.muted}}>Total HT : {total.toFixed(2)} € · TVA : {(lignes.reduce((s,l)=>s+((l.totalTTC!=null?l.totalTTC:l.totalHT*1.2)-l.totalHT),0)).toFixed(2)} €</div>
-      <div style={{textAlign:"right",fontSize:"14px",fontWeight:"900",color:C.white}}>Total TTC : {(lignes.reduce((s,l)=>s+(l.totalTTC!=null?l.totalTTC:l.totalHT*1.2),0)).toFixed(2)} €</div>
+      </div>
     </div>
   );
 }
