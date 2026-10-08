@@ -1472,9 +1472,10 @@ async function genererPdfDevis({ numero, ticket, client, lignes, montantHT, mont
   const mentions = [
     'SIRET ' + (identite.siret || '—') + '  ·  RCS ' + (identite.rcs || '—') + '  ·  TVA intracom. ' + (identite.tva || '—'),
     'Assurance décennale : ' + (assurance.assureur || '—') + (assurance.numPolice ? ' — police n° ' + assurance.numPolice : '') + (assurance.zone ? ' — zone : ' + assurance.zone : ''),
+    'Conditions de paiement : ' + (mep.conditionsPaiement || 'Acompte de 30 % à la commande, solde à la fin des travaux') + '.',
     'Devis valable ' + (mep.dureeValidite || 30) + ' jours à compter de sa date d\'émission. Bon pour accord — signature électronique ci-après.',
   ];
-  doc.text(mentions, mL, 297 - mBas - 15);
+  doc.text(mentions, mL, 297 - mBas - 19);
   const pied = rendrePiedPageRiche(mep.piedPage);
   if (pied) {
     doc.setFontSize(6.5); doc.setTextColor(160, 160, 160);
@@ -1577,6 +1578,21 @@ const CATALOGUE_DEMO_IKO = {
     ["Réglage ouvrant (forfait)", 70], ["Remplacement joint / poignée (forfait)", 55],
   ].map(([n,p],i) => ({ id:"demo-m"+i, fields:{ "Type d'action":n, "Prix forfait HT":p } })).concat([{ id:"demo-m9", fields:{ "Type d'action":"Main d'œuvre à l'heure", "Taux horaire HT":65 } }]),
 };
+
+// Valeurs par défaut de la mise en page quand le client n'a rien configuré (démo IKO).
+function mepAvecDefauts(mep, demo) {
+  const m = { ...(mep || {}) };
+  const id = { ...(m.identite || {}) };
+  const as = { ...(m.assurance || {}) };
+  if (!id.raisonSociale) {
+    Object.assign(id, { raisonSociale: "IKO DEMO — Menuiserie", formeJuridique: "SAS", adresse: "12 rue de l'Atelier, 59000 Lille", siret: id.siret || "000 000 000 00000 (démo)", rcs: id.rcs || "Lille (démo)", tva: id.tva || "FR00 000000000 (démo)" });
+  }
+  if (!as.assureur) Object.assign(as, { assureur: "Assureur (démo)", numPolice: "DEMO-0000", zone: "France métropolitaine" });
+  m.identite = id; m.assurance = as;
+  if (!m.logoUrl && demo) { m.logoUrl = IKO_LOGO; m.logoW = 26; m.logoX = 18; m.logoY = 14; }
+  if (!m.piedPage && demo) m.piedPage = "Document de démonstration — IKO";
+  return m;
+}
 
 function tauxTvaVersDecimal(label) {
   if (!label) return 0.20;
@@ -1786,6 +1802,11 @@ function ModalDevis({ ticket, onClose, onSent }) {
   const [catalogue, setCatalogue] = React.useState({ produits: [], mo: [], mep: null });
   const [clientInfo, setClientInfo] = React.useState(null);
   const [demoCat, setDemoCat] = React.useState(false);
+  const [etape, setEtape] = React.useState("edition");
+  const [apercuUrl, setApercuUrl] = React.useState(null);
+  const [conditions, setConditions] = React.useState("Acompte de 30 % à la commande, solde à la fin des travaux");
+  const [validite, setValidite] = React.useState(30);
+  const [numeroDevis] = React.useState(() => "DEV-" + new Date().getFullYear() + "-" + Math.floor(1000 + Math.random() * 9000));
   const [lignes, setLignes] = React.useState([]);
   const [email, setEmail] = React.useState(ticket.fields?.Email || "");
   const [message, setMessage] = React.useState("");
@@ -1815,6 +1836,24 @@ function ModalDevis({ ticket, onClose, onSent }) {
     })();
   }, []);
 
+  const mepEffectif = () => mepAvecDefauts({ ...(catalogue.mep || {}), conditionsPaiement: conditions, dureeValidite: validite }, demoCat);
+  const clientPdf = () => {
+    const cpMatch = (ticket.fields?.Adresse || "").match(/\b\d{5}\b/);
+    return { nom: ticket.fields?.Client, adresse: ticket.fields?.Adresse || "", cp: cpMatch ? cpMatch[0] : "" };
+  };
+  const voirApercu = async () => {
+    setError("");
+    if (!lignes.length) { setError("Ajoute au moins une ligne au devis."); return; }
+    setSaving(true);
+    try {
+      const blob = await genererPdfDevis({ numero: numeroDevis, ticket, client: clientPdf(), lignes, montantHT, montantTTC, mep: mepEffectif() });
+      if (apercuUrl) URL.revokeObjectURL(apercuUrl);
+      setApercuUrl(URL.createObjectURL(blob));
+      setEtape("apercu");
+    } catch(e) { console.error(e); setError("Impossible de générer l'aperçu : " + (e && e.message || e)); }
+    setSaving(false);
+  };
+
   const genererToken = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-6);
   const emailValide = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
   const montantHT = lignes.reduce((s, l) => s + (l.totalHT || 0), 0);
@@ -1823,25 +1862,25 @@ function ModalDevis({ ticket, onClose, onSent }) {
   const envoyer = async () => {
     if (!lignes.length) { setError("Ajoute au moins une ligne au devis."); return; }
     if (!emailValide) { setError("Indique un email client valide."); return; }
-    if (!clientInfo) { setError("Impossible de résoudre le client de cette agence — vérifie la configuration."); return; }
+    if (!clientInfo && !demoCat) { setError("Impossible de résoudre le client de cette agence — vérifie la configuration."); return; }
     setSaving(true); setError("");
     const diag = { devisId: null, pdfGenere: false, yousignOk: false, yousignErreur: null, ticketMisAJour: false, webhookStatut: null, webhookErreur: null, lienDevis: null };
     try {
-      const numero = "DEV-" + new Date().getFullYear() + "-" + Math.floor(1000 + Math.random() * 9000);
-      const mep = catalogue.mep || { identite: {}, assurance: {}, piedPage: "", dureeValidite: 30 };
-      const cpMatch = (ticket.fields?.Adresse || "").match(/\b\d{5}\b/);
-      const client = { nom: ticket.fields?.Client, adresse: ticket.fields?.Adresse || "", cp: cpMatch ? cpMatch[0] : "" };
+      const numero = numeroDevis;
+      const mep = mepEffectif();
+      const client = clientPdf();
 
       const devisRes = await fetch('/api/airtable/Devis', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ records: [{ fields: (() => {
           const champs = {
-            "N° devis": numero, "Ticket lié": [ticket.id], "Client": [clientInfo.clientId],
+            "N° devis": numero, "Ticket lié": [ticket.id],
             "Nom client": client.nom, "Adresse client": client.adresse, "CP client": client.cp,
             "Lignes devis (JSON)": JSON.stringify(lignes), "Montant HT": montantHT, "Montant TTC": montantTTC,
             "Statut": "Envoyé", "Mode": "Manuel",
           };
-          if (clientInfo.agenceId) champs["Agence"] = [clientInfo.agenceId];
+          if (clientInfo?.clientId) champs["Client"] = [clientInfo.clientId];
+          if (clientInfo?.agenceId) champs["Agence"] = [clientInfo.agenceId];
           return champs;
         })() }] })
       });
@@ -1938,7 +1977,11 @@ function ModalDevis({ ticket, onClose, onSent }) {
 
   return (
     <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="modal-box" style={{maxWidth:"520px"}}>
+      <div className="modal-box" style={{maxWidth:etape==="apercu"?"820px":"600px",width:"95%"}}>
+        <div style={{display:"flex",gap:"6px",marginBottom:"10px",fontSize:"11px",fontWeight:"800"}}>
+          <span style={{padding:"3px 10px",borderRadius:"12px",background:etape==="edition"?C.or:"rgba(0,0,0,0.06)",color:etape==="edition"?"#fff":C.muted}}>1 · Lignes</span>
+          <span style={{padding:"3px 10px",borderRadius:"12px",background:etape==="apercu"?C.or:"rgba(0,0,0,0.06)",color:etape==="apercu"?"#fff":C.muted}}>2 · Aperçu & envoi</span>
+        </div>
         <div style={{fontSize:"16px",fontWeight:"900",color:C.white,marginBottom:"4px"}}>💶 Établir le devis</div>
         <div style={{fontSize:"12px",color:C.or,fontFamily:"monospace",marginBottom:"14px"}}>{ticket.fields?.Name} — {ticket.fields?.Client}</div>
         {ticket.fields?.Diagnostic && (
@@ -1947,6 +1990,7 @@ function ModalDevis({ ticket, onClose, onSent }) {
           </div>
         )}
 
+        {etape === "edition" && (<>
         {chargement && <div style={{textAlign:"center",padding:"20px 0",color:C.muted,fontSize:"12px"}}>⏳ Chargement du catalogue client...</div>}
 
         {!chargement && (
@@ -1960,17 +2004,53 @@ function ModalDevis({ ticket, onClose, onSent }) {
         <label style={{fontSize:"11px",fontWeight:"700",color:C.muted,display:"block",marginBottom:"6px"}}>Message complémentaire (facultatif)</label>
         <textarea rows={2} placeholder="Ex : délai de livraison estimé..." value={message} onChange={e => setMessage(e.target.value)} style={{resize:"none",marginBottom:"14px"}}/>
 
+        <div style={{display:"flex",gap:"10px",marginBottom:"14px",flexWrap:"wrap"}}>
+          <div style={{flex:"2 1 220px"}}>
+            <label style={{fontSize:"11px",fontWeight:"700",color:C.muted,display:"block",marginBottom:"6px"}}>Conditions de paiement</label>
+            <select value={conditions} onChange={e => setConditions(e.target.value)}>
+              <option>Acompte de 30 % à la commande, solde à la fin des travaux</option>
+              <option>Acompte de 50 % à la commande, solde à la livraison</option>
+              <option>Paiement comptant à la réception de la facture</option>
+              <option>Paiement à 30 jours</option>
+            </select>
+          </div>
+          <div style={{flex:"1 1 120px"}}>
+            <label style={{fontSize:"11px",fontWeight:"700",color:C.muted,display:"block",marginBottom:"6px"}}>Validité du devis</label>
+            <select value={validite} onChange={e => setValidite(Number(e.target.value))}>
+              <option value={15}>15 jours</option><option value={30}>30 jours</option><option value={60}>60 jours</option><option value={90}>90 jours</option>
+            </select>
+          </div>
+        </div>
         <div style={{background:"#F3F4F6",border:"1px solid "+C.border,borderRadius:"8px",padding:"9px 12px",fontSize:"11px",color:C.muted,marginBottom:"14px"}}>
-          PDF itemisé généré avec le catalogue et la mise en page du client, signature électronique Yousign. Le client recevra un lien pour consulter, signer et valider.
+          Le PDF reprend le logo, l'identité de l'entreprise et les mentions légales (SIRET, TVA, décennale, validité, paiement). Tu le vérifies à l'étape suivante avant l'envoi.
         </div>
+        </>)}
+        {etape === "apercu" && (
+          <div style={{marginBottom:"12px"}}>
+            <div style={{fontSize:"12px",color:C.muted,marginBottom:"8px"}}>Aperçu du PDF tel que le client le recevra · {numeroDevis} · à {email}</div>
+            {apercuUrl && <iframe title="Aperçu devis" src={apercuUrl} style={{width:"100%",height:"58vh",border:"1px solid "+C.border,borderRadius:"10px",background:"#fff"}}/>}
+            {message && <div style={{fontSize:"11px",color:C.muted,marginTop:"8px"}}>Message joint : {message}</div>}
+          </div>
+        )}
         {error && <div style={{background:C.rougeDim,border:"1px solid rgba(var(--iko-erreur-rgb),0.3)",borderRadius:"8px",padding:"8px 12px",fontSize:"11px",color:C.rouge,marginBottom:"14px"}}>{error}</div>}
-        <div style={{display:"flex",gap:"10px"}}>
-          <button onClick={onClose} style={{flex:1,padding:"11px",background:"transparent",color:C.muted,border:"1px solid "+C.border,borderRadius:"10px",fontSize:"12px",cursor:"pointer"}}>Annuler</button>
-          <button onClick={envoyer} disabled={saving||!lignes.length||!emailValide}
-            style={{flex:2,padding:"11px",background:saving||!lignes.length||!emailValide?"#D1D5DB":"var(--iko-bg-sombre)",color:"#fff",border:"none",borderRadius:"10px",fontSize:"13px",fontWeight:"900",cursor:saving||!lignes.length||!emailValide?"not-allowed":"pointer"}}>
-            {saving ? "⏳ Envoi..." : "📧 Envoyer le devis au client"}
-          </button>
-        </div>
+        {etape === "edition" ? (
+          <div style={{display:"flex",gap:"10px",alignItems:"center",flexWrap:"wrap"}}>
+            <button onClick={onClose} style={{flex:1,padding:"11px",background:"transparent",color:C.muted,border:"1px solid "+C.border,borderRadius:"10px",fontSize:"12px",cursor:"pointer"}}>Annuler</button>
+            <button onClick={voirApercu} disabled={saving||!lignes.length||!emailValide}
+              style={{flex:2,padding:"11px",background:saving||!lignes.length||!emailValide?"#D1D5DB":C.or,color:"#fff",border:"none",borderRadius:"10px",fontSize:"13px",fontWeight:"900",cursor:saving||!lignes.length||!emailValide?"not-allowed":"pointer"}}>
+              {saving ? "⏳ Génération..." : "👁️ Voir l'aperçu du devis"}
+            </button>
+            {(!lignes.length || !emailValide) && <div style={{flexBasis:"100%",fontSize:"11px",color:C.muted,textAlign:"right"}}>{!lignes.length ? "Ajoute au moins une ligne" : "Renseigne un e-mail client valide"} pour continuer.</div>}
+          </div>
+        ) : (
+          <div style={{display:"flex",gap:"10px"}}>
+            <button onClick={() => setEtape("edition")} style={{flex:1,padding:"11px",background:"transparent",color:C.muted,border:"1px solid "+C.border,borderRadius:"10px",fontSize:"12px",cursor:"pointer"}}>← Modifier</button>
+            <button onClick={envoyer} disabled={saving}
+              style={{flex:2,padding:"11px",background:saving?"#D1D5DB":C.or,color:"#fff",border:"none",borderRadius:"10px",fontSize:"13px",fontWeight:"900",cursor:saving?"not-allowed":"pointer"}}>
+              {saving ? "⏳ Envoi..." : "📧 Envoyer le devis au client"}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
