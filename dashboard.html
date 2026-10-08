@@ -1608,6 +1608,14 @@ function tauxTvaVersDecimal(label) {
 function LigneDevisEditeur({ produits, mo, lignes, ticket, onAjouter, onSupprimer, demo }) {
   const [choix, setChoix] = React.useState("");
   const [qte, setQte] = React.useState(1);
+  const refListe = React.useRef(null);
+  const [dernierAjout, setDernierAjout] = React.useState("");
+  const onAjouterVisible = (l) => {
+    onAjouter(l);
+    setDernierAjout("✓ Ajouté : " + l.designation + " ×" + l.qte);
+    setTimeout(() => { try { refListe.current && refListe.current.scrollIntoView({ behavior: "smooth", block: "nearest" }); } catch(e){} }, 80);
+    setTimeout(() => setDernierAjout(""), 3500);
+  };
   const [libreOuvert, setLibreOuvert] = React.useState(false);
   const [libre, setLibre] = React.useState({ designation: "", prix: "", qte: 1, tva: "0.2" });
   const ajouterLibre = () => {
@@ -1616,7 +1624,7 @@ function LigneDevisEditeur({ produits, mo, lignes, ticket, onAjouter, onSupprime
     if (!libre.designation.trim() || !(pu >= 0) || libre.prix === "") return;
     const taux = Number(libre.tva);
     const totalHT = q * pu;
-    onAjouter({ designation: libre.designation.trim(), qte: q, puHT: pu, tauxTva: taux, totalHT, totalTTC: totalHT * (1 + taux) });
+    onAjouterVisible({ designation: libre.designation.trim(), qte: q, puHT: pu, tauxTva: taux, totalHT, totalTTC: totalHT * (1 + taux) });
     setLibre({ designation: "", prix: "", qte: 1, tva: libre.tva });
   };
 
@@ -1677,7 +1685,7 @@ function LigneDevisEditeur({ produits, mo, lignes, ticket, onAjouter, onSupprime
     const produitSource = produits.find(p => p.id === l.catalogue_id);
     const tauxTva = l.type === 'produit' ? tauxTvaVersDecimal(produitSource?.fields?.["Taux TVA"]) : 0.20;
     const totalHT = quantiteFinale * l.prix;
-    onAjouter({ designation: l.designation, qte: quantiteFinale, puHT: l.prix, tauxTva, totalHT, totalTTC: totalHT * (1 + tauxTva) });
+    onAjouterVisible({ designation: l.designation, qte: quantiteFinale, puHT: l.prix, tauxTva, totalHT, totalTTC: totalHT * (1 + tauxTva) });
     setSuggestionsDevis(prev => (prev || []).filter(x => x.catalogue_id !== l.catalogue_id));
   };
 
@@ -1691,7 +1699,7 @@ function LigneDevisEditeur({ produits, mo, lignes, ticket, onAjouter, onSupprime
     const puHT = type === 'produit' ? (f["Prix unitaire HT"] || 0) : (f["Prix forfait HT"] || f["Taux horaire HT"] || 0);
     const tauxTva = type === 'produit' ? tauxTvaVersDecimal(f["Taux TVA"]) : 0.20;
     const totalHT = (Number(qte) || 1) * puHT;
-    onAjouter({ designation, qte: Number(qte) || 1, puHT, tauxTva, totalHT, totalTTC: totalHT * (1 + tauxTva) });
+    onAjouterVisible({ designation, qte: Number(qte) || 1, puHT, tauxTva, totalHT, totalTTC: totalHT * (1 + tauxTva) });
     setChoix(""); setQte(1);
   };
 
@@ -1703,6 +1711,7 @@ function LigneDevisEditeur({ produits, mo, lignes, ticket, onAjouter, onSupprime
       {lignes.length === 0 && (
         <div style={{border:"1px dashed "+C.border,borderRadius:"8px",padding:"12px",textAlign:"center",fontSize:"12px",color:C.muted,marginBottom:"10px"}}>Aucune ligne pour le moment — ajoute une prestation ci-dessous.</div>
       )}
+      <div ref={refListe}/>
       {lignes.length > 0 && (
         <div style={{border:"1px solid "+C.border,borderRadius:"8px",overflow:"hidden",marginBottom:"6px"}}>
           {lignes.map((l, i) => (
@@ -1718,6 +1727,10 @@ function LigneDevisEditeur({ produits, mo, lignes, ticket, onAjouter, onSupprime
       )}
       <div style={{textAlign:"right",fontSize:"12px",color:C.muted}}>Total HT : {total.toFixed(2)} € · TVA : {(lignes.reduce((s,l)=>s+((l.totalTTC!=null?l.totalTTC:l.totalHT*1.2)-l.totalHT),0)).toFixed(2)} €</div>
       <div style={{textAlign:"right",fontSize:"14px",fontWeight:"900",color:C.white}}>Total TTC : {(lignes.reduce((s,l)=>s+(l.totalTTC!=null?l.totalTTC:l.totalHT*1.2),0)).toFixed(2)} €</div>
+      <div style={{position:"sticky",bottom:0,zIndex:5,margin:"10px 0 0",display:"flex",justifyContent:"space-between",alignItems:"center",gap:"8px",background:"#FEFEFE",border:"1px solid "+C.orBord,borderRadius:"10px",padding:"8px 12px",fontSize:"12px",fontWeight:"800",color:C.white}}>
+        <span>🧾 {lignes.length} ligne{lignes.length>1?"s":""} dans le devis</span>
+        {dernierAjout ? <span style={{color:"#15803D"}}>{dernierAjout}</span> : <span>Total TTC : {(lignes.reduce((s,l)=>s+(l.totalTTC!=null?l.totalTTC:l.totalHT*1.2),0)).toFixed(2)} €</span>}
+      </div>
       <div style={{fontSize:"11px",fontWeight:"700",color:C.muted,margin:"14px 0 6px"}}>➕ Ajouter une prestation</div>
       <div style={{background:"rgba(0,0,0,0.03)",border:"1px solid "+C.border,borderRadius:"10px",padding:"10px"}}>
       {(produits.length > 0 || mo.length > 0) && (
