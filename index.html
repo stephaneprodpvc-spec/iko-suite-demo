@@ -23,7 +23,7 @@ if (/Android/i.test(navigator.userAgent)) document.documentElement.classList.add
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body { font-family: 'Segoe UI', sans-serif; background: #F5F5F5; min-height: 100vh; }
 #rsia-widget-actions {
-  position: fixed; bottom: 28px; right: 28px; z-index: 9999;
+  position: fixed; bottom: 28px; right: 28px; z-index: 10001;
   display: flex; align-items: center; gap: 12px;
 }
 #rsia-widget-actions a.secondary-link {
@@ -72,7 +72,7 @@ body { font-family: 'Segoe UI', sans-serif; background: #F5F5F5; min-height: 100
   #amandine-widget-panel {
     top: 0 !important; right: 0 !important; left: 0 !important; bottom: 0 !important;
     transform: none !important; width: 100vw !important; max-width: 100vw !important;
-    height: 100vh !important; height: 100dvh !important; max-height: 100dvh !important;
+    height: auto !important; bottom: 76px !important; max-height: none !important;
     border-radius: 0 !important;
   }
 }
@@ -133,7 +133,8 @@ body { font-family: 'Segoe UI', sans-serif; background: #F5F5F5; min-height: 100
 
 
 <div id="rsia-widget-panel">
-  <div id="root" style="height:100%;display:flex;flex-direction:column;"></div>
+  <button id="rsia-retour-amandine" onclick="toggleWidget()" style="flex-shrink:0;background:#0D0D0D;color:#FFFFFF;border:none;border-bottom:1px solid rgba(255,255,255,0.12);padding:10px 14px;text-align:left;font-family:'Segoe UI',sans-serif;font-size:13px;font-weight:700;cursor:pointer;">← Retour à Amandine</button>
+  <div id="root" style="flex:1;min-height:0;display:flex;flex-direction:column;"></div>
 </div>
   <div id="amandine-widget-panel" style="position:fixed;top:50%;right:8%;transform:translateY(-50%);width:400px;max-width:40vw;height:600px;max-height:75vh;border-radius:18px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.4);z-index:10000;display:block;background:#0D0D0D;">
         <iframe src="amandine.html" title="Amandine, assistante IA Iko" allow="microphone; autoplay" style="width:100%;height:100%;border:0;"></iframe>
@@ -200,6 +201,10 @@ function toggleWidget() {
     btnLabel.style.display = 'inline';
     iconClose.style.display = 'none';
     if (window.__rsiaReset) window.__rsiaReset();
+    // Fermer le formulaire (croix ou "Retour a Amandine") rouvre la carte Amandine.
+    amandineOpen = true;
+    const apr = document.getElementById('amandine-widget-panel');
+    if (apr) apr.style.display = 'block';
   }
 }
 </script>
