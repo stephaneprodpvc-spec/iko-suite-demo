@@ -470,8 +470,8 @@ function StatCard({ label, value, sub, accent, active, onClick, alert }) {
   const isAlert = alert && value > 0;
   return (
     <div onClick={onClick} className={isAlert ? "alert-blink" : ""}
-      style={{background:isAlert?"var(--iko-erreur)":(active?"#FEFEFE":C.card),border:"2px solid "+(isAlert?"var(--iko-erreur)":(active?C.or:(accent?C.orBord:C.border))),borderRadius:"12px",padding:"16px 20px",flex:1,minWidth:"120px",cursor:onClick?"pointer":"default",transition:"border-color 0.15s"}}>
-      <div style={{fontSize:"28px",fontWeight:"900",color:isAlert?"#fff":(accent||active?C.or:C.white),fontFamily:"monospace"}}>{value}</div>
+      style={{background:isAlert?"var(--iko-erreur)":(active?"#FEFEFE":C.card),border:"2px solid "+(isAlert?"var(--iko-erreur)":(active?C.or:(accent?C.orBord:C.border))),borderRadius:"12px",padding:"12px 14px",flex:1,minWidth:"104px",cursor:onClick?"pointer":"default",transition:"border-color 0.15s"}}>
+      <div style={{fontSize:"24px",fontWeight:"900",color:isAlert?"#fff":(accent||active?C.or:C.white),fontFamily:"monospace"}}>{value}</div>
       <div style={{fontSize:"12px",fontWeight:"700",color:isAlert?"#fff":C.text,marginTop:"4px"}}>{label}</div>
       {sub && <div style={{fontSize:"10px",color:isAlert?"rgba(255,255,255,0.85)":C.muted,marginTop:"2px"}}>{sub}</div>}
     </div>
@@ -4375,6 +4375,7 @@ function Dashboard({ agenceAccess, onClose }) {
   const [showModalDirigeant, setShowModalDirigeant] = React.useState(false);
   const [debugInfo, setDebugInfo] = React.useState(null);
   const [debugOuvert, setDebugOuvert] = React.useState(false);
+  const [exportOuvert, setExportOuvert] = React.useState(false);
   const [, forcerRender] = React.useState(0);
 
   React.useEffect(() => {
@@ -5434,16 +5435,13 @@ function Dashboard({ agenceAccess, onClose }) {
           )}
         </div>
 
-        <div style={{display:"flex",gap:"12px",marginBottom:"20px",flexWrap:"wrap"}}>
+        <div style={{display:"flex",gap:"10px",marginBottom:"12px",flexWrap:"wrap"}}>
           <StatCard label="Total tickets" value={stats.total} accent
             active={statutFilter==="tous" && !urgentOnly && !messagesOnly && !rdvModifieOnly}
             onClick={() => { setStatutFilter("tous"); setUrgentOnly(false); setMessagesOnly(false); setRdvModifieOnly(false); }}/>
           <StatCard label="À traiter" value={ticketsATraiterIKO.length} sub="urgent + signalé par IKO" alert
             active={suiviIKOOuvert && ticketsATraiterIKO.length > 0}
             onClick={() => { setSuiviIKOOuvert(true); window.scrollTo({ top: 0, behavior: "smooth" }); }}/>
-          <StatCard label="Urgents" value={stats.urgent} sub="à traiter en priorité" alert
-            active={urgentOnly}
-            onClick={() => { setUrgentOnly(!urgentOnly); setStatutFilter("tous"); setMessagesOnly(false); setRdvModifieOnly(false); }}/>
           <StatCard label="Nouveaux" value={stats.nouveau}
             active={statutFilter==="Nouveau"}
             onClick={() => { setStatutFilter("Nouveau"); setUrgentOnly(false); setMessagesOnly(false); setRdvModifieOnly(false); }}/>
@@ -5462,49 +5460,55 @@ function Dashboard({ agenceAccess, onClose }) {
           <StatCard label="Note client" value={stats.noteMoyenne ? "⭐ "+stats.noteMoyenne.toFixed(1) : "—"} sub={stats.nbNotes+" avis"} onClick={() => setShowModalNotes(true)}/>
         </div>
 
-        <div style={{display:"flex",gap:"4px",marginBottom:"16px",background:C.card,borderRadius:"10px",padding:"4px",border:"1px solid "+C.border,width:"fit-content"}}>
-          {[["tickets","🎫 Tickets"],["planning","📅 Planning"]].map(([v,l]) => (
-            <button key={v} onClick={() => setVue(v)}
-              style={{padding:"7px 18px",borderRadius:"7px",border:"none",background:vue===v?C.or:"transparent",color:vue===v?"var(--iko-dark)":C.muted,fontSize:"12px",fontWeight:"700",cursor:"pointer"}}>
-              {l}
-            </button>
-          ))}
-        </div>
-
-        <div style={{background:C.card,border:"1px solid "+C.border,borderRadius:"12px",padding:"14px 16px",marginBottom:"16px"}}>
-          <div style={{fontSize:"12px",fontWeight:"700",color:C.white,marginBottom:"10px"}}>📤 Export (respecte les filtres agence/statut/recherche ci-dessous)</div>
-          <div style={{display:"flex",gap:"10px",flexWrap:"wrap",alignItems:"center"}}>
-            <div style={{display:"flex",gap:"6px",alignItems:"center"}}>
-              <span style={{fontSize:"11px",color:C.muted}}>Du</span>
-              <input type="date" value={exportDebut} onChange={e => setExportDebut(e.target.value)} style={{width:"140px"}}/>
-              <span style={{fontSize:"11px",color:C.muted}}>au</span>
-              <input type="date" value={exportFin} onChange={e => setExportFin(e.target.value)} style={{width:"140px"}}/>
-              {(exportDebut||exportFin) && (
-                <button onClick={() => { setExportDebut(""); setExportFin(""); }} style={{background:"none",border:"none",color:C.muted,fontSize:"11px",cursor:"pointer",textDecoration:"underline"}}>Effacer</button>
-              )}
-            </div>
-            <div style={{display:"flex",gap:"8px",marginLeft:"auto"}}>
-              <button onClick={exportExcel} style={{background:C.vertDim,border:"1px solid rgba(var(--iko-primary-rgb),0.4)",color:C.vert,borderRadius:"8px",padding:"8px 14px",fontSize:"12px",fontWeight:"700",cursor:"pointer"}}>📊 Excel</button>
-              <button onClick={exportPDF} style={{background:C.orDim,border:"1px solid "+C.orBord,color:C.or,borderRadius:"8px",padding:"8px 14px",fontSize:"12px",fontWeight:"700",cursor:"pointer"}}>🖨️ PDF</button>
-            </div>
+        <div style={{display:"flex",gap:"10px",flexWrap:"wrap",alignItems:"center",background:C.card,border:"1px solid "+C.border,borderRadius:"12px",padding:"8px 12px",marginBottom:"8px",position:"relative"}}>
+          <div style={{display:"flex",gap:"4px",background:"rgba(0,0,0,0.05)",borderRadius:"9px",padding:"3px"}}>
+            {[["tickets","🎫 Tickets"],["planning","📅 Planning"]].map(([v,l]) => (
+              <button key={v} onClick={() => setVue(v)}
+                style={{padding:"6px 16px",borderRadius:"7px",border:"none",background:vue===v?C.or:"transparent",color:vue===v?"#fff":C.muted,fontSize:"12px",fontWeight:"700",cursor:"pointer"}}>
+                {l}
+              </button>
+            ))}
           </div>
-        </div>
-
-        {vue === "tickets" && (
-            <div style={{display:"flex",flexDirection:"column",gap:"10px"}}>
-              <div style={{display:"flex",gap:"10px",flexWrap:"wrap",alignItems:"center",background:"#F3F4F6",border:"1px solid "+C.border,borderRadius:"10px",padding:"8px 12px"}}>
-                <input placeholder="🔍 Recherche globale (client, ticket, produit, adresse, email, tél., diagnostic...)" value={search} onChange={e => setSearch(e.target.value)} style={{width:"320px"}}/>
-                <span style={{fontSize:"11px",color:C.muted,fontWeight:"700",marginRight:"2px"}}>Trier :</span>
+          {vue === "tickets" && (
+            <>
+              <input placeholder="🔍 Rechercher (client, ticket, produit, adresse, tél...)" value={search} onChange={e => setSearch(e.target.value)} style={{flex:"1 1 240px",minWidth:"200px",maxWidth:"380px"}}/>
+              <div style={{display:"flex",gap:"6px",alignItems:"center"}}>
                 {[["date","📅 Date"],["ticket","🔢 N° Ticket"]].map(([v,l]) => (
-                  <button key={v} onClick={() => setSortBy(v)}
-                    style={{padding:"6px 14px",borderRadius:"20px",border:"1px solid "+(sortBy===v?C.or:C.border),background:sortBy===v?C.orDim:"transparent",color:sortBy===v?C.or:C.muted,fontSize:"11px",fontWeight:"700",cursor:"pointer"}}>
+                  <button key={v} onClick={() => setSortBy(v)} title="Trier"
+                    style={{padding:"6px 12px",borderRadius:"20px",border:"1px solid "+(sortBy===v?C.or:C.border),background:sortBy===v?C.orDim:"transparent",color:sortBy===v?C.or:C.muted,fontSize:"11px",fontWeight:"700",cursor:"pointer"}}>
                     {l}
                   </button>
                 ))}
-                <span style={{fontSize:"11px",color:C.muted,marginLeft:"auto"}}>{sorted.length} ticket{sorted.length>1?"s":""}</span>
+                <button onClick={() => { setUrgentOnly(!urgentOnly); setStatutFilter("tous"); setMessagesOnly(false); setRdvModifieOnly(false); }} title="Afficher seulement les urgents"
+                  style={{padding:"6px 12px",borderRadius:"20px",border:"1px solid "+(urgentOnly?"var(--iko-erreur)":C.border),background:urgentOnly?"var(--iko-erreur)":"transparent",color:urgentOnly?"#fff":C.muted,fontSize:"11px",fontWeight:"700",cursor:"pointer"}}>
+                  🔴 Urgents {stats.urgent}
+                </button>
+              </div>
+              <span style={{fontSize:"11px",color:C.muted,marginLeft:"auto"}}>{sorted.length} ticket{sorted.length>1?"s":""}</span>
+            </>
+          )}
+          <button onClick={() => setExportOuvert(v => !v)} style={{marginLeft:vue==="tickets"?0:"auto",padding:"7px 14px",borderRadius:"9px",border:"1px solid "+C.orBord,background:C.orDim,color:C.or,fontSize:"12px",fontWeight:"800",cursor:"pointer"}}>
+            📤 Exporter {exportOuvert ? "▴" : "▾"}
+          </button>
+          {exportOuvert && (
+            <div style={{position:"absolute",right:"12px",top:"calc(100% + 6px)",zIndex:80,background:"#FEFEFE",border:"1px solid "+C.border,borderRadius:"12px",padding:"14px",boxShadow:"0 14px 40px rgba(0,0,0,0.25)",display:"flex",flexDirection:"column",gap:"10px",minWidth:"340px"}}>
+              <div style={{fontSize:"11px",color:C.muted}}>Respecte les filtres agence, statut et recherche.</div>
+              <div style={{display:"flex",gap:"6px",alignItems:"center"}}>
+                <span style={{fontSize:"11px",color:C.muted}}>Du</span>
+                <input type="date" value={exportDebut} onChange={e => setExportDebut(e.target.value)} style={{width:"140px"}}/>
+                <span style={{fontSize:"11px",color:C.muted}}>au</span>
+                <input type="date" value={exportFin} onChange={e => setExportFin(e.target.value)} style={{width:"140px"}}/>
+              </div>
+              <div style={{display:"flex",gap:"8px",alignItems:"center"}}>
+                <button onClick={exportExcel} style={{background:C.or,border:"none",color:"#fff",borderRadius:"8px",padding:"8px 16px",fontSize:"12px",fontWeight:"800",cursor:"pointer"}}>📊 Excel</button>
+                <button onClick={exportPDF} style={{background:C.or,border:"none",color:"#fff",borderRadius:"8px",padding:"8px 16px",fontSize:"12px",fontWeight:"800",cursor:"pointer"}}>🖨️ PDF</button>
+                {(exportDebut||exportFin) && (
+                  <button onClick={() => { setExportDebut(""); setExportFin(""); }} style={{background:"none",border:"none",color:C.muted,fontSize:"11px",cursor:"pointer",textDecoration:"underline",marginLeft:"auto"}}>Effacer les dates</button>
+                )}
               </div>
             </div>
-        )}
+          )}
+        </div>
         </div>
 
         {vue === "tickets" && (
