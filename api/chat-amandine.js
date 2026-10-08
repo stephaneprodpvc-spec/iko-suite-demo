@@ -101,7 +101,7 @@ ticket (ex: SAV-2026-1234, jamais **SAV-2026-1234**).
 
 DEROULE POUR OUVRIR UN TICKET / PRENDRE RDV
 1. Comprendre le probleme (quel produit, quelle panne, depuis quand).
-2. Demander l'agence du client parmi : ${listeAgences}. Si le client
+2. ${agencesNoms && agencesNoms.length === 1 ? "Ce client n'a qu'une seule agence : " + agencesNoms[0] + ". Ne demande PAS l'agence, utilise-la directement." : "Demander l'agence du client parmi : " + listeAgences + "."} Si le client
    donne juste sa ville, associe-la a l'agence la plus proche parmi
       celles-ci.
       3. Recuperer nom complet, telephone, e-mail, adresse complete (rue, code
@@ -266,16 +266,21 @@ async function obtenirQuestionnaireClient(clientId) {
 // Agences de ce client (table "Agences", filtre Client + Actif), avec leurs
 // emails de notification. null si le client n'a pas encore d'agences
 // configurees (Amandine garde alors le repli demo AGENCES_VALIDES).
-async function obtenirAgencesClient(clientId) {
-  if (!clientId) return null;
+async function obtenirAgencesClient(clientId, clientNom, nombreAgences) {
+  if (!clientId || !clientNom) return null;
   try {
-    const formule = encodeURIComponent('AND(FIND("' + clientId + '", ARRAYJOIN({Client})), {Actif}=1)');
+    // ARRAYJOIN() sur un lien renvoie le NOM affiche (pas l'ID) : on filtre par
+    // nom, puis on verifie le lien par ID sur les enregistrements recus.
+    const plafond = Math.max(1, Math.min(10, parseInt(nombreAgences, 10) || 10));
+    const formule = encodeURIComponent('AND(FIND("' + String(clientNom).replace(/"/g, '\\"') + '", ARRAYJOIN({Client})), {Actif}=1)');
     const url = "https://api.airtable.com/v0/" + AIRTABLE_BASE + "/" + encodeURIComponent("Agences") +
-      "?filterByFormula=" + formule + "&maxRecords=10";
+      "?filterByFormula=" + formule + "&maxRecords=50";
     const r = await fetch(url, { headers: airtableHeaders() });
     if (!r.ok) return null;
     const json = await r.json();
-    const agences = (json.records || []).map(function (rec) {
+    const agences = (json.records || []).filter(function (rec) {
+      return Array.isArray(rec.fields["Client"]) && rec.fields["Client"].indexOf(clientId) !== -1;
+    }).slice(0, plafond).map(function (rec) {
       return {
         nom: rec.fields["Nom agence"] || "",
         emailAgence: rec.fields["Email agence"] || "",
@@ -302,7 +307,7 @@ async function resoudreClient(slug) {
     const metierId = metier === "Menuiserie" ? "menuiserie" : (metier === "Plomberie & Chauffage" ? "plomberie_chauffage" : null);
     const [questionnaire, agences] = await Promise.all([
       obtenirQuestionnaireClient(rec.id),
-      obtenirAgencesClient(rec.id),
+      obtenirAgencesClient(rec.id, rec.fields && rec.fields["Nom client"], rec.fields && rec.fields["Nombre agences"]),
     ]);
     return {
       id: rec.id,

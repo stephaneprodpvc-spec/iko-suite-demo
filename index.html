@@ -160,6 +160,14 @@ body { font-family: 'Segoe UI', sans-serif; background: var(--iko-bg-clair); min
 </script>
 
 <script>
+// Client pro (?client=slug) : Amandine travaille pour le meme client.
+(function () {
+  var s = new URLSearchParams(window.location.search).get('client');
+  var f = document.querySelector('#amandine-widget-panel iframe');
+  if (s && f) f.src = 'amandine.html?client=' + encodeURIComponent(s.trim());
+})();
+</script>
+<script>
 let widgetOpen = false;
 let reactMounted = false;
   let amandineOpen = true;
@@ -248,6 +256,33 @@ const AGENCES = [
 ];
 
 // Démo : la base utilise directement les libellés génériques Agence 1-4.
+
+// ---- Agences dynamiques (1 a 10) : lecture seule ----
+// Sans ?client=slug (demo), on garde le repli Agence 1-4 ci-dessus. Avec un client :
+// table Agences (Actif=1) de ce client, plafonnee par Clients."Nombre agences" (max 10) ;
+// a defaut de lignes, "Agence 1..N" selon "Nombre agences".
+const SLUG_CLIENT = (new URLSearchParams(window.location.search).get('client') || '').trim();
+async function chargerAgencesClient() {
+  if (!SLUG_CLIENT) return null;
+  try {
+    const rc = await fetch('/api/airtable/Clients?filterByFormula=' + encodeURIComponent('{Slug}="' + SLUG_CLIENT.replace(/"/g, '') + '"') + '&maxRecords=1');
+    const rec = ((await rc.json()).records || [])[0];
+    if (!rec) return null;
+    const nbBrut = parseInt(rec.fields["Nombre agences"], 10);
+    const plafond = Math.max(1, Math.min(10, nbBrut || 10));
+    let noms = [];
+    if (rec.fields["Nom client"]) {
+      const f = 'AND(FIND("' + String(rec.fields["Nom client"]).replace(/"/g, '') + '", ARRAYJOIN({Client})), {Actif}=1)';
+      const ra = await fetch('/api/airtable/Agences?filterByFormula=' + encodeURIComponent(f) + '&maxRecords=50');
+      noms = ((await ra.json()).records || [])
+        .filter(a => Array.isArray(a.fields["Client"]) && a.fields["Client"].includes(rec.id) && a.fields["Nom agence"])
+        .map(a => a.fields["Nom agence"]);
+    }
+    if (!noms.length && nbBrut) noms = Array.from({ length: plafond }, (_, i) => "Agence " + (i + 1));
+    noms = noms.slice(0, plafond);
+    return noms.length ? noms.map((n, i) => ({ id: "agence" + (i + 1), label: "📍 " + n, ville: n })) : null;
+  } catch (e) { return null; }
+}
 
 
 const PRODUITS = [
@@ -440,6 +475,7 @@ function CreneauPicker({ agenceVille, onSelect }) {
 function App() {
   const [etape, setEtape] = React.useState("agence");
   const [agence, setAgence] = React.useState(null);
+  const [agences, setAgences] = React.useState(AGENCES);
   const [typeClient, setTypeClient] = React.useState(null);
   const [garantie, setGarantie] = React.useState(null);
   const [facture, setFacture] = React.useState("");
@@ -458,6 +494,11 @@ function App() {
   const [factureFichier, setFactureFichier] = React.useState(null);
   const bottomRef = React.useRef(null);
 
+  React.useEffect(() => { chargerAgencesClient().then(l => { if (l && l.length) setAgences(l); }); }, []);
+  // Une seule agence : pas de choix propose, selection automatique.
+  React.useEffect(() => {
+    if (agences.length === 1 && etape === "agence") { setAgence(agences[0]); setEtape("identification"); }
+  }, [agences, etape]);
   React.useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [etape]);
   React.useEffect(() => { window.__rsiaReset = reset; }, []);
 
@@ -528,6 +569,7 @@ function App() {
       const urgentTexte = probleme.urgent ? "Oui" : "Non";
       await envoyerWebhook({
         marque: 'iko',
+        ...(SLUG_CLIENT ? { client_slug: SLUG_CLIENT } : {}),
         ticket: num,
         agence: agence.ville,
         nom: client.nom,
@@ -570,7 +612,7 @@ function App() {
             </div>
           </div>
           <div style={{display:"flex",alignItems:"center",gap:"8px"}}>
-            {etape !== "agence" && etape !== "merci" && (
+            {etape !== "agence" && etape !== "merci" && !(agences.length === 1 && etape === "identification") && (
               <button onClick={goBack} style={{background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.25)",color:"rgba(255,255,255,0.85)",borderRadius:"8px",padding:"4px 9px",fontSize:"10px",cursor:"pointer"}}>← Retour</button>
             )}
             {etape !== "agence" && etape !== "merci" && (
@@ -597,7 +639,7 @@ function App() {
               </div>
             </div>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"8px"}}>
-              {AGENCES.map(a => (
+              {agences.map(a => (
                 <button key={a.id} onClick={() => { setAgence(a); setEtape("identification"); }}
                   style={{background:F.blanc,border:"2px solid " + F.grisBord,borderRadius:"12px",padding:"14px 10px",fontSize:"13px",fontWeight:"700",color:F.marine,cursor:"pointer",textAlign:"center",lineHeight:"1.5"}}>
                   {a.label}<br/><span style={{fontSize:"10px",fontWeight:"400",color:"#64748B"}}>{a.ville}</span>

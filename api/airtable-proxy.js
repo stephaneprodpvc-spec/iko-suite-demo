@@ -294,7 +294,7 @@ async function handlerPush(req, res, baseId, headers, session) {
 // relayee telle quelle, cas historique dashboard.html) et POST (corps JSON
 // relaye tel quel, tous les autres appels du depot) - jamais l'un converti
 // en l'autre, pour ne rien changer au comportement reellement observe.
-async function relayerWebhook(req, res, urlCible, actionsAutorisees) {
+async function relayerWebhook(req, res, urlCible, actionsAutorisees, ctx) {
   if (req.method !== 'GET' && req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
@@ -336,6 +336,32 @@ async function relayerWebhook(req, res, urlCible, actionsAutorisees) {
   const corpsRelaye = Object.assign({}, req.body || {});
   if (actionsAutorisees === ACTIONS_WEBHOOK_AUTORISEES && actionDemandee === undefined) {
     delete corpsRelaye.lien_suivi;
+    // E-mails de l'agence choisie (Make les utilise pour notifier l'agence) :
+    // JAMAIS pris du navigateur (un tiers pourrait faire envoyer un mail a une
+    // adresse arbitraire) ; resolus ici depuis la table Agences (lecture seule)
+    // a partir du client (slug) et du nom d'agence.
+    const slugClient = typeof corpsRelaye.client_slug === 'string' ? corpsRelaye.client_slug.trim() : '';
+    delete corpsRelaye.client_slug;
+    delete corpsRelaye.email_agence;
+    delete corpsRelaye.email_technicien;
+    if (slugClient && corpsRelaye.agence && ctx) {
+      try {
+        const echap = (v) => String(v).replace(/"/g, '\\"');
+        const rc = await fetch('https://api.airtable.com/v0/' + ctx.baseId + '/Clients?filterByFormula=' + encodeURIComponent('{Slug}="' + echap(slugClient) + '"') + '&maxRecords=1', { headers: ctx.headers });
+        const recClient = ((await rc.json()).records || [])[0];
+        if (recClient && recClient.fields && recClient.fields['Nom client']) {
+          const formule = 'AND(FIND("' + echap(recClient.fields['Nom client']) + '", ARRAYJOIN({Client})), {Actif}=1, {Nom agence}="' + echap(corpsRelaye.agence) + '")';
+          const ra = await fetch('https://api.airtable.com/v0/' + ctx.baseId + '/Agences?filterByFormula=' + encodeURIComponent(formule) + '&maxRecords=10', { headers: ctx.headers });
+          const recAgence = ((await ra.json()).records || []).find(r => Array.isArray(r.fields.Client) && r.fields.Client.includes(recClient.id));
+          if (recAgence) {
+            corpsRelaye.email_agence = recAgence.fields['Email agence'] || '';
+            corpsRelaye.email_technicien = recAgence.fields['Email technicien SAV'] || '';
+          }
+        }
+      } catch (err) {
+        console.error('Resolution email agence (non bloquant):', err);
+      }
+    }
     const emailClient = corpsRelaye['e-mail'];
     if (emailClient && corpsRelaye.ticket) {
       const lien = lienSuivi(req, { email: emailClient, tel: corpsRelaye.tel, ticket: corpsRelaye.ticket });
@@ -526,7 +552,7 @@ export default async function handler(req, res) {
   }
 
   if (subPathRaw === 'webhook') {
-    return relayerWebhook(req, res, MAKE_WEBHOOK_URL, ACTIONS_WEBHOOK_AUTORISEES);
+    return relayerWebhook(req, res, MAKE_WEBHOOK_URL, ACTIONS_WEBHOOK_AUTORISEES, { baseId, headers });
   }
 
   if (subPathRaw === 'suivi') {
@@ -1370,6 +1396,11 @@ export default async function handler(req, res) {
   };
 
   if (req.method !== 'GET' && req.method !== 'HEAD') {
+    // Agences dynamiques (1 a 10) : une ecriture sur Planning qui porte "Agence"
+    // cree l'option du menu a la volee (typecast), sans changer le schema.
+    if (premierSegment === 'Planning' && req.body && req.body.fields && 'Agence' in req.body.fields) {
+      req.body.typecast = true;
+    }
     init.body = JSON.stringify(req.body);
   }
 

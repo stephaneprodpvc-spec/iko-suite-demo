@@ -578,6 +578,38 @@ function optimiserOrdre(start, stops) {
 // plus une preuve d'identite (voir composant Login).
 const AGENCES_DEFAUT = ["Agence 1", "Agence 2", "Agence 3", "Agence 4"];
 
+// ---- Agences dynamiques (1 a 10) : lecture seule ----
+// Agences du client courant (?client=slug) : table Agences (Actif=1) filtree sur
+// ce client, plafonnee par Clients."Nombre agences" (max 10) ; a defaut de lignes,
+// "Agence 1..N" selon "Nombre agences". null = pas de client -> repli demo inchange.
+async function chargerNomsAgencesClient() {
+  const info = window.IKO_CLIENT_INFO;
+  const clientId = window.IKO_CLIENT_ID;
+  if (!info || !clientId) return null;
+  const nbBrut = parseInt(info["Nombre agences"], 10);
+  const plafond = Math.max(1, Math.min(10, nbBrut || 10));
+  let noms = [];
+  try {
+    if (info["Nom client"]) {
+      const f = 'AND(FIND("' + String(info["Nom client"]).replace(/"/g, '') + '", ARRAYJOIN({Client})), {Actif}=1)';
+      const r = await fetch('/api/airtable/Agences?filterByFormula=' + encodeURIComponent(f) + '&maxRecords=50');
+      const j = await r.json();
+      noms = (j.records || [])
+        .filter(a => Array.isArray(a.fields["Client"]) && a.fields["Client"].includes(clientId) && a.fields["Nom agence"])
+        .map(a => a.fields["Nom agence"]);
+    }
+  } catch (e) {}
+  if (!noms.length && nbBrut) noms = Array.from({ length: plafond }, (_, i) => "Agence " + (i + 1));
+  return noms.length ? noms.slice(0, plafond) : null;
+}
+
+// Remplace la liste en place (meme reference) par celle du client.
+async function chargerAgencesTech() {
+  const noms = await chargerNomsAgencesClient();
+  if (noms) { AGENCES_DEFAUT.length = 0; noms.forEach(n => AGENCES_DEFAUT.push(n)); }
+  return AGENCES_DEFAUT;
+}
+
 const C = {
   bg: "var(--iko-bg-clair)", card: "#FFFFFF", card2: "#F3F4F6", border: "#E2E2E2",
   or: "var(--iko-primary)", orDim: "rgba(var(--iko-primary-rgb),0.12)", orBord: "rgba(var(--iko-primary-rgb),0.3)",
@@ -2718,7 +2750,12 @@ function Login({ onLogin }) {
     window.IKO_CLIENT_READY.then(() => {
       if (window.IKO_ACCES_REFUSE) { setEtat("refuse"); return; }
       if (window.IKO_ROLE === "SUPER_ADMIN_IKO") { onLogin("global"); return; }
-      setEtat("choix-agence"); // TECHNICIEN : choix metier, pas une authentification
+      // Agences du client (1 a 10). Une seule : pas de choix, selection automatique.
+      chargerAgencesTech().then(liste => {
+        if (liste.length === 1) { onLogin(liste[0]); return; }
+        setAgenceChoisie(liste[0]);
+        setEtat("choix-agence"); // TECHNICIEN : choix metier, pas une authentification
+      });
     });
   }, []);
 

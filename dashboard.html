@@ -157,6 +157,37 @@ function appliquerNombreAgences(n) {
   }
 }
 
+// ---- Agences dynamiques (1 a 10) : lecture seule ----
+// Agences du client courant (?client=slug) : table Agences (Actif=1) filtree sur
+// ce client, plafonnee par Clients."Nombre agences" (max 10) ; a defaut de lignes,
+// "Agence 1..N" selon "Nombre agences". null = pas de client -> repli demo inchange.
+async function chargerNomsAgencesClient() {
+  const info = window.IKO_CLIENT_INFO;
+  const clientId = window.IKO_CLIENT_ID;
+  if (!info || !clientId) return null;
+  const nbBrut = parseInt(info["Nombre agences"], 10);
+  const plafond = Math.max(1, Math.min(10, nbBrut || 10));
+  let noms = [];
+  try {
+    if (info["Nom client"]) {
+      const f = 'AND(FIND("' + String(info["Nom client"]).replace(/"/g, '') + '", ARRAYJOIN({Client})), {Actif}=1)';
+      const r = await fetch('/api/airtable/Agences?filterByFormula=' + encodeURIComponent(f) + '&maxRecords=50');
+      const j = await r.json();
+      noms = (j.records || [])
+        .filter(a => Array.isArray(a.fields["Client"]) && a.fields["Client"].includes(clientId) && a.fields["Nom agence"])
+        .map(a => a.fields["Nom agence"]);
+    }
+  } catch (e) {}
+  if (!noms.length && nbBrut) noms = Array.from({ length: plafond }, (_, i) => "Agence " + (i + 1));
+  return noms.length ? noms.slice(0, plafond) : null;
+}
+
+function appliquerNomsAgences(noms) {
+  AGENCES.length = 0;
+  Object.keys(AGENCE_VERS_AIRTABLE).forEach(k => delete AGENCE_VERS_AIRTABLE[k]);
+  noms.slice(0, 10).forEach(n => { AGENCES.push(n); AGENCE_VERS_AIRTABLE[n] = n; });
+}
+
 // Enregistrement "sentinelle" dans la table Planning (Date="CONFIG") qui sert
 // de config globale ; pas de vraie table dediee disponible pour ce demo.
 const CONFIG_RECORD_ID = "rec45X231n9dXnyaU";
@@ -828,7 +859,7 @@ function ModalRdv({ agenceAccess, onClose, onSuccess, initialAgence }) {
         </div>
         <div style={groupStyle}>
           <label style={labelStyle}>Agence *</label>
-          <select value={form.agence} onChange={e => set("agence", e.target.value)} disabled={agenceAccess !== "global"}>
+          <select value={form.agence} onChange={e => set("agence", e.target.value)} disabled={agenceAccess !== "global" || AGENCES.length === 1}>
             {AGENCES.map(a => <option key={a}>{a}</option>)}
           </select>
         </div>
@@ -949,7 +980,7 @@ function ModalBlocage({ agenceAccess, onClose, onSuccess, initialAgence, initial
 
         <div style={groupStyle}>
           <label style={labelStyle}>Agence</label>
-          <select value={agence} onChange={e => setAgence(e.target.value)} disabled={agenceAccess !== "global"} style={inputStyle}>
+          <select value={agence} onChange={e => setAgence(e.target.value)} disabled={agenceAccess !== "global" || AGENCES.length === 1} style={inputStyle}>
             {AGENCES.map(a => <option key={a} value={a}>{a}</option>)}
           </select>
         </div>
@@ -1929,7 +1960,7 @@ function ModalGestionDevis({ tickets, onClose, onRefresh }) {
         </div>
 
         <div style={{display:"flex",gap:"6px",marginBottom:"14px",flexWrap:"wrap"}}>
-          {["global",...AGENCES].map(a => (
+          {(AGENCES.length > 1 ? ["global",...AGENCES] : []).map(a => (
             <button key={a} onClick={() => setAgenceFiltreDevis(a)}
               style={{padding:"6px 14px",borderRadius:"20px",border:"1px solid "+(agenceFiltreDevis===a?C.or:C.border),background:agenceFiltreDevis===a?C.or:"transparent",color:agenceFiltreDevis===a?"var(--iko-dark)":C.muted,fontSize:"11px",fontWeight:"700",cursor:"pointer"}}>
               {a==="global"?"🌐 Toutes agences":a}
@@ -3764,7 +3795,7 @@ function ModalNotes({ tickets, onClose }) {
         </div>
 
         <div style={{display:"flex",gap:"8px",marginBottom:"16px",flexWrap:"wrap"}}>
-          {["global",...AGENCES].map(a => (
+          {(AGENCES.length > 1 ? ["global",...AGENCES] : []).map(a => (
             <button key={a} onClick={() => setAgenceFiltreNotes(a)}
               style={{padding:"7px 16px",borderRadius:"20px",border:"1px solid "+(agenceFiltreNotes===a?C.or:C.border),background:agenceFiltreNotes===a?C.or:"transparent",color:agenceFiltreNotes===a?"var(--iko-dark)":C.muted,fontSize:"12px",fontWeight:"700",cursor:"pointer"}}>
               {a==="global"?"🌐 Toutes agences":a}
@@ -4334,6 +4365,7 @@ function Dashboard({ agenceAccess, onClose }) {
       const info = window.IKO_CLIENT_INFO;
       if (!info) return;
       if (info["Nombre agences"]) appliquerNombreAgences(info["Nombre agences"]);
+      chargerNomsAgencesClient().then(noms => { if (noms) { appliquerNomsAgences(noms); forcerRender(x => x + 1); } });
       appliquerConfigEntreprise({
         couleurAccent: info["Couleur principale"] || CONFIG_ENTREPRISE.couleurAccent,
         logoUrl: (info["Logo"] && info["Logo"][0] && info["Logo"][0].url) || CONFIG_ENTREPRISE.logoUrl,
@@ -5296,7 +5328,7 @@ function Dashboard({ agenceAccess, onClose }) {
         <div style={{position:"sticky",top:"73px",zIndex:60,background:C.bg,paddingBottom:"14px",boxShadow:"0 8px 12px -8px rgba(0,0,0,0.08)"}}>
         {agenceAccess === "global" && (
           <div style={{display:"flex",gap:"8px",marginBottom:"20px",flexWrap:"wrap"}}>
-            {["global",...AGENCES].map(a => (
+            {(AGENCES.length > 1 ? ["global",...AGENCES] : []).map(a => (
               <button key={a} onClick={() => setAgenceFilter(a)}
                 style={{padding:"7px 16px",borderRadius:"20px",border:"1px solid "+(agenceFilter===a?C.or:C.border),background:agenceFilter===a?C.or:"transparent",color:agenceFilter===a?"var(--iko-dark)":C.muted,fontSize:"12px",fontWeight:"700",cursor:"pointer",display:"flex",alignItems:"center",gap:"6px"}}>
                 {a==="global"?"🌐 Toutes agences":a}
