@@ -1386,7 +1386,7 @@ async function dessinerElementsGraphiques(doc, elements) {
 }
 
 
-async function genererPdfDevis({ numero, ticket, client, lignes, montantHT, montantTTC, mep }) {
+async function genererPdfDevis({ numero, ticket, client, lignes, montantHT, montantTTC, mep, facture }) {
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ unit: 'mm', format: 'a4' });
   const mL = mep.margeGauche != null ? mep.margeGauche : 18;
@@ -1405,9 +1405,15 @@ async function genererPdfDevis({ numero, ticket, client, lignes, montantHT, mont
   await dessinerElementsGraphiques(doc, (mep.elements || []).filter(function(el){ return !(el.page > 0); }));
   doc.setFont('helvetica', 'bold'); doc.setFontSize(16);
   doc.setTextColor(20, 20, 20);
-  doc.text('DEVIS', 210 - mR, y, { align: 'right' });
+  doc.text(facture ? 'FACTURE' : 'DEVIS', 210 - mR, y, { align: 'right' });
   doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(100, 100, 100);
-  doc.text('N° ' + numero, 210 - mR, y + 5, { align: 'right' });
+  doc.text('N° ' + (facture ? facture.numero : numero), 210 - mR, y + 5, { align: 'right' });
+  if (facture) {
+    const fr = (s) => String(s || '').split('-').reverse().join('/');
+    doc.setFontSize(8);
+    doc.text('Date : ' + fr(facture.date) + '  ·  Échéance : ' + fr(facture.echeance), 210 - mR, y + 10, { align: 'right' });
+    doc.text('Réf. devis ' + numero, 210 - mR, y + 14, { align: 'right' });
+  }
   y += 18;
   if (logoInfo && logoInfo.url) {
     const lw = mep.logoW || 30;
@@ -1470,17 +1476,34 @@ async function genererPdfDevis({ numero, ticket, client, lignes, montantHT, mont
   doc.text('Total HT : ' + montantHT.toFixed(2) + ' €', 210 - mR, y, { align: 'right' }); y += 5.5;
   doc.text('Total TVA : ' + (montantTTC - montantHT).toFixed(2) + ' €', 210 - mR, y, { align: 'right' }); y += 5.5;
   doc.setFont('helvetica', 'bold'); doc.setTextColor(20, 20, 20);
-  doc.text('Total TTC : ' + montantTTC.toFixed(2) + ' €', 210 - mR, y, { align: 'right' }); y += 12;
+  doc.text('Total TTC : ' + montantTTC.toFixed(2) + ' €', 210 - mR, y, { align: 'right' }); y += 10;
+
+  // Conditions de règlement (bloc visible, avec montant de l'acompte quand il y en a un)
+  if (y > 297 - mBas - 60) { doc.addPage(); y = mHaut; }
+  const condTxt = mep.conditionsPaiement || 'Acompte de 30 % à la commande, solde à la fin des travaux';
+  const pctM = condTxt.match(/(\d+)\s*%/);
+  const lignesCond = [condTxt + '.'];
+  if (pctM) {
+    const ac = montantTTC * Number(pctM[1]) / 100;
+    lignesCond.push('Acompte à la commande : ' + ac.toFixed(2) + ' € TTC  ·  Solde : ' + (montantTTC - ac).toFixed(2) + ' € TTC');
+  }
+  if (facture) lignesCond.push(facture.statutPaiement === 'Payé' ? ('Facture acquittée' + (facture.datePaiement ? ' le ' + String(facture.datePaiement).split('-').reverse().join('/') : '') + '.') : 'Règlement attendu avant le ' + String(facture.echeance || '').split('-').reverse().join('/') + '.');
+  const hCond = 8 + lignesCond.length * 4.5;
+  doc.setFillColor(255, 243, 235); doc.rect(mL, y, largeurUtile, hCond, 'F');
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(7); doc.setTextColor(194, 65, 12);
+  doc.text('CONDITIONS DE RÈGLEMENT', mL + 4, y + 5);
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(40, 40, 40);
+  lignesCond.forEach((t, i) => doc.text(t, mL + 4, y + 10 + i * 4.5, { maxWidth: largeurUtile - 8 }));
+  y += hCond + 6;
 
   doc.setFont('helvetica', 'normal'); doc.setFontSize(6.5); doc.setTextColor(130, 130, 130);
   const assurance = mep.assurance || {};
   const mentions = [
     'SIRET ' + (identite.siret || '—') + '  ·  RCS ' + (identite.rcs || '—') + '  ·  TVA intracom. ' + (identite.tva || '—'),
     'Assurance décennale : ' + (assurance.assureur || '—') + (assurance.numPolice ? ' — police n° ' + assurance.numPolice : '') + (assurance.zone ? ' — zone : ' + assurance.zone : ''),
-    'Conditions de paiement : ' + (mep.conditionsPaiement || 'Acompte de 30 % à la commande, solde à la fin des travaux') + '.',
-    'Devis valable ' + (mep.dureeValidite || 30) + ' jours à compter de sa date d\'émission. Bon pour accord — signature électronique ci-après.',
+    facture ? 'En cas de retard de paiement : pénalité de 3 fois le taux d\'intérêt légal et indemnité forfaitaire de recouvrement de 40 €. Pas d\'escompte pour paiement anticipé.' : 'Devis valable ' + (mep.dureeValidite || 30) + ' jours à compter de sa date d\'émission. Bon pour accord — signature électronique ci-après.',
   ];
-  doc.text(mentions, mL, 297 - mBas - 19);
+  doc.text(mentions, mL, 297 - mBas - 15);
   const pied = rendrePiedPageRiche(mep.piedPage);
   if (pied) {
     doc.setFontSize(6.5); doc.setTextColor(160, 160, 160);
@@ -1906,7 +1929,8 @@ function ModalDevis({ ticket, onClose, onSent }) {
             "N° devis": numero, "Ticket lié": [ticket.id],
             "Nom client": client.nom, "Adresse client": client.adresse, "CP client": client.cp,
             "Lignes devis (JSON)": JSON.stringify(lignes), "Montant HT": montantHT, "Montant TTC": montantTTC,
-            "Statut": "Envoyé", "Mode": "Manuel",
+            "Statut": "Envoyé", "Mode": "Manuel", "Conditions paiement": conditions,
+            "Date validité": new Date(Date.now() + validite * 86400000).toISOString().slice(0, 10),
           };
           if (clientInfo?.clientId) champs["Client"] = [clientInfo.clientId];
           if (clientInfo?.agenceId) champs["Agence"] = [clientInfo.agenceId];
@@ -3726,7 +3750,281 @@ function ModalIntelligenceCommerciale({ onClose }) {
    Analytics opérationnel) et le socle IA synthese_direction déjà validé.
    Aucune donnée inventée : tout indicateur sans champ Airtable fiable
    est affiché "non disponible" plutôt qu'estimé. ---- */
-function ModalTableauBordDirigeant({ tickets, stats, onClose, onOpenAnalytics, onOpenIntelCom, onOpenBlocage }) {
+// ---- FACTURATION & COMPTABILITÉ (Central) : devis validé -> facture, suivi des règlements, exports comptables ----
+const telechargerContenu = (contenu, nom, mime) => {
+  const blob = contenu instanceof Blob ? contenu : new Blob([contenu], { type: mime });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = nom;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+};
+const num2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
+const fr2 = (n) => num2(n).toFixed(2).replace('.', ',');
+const aujourdhuiISO = () => new Date().toISOString().slice(0, 10);
+const ajouterJoursISO = (iso, j) => { const d = new Date(iso + "T12:00:00"); d.setDate(d.getDate() + j); return d.toISOString().slice(0, 10); };
+const echeanceDepuisConditions = (cond, dateFact) => {
+  const m = String(cond || "").match(/(\d+)\s*jours/i);
+  return m ? ajouterJoursISO(dateFact, Number(m[1])) : dateFact;
+};
+function lignesDuDevis(f) { try { const l = JSON.parse(f?.["Lignes devis (JSON)"] || "[]"); return Array.isArray(l) ? l : []; } catch(e) { return []; } }
+// TVA ventilée par taux, arrondie pour que base + TVA = TTC du devis.
+function ventilationTva(f) {
+  const lignes = lignesDuDevis(f);
+  const ht = num2(f?.["Montant HT"]); const ttc = num2(f?.["Montant TTC"]);
+  const parTaux = {};
+  lignes.forEach(l => { const t = l.tauxTva != null ? l.tauxTva : 0.2; parTaux[t] = (parTaux[t] || 0) + (Number(l.totalHT) || 0); });
+  const taux = Object.keys(parTaux).sort();
+  let reste = num2(ttc - ht);
+  const out = taux.map((t, i) => {
+    const base = num2(parTaux[t]);
+    let tva = i === taux.length - 1 ? reste : num2(parTaux[t] * Number(t));
+    reste = num2(reste - (i === taux.length - 1 ? 0 : tva));
+    return { taux: Number(t), base, tva };
+  });
+  if (!out.length) out.push({ taux: 0.2, base: ht, tva: num2(ttc - ht) });
+  return out;
+}
+function ligneFacture(rec) {
+  const f = rec.fields || {};
+  const dateFact = f["Date facture"] || "";
+  return {
+    id: rec.id, facture: f["N° facture"] || "", dateFacture: dateFact, devis: f["N° devis"] || "",
+    client: f["Nom client"] || "", adresse: f["Adresse client"] || "", cp: f["CP client"] || "",
+    ht: num2(f["Montant HT"]), ttc: num2(f["Montant TTC"]), tva: num2((f["Montant TTC"] || 0) - (f["Montant HT"] || 0)),
+    conditions: f["Conditions paiement"] || "", echeance: dateFact ? echeanceDepuisConditions(f["Conditions paiement"], dateFact) : "",
+    statutPaiement: f["Statut paiement"] || (f["N° facture"] ? "À payer" : ""), datePaiement: f["Date paiement"] || "",
+    mode: f["Mode règlement"] || "", ventilation: ventilationTva(rec.fields || {}),
+  };
+}
+function construireFEC(lignes) {
+  const entetes = ["JournalCode","JournalLib","EcritureNum","EcritureDate","CompteNum","CompteLib","CompAuxNum","CompAuxLib","PieceRef","PieceDate","EcritureLib","Debit","Credit","EcritureLet","DateLet","ValidDate","Montantdevise","Idevise"];
+  const d8 = (iso) => String(iso || "").replace(/-/g, "");
+  const aux = (nom) => "C" + String(nom || "CLIENT").normalize("NFD").replace(/[^A-Za-z0-9]/g, "").toUpperCase().slice(0, 10);
+  const out = [entetes.join("\t")]; let n = 0;
+  const ecr = (j, jl, date, compte, cl, auxNum, auxLib, piece, lib, deb, cred) => {
+    out.push([j, jl, n, d8(date), compte, cl, auxNum, auxLib, piece, d8(date), lib, fr2(deb), fr2(cred), "", "", d8(date), "", ""].join("\t"));
+  };
+  lignes.filter(l => l.facture).forEach(l => {
+    n += 1;
+    const lib = "Facture " + l.facture + " " + l.client;
+    ecr("VT", "Journal des ventes", l.dateFacture, "411000", "Clients", aux(l.client), l.client, l.facture, lib, l.ttc, 0);
+    ecr("VT", "Journal des ventes", l.dateFacture, "706000", "Prestations de services", "", "", l.facture, lib, 0, l.ht);
+    l.ventilation.forEach(v => { if (v.tva) ecr("VT", "Journal des ventes", l.dateFacture, "445710", "TVA collectée " + Math.round(v.taux * 1000) / 10 + " %", "", "", l.facture, lib, 0, v.tva); });
+    if (l.statutPaiement === "Payé" && l.datePaiement) {
+      n += 1;
+      const libP = "Règlement facture " + l.facture + " " + l.client + (l.mode ? " (" + l.mode + ")" : "");
+      ecr("BQ", "Journal de banque", l.datePaiement, "512000", "Banque", "", "", l.facture, libP, l.ttc, 0);
+      ecr("BQ", "Journal de banque", l.datePaiement, "411000", "Clients", aux(l.client), l.client, l.facture, libP, 0, l.ttc);
+    }
+  });
+  return out.join("\r\n");
+}
+const csvCell = (v) => { const s = String(v == null ? "" : v); return /[;"\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+function construireCSV(lignes) {
+  const ent = ["N° facture","Date facture","N° devis","Client","Adresse","CP","Total HT","TVA","Total TTC","Conditions de paiement","Échéance","Statut paiement","Date paiement","Mode de règlement"];
+  const rows = lignes.filter(l => l.facture).map(l => [l.facture, l.dateFacture, l.devis, l.client, l.adresse, l.cp, fr2(l.ht), fr2(l.tva), fr2(l.ttc), l.conditions, l.echeance, l.statutPaiement, l.datePaiement, l.mode]);
+  return "﻿" + [ent, ...rows].map(r => r.map(csvCell).join(";")).join("\r\n");
+}
+function construireJournalCSV(lignes) {
+  const rows = [["Journal","Date","Pièce","Compte","Libellé","Débit","Crédit"]];
+  construireFEC(lignes).split("\r\n").slice(1).forEach(l => { const c = l.split("\t"); rows.push([c[0], c[3], c[8], c[4] + (c[6] ? " / " + c[6] : ""), c[10], c[11], c[12]]); });
+  return "﻿" + rows.map(r => r.map(csvCell).join(";")).join("\r\n");
+}
+
+function ModalFacturation({ onClose }) {
+  const [recs, setRecs] = React.useState([]);
+  const [chargement, setChargement] = React.useState(true);
+  const [filtre, setFiltre] = React.useState("tous");
+  const [du, setDu] = React.useState("");
+  const [au, setAu] = React.useState("");
+  const [msg, setMsg] = React.useState("");
+  const [occupe, setOccupe] = React.useState(null);
+  const [paiement, setPaiement] = React.useState(null); // {id, date, mode}
+
+  const charger = async () => {
+    setChargement(true);
+    try {
+      const formule = encodeURIComponent('{Statut}="Validé"');
+      const j = await (await fetch('/api/airtable/Devis?filterByFormula=' + formule + '&maxRecords=200')).json();
+      setRecs(j.records || []);
+    } catch(e) { setMsg("Impossible de charger les devis."); }
+    setChargement(false);
+  };
+  React.useEffect(() => { charger(); }, []);
+
+  const toutes = recs.map(ligneFacture);
+  const visibles = toutes.filter(l => {
+    if (filtre === "afacturer" && l.facture) return false;
+    if (filtre === "facturees" && !l.facture) return false;
+    if (filtre === "impayees" && !(l.facture && l.statutPaiement !== "Payé")) return false;
+    if (filtre === "payees" && l.statutPaiement !== "Payé") return false;
+    const ref = l.dateFacture || "";
+    if (du && ref && ref < du) return false;
+    if (au && ref && ref > au) return false;
+    return true;
+  });
+  const factures = visibles.filter(l => l.facture);
+
+  const prochainNumero = () => {
+    const an = new Date().getFullYear();
+    const max = toutes.reduce((m, l) => { const x = String(l.facture).match(new RegExp("^FAC-" + an + "-(\\d+)$")); return x ? Math.max(m, Number(x[1])) : m; }, 0);
+    return "FAC-" + an + "-" + String(max + 1).padStart(4, "0");
+  };
+  const maj = async (id, fields) => {
+    const r = await fetch('/api/airtable/Devis/' + id, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fields }) });
+    if (!r.ok) throw new Error("Airtable " + r.status);
+  };
+  const creerFacture = async (l) => {
+    setOccupe(l.id); setMsg("");
+    try {
+      const numero = prochainNumero();
+      await maj(l.id, { "N° facture": numero, "Date facture": aujourdhuiISO(), "Statut paiement": "À payer" });
+      const rec = recs.find(r => r.id === l.id);
+      const tId = rec?.fields?.["Ticket lié"]?.[0];
+      if (tId) { try { await fetch('/api/airtable/tenant/Tickets%20SAV/' + tId, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fields: { "N° Facture": numero } }) }); } catch(e) {} }
+      setMsg("✓ Facture " + numero + " créée.");
+      await charger();
+    } catch(e) { setMsg("Erreur : " + (e && e.message || e)); }
+    setOccupe(null);
+  };
+  const enregistrerPaiement = async () => {
+    if (!paiement) return;
+    setOccupe(paiement.id);
+    try {
+      await maj(paiement.id, { "Statut paiement": paiement.partiel ? "Acompte reçu" : "Payé", "Date paiement": paiement.date, "Mode règlement": paiement.mode });
+      setPaiement(null); setMsg("✓ Règlement enregistré."); await charger();
+    } catch(e) { setMsg("Erreur : " + (e && e.message || e)); }
+    setOccupe(null);
+  };
+  const pdfFacture = async (l) => {
+    setOccupe(l.id); setMsg("");
+    try {
+      const estDemo = !new URLSearchParams(window.location.search).get('client');
+      let mep = null;
+      try { const nomTenant = window.IKO_CLIENT_INFO && window.IKO_CLIENT_INFO["Nom client"]; if (nomTenant) { const c = await chargerCatalogueDevis(nomTenant); mep = c.mep; } } catch(e) {}
+      mep = mepAvecDefauts({ ...(mep || {}), conditionsPaiement: l.conditions || undefined }, estDemo);
+      const blob = await genererPdfDevis({
+        numero: l.devis, ticket: { fields: { Client: l.client, Adresse: l.adresse } }, client: { nom: l.client, adresse: l.adresse, cp: l.cp },
+        lignes: lignesDuDevis(recs.find(r => r.id === l.id)?.fields), montantHT: l.ht, montantTTC: l.ttc, mep,
+        facture: { numero: l.facture, date: l.dateFacture, echeance: l.echeance, statutPaiement: l.statutPaiement, datePaiement: l.datePaiement },
+      });
+      telechargerContenu(blob, l.facture + ".pdf");
+    } catch(e) { setMsg("Erreur PDF : " + (e && e.message || e)); }
+    setOccupe(null);
+  };
+
+  const suffixe = (du || au ? "_" + (du || "debut") + "_" + (au || "fin") : "_" + aujourdhuiISO());
+  const exporter = (format) => {
+    if (!factures.length) { setMsg("Aucune facture à exporter sur cette sélection."); return; }
+    const base = "factures-iko" + suffixe;
+    if (format === "xlsx") {
+      const feuille1 = factures.map(l => ({ "N° facture": l.facture, "Date facture": l.dateFacture, "N° devis": l.devis, Client: l.client, Adresse: l.adresse, CP: l.cp, "Total HT": l.ht, TVA: l.tva, "Total TTC": l.ttc, "Conditions de paiement": l.conditions, Échéance: l.echeance, "Statut paiement": l.statutPaiement, "Date paiement": l.datePaiement, "Mode de règlement": l.mode }));
+      const feuille2 = [];
+      factures.forEach(l => l.ventilation.forEach(v => feuille2.push({ "N° facture": l.facture, "Taux TVA": Math.round(v.taux * 1000) / 10 + " %", "Base HT": v.base, "TVA": v.tva })));
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(feuille1), "Factures");
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(feuille2), "TVA par taux");
+      XLSX.writeFile(wb, base + ".xlsx");
+    } else if (format === "csv") telechargerContenu(construireCSV(factures), base + ".csv", "text/csv;charset=utf-8");
+    else if (format === "fec") telechargerContenu(construireFEC(factures), "FEC-iko" + suffixe + ".txt", "text/plain;charset=utf-8");
+    else if (format === "journal") telechargerContenu(construireJournalCSV(factures), "journal-comptable-iko" + suffixe + ".csv", "text/csv;charset=utf-8");
+    else if (format === "json") telechargerContenu(JSON.stringify(factures.map(l => ({ numeroFacture: l.facture, dateFacture: l.dateFacture, numeroDevis: l.devis, client: { nom: l.client, adresse: l.adresse, codePostal: l.cp }, totalHT: l.ht, totalTVA: l.tva, totalTTC: l.ttc, tvaParTaux: l.ventilation, conditionsPaiement: l.conditions, echeance: l.echeance, paiement: { statut: l.statutPaiement, date: l.datePaiement, mode: l.mode }, devise: "EUR" })), null, 2), base + ".json", "application/json");
+    else if (format === "pdf") {
+      const { jsPDF } = window.jspdf; const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'landscape' });
+      doc.setFontSize(13); doc.text("Récapitulatif des factures — IKO", 12, 14);
+      doc.setFontSize(8); let y = 24;
+      const cols = [12, 40, 66, 120, 150, 172, 196, 236];
+      ["N° facture","Date","N° devis","Client","HT","TVA","TTC","Paiement"].forEach((t, i) => doc.text(t, cols[i], y)); y += 5;
+      factures.forEach(l => {
+        if (y > 195) { doc.addPage(); y = 14; }
+        [l.facture, l.dateFacture, l.devis, String(l.client).slice(0, 30), fr2(l.ht), fr2(l.tva), fr2(l.ttc), l.statutPaiement + (l.datePaiement ? " " + l.datePaiement : "")].forEach((t, i) => doc.text(String(t), cols[i], y)); y += 5;
+      });
+      y += 3; doc.setFontSize(9);
+      doc.text("Total HT " + fr2(factures.reduce((s, l) => s + l.ht, 0)) + " €  ·  TVA " + fr2(factures.reduce((s, l) => s + l.tva, 0)) + " €  ·  TTC " + fr2(factures.reduce((s, l) => s + l.ttc, 0)) + " €", 12, y);
+      doc.save(base + ".pdf");
+    }
+    setMsg("✓ Export " + format.toUpperCase() + " : " + factures.length + " facture(s).");
+  };
+
+  const totalTTC = factures.reduce((s, l) => s + l.ttc, 0);
+  const aEncaisser = factures.filter(l => l.statutPaiement !== "Payé").reduce((s, l) => s + l.ttc, 0);
+  const pastille = (s) => ({ padding: "2px 9px", borderRadius: "10px", fontSize: "10px", fontWeight: "800", background: s === "Payé" ? "#DCFCE7" : s === "Acompte reçu" ? "#FEF3C7" : "#FFE8D6", color: s === "Payé" ? "#15803D" : s === "Acompte reçu" ? "#B45309" : "#C2410C" });
+
+  return (
+    <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="modal-box" style={{maxWidth:"980px",width:"96%"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"12px"}}>
+          <div>
+            <div style={{fontSize:"17px",fontWeight:"900",color:C.white}}>💶 Facturation & comptabilité</div>
+            <div style={{fontSize:"11px",color:C.muted}}>Devis signés → factures → règlements → exports pour le comptable</div>
+          </div>
+          <button onClick={onClose} style={{background:"#F3F4F6",border:"1px solid "+C.border,color:C.muted,borderRadius:"8px",width:"32px",height:"32px",cursor:"pointer",fontSize:"16px"}}>✕</button>
+        </div>
+
+        <div style={{display:"flex",gap:"10px",flexWrap:"wrap",marginBottom:"12px"}}>
+          {[["Factures", factures.length], ["Total TTC", fr2(totalTTC) + " €"], ["À encaisser", fr2(aEncaisser) + " €"]].map(([t, v]) => (
+            <div key={t} style={{flex:"1 1 130px",background:"rgba(255,255,255,0.8)",border:"1px solid "+C.border,borderRadius:"10px",padding:"8px 12px"}}>
+              <div style={{fontSize:"10px",color:C.muted,fontWeight:"700"}}>{t}</div><div style={{fontSize:"16px",fontWeight:"900",color:C.white}}>{v}</div>
+            </div>
+          ))}
+        </div>
+
+        <div style={{display:"flex",gap:"6px",flexWrap:"wrap",alignItems:"center",marginBottom:"10px"}}>
+          {[["tous","Tous"],["afacturer","À facturer"],["facturees","Facturés"],["impayees","À encaisser"],["payees","Payés"]].map(([v, l]) => (
+            <button key={v} onClick={() => setFiltre(v)} style={{padding:"6px 12px",borderRadius:"20px",border:"1px solid "+(filtre===v?C.or:C.border),background:filtre===v?C.or:"transparent",color:filtre===v?"#fff":C.muted,fontSize:"11px",fontWeight:"700",cursor:"pointer"}}>{l}</button>
+          ))}
+          <span style={{marginLeft:"auto",fontSize:"11px",color:C.muted}}>Du</span><input type="date" value={du} onChange={e => setDu(e.target.value)} style={{width:"140px"}}/>
+          <span style={{fontSize:"11px",color:C.muted}}>au</span><input type="date" value={au} onChange={e => setAu(e.target.value)} style={{width:"140px"}}/>
+        </div>
+
+        {msg && <div style={{fontSize:"12px",fontWeight:"700",color:msg.startsWith("✓")?"#15803D":C.rouge,marginBottom:"8px"}}>{msg}</div>}
+
+        <div style={{maxHeight:"42vh",overflowY:"auto",border:"1px solid "+C.border,borderRadius:"10px",background:"rgba(255,255,255,0.85)"}}>
+          {chargement && <div style={{padding:"18px",textAlign:"center",color:C.muted,fontSize:"12px"}}>⏳ Chargement…</div>}
+          {!chargement && visibles.length === 0 && <div style={{padding:"18px",textAlign:"center",color:C.muted,fontSize:"12px"}}>Aucun devis signé sur cette sélection. Un devis devient facturable une fois signé par le client.</div>}
+          {visibles.map(l => (
+            <div key={l.id} style={{display:"flex",alignItems:"center",gap:"10px",flexWrap:"wrap",padding:"10px 12px",borderBottom:"1px solid "+C.border,fontSize:"12px"}}>
+              <div style={{flex:"1 1 200px",minWidth:0}}>
+                <div style={{fontWeight:"800",color:C.white}}>{l.client || "—"}</div>
+                <div style={{fontSize:"10px",color:C.muted}}>Devis {l.devis}{l.facture ? " · Facture " + l.facture + " du " + l.dateFacture.split("-").reverse().join("/") : ""}</div>
+              </div>
+              <div style={{fontWeight:"900"}}>{fr2(l.ttc)} € <span style={{fontSize:"10px",color:C.muted,fontWeight:"600"}}>TTC</span></div>
+              {l.facture && <span style={pastille(l.statutPaiement)}>{l.statutPaiement}{l.datePaiement ? " · " + l.datePaiement.split("-").reverse().join("/") : ""}</span>}
+              <div style={{display:"flex",gap:"6px"}}>
+                {!l.facture && <button disabled={occupe===l.id} onClick={() => creerFacture(l)} style={{padding:"7px 12px",background:C.or,color:"#fff",border:"none",borderRadius:"8px",fontSize:"11px",fontWeight:"800",cursor:"pointer"}}>{occupe===l.id ? "⏳" : "🧾 Créer la facture"}</button>}
+                {l.facture && <button disabled={occupe===l.id} onClick={() => pdfFacture(l)} style={{padding:"7px 12px",background:"#fff",color:C.white,border:"1px solid "+C.border,borderRadius:"8px",fontSize:"11px",fontWeight:"800",cursor:"pointer"}}>📄 PDF</button>}
+                {l.facture && l.statutPaiement !== "Payé" && <button onClick={() => setPaiement({ id: l.id, date: aujourdhuiISO(), mode: "Virement", partiel: false })} style={{padding:"7px 12px",background:C.or,color:"#fff",border:"none",borderRadius:"8px",fontSize:"11px",fontWeight:"800",cursor:"pointer"}}>💰 Règlement</button>}
+              </div>
+              {paiement && paiement.id === l.id && (
+                <div style={{flexBasis:"100%",display:"flex",gap:"8px",flexWrap:"wrap",alignItems:"center",background:"#FFF3EB",borderRadius:"8px",padding:"8px"}}>
+                  <input type="date" value={paiement.date} onChange={e => setPaiement({...paiement, date:e.target.value})} style={{width:"140px"}}/>
+                  <select value={paiement.mode} onChange={e => setPaiement({...paiement, mode:e.target.value})} style={{width:"150px"}}>
+                    {["Virement","Chèque","Carte bancaire","Espèces","Prélèvement"].map(m => <option key={m}>{m}</option>)}
+                  </select>
+                  <label style={{fontSize:"11px",display:"flex",gap:"4px",alignItems:"center"}}><input type="checkbox" checked={paiement.partiel} onChange={e => setPaiement({...paiement, partiel:e.target.checked})} style={{width:"auto"}}/> Acompte seulement</label>
+                  <button onClick={enregistrerPaiement} style={{padding:"7px 14px",background:C.or,color:"#fff",border:"none",borderRadius:"8px",fontSize:"11px",fontWeight:"800",cursor:"pointer"}}>Enregistrer</button>
+                  <button onClick={() => setPaiement(null)} style={{padding:"7px 10px",background:"transparent",color:C.muted,border:"none",fontSize:"11px",cursor:"pointer"}}>Annuler</button>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+
+        <div style={{marginTop:"14px",background:"rgba(255,255,255,0.8)",border:"1px solid "+C.border,borderRadius:"10px",padding:"12px"}}>
+          <div style={{fontSize:"12px",fontWeight:"900",color:C.white,marginBottom:"4px"}}>📤 Données pour la comptabilité ({factures.length} facture{factures.length>1?"s":""} sélectionnée{factures.length>1?"s":""})</div>
+          <div style={{fontSize:"10.5px",color:C.muted,marginBottom:"8px"}}>La période et les filtres ci-dessus s'appliquent. Le FEC et le journal sont indicatifs : fais-les valider par ton expert-comptable avant de les importer.</div>
+          <div style={{display:"flex",gap:"8px",flexWrap:"wrap"}}>
+            {[["xlsx","📊 Excel"],["csv","📄 CSV"],["fec","🏛️ FEC (fichier fiscal)"],["journal","📒 Journal comptable CSV"],["json","🔗 JSON (API / logiciel)"],["pdf","🖨️ PDF récap"]].map(([f, l]) => (
+              <button key={f} onClick={() => exporter(f)} style={{padding:"8px 14px",background:C.or,color:"#fff",border:"none",borderRadius:"9px",fontSize:"12px",fontWeight:"800",cursor:"pointer"}}>{l}</button>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ModalTableauBordDirigeant({ tickets, stats, onClose, onOpenAnalytics, onOpenIntelCom, onOpenBlocage, onOpenFacturation }) {
   const { topProduits, totalAvecAgence, repartitionAgences, repartitionStatuts, tauxUrgents, tendance, maxTendance, estimationMoisSuivant, produitsRisque, topCauses, coutSAVGlobal } = window.AnalyticsSAV.calculerAnalyticsSAV(tickets);
 
   const ticketsDevisPipeline = tickets.filter(t => ["Devis à faire","Devis envoyé","Devis - Suivi","Devis - Attente fournisseur"].includes(t.fields?.Statut));
@@ -3799,6 +4097,7 @@ function ModalTableauBordDirigeant({ tickets, stats, onClose, onOpenAnalytics, o
         <div style={{fontSize:"11px",color:C.muted,marginBottom:"12px"}}>Vue consolidée toutes agences — {tickets.length} ticket(s) chargé(s), lecture seule</div>
         <div style={{display:"flex",gap:"8px",flexWrap:"wrap",marginBottom:"18px"}}>
           {onOpenAnalytics && <button onClick={onOpenAnalytics} style={{background:C.or,border:"none",color:"#fff",borderRadius:"10px",padding:"9px 16px",fontSize:"12px",fontWeight:"800",cursor:"pointer"}}>📊 Analytics SAV</button>}
+          {onOpenFacturation && <button onClick={onOpenFacturation} style={{background:C.or,border:"none",color:"#fff",borderRadius:"10px",padding:"9px 16px",fontSize:"12px",fontWeight:"800",cursor:"pointer"}}>💶 Facturation & compta</button>}
           {onOpenBlocage && <button onClick={onOpenBlocage} style={{background:C.or,border:"none",color:"#fff",borderRadius:"10px",padding:"9px 16px",fontSize:"12px",fontWeight:"800",cursor:"pointer"}}>🔒 Bloquer des dates (fermeture)</button>}
           {onOpenIntelCom && <button onClick={onOpenIntelCom} style={{background:C.or,border:"none",color:"#fff",borderRadius:"10px",padding:"9px 16px",fontSize:"12px",fontWeight:"800",cursor:"pointer"}}>💼 Intelligence commerciale</button>}
         </div>
@@ -4571,6 +4870,7 @@ function Dashboard({ agenceAccess, onClose }) {
   const [blocagePrefill, setBlocagePrefill] = React.useState(null); // {agence, dateDebut, dateFin, motif}
   const [annulationMotifPrefill, setAnnulationMotifPrefill] = React.useState("");
   const [showModalBlocage, setShowModalBlocage] = React.useState(false);
+  const [showModalFacturation, setShowModalFacturation] = React.useState(false);
   const [showModalConcepteur, setShowModalConcepteur] = React.useState(false);
   const [showModalAnalytics, setShowModalAnalytics] = React.useState(false);
   const [showModalIntelligenceCommerciale, setShowModalIntelligenceCommerciale] = React.useState(false);
@@ -5417,6 +5717,7 @@ function Dashboard({ agenceAccess, onClose }) {
           onSuccess={(num) => { setShowModalRdv(false); setRdvPrefillAgence(null); setSuccessTicket(num); charger(); }}
         />
       )}
+      {showModalFacturation && <ModalFacturation onClose={() => setShowModalFacturation(false)}/>}
       {showModalBlocage && (
         <ModalBlocage
           agenceAccess={agenceFilter !== "global" ? agenceFilter : agenceAccess}
@@ -5453,6 +5754,7 @@ function Dashboard({ agenceAccess, onClose }) {
           onOpenAnalytics={() => { setShowModalDirigeant(false); setShowModalAnalytics(true); }}
           onOpenIntelCom={() => { setShowModalDirigeant(false); setShowModalIntelligenceCommerciale(true); }}
           onOpenBlocage={() => { setShowModalDirigeant(false); setShowModalBlocage(true); }}
+          onOpenFacturation={() => { setShowModalDirigeant(false); setShowModalFacturation(true); }}
         />
       )}
       {showModalGestionDevis && (
