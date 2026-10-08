@@ -95,7 +95,9 @@ export function reponseBloquee(res, raison) {
 // Une vraie session valide (cookie iko_access) reste prioritaire.
 // Pour REACTIVER la protection : variable d'environnement Vercel
 // IKO_DEMO_OUVERT=0 (ou mettre la constante ci-dessous a false), puis redeployer.
-export const MODE_DEMO_OUVERT = process.env.IKO_DEMO_OUVERT !== "0";
+// Des que la variable IKO_MDP_UNIQUE est definie (mot de passe commun a tous
+// les modules, voir verif-securite.js), le mode ouvert se ferme tout seul.
+export const MODE_DEMO_OUVERT = process.env.IKO_DEMO_OUVERT !== "0" && !process.env.IKO_MDP_UNIQUE;
 
 export const SESSION_DEMO = { userId: "demo", tenantId: undefined, role: "SUPER_ADMIN_IKO", mdpAChanger: false };
 

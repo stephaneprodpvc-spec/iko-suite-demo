@@ -211,8 +211,29 @@ async function reponseGeneriqueEchec(res, hashACompare) {
   return res.status(401).json({ erreur: MESSAGE_GENERIQUE });
 }
 
+// MOT DE PASSE UNIQUE (demo) : si la variable d'environnement IKO_MDP_UNIQUE
+// est definie sur Vercel, ce mot de passe ouvre TOUS les modules (session
+// SUPER_ADMIN_IKO de 30 jours, identifiant facultatif). Le mot de passe n'est
+// JAMAIS ecrit dans le code (depot public) : il vit uniquement dans Vercel.
+function motDePasseUniqueValide(saisi) {
+  const attendu = process.env.IKO_MDP_UNIQUE;
+  if (!attendu || !saisi) return false;
+  const h = (v) => crypto.createHash("sha256").update(String(v)).digest();
+  return crypto.timingSafeEqual(h(saisi), h(attendu));
+}
+
 async function gererLogin(req, res) {
   const { identifiant, motDePasse } = req.body || {};
+  if (motDePasseUniqueValide(motDePasse)) {
+    const duree = 30 * 24 * 3600;
+    const jeton = jwt.sign(
+      { userId: "demo", role: "SUPER_ADMIN_IKO" },
+      process.env.JWT_ACCESS_SECRET,
+      { expiresIn: duree }
+    );
+    res.setHeader("Set-Cookie", [cookie("iko_access", jeton, duree, "/")]);
+    return res.status(200).json({ role: "SUPER_ADMIN_IKO" });
+  }
   if (!identifiant || !motDePasse) {
     return res.status(400).json({ erreur: "Identifiant et mot de passe requis." });
   }
