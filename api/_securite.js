@@ -26,9 +26,11 @@ const compteurs = new Map(); // "cle:ip" -> { debut: timestamp, nb: compte }
 const FENETRE_MS = 60_000; // 1 minute
 const MAX_REQUETES_PAR_FENETRE = 12;
 
-export function verifierOrigine(req) {
+// options.strict : exige un en-tete Origin/Referer (un navigateur en envoie toujours
+// un sur un POST ; son absence = appel direct hors navigateur, ex. curl).
+export function verifierOrigine(req, options = {}) {
   const origine = req.headers.origin || req.headers.referer || "";
-  if (!origine) return true; // certains clients (curl direct, tests) n'envoient rien : on laisse passer, le rate-limit prend le relais
+  if (!origine) return !options.strict; // mode historique : on laisse passer, le rate-limit prend le relais
   return ORIGINES_AUTORISEES.some(d => origine.includes(d)) || origine.includes("localhost");
 }
 
@@ -51,6 +53,17 @@ export function verifierDebit(req, options = {}) {
   entree.nb += 1;
   if (entree.nb > max) return false;
   return true;
+}
+
+// Protection des endpoints /api/chat-* (ils consomment le credit Anthropic) :
+// origine obligatoire + 12 requetes/minute + 150 requetes/heure par IP.
+// Retourne true si la requete a ete refusee (la reponse est deja envoyee).
+// Limite en memoire d'instance : freine l'abus evident, pas une garantie absolue.
+export function limiterChat(req, res) {
+  if (!verifierOrigine(req, { strict: true })) { reponseBloquee(res, "origine"); return true; }
+  if (!verifierDebit(req)) { reponseBloquee(res, "debit"); return true; }
+  if (!verifierDebit(req, { max: 150, fenetreMs: 60 * 60_000, cle: "chat-heure" })) { reponseBloquee(res, "debit"); return true; }
+  return false;
 }
 
 export function reponseBloquee(res, raison) {
@@ -83,7 +96,9 @@ export function verifierSession(req) {
   if (!m) return null;
   try {
     const payload = jwt.verify(decodeURIComponent(m[1]), process.env.JWT_ACCESS_SECRET);
-    return { userId: payload.userId, tenantId: payload.tenantId, role: payload.role };
+    // mdpAChanger : mot de passe faible a la connexion, changement impose
+    // (les routes protegees refusent la session tant qu'il n'est pas fait).
+    return { userId: payload.userId, tenantId: payload.tenantId, role: payload.role, mdpAChanger: payload.mdpAChanger === true };
   } catch (e) {
     return null;
   }

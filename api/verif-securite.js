@@ -56,13 +56,41 @@ const UTILISATEURS_TABLE = "Utilisateurs";
 
 const ACCESS_TOKEN_DUREE_S = 15 * 60;        // 15 minutes
 const REFRESH_TOKEN_DUREE_S = 7 * 24 * 3600; // 7 jours
-const MAX_ECHECS_AVANT_BLOCAGE = 8;
+const MAX_ECHECS_AVANT_BLOCAGE = 5;
+const MOT_DE_PASSE_LONGUEUR_MIN = 12;
 const DUREE_BLOCAGE_MIN = 15;
 // Roles provisionnables depuis l'admin (Poste de pilotage). SUPER_ADMIN_IKO
 // est volontairement exclu de cette liste : ce role ne doit jamais etre
 // creable via un formulaire de provisioning client, seulement en direct
 // dans Airtable par RSIA.
 const ROLES_PROVISIONNABLES = ["TENANT_ADMIN", "TECHNICIEN", "COMMERCIAL", "CLIENT"];
+
+// Mots/suites interdits (comparaison sans accents ni casse, "contient").
+const MOTS_INTERDITS = [
+  "123456", "654321", "000000", "111111", "password", "passw0rd", "motdepasse", "mdp", "azerty", "qwerty",
+  "admin", "iko", "rsia", "menuiserie", "bienvenue", "welcome", "letmein", "changeme", "secret", "soleil",
+];
+
+// Retourne un message d'erreur si le mot de passe est refuse, sinon null.
+// Jamais journalise : le mot de passe ne sort pas de cette fonction.
+function evaluerMotDePasse(motDePasse, identifiant) {
+  const mdp = String(motDePasse || "");
+  if (mdp.length < MOT_DE_PASSE_LONGUEUR_MIN) {
+    return "Le mot de passe doit contenir au moins " + MOT_DE_PASSE_LONGUEUR_MIN + " caractères.";
+  }
+  const norm = mdp.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  if (MOTS_INTERDITS.some((m) => norm.includes(m))) {
+    return "Mot de passe trop courant : évitez les suites simples et les mots comme « password », « admin » ou le nom du produit.";
+  }
+  if (/^(.)\1+$/.test(mdp) || /^\d+$/.test(mdp)) {
+    return "Le mot de passe ne doit pas être composé uniquement de chiffres ou d'un même caractère.";
+  }
+  const id = String(identifiant || "").trim().toLowerCase();
+  if (id && (norm === id || norm === id.split("@")[0])) {
+    return "Le mot de passe ne doit pas être identique à l'identifiant.";
+  }
+  return null;
+}
 
 const MESSAGE_GENERIQUE = "Identifiant ou mot de passe incorrect.";
 // Hash factice pour egaliser le temps de reponse quand le compte n'existe pas
@@ -121,7 +149,7 @@ function lireCookie(req, nom) {
 
 function signAccessToken(user) {
   return jwt.sign(
-    { userId: user.userId, tenantId: user.tenantId, role: user.role },
+    Object.assign({ userId: user.userId, tenantId: user.tenantId, role: user.role }, user.mdpAChanger ? { mdpAChanger: true } : {}),
     process.env.JWT_ACCESS_SECRET,
     { expiresIn: ACCESS_TOKEN_DUREE_S }
   );
@@ -129,7 +157,7 @@ function signAccessToken(user) {
 
 function signRefreshToken(user, tokenId) {
   return jwt.sign(
-    { userId: user.userId, tokenId },
+    Object.assign({ userId: user.userId, tokenId }, user.mdpAChanger ? { mdpAChanger: true } : {}),
     process.env.JWT_REFRESH_SECRET,
     { expiresIn: REFRESH_TOKEN_DUREE_S }
   );
@@ -207,6 +235,10 @@ async function gererLogin(req, res) {
     "Dernière connexion": new Date().toISOString(),
   });
 
+  // Mot de passe interdit ou trop court : la session s'ouvre mais le changement
+  // est impose (drapeau dans les jetons, refuse par le proxy et par ?action=session).
+  user.mdpAChanger = evaluerMotDePasse(motDePasse, user.identifiant) !== null;
+
   const access = signAccessToken(user);
   const refresh = signRefreshToken(user, tokenId);
 
@@ -214,7 +246,76 @@ async function gererLogin(req, res) {
     cookie("iko_access", access, ACCESS_TOKEN_DUREE_S, "/"),
     cookie("iko_refresh", refresh, REFRESH_TOKEN_DUREE_S, "/api/verif-securite"),
   ]);
-  return res.status(200).json({ role: user.role });
+  return res.status(200).json(user.mdpAChanger ? { role: user.role, mdpAChanger: true } : { role: user.role });
+}
+
+// --- CHANGEMENT / REINITIALISATION DU MOT DE PASSE -------------------------
+// changer_mot_de_passe : l'ancien mot de passe est obligatoire (verifie comme
+// a la connexion, avec le meme compteur d'echecs/blocage). Ouvre ensuite une
+// session propre (sans drapeau). reinitialiser_mot_de_passe : super admin.
+async function gererChangementMotDePasse(req, res) {
+  const { identifiant, motDePasse, nouveauMotDePasse } = req.body || {};
+  if (!identifiant || !motDePasse || !nouveauMotDePasse) {
+    return res.status(400).json({ erreur: "Identifiant, ancien et nouveau mot de passe requis." });
+  }
+  const user = await lireUtilisateurParIdentifiant(String(identifiant));
+  if (!user) return reponseGeneriqueEchec(res, null);
+  if (user.bloqueJusqua && new Date(user.bloqueJusqua) > new Date()) return reponseGeneriqueEchec(res, user.hash);
+
+  const ancienValide = await bcrypt.compare(String(motDePasse), user.hash || HASH_FACTICE);
+  if (!ancienValide || user.statut !== "Actif") {
+    const nouveauxEchecs = (user.echecs || 0) + 1;
+    const champs = { "Échecs de connexion": nouveauxEchecs };
+    if (nouveauxEchecs >= MAX_ECHECS_AVANT_BLOCAGE) {
+      champs["Bloqué jusqu'à"] = new Date(Date.now() + DUREE_BLOCAGE_MIN * 60000).toISOString();
+    }
+    await majUtilisateur(user.userId, champs);
+    return res.status(401).json({ erreur: MESSAGE_GENERIQUE });
+  }
+  const refus = evaluerMotDePasse(nouveauMotDePasse, user.identifiant);
+  if (refus) return res.status(400).json({ erreur: refus });
+  if (String(nouveauMotDePasse) === String(motDePasse)) {
+    return res.status(400).json({ erreur: "Le nouveau mot de passe doit être différent de l'ancien." });
+  }
+
+  const hash = await bcrypt.hash(String(nouveauMotDePasse), 12);
+  const tokenId = crypto.randomUUID();
+  await majUtilisateur(user.userId, {
+    "Hash mot de passe": hash,
+    "Échecs de connexion": 0,
+    "Bloqué jusqu'à": null,
+    "Dernier tokenId refresh valide": tokenId,
+  });
+  user.mdpAChanger = false;
+  res.setHeader("Set-Cookie", [
+    cookie("iko_access", signAccessToken(user), ACCESS_TOKEN_DUREE_S, "/"),
+    cookie("iko_refresh", signRefreshToken(user, tokenId), REFRESH_TOKEN_DUREE_S, "/api/verif-securite"),
+  ]);
+  return res.status(200).json({ ok: true, role: user.role });
+}
+
+async function gererReinitialisationMotDePasse(req, res) {
+  const session = verifierSession(req);
+  if (!session || session.role !== "SUPER_ADMIN_IKO" || session.mdpAChanger) {
+    return res.status(403).json({ erreur: "Accès refusé : droits administrateur requis." });
+  }
+  const { identifiant, nouveauMotDePasse } = req.body || {};
+  if (!identifiant || !nouveauMotDePasse) {
+    return res.status(400).json({ erreur: "Identifiant et nouveau mot de passe requis." });
+  }
+  const refus = evaluerMotDePasse(nouveauMotDePasse, String(identifiant));
+  if (refus) return res.status(400).json({ erreur: refus });
+  const user = await lireUtilisateurParIdentifiant(String(identifiant));
+  if (!user) return res.status(404).json({ erreur: "Utilisateur introuvable." });
+  const hash = await bcrypt.hash(String(nouveauMotDePasse), 12);
+  // Revoque aussi la session de refresh de l'utilisateur (reconnexion obligatoire).
+  await majUtilisateur(user.userId, {
+    "Hash mot de passe": hash,
+    "Échecs de connexion": 0,
+    "Bloqué jusqu'à": null,
+    "Dernier tokenId refresh valide": null,
+  });
+  return res.status(200).json({ ok: true });
 }
 
 async function gererLogout(req, res) {
@@ -264,8 +365,9 @@ async function gererCreationUtilisateur(req, res) {
   if (!ROLES_PROVISIONNABLES.includes(role)) {
     return res.status(400).json({ erreur: "Rôle invalide." });
   }
-  if (String(motDePasse).length < 8) {
-    return res.status(400).json({ erreur: "Le mot de passe doit contenir au moins 8 caractères." });
+  const refusMdp = evaluerMotDePasse(motDePasse, identifiant);
+  if (refusMdp) {
+    return res.status(400).json({ erreur: refusMdp });
   }
 
   // Le tenantId reste choisi par l'admin (SUPER_ADMIN_IKO gere plusieurs
@@ -323,6 +425,7 @@ async function gererSession(req, res) {
   if (accessBrut) {
     try {
       const payload = jwt.verify(accessBrut, process.env.JWT_ACCESS_SECRET);
+      if (payload.mdpAChanger) return res.status(401).json({ erreur: "Changement de mot de passe obligatoire.", mdpAChanger: true });
       return res.status(200).json({ userId: payload.userId, tenantId: payload.tenantId, role: payload.role });
     } catch (e) {
       // Access token absent/expire : on tente le refresh ci-dessous.
@@ -338,6 +441,7 @@ async function gererSession(req, res) {
   } catch (e) {
     return res.status(401).json({ erreur: "Session expirée." });
   }
+  if (payload.mdpAChanger) return res.status(401).json({ erreur: "Changement de mot de passe obligatoire.", mdpAChanger: true });
 
   // Relecture directe par userId (pas par identifiant) pour la rotation.
   const r = await fetch(
@@ -473,6 +577,16 @@ export default async function handler(req, res) {
       }
       if (action === "logout") {
         return gererLogout(req, res);
+      }
+      if (action === "changer_mot_de_passe") {
+        if (!verifierOrigine(req)) return reponseBloquee(res, "origine");
+        if (!verifierDebit(req, { max: 10, fenetreMs: 10 * 60_000, cle: "chg-mdp" })) return reponseBloquee(res, "debit");
+        return gererChangementMotDePasse(req, res);
+      }
+      if (action === "reinitialiser_mot_de_passe") {
+        if (!verifierOrigine(req)) return reponseBloquee(res, "origine");
+        if (!verifierDebit(req)) return reponseBloquee(res, "debit");
+        return gererReinitialisationMotDePasse(req, res);
       }
       if (action === "creer_utilisateur") {
         if (!verifierOrigine(req)) return reponseBloquee(res, "origine");

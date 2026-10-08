@@ -1,4 +1,4 @@
-import { verifierOrigine, verifierDebit, reponseBloquee } from "./_securite.js";
+import { limiterChat } from "./_securite.js";
 
 // api/chat-admin.js
 // Claude, integre au poste de pilotage (admin.html) comme partenaire de
@@ -337,8 +337,7 @@ export default async function handler(req, res) {
     return res.status(405).json({ erreur: "Methode non autorisee" });
   }
 
-  if (!verifierOrigine(req)) return reponseBloquee(res, "origine");
-  if (!verifierDebit(req)) return reponseBloquee(res, "debit");
+  if (limiterChat(req, res)) return;
 
   const cleClaude = process.env.ANTHROPIC_API_KEY;
   if (!cleClaude) {

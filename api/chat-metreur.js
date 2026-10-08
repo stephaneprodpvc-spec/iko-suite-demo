@@ -1,4 +1,4 @@
-import { verifierOrigine, verifierDebit, reponseBloquee } from "./_securite.js";
+import { limiterChat } from "./_securite.js";
 
 // api/chat-metreur.js
 // Relais serveur entre le widget vocal Toise (metreur.html) et l'API
@@ -228,8 +228,7 @@ export default async function handler(req, res) {
     return res.status(405).json({ erreur: "Methode non autorisee" });
   }
 
-  if (!verifierOrigine(req)) return reponseBloquee(res, "origine");
-  if (!verifierDebit(req)) return reponseBloquee(res, "debit");
+  if (limiterChat(req, res)) return;
 
   const cle = process.env.ANTHROPIC_API_KEY;
   if (!cle) {

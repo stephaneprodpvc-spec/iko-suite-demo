@@ -10,7 +10,7 @@
 // remplir le formulaire lui-meme ou tout faire a la voix/au clavier avec
 // Amandine ; dans les deux cas, le meme systeme derriere est utilise.
 
-import { verifierOrigine, verifierDebit } from "./_securite.js";
+import { limiterChat } from "./_securite.js";
 import { lienSuivi } from "./_suivi.js";
 import vocabMenuiserie from "./_trades/menuiserie.js";
 import vocabPlomberieChauffage from "./_trades/plomberie_chauffage.js";
@@ -533,12 +533,7 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: "Methode non autorisee" });
   }
 
-  if (!verifierOrigine(req)) {
-    return res.status(403).json({ error: "Origine non autorisée." });
-  }
-  if (!verifierDebit(req)) {
-    return res.status(429).json({ error: "Trop de requêtes, réessayez dans une minute." });
-  }
+  if (limiterChat(req, res)) return;
 
 const cle = process.env.ANTHROPIC_API_KEY;
   if (!cle) {

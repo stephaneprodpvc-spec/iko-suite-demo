@@ -385,6 +385,23 @@ async function relayerWebhook(req, res, urlCible, actionsAutorisees, ctx) {
   }
 }
 
+// ETAPE 1 SECURITE (journalisation, aucun blocage) : trace chaque appel du
+// proxy SANS session valide, pour savoir ce qui doit rester public avant de
+// fermer le reste. Ne journalise que : nom de table (premier segment), methode
+// et chemin de la page appelante (Referer sans parametres). Jamais d'identifiant
+// d'enregistrement, de filtre, de corps de requete, d'e-mail ni de secret.
+// A chercher dans les logs Vercel : "IKO_AUDIT".
+function journaliserSansSession(req, premierSegment) {
+  try {
+    const table = /^[A-Za-z0-9 _'\u00C0-\u017F-]{1,40}$/.test(premierSegment) ? premierSegment : 'autre';
+    let page = 'inconnue';
+    const ref = String(req.headers.referer || req.headers.origin || '');
+    const m = ref.match(/^https?:\/\/[^\/]+(\/[A-Za-z0-9_.\/-]{0,60})?(?:[?#].*)?$/);
+    if (m) page = m[1] || '/';
+    console.log('IKO_AUDIT ' + JSON.stringify({ evt: 'proxy_sans_session', table, methode: req.method, page }));
+  } catch (e) { /* la journalisation ne doit jamais casser une requete */ }
+}
+
 export default async function handler(req, res) {
   const token = process.env.AIRTABLE_TOKEN;
   const appSecret = process.env.APP_PROXY_SECRET;
@@ -457,6 +474,25 @@ export default async function handler(req, res) {
   // Bloque inconditionnellement l'acces a la table Utilisateurs via ce
   // proxy, quelle que soit la session (voir commentaire de tete de fichier).
   const premierSegment = subPathRaw.split('/').filter(Boolean)[0] || '';
+
+  // Mot de passe faible a la connexion : la session est ouverte mais le
+  // changement est impose (voir api/verif-securite.js) ; tant qu'il n'est pas
+  // fait, le proxy refuse toute requete de cette session.
+  if (session && session.mdpAChanger) {
+    return res.status(403).json({ error: 'Changement de mot de passe obligatoire.', mdpAChanger: true });
+  }
+
+  // ETAPE 1 : journalisation des appels sans session (aucun blocage).
+  if (!session) journaliserSansSession(req, premierSegment);
+
+  // DELETE reserve aux administrateurs : session obligatoire. (Usages reels
+  // verifies : admin.html [super admin] et dashboard.html [admin du client].)
+  if (req.method === 'DELETE') {
+    if (!session) return res.status(401).json({ error: 'Authentification requise pour supprimer.' });
+    if (session.role !== 'SUPER_ADMIN_IKO' && session.role !== 'TENANT_ADMIN') {
+      return res.status(403).json({ error: 'Suppression réservée aux administrateurs.' });
+    }
+  }
 
   // AUTH #013 — Exception étroite au blocage générique ci-dessous (qui
   // reste inchangé pour tout le reste : autre rôle, autre méthode, pas de

@@ -47,6 +47,12 @@
     <button id="btnLogin" class="btn-primary">Se connecter</button>
     <button id="btnSession" class="btn-secondary">Vérifier la session</button>
     <button id="btnLogout" class="btn-danger">Se déconnecter</button>
+    <div id="blocChangement" style="display:none;">
+      <div class="msg" style="min-height:0;margin-bottom:8px;">Votre mot de passe est trop faible ou trop court : choisissez-en un nouveau (12 caractères minimum) pour continuer.</div>
+      <input id="nouveauMdp" type="password" placeholder="Nouveau mot de passe (12 caractères min.)" autocomplete="new-password" />
+      <input id="confirmeMdp" type="password" placeholder="Confirmer le nouveau mot de passe" autocomplete="new-password" />
+      <button id="btnChanger" class="btn-primary">Changer le mot de passe</button>
+    </div>
     <div class="msg" id="msg"></div>
     <div class="etat" id="etat"></div>
     <div class="note">
@@ -96,6 +102,13 @@
   $('btnLogin').addEventListener('click', async function () {
     afficherMsg(''); afficherEtat(null);
     var res = await appel('login', 'POST');
+    if (res.status === 200 && res.json.mdpAChanger) {
+      // Mot de passe interdit ou trop court : la session est ouverte mais le
+      // changement est obligatoire avant d'aller plus loin.
+      $('blocChangement').style.display = 'block';
+      $('nouveauMdp').focus();
+      return;
+    }
     if (res.status === 200) {
       var retour = retourDemande();
       if (retour) {
@@ -106,6 +119,23 @@
       afficherEtat(res.json);
     }
     else { afficherMsg(res.json.erreur || 'Erreur.'); }
+  });
+
+  $('btnChanger').addEventListener('click', async function () {
+    afficherMsg(''); afficherEtat(null);
+    var nouveau = $('nouveauMdp').value;
+    if (nouveau !== $('confirmeMdp').value) { afficherMsg('Les deux mots de passe ne correspondent pas.'); return; }
+    var r = await fetch('/api/verif-securite', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'changer_mot_de_passe', identifiant: $('identifiant').value, motDePasse: $('motDePasse').value, nouveauMotDePasse: nouveau })
+    });
+    var json = await r.json().catch(function () { return {}; });
+    if (!r.ok) { afficherMsg(json.erreur || 'Erreur.'); return; }
+    $('blocChangement').style.display = 'none';
+    $('motDePasse').value = ''; $('nouveauMdp').value = ''; $('confirmeMdp').value = '';
+    var retour = retourDemande();
+    if (retour) { window.location.href = retour; return; }
+    afficherEtat({ ok: true, role: json.role, message: 'Mot de passe changé.' });
   });
 
   $('btnSession').addEventListener('click', async function () {

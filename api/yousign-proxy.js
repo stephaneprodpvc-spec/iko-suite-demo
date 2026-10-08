@@ -18,6 +18,46 @@
 // l'environnement sandbox (api-sandbox.yousign.app), gratuit et illimité
 // pour les tests.
 
+import { verifierSession, verifierOrigine, verifierDebit } from './_securite.js';
+
+// ETAPE 2 SECURITE : ce relais utilisait la cle Yousign du serveur sans AUCUN
+// controle (ni session, ni origine, ni liste de chemins). Desormais :
+//  - liste blanche stricte des chemins + methodes reellement utilises ;
+//  - creation / envoi de signature : session obligatoire (admin du client,
+//    technicien ou super admin) ;
+//  - lecture du lien de signature d'un signataire (devis.html, client sans
+//    compte) : autorisee si le couple (demande, signataire) correspond a un
+//    devis existant dans Airtable (jeton de devis : ids Yousign inconnus de
+//    tout tiers) ;
+//  - origine du site + limite de debit.
+const AIRTABLE_BASE_ID = process.env.AIRTABLE_BASE_ID || 'appkI8RKHkYNWY86U';
+const ID_YOUSIGN = '[A-Za-z0-9_-]{8,64}';
+const CHEMINS_ECRITURE = [
+  ['POST', new RegExp('^signature_requests$')],
+  ['POST', new RegExp('^signature_requests/' + ID_YOUSIGN + '/documents$')],
+  ['POST', new RegExp('^signature_requests/' + ID_YOUSIGN + '/signers$')],
+  ['POST', new RegExp('^signature_requests/' + ID_YOUSIGN + '/activate$')],
+];
+const CHEMIN_LECTURE_SIGNATAIRE = new RegExp('^signature_requests/(' + ID_YOUSIGN + ')/signers/(' + ID_YOUSIGN + ')$');
+const ROLES_AUTORISES_ECRITURE = ['SUPER_ADMIN_IKO', 'TENANT_ADMIN', 'TECHNICIEN'];
+const TAILLE_MAX_CORPS = 12 * 1024 * 1024; // 12 Mo (PDF de devis)
+
+async function devisCorrespond(requestId, signerId) {
+  const jeton = process.env.AIRTABLE_TOKEN;
+  if (!jeton) return false;
+  const formule = 'AND({Yousign Request ID}="' + requestId + '",{Yousign Signer ID}="' + signerId + '")';
+  try {
+    const r = await fetch('https://api.airtable.com/v0/' + AIRTABLE_BASE_ID + '/Devis?filterByFormula=' + encodeURIComponent(formule) + '&maxRecords=1&fields%5B%5D=N%C2%B0%20devis', {
+      headers: { Authorization: 'Bearer ' + jeton },
+    });
+    if (!r.ok) return false;
+    const j = await r.json();
+    return Array.isArray(j.records) && j.records.length > 0;
+  } catch (e) {
+    return false;
+  }
+}
+
 export const config = {
   api: {
     bodyParser: false,
@@ -26,7 +66,10 @@ export const config = {
 
 async function readRawBody(req) {
   const chunks = [];
+  let total = 0;
   for await (const chunk of req) {
+    total += chunk.length;
+    if (total > TAILLE_MAX_CORPS) throw new Error('corps trop volumineux');
     chunks.push(chunk);
   }
   return Buffer.concat(chunks);
@@ -39,6 +82,35 @@ export default async function handler(req, res) {
     return res.status(500).json({
       error: 'YOUSIGN_API_KEY manquant. Ajoute-le dans Vercel > Project Settings > Environment Variables.'
     });
+  }
+
+  if (!verifierOrigine(req)) {
+    return res.status(403).json({ error: 'Origine non autorisée.' });
+  }
+  if (!verifierDebit(req, { max: 30, fenetreMs: 60 * 1000, cle: 'yousign' })) {
+    return res.status(429).json({ error: 'Trop de requêtes, réessayez dans une minute.' });
+  }
+
+  // Controle d'acces par liste blanche (chemin + methode), avant tout appel Yousign.
+  const cheminDemande = (() => {
+    const p = (req.query || {}).path;
+    return (Array.isArray(p) ? p.join('/') : (p || '')).replace(/^\/+|\/+$/g, '');
+  })();
+  const session = verifierSession(req);
+  const ecritureAutorisee = CHEMINS_ECRITURE.some(([m, re]) => m === req.method && re.test(cheminDemande));
+  const lecture = req.method === 'GET' ? cheminDemande.match(CHEMIN_LECTURE_SIGNATAIRE) : null;
+  if (ecritureAutorisee) {
+    if (!session) return res.status(401).json({ error: 'Authentification requise.' });
+    if (session.mdpAChanger || !ROLES_AUTORISES_ECRITURE.includes(session.role)) {
+      return res.status(403).json({ error: 'Accès refusé.' });
+    }
+  } else if (lecture) {
+    const sessionValide = session && !session.mdpAChanger && ROLES_AUTORISES_ECRITURE.includes(session.role);
+    if (!sessionValide && !(await devisCorrespond(lecture[1], lecture[2]))) {
+      return res.status(403).json({ error: 'Accès refusé.' });
+    }
+  } else {
+    return res.status(404).json({ error: 'Route non autorisée.' });
   }
 
   const base = process.env.YOUSIGN_ENV === 'production'
@@ -69,7 +141,12 @@ export default async function handler(req, res) {
   };
 
   if (req.method !== 'GET' && req.method !== 'HEAD') {
-    const rawBody = await readRawBody(req);
+    let rawBody;
+    try {
+      rawBody = await readRawBody(req);
+    } catch (e) {
+      return res.status(413).json({ error: 'Corps de requête trop volumineux.' });
+    }
     init.body = rawBody;
     // On relaie le Content-Type d'origine tel quel (important pour le
     // multipart/form-data : la boundary doit rester identique à celle du

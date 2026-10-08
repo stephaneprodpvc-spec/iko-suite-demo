@@ -3,7 +3,7 @@
 // La clé ANTHROPIC_API_KEY reste ici (côté serveur) : elle n'est jamais
 // envoyée au navigateur du visiteur.
 
-import { verifierOrigine, verifierDebit } from "./_securite.js";
+import { limiterChat } from "./_securite.js";
 import vocabMenuiserie from "./_trades/menuiserie.js";
 import vocabPlomberieChauffage from "./_trades/plomberie_chauffage.js";
 import { extraireConnaissanceDuRecord, blocPromptConnaissance, affinerPourPrompt } from "./_connaissance.js";
@@ -152,12 +152,7 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: "Méthode non autorisée" });
   }
 
-  if (!verifierOrigine(req)) {
-    return res.status(403).json({ error: "Origine non autorisée." });
-  }
-  if (!verifierDebit(req)) {
-    return res.status(429).json({ error: "Trop de requêtes, réessayez dans une minute." });
-  }
+  if (limiterChat(req, res)) return;
 
   const cle = process.env.ANTHROPIC_API_KEY;
   if (!cle) {

@@ -1,4 +1,4 @@
-import { verifierOrigine, verifierDebit, reponseBloquee } from "./_securite.js";
+import { limiterChat } from "./_securite.js";
 import { normaliserConnaissance, blocPromptConnaissance, affinerPourPrompt } from "./_connaissance.js";
 import { blocPromptAnalyticsSAV, genererRecommandationsSAV, blocPromptRecommandationsSAV } from "../analytics-sav.js";
 import { nomAssistantDepuisEntree } from "./_assistants.js";
@@ -491,8 +491,7 @@ export default async function handler(req, res) {
     return res.status(405).json({ erreur: "Methode non autorisee" });
   }
 
-  if (!verifierOrigine(req)) return reponseBloquee(res, "origine");
-  if (!verifierDebit(req)) return reponseBloquee(res, "debit");
+  if (limiterChat(req, res)) return;
 
   const cle = process.env.ANTHROPIC_API_KEY;
   if (!cle) {
