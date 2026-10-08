@@ -41,8 +41,10 @@ div[style*="position: sticky"][style*="top: 0px"][style*="rgb(255, 255, 255)"] {
 div[style*="background: rgb(255, 255, 255)"], button[style*="background: rgb(255, 255, 255)"], label[style*="background: rgb(255, 255, 255)"] {
   background: rgba(255,255,255,0.74) !important; -webkit-backdrop-filter: blur(18px) saturate(170%); backdrop-filter: blur(18px) saturate(170%);
   border: 1px solid rgba(255,255,255,0.7) !important; box-shadow: 0 6px 20px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.8) !important; color: #1c1c1e !important; }
-.modal-box { background: rgba(255,255,255,0.80) !important; -webkit-backdrop-filter: blur(26px) saturate(180%); backdrop-filter: blur(26px) saturate(180%);
+.modal-box { background: rgba(255,255,255,0.97) !important;
+  color: #1c1c1e;
   border: 1px solid rgba(255,255,255,0.8) !important; box-shadow: 0 24px 70px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.9) !important; }
+.modal-box div[style*="background: rgb(255, 255, 255)"], .modal-box button[style*="background: rgb(255, 255, 255)"], .modal-box label[style*="background: rgb(255, 255, 255)"] { background: #fff !important; -webkit-backdrop-filter: none !important; backdrop-filter: none !important; box-shadow: none !important; border: 1px solid #E5E7EB !important; }
 .modal-overlay { background: rgba(60,20,0,0.55) !important; -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
 input, select, textarea { background: rgba(255,255,255,0.75) !important; border: 1px solid rgba(255,255,255,0.85) !important; border-radius: 12px !important; }
 button[style*="background: var(--iko-primary)"] { background: linear-gradient(180deg, rgba(255,150,60,0.95), rgba(255,107,0,0.85)) !important; border: 1px solid rgba(255,255,255,0.55) !important; box-shadow: 0 4px 14px rgba(255,107,0,0.35), inset 0 1px 0 rgba(255,255,255,0.5) !important; color: #fff !important; }
@@ -468,7 +470,7 @@ function StatCard({ label, value, sub, accent, active, onClick, alert }) {
   const isAlert = alert && value > 0;
   return (
     <div onClick={onClick} className={isAlert ? "alert-blink" : ""}
-      style={{background:isAlert?"var(--iko-erreur)":(active?C.orDim:C.card),border:"2px solid "+(isAlert?"var(--iko-erreur)":(active?C.or:(accent?C.orBord:C.border))),borderRadius:"12px",padding:"16px 20px",flex:1,minWidth:"120px",cursor:onClick?"pointer":"default",transition:"border-color 0.15s"}}>
+      style={{background:isAlert?"var(--iko-erreur)":(active?"#FEFEFE":C.card),border:"2px solid "+(isAlert?"var(--iko-erreur)":(active?C.or:(accent?C.orBord:C.border))),borderRadius:"12px",padding:"16px 20px",flex:1,minWidth:"120px",cursor:onClick?"pointer":"default",transition:"border-color 0.15s"}}>
       <div style={{fontSize:"28px",fontWeight:"900",color:isAlert?"#fff":(accent||active?C.or:C.white),fontFamily:"monospace"}}>{value}</div>
       <div style={{fontSize:"12px",fontWeight:"700",color:isAlert?"#fff":C.text,marginTop:"4px"}}>{label}</div>
       {sub && <div style={{fontSize:"10px",color:isAlert?"rgba(255,255,255,0.85)":C.muted,marginTop:"2px"}}>{sub}</div>}
@@ -3593,7 +3595,7 @@ function ModalTableauBordDirigeant({ tickets, stats, onClose, onOpenAnalytics, o
   return (
     <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
       <div className="modal-box" style={{maxWidth:"720px",maxHeight:"88vh",overflow:"auto"}}>
-        <div style={{fontSize:"18px",fontWeight:"900",color:C.white,marginBottom:"2px"}}>🧭 Tableau de bord dirigeant</div>
+        <div style={{fontSize:"18px",fontWeight:"900",color:C.white,marginBottom:"2px"}}>🧭 Central — direction</div>
         <div style={{fontSize:"11px",color:C.muted,marginBottom:"12px"}}>Vue consolidée toutes agences — {tickets.length} ticket(s) chargé(s), lecture seule</div>
         <div style={{display:"flex",gap:"8px",flexWrap:"wrap",marginBottom:"18px"}}>
           {onOpenAnalytics && <button onClick={onOpenAnalytics} style={{background:C.or,border:"none",color:"#fff",borderRadius:"10px",padding:"9px 16px",fontSize:"12px",fontWeight:"800",cursor:"pointer"}}>📊 Analytics SAV</button>}
@@ -5331,10 +5333,11 @@ function Dashboard({ agenceAccess, onClose }) {
             style={{background:C.or,border:"none",color:"var(--iko-dark)",borderRadius:"8px",padding:"8px 14px",fontSize:"12px",fontWeight:"900",cursor:"pointer",display:"flex",alignItems:"center",gap:"6px"}}>
             📋 Devis {stats.devisEnAttente > 0 && <span style={{background:"var(--iko-bg-sombre)",color:"#fff",borderRadius:"10px",padding:"1px 6px",fontSize:"10px"}}>{stats.devisEnAttente}</span>}
           </button>
+          {/* TODO (plus tard, décision du patron) : mot de passe propre au bouton Central. */}
           {agenceAccess === "global" && (
           <button onClick={() => setShowModalDirigeant(true)} title="Réservé à la direction : analytics, intelligence commerciale, vue toutes agences"
-            style={{background:"var(--iko-bg-sombre)",border:"1px solid "+C.border,color:"#fff",borderRadius:"8px",padding:"8px 14px",fontSize:"12px",fontWeight:"900",cursor:"pointer",display:"flex",alignItems:"center",gap:"6px"}}>
-            🧭 Dirigeant
+            style={{background:"#fff",border:"1px solid "+C.border,color:"#111",borderRadius:"8px",padding:"8px 14px",fontSize:"12px",fontWeight:"900",cursor:"pointer",display:"flex",alignItems:"center",gap:"6px"}}>
+            🧭 Central
           </button>
           )}
           <button onClick={() => setShowModalRdv(true)} style={{background:C.or,border:"none",color:"var(--iko-dark)",borderRadius:"8px",padding:"8px 16px",fontSize:"12px",fontWeight:"900",cursor:"pointer",display:"flex",alignItems:"center",gap:"6px"}}>📞 + Nouveau RDV</button>
