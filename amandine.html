@@ -184,11 +184,12 @@
   }
   #saisie:focus { border-color: var(--orange); }
   #envoyer {
-    background: var(--orange);
-    color: var(--blanc);
-    border: none;
+    background: linear-gradient(180deg, rgba(255,150,60,0.95), rgba(255,107,0,0.85));
+    color: #fff;
+    border: 1px solid rgba(255,255,255,0.6);
+    box-shadow: 0 4px 14px rgba(255,107,0,0.35), inset 0 1px 0 rgba(255,255,255,0.55);
     border-radius: 50%;
-    width: 44px; height: 44px;
+    width: 52px; height: 52px;
     font-size: 19px;
     cursor: pointer;
     flex-shrink: 0;
@@ -196,7 +197,7 @@
     align-items: center;
     justify-content: center;
   }
-  #envoyer:disabled { background: var(--gris-clair); cursor: default; }
+  #envoyer:disabled { background: var(--gris-clair); box-shadow: none; border-color: transparent; cursor: default; }
   :focus-visible { outline: 2px solid var(--orange); outline-offset: 2px; }
 
   /* Boutons vocaux — masqués si le navigateur ne sait pas les gérer */
@@ -324,8 +325,8 @@
 
 <div id="zone-saisie">
   <button id="micro" aria-label="Dicter votre message" title="Dicter"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v4M8 22h8"/></svg></button>
-  <textarea id="saisie" rows="1" placeholder="Décrivez votre projet…" aria-label="Votre message"></textarea>
-  <button id="envoyer" aria-label="Envoyer">↑</button>
+  <textarea id="saisie" rows="1" placeholder="Décrivez votre problème…" aria-label="Votre message"></textarea>
+  <button id="envoyer" aria-label="Envoyer"><svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button>
 </div>
 <div class="mention">Assistant automatisé — pour un devis, un conseiller vous rappellera.</div>
 
