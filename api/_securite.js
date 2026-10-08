@@ -90,16 +90,26 @@ export function reponseBloquee(res, raison) {
 //
 // Retourne { userId, tenantId, role } si une session valide existe,
 // sinon null (ne leve jamais d'exception).
+// MODE DEMO OUVERT : tant qu'il est actif, toute requete SANS session valide
+// est traitee comme une session SUPER_ADMIN_IKO (aucune connexion requise).
+// Une vraie session valide (cookie iko_access) reste prioritaire.
+// Pour REACTIVER la protection : variable d'environnement Vercel
+// IKO_DEMO_OUVERT=0 (ou mettre la constante ci-dessous a false), puis redeployer.
+export const MODE_DEMO_OUVERT = process.env.IKO_DEMO_OUVERT !== "0";
+
+export const SESSION_DEMO = { userId: "demo", tenantId: undefined, role: "SUPER_ADMIN_IKO", mdpAChanger: false };
+
 export function verifierSession(req) {
   const brut = req.headers.cookie || "";
   const m = brut.match(/(?:^|; )iko_access=([^;]*)/);
-  if (!m) return null;
+  if (!m) return MODE_DEMO_OUVERT ? SESSION_DEMO : null;
   try {
     const payload = jwt.verify(decodeURIComponent(m[1]), process.env.JWT_ACCESS_SECRET);
     // mdpAChanger : mot de passe faible a la connexion, changement impose
     // (les routes protegees refusent la session tant qu'il n'est pas fait).
+    if (payload.mdpAChanger === true && MODE_DEMO_OUVERT) return SESSION_DEMO;
     return { userId: payload.userId, tenantId: payload.tenantId, role: payload.role, mdpAChanger: payload.mdpAChanger === true };
   } catch (e) {
-    return null;
+    return MODE_DEMO_OUVERT ? SESSION_DEMO : null;
   }
 }

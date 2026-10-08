@@ -46,7 +46,7 @@
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
-import { verifierOrigine, verifierDebit, reponseBloquee, verifierSession } from "./_securite.js";
+import { verifierOrigine, verifierDebit, reponseBloquee, verifierSession, MODE_DEMO_OUVERT, SESSION_DEMO } from "./_securite.js";
 import { initialiserPlanning, lireReglagesBruts, enregistrerReglages, REGLAGES_DEFAUT } from "./_planning.js";
 
 const AIRTABLE_BASE = "appkI8RKHkYNWY86U";
@@ -733,6 +733,13 @@ async function gererEnregistrerReglagesPlanning(req, res) {
 }
 
 async function gererSession(req, res) {
+  // MODE DEMO OUVERT : sans session valide, on repond comme un SUPER_ADMIN.
+  if (MODE_DEMO_OUVERT) {
+    const s = verifierSession(req);
+    if (s === SESSION_DEMO) {
+      return res.status(200).json({ userId: SESSION_DEMO.userId, role: SESSION_DEMO.role, demo: true });
+    }
+  }
   const accessBrut = lireCookie(req, "iko_access");
   if (accessBrut) {
     try {
