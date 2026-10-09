@@ -1,7 +1,8 @@
-const CACHE_NAME = 'iko-suite-sav-v1';
+const CACHE_NAME = 'iko-suite-sav-v2';
 const CORE_ASSETS = [
   '/',
   '/index.html',
+  '/technicien.html',
   '/manifest.json',
   '/icon-192.png',
   '/icon-512.png'
@@ -55,12 +56,15 @@ self.addEventListener('fetch', (event) => {
   event.respondWith(
     fetch(event.request)
       .then((response) => {
-        const copy = response.clone();
-        caches.open(CACHE_NAME).then((cache) => {
-          try { cache.put(event.request, copy); } catch (e) {}
-        });
+        // On ne garde en cache que les réponses valides (pas de 401/500 rejouées hors ligne)
+        if (response && (response.ok || response.type === 'opaque')) {
+          const copy = response.clone();
+          caches.open(CACHE_NAME).then((cache) => {
+            try { cache.put(event.request, copy); } catch (e) {}
+          });
+        }
         return response;
       })
-      .catch(() => caches.match(event.request))
+      .catch(() => caches.match(event.request).then((r) => r || (event.request.mode === 'navigate' ? caches.match('/technicien.html') : undefined)))
   );
 });
