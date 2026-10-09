@@ -3296,6 +3296,19 @@ function Technicien({ agence, onClose }) {
     } catch (e) { console.error(e); }
   };
 
+  const [lienAgenda, setLienAgenda] = React.useState("");
+  const [agendaCopie, setAgendaCopie] = React.useState(false);
+  const [erreurAgenda, setErreurAgenda] = React.useState("");
+  const obtenirLienAgenda = async () => {
+    setErreurAgenda("");
+    try {
+      const r = await fetch('/api/agenda?lien=1&agence=' + encodeURIComponent(agenceShort));
+      const j = await r.json();
+      if (!r.ok || !j.url) throw new Error(j.error || "indisponible");
+      setLienAgenda(j.url);
+    } catch (e) { setErreurAgenda("Impossible de générer le lien d'agenda pour l'instant."); }
+  };
+
   const todayStr = new Date().toLocaleDateString('fr-FR');
   const todayLong = new Date().toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'});
 
@@ -3703,6 +3716,21 @@ function Technicien({ agence, onClose }) {
         <div style={{display:"flex",flexDirection:"column",gap:"12px"}}>
           {filtered.map(t => <TicketCard key={t.id} ticket={t} onAction={setSelectedTicket} onAcquitterRdv={acquitterRdv} onEtablirDevis={setTicketDevis} onEnRoute={partirEnRoute}/>)}
         </div>
+        {agenceShort && agenceShort !== "global" && (
+          <div style={{marginTop:"18px",padding:"12px 14px",borderRadius:"12px",background:"rgba(255,255,255,0.55)",border:"1px solid rgba(255,255,255,0.7)"}}>
+            {!lienAgenda ? (
+              <button onClick={obtenirLienAgenda} style={{width:"100%",background:"none",border:"none",color:C.or,fontWeight:"800",fontSize:"12px",cursor:"pointer"}}>📅 Ajouter mes interventions à mon agenda (Google / Apple / Outlook)</button>
+            ) : (
+              <div>
+                <div style={{fontSize:"11px",fontWeight:"800",color:C.muted,marginBottom:"6px"}}>Collez ce lien dans « Ajouter un agenda par URL » (il se met à jour tout seul) :</div>
+                <input readOnly value={lienAgenda} onFocus={e => e.target.select()} style={{width:"100%",fontSize:"11px"}}/>
+                <button onClick={() => { try { navigator.clipboard.writeText(lienAgenda); setAgendaCopie(true); setTimeout(() => setAgendaCopie(false), 2500); } catch (e) {} }}
+                  style={{width:"100%",marginTop:"8px",padding:"10px",borderRadius:"10px",border:"none",color:"#fff",fontWeight:"900",fontSize:"12px",cursor:"pointer",background:"linear-gradient(180deg, rgba(255,150,60,0.97), rgba(255,107,0,0.9))"}}>{agendaCopie ? "✓ Lien copié" : "Copier le lien"}</button>
+              </div>
+            )}
+            {erreurAgenda && <div style={{fontSize:"11px",color:C.rouge,marginTop:"6px"}}>{erreurAgenda}</div>}
+          </div>
+        )}
         {lastRefresh && <div style={{textAlign:"center",fontSize:"9px",color:C.muted,marginTop:"20px"}}>Dernière mise à jour : {lastRefresh}</div>}
       </div>
 
