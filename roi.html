@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Iko — Simulateur de rentabilité</title>
+<style>
+:root{--or:#FF6B00;--noir:#0D0D0D;--gris:#6B7280}
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;font-family:-apple-system,"Segoe UI",Roboto,Arial,sans-serif;color:var(--noir);
+  background:linear-gradient(160deg,#FF9A3C 0%,#FF6B00 55%,#C94F00 100%);background-attachment:fixed;padding:20px 14px 60px}
+.w{max-width:980px;margin:0 auto}
+h1{margin:0 0 4px;font-size:24px;color:#fff}
+.sub{margin:0 0 18px;color:rgba(255,255,255,.92);font-size:14px}
+.grille{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media(max-width:760px){.grille{grid-template-columns:1fr}}
+.carte{background:rgba(255,255,255,.88);border:1px solid rgba(255,255,255,.7);border-radius:18px;padding:18px;box-shadow:0 10px 30px rgba(0,0,0,.15);backdrop-filter:blur(12px)}
+.carte h2{margin:0 0 12px;font-size:14px;letter-spacing:.06em;text-transform:uppercase;color:var(--or)}
+.champ{margin-bottom:14px}
+.champ label{display:flex;justify-content:space-between;font-size:12px;font-weight:700;color:#374151;margin-bottom:5px}
+.champ label b{color:var(--noir);font-size:14px}
+input[type=range]{width:100%;accent-color:var(--or)}
+input[type=number]{width:100%;padding:11px 12px;border-radius:10px;border:1px solid #D1D5DB;font-size:15px}
+.hint{font-size:11px;color:var(--gris);margin-top:3px}
+.gros{background:var(--noir);color:#fff;border-radius:18px;padding:20px;text-align:center;margin-bottom:14px}
+.gros .v{font-size:40px;font-weight:900;color:#FF9A3C;line-height:1.1}
+.gros .l{font-size:12px;opacity:.85;margin-top:4px}
+.ligne{display:flex;justify-content:space-between;gap:10px;padding:9px 0;border-bottom:1px solid #E5E7EB;font-size:13px}
+.ligne:last-child{border:0}.ligne b{white-space:nowrap}
+.barre{height:10px;border-radius:6px;background:#E5E7EB;overflow:hidden;margin-top:5px}
+.barre i{display:block;height:100%;background:linear-gradient(90deg,#FF9A3C,#FF6B00)}
+.btn{display:block;width:100%;margin-top:12px;padding:14px;border:0;border-radius:12px;font-size:14px;font-weight:900;cursor:pointer;color:#fff;
+  background:linear-gradient(180deg,rgba(255,150,60,.97),rgba(255,107,0,.9))}
+.note{font-size:11px;color:rgba(255,255,255,.9);margin-top:16px;line-height:1.5}
+@media print{body{background:#fff}.btn,.note{display:none}.carte{box-shadow:none}}
+</style>
+</head>
+<body>
+<div class="w">
+  <h1>Combien IKO vous fait économiser</h1>
+  <p class="sub">Déplacez les curseurs selon votre activité : le résultat se met à jour en direct.</p>
+
+  <div class="grille">
+    <div class="carte">
+      <h2>Votre activité</h2>
+      <div class="champ"><label>Demandes SAV par mois <b id="vNb"></b></label><input type="range" id="nb" min="5" max="400" step="5" value="60"></div>
+      <div class="champ"><label>Temps administratif par SAV aujourd'hui <b id="vTps"></b></label><input type="range" id="tps" min="5" max="60" step="1" value="25"><div class="hint">Appels, e-mails, saisie, relances, planning.</div></div>
+      <div class="champ"><label>Coût horaire d'un gestionnaire <b id="vCout"></b></label><input type="range" id="cout" min="15" max="80" step="1" value="32"></div>
+      <div class="champ"><label>Clients absents ou RDV ratés <b id="vAbs"></b></label><input type="range" id="abs" min="0" max="30" step="1" value="10"><div class="hint">Part des interventions où le technicien se déplace pour rien.</div></div>
+      <div class="champ"><label>Coût d'un déplacement raté <b id="vDep"></b></label><input type="range" id="dep" min="30" max="200" step="5" value="75"></div>
+      <div class="champ"><label>Devis établis par mois <b id="vDev"></b></label><input type="range" id="dev" min="0" max="200" step="1" value="15"></div>
+      <div class="champ"><label>Montant moyen d'un devis <b id="vPan"></b></label><input type="range" id="pan" min="100" max="5000" step="50" value="850"></div>
+      <div class="champ"><label>Votre investissement IKO par mois <b id="vInv"></b></label><input type="number" id="inv" value="199" min="0"><div class="hint">À ajuster avec votre tarif réel.</div></div>
+    </div>
+
+    <div>
+      <div class="gros"><div class="v" id="rGain">0 €</div><div class="l">de gain net estimé par mois</div></div>
+      <div class="carte">
+        <h2>Détail du gain mensuel</h2>
+        <div class="ligne"><span>⏱️ Temps administratif économisé<br><span class="hint" id="dAdm"></span></span><b id="gAdm"></b></div>
+        <div class="barre"><i id="bAdm"></i></div>
+        <div class="ligne"><span>🚗 Déplacements ratés évités<br><span class="hint" id="dAbs"></span></span><b id="gAbs"></b></div>
+        <div class="barre"><i id="bAbs"></i></div>
+        <div class="ligne"><span>📋 Devis supplémentaires signés<br><span class="hint" id="dDev"></span></span><b id="gDev"></b></div>
+        <div class="barre"><i id="bDev"></i></div>
+        <div class="ligne"><span><b>Total des gains</b></span><b id="gTot"></b></div>
+        <div class="ligne"><span>Investissement IKO</span><b id="gInv"></b></div>
+        <div class="ligne"><span><b>Gain net par an</b></span><b id="gAn"></b></div>
+        <div class="ligne"><span><b>Retour sur investissement</b></span><b id="gRoi"></b></div>
+        <button class="btn" onclick="window.print()">📄 Imprimer / enregistrer en PDF</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="note">Hypothèses prudentes appliquées : IKO réduit le temps administratif de 60 % (prise de demande par chatbot, planning et suivi automatiques), divise par 2 les clients absents (rappel la veille + suivi « technicien en route ») et améliore la signature des devis de 8 points (envoi immédiat sur place, signature électronique, paiement en ligne). Estimation indicative, non contractuelle.</div>
+</div>
+
+<script>
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var eur = function (n) { return Math.round(n).toLocaleString('fr-FR') + ' €'; };
+  var HYP_ADMIN = 0.60, HYP_ABS = 0.50, HYP_DEVIS_POINTS = 0.08; // hypothèses prudentes (voir note)
+  function calc() {
+    var nb = +$('nb').value, tps = +$('tps').value, cout = +$('cout').value, abs = +$('abs').value / 100,
+        dep = +$('dep').value, dev = +$('dev').value, pan = +$('pan').value, inv = Math.max(0, +$('inv').value || 0);
+    $('vNb').textContent = nb; $('vTps').textContent = tps + ' min'; $('vCout').textContent = cout + ' €/h';
+    $('vAbs').textContent = Math.round(abs * 100) + ' %'; $('vDep').textContent = dep + ' €';
+    $('vDev').textContent = dev; $('vPan').textContent = pan + ' €'; $('vInv').textContent = '';
+    var minutes = nb * tps * HYP_ADMIN;
+    var gAdm = minutes / 60 * cout;
+    var evites = nb * abs * HYP_ABS;
+    var gAbs = evites * dep;
+    var gDev = dev * HYP_DEVIS_POINTS * pan;
+    var tot = gAdm + gAbs + gDev, net = tot - inv;
+    $('gAdm').textContent = eur(gAdm); $('dAdm').textContent = Math.round(minutes / 60) + ' h gagnées par mois';
+    $('gAbs').textContent = eur(gAbs); $('dAbs').textContent = Math.round(evites * 10) / 10 + ' déplacement(s) évité(s) par mois';
+    $('gDev').textContent = eur(gDev); $('dDev').textContent = '+8 points de signature sur ' + dev + ' devis';
+    $('gTot').textContent = eur(tot); $('gInv').textContent = '− ' + eur(inv);
+    $('rGain').textContent = eur(net); $('gAn').textContent = eur(net * 12);
+    $('gRoi').textContent = inv > 0 ? (tot / inv).toFixed(1).replace('.', ',') + ' × la mise' : '—';
+    var max = Math.max(gAdm, gAbs, gDev, 1);
+    $('bAdm').style.width = (gAdm / max * 100) + '%'; $('bAbs').style.width = (gAbs / max * 100) + '%'; $('bDev').style.width = (gDev / max * 100) + '%';
+  }
+  document.querySelectorAll('input').forEach(function (i) { i.addEventListener('input', calc); });
+  calc();
+})();
+</script>
+</body>
+</html>
