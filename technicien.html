@@ -2241,7 +2241,7 @@ function ModalAction({ ticket, onClose, onDone }) {
         fields["Créneau"] = dateLabelDeblocage;
         fields.Commentaire = "Créneau débloqué par le technicien (intervention avancée)" + (commentaire ? " : " + commentaire : "");
       } else {
-        fields.Statut = "En cours";
+        fields.Statut = "Nouveau"; // même statut que lorsque le client change sa date : le nouveau RDV est à (re)faire
         const dateLabel = new Date(newDate+'T12:00:00').toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'});
         fields["Créneau"] = newCreneau + ' — ' + dateLabel;
         if (commentaire) fields.Commentaire = "Replanifié : " + commentaire;

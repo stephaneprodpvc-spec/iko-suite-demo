@@ -228,12 +228,14 @@ function DevisItemiseView({ devisId }) {
   const refuser = async () => {
     setSaving(true);
     try {
-      await fetch('/api/airtable/Devis/' + devisId, {
+      const rRefus = await fetch('/api/airtable/Devis/' + devisId, {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ fields: { "Devis refusé": true, "Motif refus": motifRefus || '(sans motif précisé)', "Categorie refus": categorieRefus } })
       });
+      // Ne jamais afficher « refus enregistré » si Airtable n'a rien enregistré.
+      if (!rRefus.ok) throw new Error('HTTP ' + rRefus.status);
       setResultat('refuse'); setStatutPage("termine");
-    } catch(e) { console.error(e); }
+    } catch(e) { console.error(e); window.alert("Votre refus n'a pas pu être enregistré. Merci de réessayer dans un instant."); }
     setSaving(false);
   };
 

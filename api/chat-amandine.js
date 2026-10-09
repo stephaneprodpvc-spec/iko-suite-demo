@@ -448,7 +448,17 @@ async function executerOutil(nom, input, clientId, tradeId, agencesObjets) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
-    if (!r.ok) return { erreur: "La creation du ticket a echoue, merci de reessayer." };
+    if (!r.ok) {
+      // Le créneau a été réservé juste avant : sans ticket, il resterait "Pris" pour rien. On le libère.
+      if (input.planning_id) {
+        try {
+          await fetch("https://api.airtable.com/v0/" + AIRTABLE_BASE + "/Planning/" + encodeURIComponent(input.planning_id), {
+            method: "PATCH", headers: airtableHeaders(), body: JSON.stringify({ fields: { Statut: "Libre" } }),
+          });
+        } catch (e) { console.error("Libération du créneau après échec de création du ticket", e); }
+      }
+      return { erreur: "La creation du ticket a echoue, merci de reessayer." };
+    }
 
     if (clientId || input.reponses_questionnaire) {
       // Le ticket est cree de maniere asynchrone par le scenario Make (pas
