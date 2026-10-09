@@ -5946,6 +5946,12 @@ function Dashboard({ agenceAccess, onClose }) {
             style={{background:C.or,border:"none",color:"var(--iko-dark)",borderRadius:"8px",padding:"8px 14px",fontSize:"12px",fontWeight:"900",cursor:"pointer",display:"flex",alignItems:"center",gap:"6px"}}>
             📋 Devis {stats.devisEnAttente > 0 && <span style={{background:"var(--iko-bg-sombre)",color:"#fff",borderRadius:"10px",padding:"1px 6px",fontSize:"10px"}}>{stats.devisEnAttente}</span>}
           </button>
+          {window.IKO_ROLE === "SUPER_ADMIN_IKO" && (
+            <span title="Client affiché. Cliquer pour revenir à IKO DEMO (sans client)" onClick={() => { try { localStorage.removeItem('iko_client_slug'); } catch (e) {} const u = new URL(window.location.href); u.searchParams.delete('client'); window.location.href = u.toString(); }}
+              style={{background:"#fff",color:"var(--iko-dark)",border:"1px solid var(--iko-primary)",borderRadius:"8px",padding:"8px 12px",fontSize:"12px",fontWeight:"900",cursor:"pointer"}}>
+              {window.IKO_CLIENT_INFO?.["Nom client"] ? "🏢 " + window.IKO_CLIENT_INFO["Nom client"] + " ✕" : "🧪 IKO DEMO"}
+            </span>
+          )}
           <a href="/entretien.html" style={{background:C.or,color:"var(--iko-dark)",borderRadius:"8px",padding:"8px 14px",fontSize:"12px",fontWeight:"900",textDecoration:"none",display:"flex",alignItems:"center",gap:"6px"}}>🛠️ Entretien</a>
           <a href="/equipe.html" style={{background:C.or,color:"var(--iko-dark)",borderRadius:"8px",padding:"8px 14px",fontSize:"12px",fontWeight:"900",textDecoration:"none",display:"flex",alignItems:"center",gap:"6px"}}>👷 Équipe</a>
           {/* TODO (plus tard, décision du patron) : mot de passe propre au bouton Central. */}
