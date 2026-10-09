@@ -5662,9 +5662,6 @@ function Dashboard({ agenceAccess, onClose }) {
     return (
       <div style={{position:"fixed",inset:0,background:"var(--iko-bg-sombre)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",zIndex:100}}>
         <audio ref={ikoAudioRef} style={{display:"none"}}/>
-        <div style={{position:"absolute",top:"20px",left:"50%",transform:"translateX(-50%)",color:"#8a8a8a",fontSize:"12px",letterSpacing:"2px",textTransform:"uppercase"}}>
-          {agenceFilter === "global" ? "Toutes agences" : agenceFilter}
-        </div>
         <div style={{width:"220px",height:"220px",borderRadius:"50%",
           background:"radial-gradient(circle at 35% 30%, var(--iko-primary-pale), var(--iko-primary) 55%, var(--iko-primary-fonce) 100%)",
           boxShadow:"0 0 90px rgba(var(--iko-primary-rgb),0.45)",

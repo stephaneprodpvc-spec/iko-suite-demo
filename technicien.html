@@ -2591,9 +2591,6 @@ function Technicien({ agence, onClose }) {
       <div style={{position:"fixed",inset:0,background:"var(--iko-bg-sombre)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",zIndex:100,WebkitUserSelect:"none",userSelect:"none",WebkitTouchCallout:"none"}}
         onContextMenu={e => e.preventDefault()}>
         <audio ref={maxAudioRef} style={{display:"none"}}/>
-        <div style={{position:"absolute",top:"20px",left:"20px",color:"#8a8a8a",fontSize:"12px",letterSpacing:"2px",textTransform:"uppercase"}}>
-          {agence === "global" ? "Toutes agences" : agence}
-        </div>
         <div style={{width:"220px",height:"220px",borderRadius:"50%",
           background:"radial-gradient(circle at 35% 30%, var(--iko-primary-pale), var(--iko-primary) 55%, var(--iko-primary-fonce) 100%)",
           boxShadow:"0 0 90px rgba(var(--iko-primary-rgb),0.35)",
@@ -2644,10 +2641,10 @@ function Technicien({ agence, onClose }) {
       {itineraireOpen && (
         <ItineraireModal agence={agence} tickets={filtered} onClose={() => setItineraireOpen(false)}/>
       )}
-      <div style={{background:C.card,borderBottom:"1px solid "+C.border,padding:"14px 20px 10px",position:"sticky",top:0,zIndex:100}}>
-        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-          <div style={{display:"flex",alignItems:"center",gap:"12px"}}>
-            <div style={{width:"100px",height:"48px",background:"#FFFFFF",borderRadius:"10px",display:"flex",alignItems:"center",justifyContent:"center",padding:"3px",boxSizing:"border-box"}}>
+      <div style={{background:C.card,borderBottom:"1px solid "+C.border,padding:"8px 12px 8px",position:"sticky",top:0,zIndex:100}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:"6px",flexWrap:"nowrap"}}>
+          <div style={{display:"flex",alignItems:"center",gap:"8px",minWidth:0}}>
+            <div style={{width:"64px",height:"36px",background:"#FFFFFF",borderRadius:"10px",display:"flex",alignItems:"center",justifyContent:"center",padding:"3px",boxSizing:"border-box"}}>
               <img data-iko-logo src={CONFIG_ENTREPRISE.logoUrl || IKO_LOGO} alt="Iko" style={{width:"100%",height:"100%",objectFit:"contain"}}/>
             </div>
             <button title="Maintenir pour parler"
@@ -2655,26 +2652,27 @@ function Technicien({ agence, onClose }) {
             onPointerUp={arreterEcouteMax}
             onPointerLeave={arreterEcouteMax}
             onPointerCancel={arreterEcouteMax}
-            style={{width:"44px",height:"44px",borderRadius:"50%",background:"radial-gradient(circle at 35% 30%, var(--iko-primary-pale), var(--iko-primary) 55%, var(--iko-primary-fonce) 100%)",border:"2px solid var(--iko-primary)",color:"#fff",cursor:"pointer",fontSize:"20px",boxShadow:"0 0 26px rgba(var(--iko-primary-rgb),0.35)",animation:maxEcoute?"pulseMax 1.2s infinite":"none",touchAction:"none",userSelect:"none"}}>
+            style={{width:"38px",height:"38px",borderRadius:"50%",flexShrink:0,background:"radial-gradient(circle at 35% 30%, var(--iko-primary-pale), var(--iko-primary) 55%, var(--iko-primary-fonce) 100%)",border:"2px solid var(--iko-primary)",color:"#fff",cursor:"pointer",fontSize:"20px",boxShadow:"0 0 26px rgba(var(--iko-primary-rgb),0.35)",animation:maxEcoute?"pulseMax 1.2s infinite":"none",touchAction:"none",userSelect:"none"}}>
             🎙️
           </button>
             <div>
-              <div style={{fontSize:"13px",fontWeight:"700",color:C.muted}}>Technicien</div>
-              <div style={{fontSize:"11px",color:C.or,marginTop:"1px",fontWeight:"700"}}>📍 {agenceShort}</div>
+              <div style={{fontSize:"12px",fontWeight:"800",color:C.muted,lineHeight:1.1}}>Technicien</div>
+              <div style={{fontSize:"11px",color:C.or,marginTop:"1px",fontWeight:"700",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>📍 {agenceShort}</div>
             </div>
           </div>
-          <div style={{display:"flex",alignItems:"center",gap:"8px"}}>
-            <button onClick={charger} title="Rafraîchir" style={{background:C.orDim,border:"1px solid "+C.orBord,color:C.or,borderRadius:"10px",width:"44px",height:"44px",fontSize:"17px",fontWeight:"700",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>↺</button>
-            <button onClick={onClose} title="Fermer la session" style={{background:"rgba(var(--iko-erreur-rgb),0.08)",border:"1px solid rgba(var(--iko-erreur-rgb),0.25)",color:"rgba(var(--iko-erreur-rgb),0.85)",borderRadius:"10px",width:"44px",height:"44px",cursor:"pointer",fontSize:"17px",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>✕</button>
+          <div style={{display:"flex",alignItems:"center",gap:"6px",flexShrink:0}}>
+            <button onClick={() => window.ikoInstaller && window.ikoInstaller()} title="Installer l'appli sur cet appareil" style={{background:C.orDim,border:"1px solid "+C.orBord,color:C.or,borderRadius:"10px",width:"38px",height:"38px",fontSize:"16px",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>📲</button>
+            <button onClick={charger} title="Rafraîchir" style={{background:C.orDim,border:"1px solid "+C.orBord,color:C.or,borderRadius:"10px",width:"38px",height:"38px",fontSize:"16px",fontWeight:"700",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>↺</button>
+            <button onClick={onClose} title="Fermer la session" style={{background:"rgba(var(--iko-erreur-rgb),0.08)",border:"1px solid rgba(var(--iko-erreur-rgb),0.25)",color:"rgba(var(--iko-erreur-rgb),0.85)",borderRadius:"10px",width:"38px",height:"38px",cursor:"pointer",fontSize:"16px",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>✕</button>
           </div>
         </div>
-        <div style={{display:"flex",alignItems:"center",gap:"6px",marginTop:"10px",flexWrap:"wrap"}}>
-          <button onClick={imprimerSemaine} title="Imprimer ma semaine" style={{background:C.orDim,border:"1px solid "+C.orBord,color:C.or,borderRadius:"10px",padding:"0 14px",height:"40px",fontSize:"12px",fontWeight:"700",cursor:"pointer",display:"flex",alignItems:"center",gap:"5px",whiteSpace:"nowrap",flexShrink:0}}>🖨️ Ma semaine</button>
-            <button onClick={() => setItineraireOpen(true)} title="Itinéraire optimisé" style={{background:"var(--iko-bg-sombre)",border:"1px solid var(--iko-bg-sombre)",color:"#fff",borderRadius:"10px",padding:"0 14px",height:"40px",fontSize:"12px",fontWeight:"700",cursor:"pointer",display:"flex",alignItems:"center",gap:"5px",whiteSpace:"nowrap",flexShrink:0}}>🗺️ Itinéraire</button>
-            <button onClick={() => setOnglet("devis")} title="Devis en attente" style={{background:onglet==="devis"?"var(--iko-primary)":"rgba(var(--iko-primary-rgb),0.12)",border:"1px solid var(--iko-primary)",color:onglet==="devis"?"var(--iko-dark)":"var(--iko-primary-fonce)",borderRadius:"10px",padding:"0 14px",height:"40px",fontSize:"12px",fontWeight:"700",cursor:"pointer",display:"flex",alignItems:"center",gap:"5px",whiteSpace:"nowrap",flexShrink:0}}>
+        <div style={{display:"flex",alignItems:"center",gap:"6px",marginTop:"8px",flexWrap:"nowrap",overflowX:"auto",paddingBottom:"2px"}}>
+          <button onClick={imprimerSemaine} title="Imprimer ma semaine" style={{background:C.orDim,border:"1px solid "+C.orBord,color:C.or,borderRadius:"10px",padding:"0 10px",height:"34px",fontSize:"12px",fontWeight:"700",cursor:"pointer",display:"flex",alignItems:"center",gap:"5px",whiteSpace:"nowrap",flexShrink:0}}>🖨️ Ma semaine</button>
+            <button onClick={() => setItineraireOpen(true)} title="Itinéraire optimisé" style={{background:"var(--iko-bg-sombre)",border:"1px solid var(--iko-bg-sombre)",color:"#fff",borderRadius:"10px",padding:"0 10px",height:"34px",fontSize:"12px",fontWeight:"700",cursor:"pointer",display:"flex",alignItems:"center",gap:"5px",whiteSpace:"nowrap",flexShrink:0}}>🗺️ Itinéraire</button>
+            <button onClick={() => setOnglet("devis")} title="Devis en attente" style={{background:onglet==="devis"?"var(--iko-primary)":"rgba(var(--iko-primary-rgb),0.12)",border:"1px solid var(--iko-primary)",color:onglet==="devis"?"var(--iko-dark)":"var(--iko-primary-fonce)",borderRadius:"10px",padding:"0 10px",height:"34px",fontSize:"12px",fontWeight:"700",cursor:"pointer",display:"flex",alignItems:"center",gap:"5px",whiteSpace:"nowrap",flexShrink:0}}>
               📋 Devis {nbDevisAttente > 0 && <span style={{background:onglet==="devis"?"var(--iko-bg-sombre)":"var(--iko-primary)",color:"#fff",borderRadius:"10px",padding:"0 5px",fontSize:"10px"}}>{nbDevisAttente}</span>}
             </button>
-            <button onClick={() => setNoteOpen(true)} title="Ma note client" style={{background:"rgba(var(--iko-statut-attention-rgb),0.12)",border:"1px solid var(--iko-primary)",color:"var(--iko-primary-fonce)",borderRadius:"10px",padding:"0 14px",height:"40px",fontSize:"12px",fontWeight:"700",cursor:"pointer",display:"flex",alignItems:"center",gap:"5px",whiteSpace:"nowrap",flexShrink:0}}>
+            <button onClick={() => setNoteOpen(true)} title="Ma note client" style={{background:"rgba(var(--iko-statut-attention-rgb),0.12)",border:"1px solid var(--iko-primary)",color:"var(--iko-primary-fonce)",borderRadius:"10px",padding:"0 10px",height:"34px",fontSize:"12px",fontWeight:"700",cursor:"pointer",display:"flex",alignItems:"center",gap:"5px",whiteSpace:"nowrap",flexShrink:0}}>
               ⭐ {moyenneAgence ? moyenneAgence.toFixed(1) : "—"}
             </button>
             {noteOpen && (
@@ -2703,17 +2701,17 @@ function Technicien({ agence, onClose }) {
               </div>
             )}
         </div>
-        <div style={{display:"flex",gap:"6px",marginTop:"12px",flexWrap:"wrap"}}>
+        <div style={{display:"flex",gap:"6px",marginTop:"8px",flexWrap:"nowrap"}}>
           {[["aujourd_hui","Aujourd'hui",nbAujourdhui],["a_venir","À venir",nbAVenir],["urgent","⚡ Urgent",nbUrgent],["termines","Terminés",nbTermines],["annules","Annulés",nbAnnules]].map(([id,label,count]) => (
             <div key={id} onClick={() => setOnglet(id)}
-              style={{flex:"1",minWidth:"78px",background:onglet===id?C.orDim:"#FFFFFF",border:"2px solid "+(onglet===id?C.or:C.border),borderRadius:"10px",padding:"8px 6px",cursor:"pointer",textAlign:"center",transition:"border-color 0.15s"}}>
-              <div style={{fontSize:"20px",fontWeight:"900",color:onglet===id?C.or:C.white,fontFamily:"monospace",lineHeight:1}}>{count}</div>
-              <div style={{fontSize:"10px",fontWeight:"700",color:onglet===id?C.or:C.muted,marginTop:"2px",whiteSpace:"nowrap"}}>{label}</div>
+              style={{flex:"1 1 0",minWidth:0,background:onglet===id?C.orDim:"#FFFFFF",border:"2px solid "+(onglet===id?C.or:C.border),borderRadius:"10px",padding:"5px 2px",cursor:"pointer",textAlign:"center",transition:"border-color 0.15s"}}>
+              <div style={{fontSize:"16px",fontWeight:"900",color:onglet===id?C.or:C.white,fontFamily:"monospace",lineHeight:1}}>{count}</div>
+              <div style={{fontSize:"9px",fontWeight:"700",color:onglet===id?C.or:C.muted,marginTop:"1px",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{label}</div>
             </div>
           ))}
         </div>
       </div>
-      <div style={{padding:"16px"}}>
+      <div style={{padding:"12px"}}>
         {loading && <div style={{textAlign:"center",padding:"60px",color:C.muted}}>Chargement...</div>}
         {!loading && filtered.length===0 && (
           <div style={{textAlign:"center",padding:"60px 20px",color:C.muted}}>
@@ -2863,8 +2861,9 @@ ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
     function style(el, css) { el.style.cssText = css; }
     var base = 'position:fixed;left:12px;right:12px;z-index:9999;border-radius:16px;padding:12px 14px;font:600 13px -apple-system,Segoe UI,sans-serif;color:#fff;display:flex;align-items:center;gap:10px;box-shadow:0 10px 30px rgba(0,0,0,.35);';
     var inst = null;
-    function montrerInstall(contenu, avecBouton) {
-      if (standalone || masque() || inst) return;
+    function montrerInstall(contenu, avecBouton, force) {
+      if (inst) fermer();
+      if (!force && (standalone || masque())) return;
       inst = document.createElement('div');
       style(inst, base + 'bottom:calc(12px + env(safe-area-inset-bottom));background:rgba(20,20,22,.94);border:1px solid rgba(255,107,0,.6);');
       var t = document.createElement('div'); t.style.flex = '1'; t.innerHTML = contenu; inst.appendChild(t);
@@ -2876,18 +2875,20 @@ ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
       }
       var x = document.createElement('button'); x.textContent = '✕'; x.setAttribute('aria-label', 'Fermer');
       style(x, 'background:transparent;color:#fff;border:0;font-size:18px;padding:6px;');
-      x.onclick = function () { try { localStorage.setItem(K, '1'); } catch (e) {} fermer(); };
+      x.onclick = function () { fermer(); };
       inst.appendChild(x);
       document.body.appendChild(inst);
     }
     function fermer() { if (inst && inst.parentNode) inst.parentNode.removeChild(inst); inst = null; }
-    window.addEventListener('beforeinstallprompt', function (e) { e.preventDefault(); evt = e; montrerInstall('📲 <b>Installer l\'appli IKO</b> sur cet appareil', true); });
-    window.addEventListener('appinstalled', fermer);
-    if (ios && !standalone) {
-      window.addEventListener('load', function () {
-        setTimeout(function () { montrerInstall('📲 <b>Installer sur iPhone / iPad</b> : touchez <b>Partager</b> (carré avec flèche) puis <b>« Sur l\'écran d\'accueil »</b>', false); }, 2500);
-      });
-    }
+    window.addEventListener('beforeinstallprompt', function (e) { e.preventDefault(); evt = e; });
+    window.addEventListener('appinstalled', function () { standalone = true; fermer(); });
+    // Appelée par l'icône 📲 de l'en-tête
+    window.ikoInstaller = function () {
+      if (standalone) { montrerInstall('✅ <b>L\'appli est déjà installée</b> sur cet appareil.', false, true); return; }
+      if (evt) { evt.prompt(); evt.userChoice.finally(function () { evt = null; }); return; }
+      if (ios) montrerInstall('📲 <b>Installer sur iPhone / iPad</b><br>1. Ouvrez cette page dans <b>Safari</b> (pas dans Mail ou une autre appli).<br>2. Touchez <b>Partager</b> (carré avec une flèche).<br>3. Choisissez <b>« Sur l\'écran d\'accueil »</b>.', false, true);
+      else montrerInstall('📲 <b>Installer l\'appli</b><br>Dans le menu du navigateur (⋮ ou icône dans la barre d\'adresse), choisissez <b>« Installer l\'application »</b> ou <b>« Ajouter à l\'écran d\'accueil »</b>.', false, true);
+    };
     var off = null;
     function majReseau() {
       if (!navigator.onLine) {
