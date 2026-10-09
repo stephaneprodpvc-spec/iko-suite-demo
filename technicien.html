@@ -1902,6 +1902,7 @@ function ModalAction({ ticket, onClose, onDone }) {
   const [resultatDiagnostic, setResultatDiagnostic] = React.useState(null);
   const [diagnosticGarde, setDiagnosticGarde] = React.useState(!!ticket.fields?.["IKO Utilisé"]);
   const [commentaire, setCommentaire] = React.useState("");
+  const [pieceTexte, setPieceTexte] = React.useState("");
   const [newDate, setNewDate] = React.useState("");
   const [newCreneau, setNewCreneau] = React.useState("Matin (8h30 — 12h00)");
   const [saving, setSaving] = React.useState(false);
@@ -2242,6 +2243,7 @@ function ModalAction({ ticket, onClose, onDone }) {
       devis_place: "Résolu",
       replanifier: "Non résolu - RDV à reprogrammer",
       devis: "Non résolu - pièce à commander",
+      piece: "Non résolu - pièce à commander",
     };
     const statutIntervention = STATUT_PAR_MODE[mode];
     if (!statutIntervention) return { ok: true, skip: true }; // mode sans intervention (annuler, debloquer) : rien à créer, pas une erreur
@@ -2303,6 +2305,7 @@ function ModalAction({ ticket, onClose, onDone }) {
     if (mode === "debloquer" && !newDate) return;
     if (mode === "annuler" && !commentaire.trim()) return;
     if (mode === "devis" && !explication.trim()) return;
+    if (mode === "piece" && !pieceTexte.trim()) return;
     if (mode === "devis_place" && (!lignesAuto.length || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailAuto.trim()) || !modePaiementPlace)) return;
     setSaving(true); setErreurFermeture("");
     try {
@@ -2331,6 +2334,11 @@ function ModalAction({ ticket, onClose, onDone }) {
             body:JSON.stringify({fields:{Statut:'Libre'}})
           });
         }
+      } else if (mode === "piece") {
+        fields.Statut = "Attente pièce";
+        fields["Pièce à commander"] = pieceTexte.trim();
+        fields["Commande pièce"] = "À commander";
+        if (commentaire) fields.Commentaire = "Pièce à commander : " + commentaire;
       } else if (mode === "devis") {
         fields.Statut = "Devis à faire";
         const tagsTexte = tags.length ? "[" + tags.join(" · ") + "]\n" : "";
@@ -2387,6 +2395,12 @@ function ModalAction({ ticket, onClose, onDone }) {
       // Cohérence du planning : quand le technicien déplace le rendez-vous, l'ancien
       // créneau doit être libéré et le nouveau réservé (comme côté client/tableau de bord),
       // sinon l'agenda reste faux et le même créneau peut être reproposé à un autre client.
+      if (mode === "piece" && ticket.fields?.PlanningID) {
+        try {
+          await fetch('/api/airtable/Planning/' + ticket.fields.PlanningID, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ fields: { Statut: 'Libre' } }) });
+          await fetch('/api/airtable/tenant/Tickets%20SAV/' + ticket.id, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ fields: { PlanningID: "" } }) });
+        } catch (e) { console.error('Libération du créneau (pièce)', e); }
+      }
       if ((mode === "replanifier" || mode === "debloquer") && newDate) {
         try {
           const ancienPlanningId = ticket.fields?.PlanningID || "";
@@ -2414,6 +2428,8 @@ function ModalAction({ ticket, onClose, onDone }) {
         diagnosticTexte = resultatDiagnostic ? formaterTexteDiagnosticMax(resultatDiagnostic) : (commentaire || "");
       } else if (mode === "replanifier") {
         diagnosticTexte = commentaire || "";
+      } else if (mode === "piece") {
+        diagnosticTexte = "Pièce à commander : " + pieceTexte.trim() + (commentaire ? "\n" + commentaire : "");
       } else if (mode === "devis") {
         diagnosticTexte = fields.Diagnostic || "";
       }
@@ -2440,6 +2456,14 @@ function ModalAction({ ticket, onClose, onDone }) {
               marque: 'iko', action: 'renvoi_client',
               ticket: ticket.fields?.Name, "e-mail": ticket.fields?.Email,
             })
+          });
+        } catch(e) { console.error(e); }
+      }
+      if (mode === "piece") {
+        try {
+          await fetch(WEBHOOK, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ marque: 'iko', action: 'piece_a_commander', ticket: ticket.fields?.Name, nom: ticket.fields?.Client, "e-mail": ticket.fields?.Email || '', agence: ticket.fields?.Agence, piece: pieceTexte.trim() })
           });
         } catch(e) { console.error(e); }
       }
@@ -2561,6 +2585,11 @@ function ModalAction({ ticket, onClose, onDone }) {
                 <div style={{fontSize:"10px",color:"rgba(var(--iko-statut-attention-rgb),0.7)",marginTop:"3px"}}>Choisir une autre date</div>
               </button>
             </div>
+            <button onClick={() => setMode("piece")}
+              style={{width:"100%",padding:"14px",background:"rgba(var(--iko-primary-rgb),0.08)",border:"2px solid rgba(var(--iko-primary-rgb),0.4)",borderRadius:"14px",color:"var(--iko-bg-sombre)",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:"10px",marginBottom:"10px"}}>
+              <span style={{fontSize:"20px"}}>🔧</span>
+              <span style={{fontSize:"13px",fontWeight:"900"}}>Pièce à commander</span>
+            </button>
             <button onClick={() => setMode("devis_choix")}
               style={{width:"100%",padding:"14px",background:"rgba(var(--iko-dark-rgb),0.06)",border:"2px solid rgba(var(--iko-dark-rgb),0.3)",borderRadius:"14px",color:"var(--iko-bg-sombre)",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:"10px",marginBottom:"10px"}}>
               <span style={{fontSize:"20px"}}>💶</span>
@@ -2690,6 +2719,25 @@ function ModalAction({ ticket, onClose, onDone }) {
             <button onClick={confirmer} disabled={saving||!commentaire.trim()}
               style={{width:"100%",padding:"14px",background:saving||!commentaire.trim()?"#D1D5DB":C.rouge,color:saving||!commentaire.trim()?C.muted:"#fff",border:"none",borderRadius:"12px",fontSize:"14px",fontWeight:"900",cursor:saving||!commentaire.trim()?"not-allowed":"pointer"}}>
               {saving ? "⏳ Enregistrement..." : "❌ Confirmer l'annulation"}
+            </button>
+          </>
+        )}
+        {mode === "piece" && (
+          <>
+            <div style={{display:"flex",alignItems:"center",gap:"8px",marginBottom:"16px"}}>
+              <button onClick={() => setMode(null)} style={{background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:"18px"}}>←</button>
+              <span style={{fontSize:"14px",fontWeight:"700",color:C.white}}>🔧 Pièce à commander</span>
+            </div>
+            <div style={{background:"rgba(var(--iko-primary-rgb),0.08)",border:"1px solid var(--iko-primary)",borderRadius:"10px",padding:"10px 14px",marginBottom:"14px",fontSize:"12px",color:"var(--iko-bg-sombre)"}}>
+              Le créneau est libéré, le client est prévenu qu'une pièce est commandée et reprendra RDV dès sa réception.
+            </div>
+            <label style={{fontSize:"11px",color:C.muted,display:"block",marginBottom:"6px",fontWeight:"700"}}>Pièce(s) nécessaire(s) *</label>
+            <textarea rows={3} value={pieceTexte} onChange={e => setPieceTexte(e.target.value)} placeholder="Ex : galet de coulissant réf. 123, joint 4 m…" style={{marginBottom:"12px"}}/>
+            <label style={{fontSize:"11px",color:C.muted,display:"block",marginBottom:"6px",fontWeight:"700"}}>Commentaire (optionnel)</label>
+            <textarea rows={2} value={commentaire} onChange={e => setCommentaire(e.target.value)} style={{marginBottom:"14px"}}/>
+            <button onClick={confirmer} disabled={saving || !pieceTexte.trim()}
+              style={{width:"100%",padding:"14px",background:"var(--iko-primary)",border:"none",borderRadius:"12px",color:"#fff",fontSize:"14px",fontWeight:"900",cursor:"pointer",opacity:(saving||!pieceTexte.trim())?0.5:1}}>
+              {saving ? "Enregistrement…" : "Valider la demande de pièce"}
             </button>
           </>
         )}

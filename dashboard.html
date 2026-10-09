@@ -610,7 +610,32 @@ function PhoneChatModal({ clientName, entries, texteReponse, onChangeTexte, onEn
   );
 }
 
-function TicketRow({ t, onStatusChange, onAnnuler, onSupprimer, onSupprimerDefinitivement, onRenvoyerMail, onRenvoyerMailClient, onDevis, onRepondreClient, onMarquerLu, isMessagePanelOpen, onToggleMessagePanel, onCloseMessagePanel, onRefreshTicket }) {
+function PieceBloc({ t, onPiece }) {
+  const [fournisseur, setFournisseur] = React.useState(t.fields?.["Fournisseur pièce"] || "");
+  const [datePrevue, setDatePrevue] = React.useState(t.fields?.["Date réception prévue"] || "");
+  const [enCours, setEnCours] = React.useState(false);
+  const etat = t.fields?.["Commande pièce"] || "À commander";
+  const agir = async (etape) => { setEnCours(true); try { await onPiece(t, etape, { fournisseur, datePrevue }); } finally { setEnCours(false); } };
+  const champ = {width:"100%",padding:"8px",borderRadius:"8px",border:"1px solid "+C.border,fontSize:"12px",boxSizing:"border-box"};
+  return (
+    <div style={{marginTop:"10px",padding:"10px",borderRadius:"10px",background:"rgba(var(--iko-primary-rgb),0.08)",border:"1px solid var(--iko-primary)"}}>
+      <div style={{fontSize:"12px",fontWeight:"800",color:"var(--iko-bg-sombre)"}}>🔧 Pièce : {t.fields?.["Pièce à commander"] || "—"}</div>
+      <div style={{fontSize:"11px",color:C.muted,margin:"2px 0 8px"}}>Commande : <strong>{etat}</strong>{t.fields?.["Date réception prévue"] ? " · réception prévue le " + new Date(t.fields["Date réception prévue"]+"T12:00:00").toLocaleDateString("fr-FR") : ""}</div>
+      {etat !== "Commandée" && (
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"6px",marginBottom:"8px"}}>
+          <input style={champ} placeholder="Fournisseur" value={fournisseur} onChange={e => setFournisseur(e.target.value)}/>
+          <input style={champ} type="date" value={datePrevue} onChange={e => setDatePrevue(e.target.value)}/>
+        </div>
+      )}
+      <div style={{display:"flex",gap:"8px",flexWrap:"wrap"}}>
+        {etat !== "Commandée" && <button disabled={enCours} onClick={() => agir("commandee")} style={{flex:1,background:"var(--iko-bg-sombre)",color:"#fff",border:"none",borderRadius:"8px",padding:"9px",fontWeight:"700",fontSize:"12px",cursor:"pointer"}}>📦 Marquer commandée</button>}
+        <button disabled={enCours} onClick={() => agir("recue")} style={{flex:1,background:"var(--iko-primary)",color:"#fff",border:"none",borderRadius:"8px",padding:"9px",fontWeight:"700",fontSize:"12px",cursor:"pointer"}}>✅ Pièce reçue — relancer le RDV</button>
+      </div>
+    </div>
+  );
+}
+
+function TicketRow({ t, onStatusChange, onAnnuler, onSupprimer, onSupprimerDefinitivement, onRenvoyerMail, onRenvoyerMailClient, onDevis, onPiece, onRepondreClient, onMarquerLu, isMessagePanelOpen, onToggleMessagePanel, onCloseMessagePanel, onRefreshTicket }) {
   const [texteReponse, setTexteReponse] = React.useState("");
   const [envoiReponse, setEnvoiReponse] = React.useState(null); // null | 'sending' | 'ok'
   const nonLu = !!t.fields?.["Message client non lu"];
@@ -658,6 +683,7 @@ function TicketRow({ t, onStatusChange, onAnnuler, onSupprimer, onSupprimerDefin
   const statusColors = {
     "Nouveau": { color: C.bleu, bg: C.bleuDim },
     "En cours": { color: C.jaune, bg: C.jauneDim },
+    "Attente pièce": { color: "var(--iko-primary)", bg: "rgba(var(--iko-primary-rgb),0.12)" },
     "Devis à faire": { color: "var(--iko-bg-sombre)", bg: "rgba(var(--iko-dark-rgb),0.08)" },
     "Devis envoyé": { color: "var(--iko-bg-sombre)", bg: "rgba(var(--iko-dark-rgb),0.08)" },
     "Devis refusé": { color: C.rouge, bg: C.rougeDim },
@@ -736,6 +762,7 @@ function TicketRow({ t, onStatusChange, onAnnuler, onSupprimer, onSupprimerDefin
         {t.fields?.["Montant devis"] && (statut === "Devis envoyé" || statut === "Devis refusé") && (
           <div style={{marginTop:"8px",fontSize:"12px",color:C.text}}>💶 Devis envoyé : <strong>{t.fields["Montant devis"]} € TTC</strong></div>
         )}
+        {statut === "Attente pièce" && <PieceBloc t={t} onPiece={onPiece}/>}
         {statut === "Devis à faire" && (
           <button onClick={() => onDevis(t)} style={{marginTop:"10px",width:"100%",background:"var(--iko-bg-sombre)",color:"#fff",border:"none",borderRadius:"8px",padding:"10px",fontWeight:"700",fontSize:"12px",cursor:"pointer"}}>
             💶 Établir et envoyer le devis
@@ -770,7 +797,7 @@ function TicketRow({ t, onStatusChange, onAnnuler, onSupprimer, onSupprimerDefin
       <div style={{flexShrink:0,display:"flex",flexDirection:"column",gap:"6px",alignItems:"stretch"}}>
         <select value={statut} onChange={e => e.target.value === "Annulé" ? onAnnuler(t) : onStatusChange(t.id, e.target.value)}
           style={{background:"#FFFFFF",border:"1px solid "+C.border,color:C.text,borderRadius:"8px",padding:"5px 8px",fontSize:"11px",cursor:"pointer"}}>
-          <option>Nouveau</option><option>En cours</option><option>Devis à faire</option><option>Devis envoyé</option><option>Devis - Suivi</option><option>Devis - Attente fournisseur</option><option>Devis refusé</option><option>Terminé</option><option>Annulé</option>
+          <option>Nouveau</option><option>En cours</option><option>Devis à faire</option><option>Devis envoyé</option><option>Devis - Suivi</option><option>Devis - Attente fournisseur</option><option>Devis refusé</option><option>Attente pièce</option><option>Terminé</option><option>Annulé</option>
         </select>
         <button onClick={() => (statut === "Annulé" || statut === "Supprimé") ? onSupprimerDefinitivement(t) : onSupprimer(t)}
           title={(statut === "Annulé" || statut === "Supprimé") ? "Supprimer définitivement" : "Archiver (déplace vers l'onglet Archives)"}
@@ -5305,6 +5332,25 @@ function Dashboard({ agenceAccess, onClose }) {
     });
   };
 
+  // Suivi des pièces à commander : « Commandée » (fournisseur + date prévue) puis « Reçue » (le ticket repasse en
+  // « Nouveau » et le client est invité par le webhook à reprendre RDV via son lien de suivi).
+  const majPiece = async (t, etape, extra) => {
+    const champs = etape === "commandee"
+      ? { "Commande pièce": "Commandée", "Fournisseur pièce": (extra.fournisseur || "").trim() }
+      : { "Commande pièce": "Reçue", Statut: "Nouveau" };
+    if (etape === "commandee" && extra.datePrevue) champs["Date réception prévue"] = extra.datePrevue;
+    const r = await fetch('/api/airtable/tenant/Tickets SAV/' + t.id, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ fields: champs }) });
+    if (!r.ok) { alert("Enregistrement impossible (" + r.status + ")."); return; }
+    setTickets(prev => prev.map(x => x.id === t.id ? { ...x, fields: { ...x.fields, ...champs } } : x));
+    try {
+      await fetch(WEBHOOK, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({
+        marque:'iko', action: etape === "commandee" ? 'piece_commandee' : 'piece_recue',
+        ticket: t.fields?.Name, nom: t.fields?.Client, "e-mail": t.fields?.Email || '', agence: t.fields?.Agence,
+        piece: t.fields?.["Pièce à commander"] || '', date_prevue: extra.datePrevue || ''
+      }) });
+    } catch (e) { console.error(e); }
+  };
+
   // ---- Amandine vocale : ecoute, comprend, agit directement sur le dashboard ----
   // iOS Safari bloque silencieusement speechSynthesis.speak() si l'appel
   // n'est pas synchrone avec le geste de l'utilisateur (clic/tap). Comme
@@ -6027,7 +6073,7 @@ function Dashboard({ agenceAccess, onClose }) {
               <div style={{textAlign:"center",padding:"60px",color:C.muted,border:"1px dashed "+C.border,borderRadius:"12px"}}>Aucun ticket trouvé</div>
             )}
             <div style={{display:"flex",flexDirection:"column",gap:"8px"}}>
-              {sorted.map(t => <TicketRow key={t.id} t={t} onStatusChange={updateStatus} onAnnuler={setModalAnnulation} onSupprimer={setModalSuppression} onSupprimerDefinitivement={setModalSuppressionDefinitive} onRenvoyerMail={renvoyerMailTechnicien} onRenvoyerMailClient={renvoyerMailClient} onDevis={setModalDevis} onRepondreClient={repondreClient} onMarquerLu={marquerMessageLu} isMessagePanelOpen={openMessageTicketId===t.id} onToggleMessagePanel={() => setOpenMessageTicketId(prev => prev===t.id ? null : t.id)} onCloseMessagePanel={() => setOpenMessageTicketId(null)} onRefreshTicket={rafraichirTicketMessage}/>)}
+              {sorted.map(t => <TicketRow key={t.id} t={t} onStatusChange={updateStatus} onAnnuler={setModalAnnulation} onSupprimer={setModalSuppression} onSupprimerDefinitivement={setModalSuppressionDefinitive} onRenvoyerMail={renvoyerMailTechnicien} onRenvoyerMailClient={renvoyerMailClient} onDevis={setModalDevis} onPiece={majPiece} onRepondreClient={repondreClient} onMarquerLu={marquerMessageLu} isMessagePanelOpen={openMessageTicketId===t.id} onToggleMessagePanel={() => setOpenMessageTicketId(prev => prev===t.id ? null : t.id)} onCloseMessagePanel={() => setOpenMessageTicketId(null)} onRefreshTicket={rafraichirTicketMessage}/>)}
             </div>
           </div>
         )}

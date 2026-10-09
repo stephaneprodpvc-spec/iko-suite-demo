@@ -23,7 +23,7 @@ const MAX_TICKETS_CONTEXTE = 150;
 const MAX_CATALOGUE_CONTEXTE = 60;
 
 const AGENCES_VALIDES = ["Agence 1", "Agence 2", "Agence 3", "Agence 4"];
-const STATUTS_VALIDES = ["Nouveau", "En cours", "Terminé", "Annulé", "Devis à faire", "Devis envoyé", "Devis - Suivi", "Devis - Attente fournisseur", "Devis refusé"];
+const STATUTS_VALIDES = ["Nouveau", "En cours", "Terminé", "Annulé", "Devis à faire", "Devis envoyé", "Devis - Suivi", "Devis - Attente fournisseur", "Attente pièce", "Devis refusé"];
 // Sous-ensemble utilisable par changer_statut : Annulé en est exclu volontairement,
 // cette transition exige un motif et passe par preparer_annulation_ticket.
 const STATUTS_MODIFIABLES = STATUTS_VALIDES.filter(s => s !== "Annulé");
