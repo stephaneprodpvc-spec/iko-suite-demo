@@ -79,7 +79,31 @@ async function handlerSuivi(req, res, baseId, headers) {
       if (!identite) return res.status(404).json(ECHEC);
       const records = await airtable(formuleClient(identite), 50);
       if (!records.length) return res.status(404).json(ECHEC);
-      return res.status(200).json({ tickets: versTickets(records), numero: '' });
+      // Espace client : devis / factures liés à ses demandes + contrat d'entretien (meme identite prouvee par le lien du mail).
+      let devis = [], contrats = [];
+      try {
+        const idsTickets = new Set(records.map(r => r.id));
+        const noms = records.map(r => String((r.fields && r.fields.Name) || '').replace(/[^A-Za-z0-9-]/g, '')).filter(Boolean);
+        if (noms.length) {
+          const fd = 'OR(' + noms.map(n => 'FIND("' + n + '", ARRAYJOIN({Ticket lié}))').join(',') + ')';
+          const rd = await fetch('https://api.airtable.com/v0/' + baseId + '/Devis?filterByFormula=' + encodeURIComponent(fd) + '&maxRecords=100', { headers });
+          if (rd.ok) {
+            devis = ((await rd.json()).records || [])
+              .filter(d => (d.fields['Ticket lié'] || []).some(id => idsTickets.has(id)))
+              .map(d => ({ id: d.id, fields: {
+                'N° devis': d.fields['N° devis'], Statut: d.fields.Statut, 'Montant TTC': d.fields['Montant TTC'], 'Date validité': d.fields['Date validité'],
+                'Devis refusé': d.fields['Devis refusé'], 'N° facture': d.fields['N° facture'], 'Date facture': d.fields['Date facture'],
+                'Statut paiement': d.fields['Statut paiement'], ticket: d.fields['Ticket lié'] && d.fields['Ticket lié'][0] } }));
+          }
+        }
+        const rc = await fetch('https://api.airtable.com/v0/' + baseId + '/Contrats%20entretien?filterByFormula=' + encodeURIComponent('AND({Statut contrat}!="Résilié",' + formuleClient(identite) + ')') + '&maxRecords=10', { headers });
+        if (rc.ok) {
+          contrats = ((await rc.json()).records || []).map(c => ({ id: c.id, fields: {
+            Client: c.fields.Client, 'Prochaine visite': c.fields['Prochaine visite'], 'Dernière visite': c.fields['Dernière visite'],
+            'Périodicité (mois)': c.fields['Périodicité (mois)'], 'Équipements': c.fields['Équipements'], 'Statut contrat': c.fields['Statut contrat'], 'Carnet (JSON)': c.fields['Carnet (JSON)'] } }));
+        }
+      } catch (e) { console.error('Espace client (devis/contrats):', e); }
+      return res.status(200).json({ tickets: versTickets(records), numero: '', devis, contrats });
     }
     if (typeof body.numero === 'string' && typeof body.contact === 'string') {
       // Saisie manuelle (rien ne prouve la propriete de l'e-mail/telephone) :

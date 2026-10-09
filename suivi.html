@@ -423,6 +423,7 @@ function ChangerDatePanel({ agenceVille, clientId, onChoisir, onFermer, applique
 function App() {
   const [numero, setNumero] = useState("");
   const [contact, setContact] = useState("");
+  const [espace, setEspace] = useState({ devis: [], contrats: [] }); // devis, factures et contrats du client (lien du mail)
   const [liste, setListe] = useState(null); // demandes du client (null = pas encore identifie)
   const [loading, setLoading] = useState(false);
   const [erreur, setErreur] = useState("");
@@ -543,6 +544,7 @@ function App() {
           const cible = (ouvrirNumero || "").toUpperCase();
           tickets.sort((a, b) => (b.fields?.Name?.toUpperCase() === cible) - (a.fields?.Name?.toUpperCase() === cible));
           setListe(tickets);
+          setEspace({ devis: data.devis || [], contrats: data.contrats || [] });
           const voulue = tickets.find(t => cible && t.fields?.Name?.toUpperCase() === cible);
           if (voulue) await ouvrirTicket(voulue);
           else if (tickets.length === 1) await ouvrirTicket(tickets[0]);
@@ -757,6 +759,46 @@ function App() {
                 );
               })}
             </div>
+          </div>
+        )}
+
+        {!ticket && liste && (espace.devis.length > 0 || espace.contrats.length > 0) && (
+          <div style={{background:F.blanc,border:"1px solid "+F.grisBord,borderRadius:"14px",padding:"22px",marginTop:"14px",boxShadow:"0 4px 20px rgba(0,0,0,0.05)"}}>
+            <h2 style={{fontSize:"16px",color:F.marine,marginBottom:"10px"}}>Mes devis et factures</h2>
+            {espace.devis.length === 0 && <p style={{fontSize:"12px",color:"var(--iko-texte-clair)"}}>Aucun devis pour le moment.</p>}
+            <div style={{display:"flex",flexDirection:"column",gap:"8px"}}>
+              {espace.devis.map(d => {
+                const f = d.fields || {};
+                const facture = f["N° facture"];
+                return (
+                  <div key={d.id} style={{background:F.grisClair,border:"1px solid "+F.grisBord,borderRadius:"10px",padding:"12px"}}>
+                    <div style={{display:"flex",justifyContent:"space-between",gap:"8px",flexWrap:"wrap"}}>
+                      <span style={{fontSize:"13px",fontWeight:"900",color:F.or,fontFamily:"monospace"}}>{f["N° devis"] || "Devis"}</span>
+                      <span style={{fontSize:"13px",fontWeight:"800",color:F.marine}}>{f["Montant TTC"] != null ? Number(f["Montant TTC"]).toFixed(2).replace(".", ",") + " € TTC" : ""}</span>
+                    </div>
+                    <div style={{fontSize:"11px",color:"#4B5563",marginTop:"3px"}}>
+                      {f["Devis refusé"] ? "Refusé" : (f.Statut || "En attente")}
+                      {facture ? " · Facture " + facture + (f["Statut paiement"] ? " (" + f["Statut paiement"] + ")" : "") : ""}
+                    </div>
+                    <a href={"/devis.html?devisId=" + d.id} style={{display:"inline-block",marginTop:"8px",fontSize:"12px",fontWeight:"800",color:F.or,textDecoration:"none"}}>Ouvrir le devis →</a>
+                  </div>
+                );
+              })}
+            </div>
+            {espace.contrats.map(c => {
+              const f = c.fields || {};
+              let carnet = []; try { carnet = JSON.parse(f["Carnet (JSON)"] || "[]"); } catch (e) {}
+              return (
+                <div key={c.id} style={{marginTop:"16px"}}>
+                  <h2 style={{fontSize:"16px",color:F.marine,marginBottom:"8px"}}>🛠️ Mon contrat d'entretien</h2>
+                  <div style={{background:F.grisClair,border:"1px solid "+F.grisBord,borderRadius:"10px",padding:"12px",fontSize:"12px",color:"#4B5563"}}>
+                    {f["Équipements"] && <div style={{marginBottom:"4px"}}>{f["Équipements"]}</div>}
+                    <div><strong>Prochaine visite :</strong> {f["Prochaine visite"] ? new Date(f["Prochaine visite"] + "T12:00:00").toLocaleDateString("fr-FR") : "à planifier"}</div>
+                    {carnet.length > 0 && <div style={{marginTop:"6px"}}><strong>Carnet d'entretien</strong>{carnet.slice().reverse().map((v, i) => <div key={i}>{new Date(v.date + "T12:00:00").toLocaleDateString("fr-FR")} — {v.observations || "Visite réalisée"}</div>)}</div>}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
 
