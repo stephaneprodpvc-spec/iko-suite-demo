@@ -510,6 +510,820 @@ async function creerDemandeSignatureYousignTech(pdfBlob, nomFichier, personneNom
 
   return { signatureRequestId: srId, lienSignature };
 }
+// ==================== Devis professionnel — identique au tableau de bord ====================
+// Porté tel quel de dashboard.html (ModalDevis, LigneDevisEditeur, PDF avec mentions légales,
+// catalogue de démonstration IKO). Les 2 fonctions de chargement réutilisent celles du technicien.
+const resoudreClientDepuisAgence = resoudreClientDepuisAgenceTech;
+const chargerCatalogueDevis = chargerCatalogueDevisTech;
+
+
+
+/* ---- Génération PDF itemisée (logo, catalogue, mentions légales) ---- */
+async function chargerImageEnDataUrl(url) {
+  if (!url) return null;
+  try {
+    const res = await fetch(url);
+    const blob = await res.blob();
+    const dataUrl = await new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = () => resolve(null);
+      reader.readAsDataURL(blob);
+    });
+    if (!dataUrl) return null;
+    const ratio = await new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => resolve(img.naturalWidth && img.naturalHeight ? img.naturalWidth / img.naturalHeight : null);
+      img.onerror = () => resolve(null);
+      img.src = dataUrl;
+    });
+    return { url: dataUrl, ratio };
+  } catch(e) { return null; }
+}
+
+function rendrePiedPageRiche(html) {
+  if (!html) return null;
+  const gras = /<(b|strong)[ >]/i.test(html);
+  const italique = /<(i|em)[ >]/i.test(html);
+  let align = 'center';
+  if (/text-align:\s*right/i.test(html)) align = 'right';
+  else if (/text-align:\s*left/i.test(html)) align = 'left';
+  const texte = html.replace(/<[^>]+>/g, ' ').replace(/&nbsp;/gi, ' ').replace(/\s+/g, ' ').trim();
+  if (!texte) return null;
+  return { texte, gras, italique, align };
+}
+
+/* ---- Éléments graphiques du configurateur (formes/traits/images) — identique à l'aperçu admin.html ---- */
+function hexVersRgb(hex, secours) {
+  hex = String(hex || secours || '#111111').replace('#', '');
+  if (hex.length === 3) hex = hex.split('').map(c => c + c).join('');
+  const num = parseInt(hex, 16);
+  if (isNaN(num)) return [17, 17, 17];
+  return [(num >> 16) & 255, (num >> 8) & 255, num & 255];
+}
+
+async function dessinerElementsGraphiques(doc, elements) {
+  if (!Array.isArray(elements) || !elements.length) return;
+  const tries = elements.filter(el => el && el.visible !== false).sort((a, b) => (a.zIndex || 0) - (b.zIndex || 0));
+  for (const el of tries) {
+    try {
+      if (el.type === 'rect' || el.type === 'circle') {
+        const [dr, dg, db] = hexVersRgb(el.stroke);
+        doc.setDrawColor(dr, dg, db);
+        doc.setLineWidth(el.strokeWidth != null ? el.strokeWidth : 1);
+        const aRemplir = el.fill && el.fill !== 'none';
+        if (aRemplir) { const [fr, fg, fb] = hexVersRgb(el.fill); doc.setFillColor(fr, fg, fb); }
+        const style = aRemplir ? 'FD' : 'S';
+        if (el.type === 'rect') {
+          doc.rect(el.x, el.y, el.w, el.h, style);
+        } else {
+          doc.ellipse(el.x + el.w / 2, el.y + el.h / 2, el.w / 2, el.h / 2, style);
+        }
+      } else if (el.type === 'line') {
+        const [dr, dg, db] = hexVersRgb(el.stroke);
+        doc.setDrawColor(dr, dg, db);
+        doc.setLineWidth(el.strokeWidth != null ? el.strokeWidth : 2);
+        doc.line(el.x1, el.y1, el.x2, el.y2);
+        if (el.arrowEnd) {
+          const angle = Math.atan2(el.y2 - el.y1, el.x2 - el.x1);
+          const taille = 3;
+          const p1x = el.x2 - taille * Math.cos(angle - Math.PI / 7), p1y = el.y2 - taille * Math.sin(angle - Math.PI / 7);
+          const p2x = el.x2 - taille * Math.cos(angle + Math.PI / 7), p2y = el.y2 - taille * Math.sin(angle + Math.PI / 7);
+          doc.setFillColor(dr, dg, db);
+          doc.triangle(el.x2, el.y2, p1x, p1y, p2x, p2y, 'F');
+        }
+      } else if (el.type === 'image' && el.url) {
+        const info = await chargerImageEnDataUrl(el.url);
+        if (info && info.url) {
+          try { doc.addImage(info.url, 'JPEG', el.x, el.y, el.w, el.h, undefined, 'FAST'); }
+          catch (e) { try { doc.addImage(info.url, 'PNG', el.x, el.y, el.w, el.h, undefined, 'FAST'); } catch (e2) {} }
+        }
+      }
+    } catch (e) { /* un élément mal formé ne doit pas bloquer le reste du PDF */ }
+  }
+}
+
+
+async function genererPdfDevis({ numero, ticket, client, lignes, montantHT, montantTTC, mep, facture }) {
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+  const mL = mep.margeGauche != null ? mep.margeGauche : 18;
+  const mR = mep.margeDroite != null ? mep.margeDroite : 18;
+  const mHaut = mep.margeHaut != null ? mep.margeHaut : 20;
+  const mBas = mep.margeBas != null ? mep.margeBas : 20;
+  const largeurUtile = 210 - mL - mR;
+  let y = mHaut;
+
+  const logoInfo = await chargerImageEnDataUrl(mep.logoUrl);
+  if (logoInfo && logoInfo.url) {
+    const logoW = mep.logoW || 30;
+    const ratio = logoInfo.ratio || (30 / 16);
+    try { doc.addImage(logoInfo.url, 'PNG', mep.logoX != null ? mep.logoX : mL, mep.logoY != null ? mep.logoY : (y - 6), logoW, logoW / ratio, undefined, 'FAST'); } catch(e){}
+  }
+  await dessinerElementsGraphiques(doc, (mep.elements || []).filter(function(el){ return !(el.page > 0); }));
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(16);
+  doc.setTextColor(20, 20, 20);
+  doc.text(facture ? 'FACTURE' : 'DEVIS', 210 - mR, y, { align: 'right' });
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(100, 100, 100);
+  doc.text('N° ' + (facture ? facture.numero : numero), 210 - mR, y + 5, { align: 'right' });
+  if (facture) {
+    const fr = (s) => String(s || '').split('-').reverse().join('/');
+    doc.setFontSize(8);
+    doc.text('Date : ' + fr(facture.date) + '  ·  Échéance : ' + fr(facture.echeance), 210 - mR, y + 10, { align: 'right' });
+    doc.text('Réf. devis ' + numero, 210 - mR, y + 14, { align: 'right' });
+  }
+  y += 18;
+  if (logoInfo && logoInfo.url) {
+    const lw = mep.logoW || 30;
+    const bas = (mep.logoY != null ? mep.logoY : (mHaut - 6)) + lw / (logoInfo.ratio || (30 / 16)) + 4;
+    if (bas > y) y = bas;
+  }
+
+  doc.setDrawColor(220, 220, 220); doc.setLineWidth(0.3);
+  doc.line(mL, y, 210 - mR, y); y += 7;
+
+  doc.setFontSize(8); doc.setTextColor(80, 80, 80);
+  const identite = mep.identite || {};
+  doc.text([
+    (identite.raisonSociale || 'Raison sociale') + (identite.formeJuridique ? ' — ' + identite.formeJuridique : ''),
+    identite.adresse || '',
+  ], mL, y);
+  y += 12;
+
+  doc.setFillColor(245, 245, 245);
+  doc.rect(mL, y, largeurUtile * 0.55, 16, 'F');
+  doc.setFontSize(7); doc.setTextColor(140, 140, 140);
+  doc.text('CLIENT', mL + 4, y + 5);
+  doc.setFontSize(9); doc.setTextColor(20, 20, 20);
+  doc.text(client.nom || ticket.fields?.Client || '—', mL + 4, y + 10);
+  doc.setFontSize(8); doc.setTextColor(80, 80, 80);
+  doc.text(client.adresse || ticket.fields?.Adresse || '', mL + 4, y + 14.5);
+  y += 24;
+
+  // Tableau des lignes (dessiné manuellement, pas de plugin autoTable chargé)
+  const colX = [mL, mL + largeurUtile * 0.46, mL + largeurUtile * 0.63, mL + largeurUtile * 0.75, mL + largeurUtile * 0.88];
+  doc.setFillColor(20, 20, 20);
+  doc.rect(mL, y, largeurUtile, 7, 'F');
+  doc.setFontSize(7.5); doc.setTextColor(255, 255, 255); doc.setFont('helvetica', 'bold');
+  doc.text('DÉSIGNATION', colX[0] + 2, y + 4.8);
+  doc.text('QTÉ', colX[1] + 2, y + 4.8);
+  doc.text('PU HT', colX[2] + 2, y + 4.8);
+  doc.text('TVA', colX[3] + 2, y + 4.8);
+  doc.text('TOTAL HT', colX[4] + 2, y + 4.8);
+  y += 7;
+
+  doc.setFont('helvetica', 'normal'); doc.setTextColor(30, 30, 30);
+  const yLimite = 297 - mBas - 30;
+  lignes.forEach((l, i) => {
+    const hauteur = 7;
+    if (i % 2 === 1) { doc.setFillColor(248, 248, 248); doc.rect(mL, y, largeurUtile, hauteur, 'F'); }
+    doc.setFontSize(8.5);
+    doc.text(String(l.designation || ''), colX[0] + 2, y + 4.8, { maxWidth: largeurUtile * 0.44 });
+    doc.text(String(l.qte), colX[1] + 2, y + 4.8);
+    doc.text((l.puHT || 0).toFixed(2) + ' €', colX[2] + 2, y + 4.8);
+    doc.text(Math.round((l.tauxTva != null ? l.tauxTva : 0.20) * 100) + '%', colX[3] + 2, y + 4.8);
+    doc.text((l.totalHT || 0).toFixed(2) + ' €', colX[4] + 2, y + 4.8);
+    y += hauteur;
+    if (y > yLimite) { doc.addPage(); y = mHaut; }
+  });
+  y += 4;
+  doc.setDrawColor(220, 220, 220);
+  doc.line(mL, y, 210 - mR, y); y += 8;
+
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(80, 80, 80);
+  doc.text('Total HT : ' + montantHT.toFixed(2) + ' €', 210 - mR, y, { align: 'right' }); y += 5.5;
+  doc.text('Total TVA : ' + (montantTTC - montantHT).toFixed(2) + ' €', 210 - mR, y, { align: 'right' }); y += 5.5;
+  doc.setFont('helvetica', 'bold'); doc.setTextColor(20, 20, 20);
+  doc.text('Total TTC : ' + montantTTC.toFixed(2) + ' €', 210 - mR, y, { align: 'right' }); y += 10;
+
+  // Conditions de règlement (bloc visible, avec montant de l'acompte quand il y en a un)
+  if (y > 297 - mBas - 60) { doc.addPage(); y = mHaut; }
+  const condTxt = mep.conditionsPaiement || 'Acompte de 30 % à la commande, solde à la fin des travaux';
+  const pctM = condTxt.match(/(\d+)\s*%/);
+  const lignesCond = [condTxt + '.'];
+  if (pctM) {
+    const ac = montantTTC * Number(pctM[1]) / 100;
+    lignesCond.push('Acompte à la commande : ' + ac.toFixed(2) + ' € TTC  ·  Solde : ' + (montantTTC - ac).toFixed(2) + ' € TTC');
+  }
+  if (facture) lignesCond.push(facture.statutPaiement === 'Payé' ? ('Facture acquittée' + (facture.datePaiement ? ' le ' + String(facture.datePaiement).split('-').reverse().join('/') : '') + '.') : 'Règlement attendu avant le ' + String(facture.echeance || '').split('-').reverse().join('/') + '.');
+  const hCond = 8 + lignesCond.length * 4.5;
+  doc.setFillColor(255, 243, 235); doc.rect(mL, y, largeurUtile, hCond, 'F');
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(7); doc.setTextColor(194, 65, 12);
+  doc.text('CONDITIONS DE RÈGLEMENT', mL + 4, y + 5);
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(40, 40, 40);
+  lignesCond.forEach((t, i) => doc.text(t, mL + 4, y + 10 + i * 4.5, { maxWidth: largeurUtile - 8 }));
+  y += hCond + 6;
+
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(6.5); doc.setTextColor(130, 130, 130);
+  const assurance = mep.assurance || {};
+  const mentions = [
+    'SIRET ' + (identite.siret || '—') + '  ·  RCS ' + (identite.rcs || '—') + '  ·  TVA intracom. ' + (identite.tva || '—'),
+    'Assurance décennale : ' + (assurance.assureur || '—') + (assurance.numPolice ? ' — police n° ' + assurance.numPolice : '') + (assurance.zone ? ' — zone : ' + assurance.zone : ''),
+    facture ? 'En cas de retard de paiement : pénalité de 3 fois le taux d\'intérêt légal et indemnité forfaitaire de recouvrement de 40 €. Pas d\'escompte pour paiement anticipé.' : 'Devis valable ' + (mep.dureeValidite || 30) + ' jours à compter de sa date d\'émission. Bon pour accord — signature électronique ci-après.',
+  ];
+  doc.text(mentions, mL, 297 - mBas - 15);
+  const pied = rendrePiedPageRiche(mep.piedPage);
+  if (pied) {
+    doc.setFontSize(6.5); doc.setTextColor(160, 160, 160);
+    doc.setFont('helvetica', pied.gras && pied.italique ? 'bolditalic' : pied.gras ? 'bold' : pied.italique ? 'italic' : 'normal');
+    const xPied = pied.align === 'left' ? mL : pied.align === 'right' ? 210 - mR : 105;
+    doc.text(pied.texte, xPied, 297 - mBas, { align: pied.align });
+    doc.setFont('helvetica', 'normal');
+  }
+
+  // Pages annexes (Phase 3 configurateur) : schémas/photos placés sur page > 0 dans l'éditeur
+  const pagesAnnexes = {};
+  (mep.elements || []).forEach(function(el){
+    const p = el.page || 0;
+    if (p > 0) { (pagesAnnexes[p] = pagesAnnexes[p] || []).push(el); }
+  });
+  const numerosAnnexes = Object.keys(pagesAnnexes).map(Number).sort((a, b) => a - b);
+  for (const p of numerosAnnexes) {
+    doc.addPage();
+    await dessinerElementsGraphiques(doc, pagesAnnexes[p]);
+  }
+
+  return doc.output('blob');
+}
+
+async function creerDemandeSignatureYousign(pdfBlob, nomFichier, personneNom, email, telephone) {
+  const reqRes = await fetch('/api/yousign/signature_requests', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: nomFichier, delivery_mode: 'none', timezone: 'Europe/Paris' })
+  });
+  if (!reqRes.ok) {
+    const detail = await reqRes.text().catch(() => '');
+    throw new Error('Yousign: création de la demande échouée (HTTP ' + reqRes.status + ') ' + detail.slice(0, 300));
+  }
+  const signatureRequest = await reqRes.json();
+  const srId = signatureRequest.id;
+
+  const form = new FormData();
+  form.append('file', pdfBlob, nomFichier + '.pdf');
+  form.append('nature', 'signable_document');
+  form.append('parse_anchors', 'false');
+  const docRes = await fetch('/api/yousign/signature_requests/' + srId + '/documents', { method: 'POST', body: form });
+  if (!docRes.ok) {
+    const detail = await docRes.text().catch(() => '');
+    throw new Error('Yousign: envoi du document échoué (HTTP ' + docRes.status + ') ' + detail.slice(0, 300));
+  }
+  const document = await docRes.json();
+
+  const nomParts = (personneNom || 'Client Iko Suite').trim().split(/\s+/);
+  const firstName = nomParts.length > 1 ? nomParts.slice(0, -1).join(' ') : 'Client';
+  const lastName = nomParts.length > 1 ? nomParts[nomParts.length - 1] : nomParts[0];
+  const telValide = telephone && /^(\+33|0)[1-9](\d{2}){4}$/.test(String(telephone).replace(/[\s.-]/g, ''));
+
+  const signerRes = await fetch('/api/yousign/signature_requests/' + srId + '/signers', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      info: { first_name: firstName, last_name: lastName, email, phone_number: telValide ? String(telephone).replace(/[\s.-]/g, '') : undefined, locale: 'fr' },
+      signature_level: 'electronic_signature',
+      signature_authentication_mode: 'no_otp',
+      fields: [{ document_id: document.id, type: 'signature', page: 1, x: 60, y: 700 }]
+    })
+  });
+  if (!signerRes.ok) {
+    const detail = await signerRes.text().catch(() => '');
+    throw new Error('Yousign: ajout du signataire échoué (HTTP ' + signerRes.status + ') ' + detail.slice(0, 300));
+  }
+  const signer = await signerRes.json();
+  const signerId = signer.id;
+
+  await fetch('/api/yousign/signature_requests/' + srId + '/activate', { method: 'POST' });
+
+  // signature_link peut mettre un instant a etre genere cote Yousign. On
+  // tente une seule fois rapidement ici (ne bloque pas l'envoi du devis) ;
+  // si absent, devis.html le recuperera lui-meme a l'ouverture (via
+  // Yousign Request ID + Yousign Signer ID stockes sur le devis), quel
+  // que soit le delai reel de Yousign.
+  let lienSignature = '';
+  try {
+    const signerFraisRes = await fetch('/api/yousign/signature_requests/' + srId + '/signers/' + signerId);
+    if (signerFraisRes.ok) {
+      const signerFrais = await signerFraisRes.json();
+      lienSignature = signerFrais.signature_link || '';
+    }
+  } catch(e) {}
+
+  return { signatureRequestId: srId, signerId, lienSignature };
+}
+
+// Catalogue de démonstration (IKO DEMO uniquement, quand aucun catalogue client n'existe).
+const CATALOGUE_DEMO_IKO = {
+  produits: [
+    ["Fenêtre PVC 2 vantaux 120x135", 420, "10 %"], ["Porte-fenêtre PVC 215x140", 640, "10 %"],
+    ["Volet roulant électrique", 380, "10 %"], ["Vitrage double 4/16/4 (remplacement)", 160, "10 %"],
+    ["Serrure 3 points porte d'entrée", 290, "10 %"], ["Poignée de fenêtre", 35, "20 %"],
+    ["Joint de vitrage (ml)", 8, "20 %"], ["Moustiquaire sur mesure", 95, "20 %"],
+  ].map(([n,p,t],i) => ({ id:"demo-p"+i, fields:{ "Désignation":n, "Prix unitaire HT":p, "Taux TVA":t } })),
+  mo: [
+    ["Déplacement + diagnostic (forfait)", 60], ["Pose / remplacement fenêtre (forfait)", 180],
+    ["Réglage ouvrant (forfait)", 70], ["Remplacement joint / poignée (forfait)", 55],
+  ].map(([n,p],i) => ({ id:"demo-m"+i, fields:{ "Type d'action":n, "Prix forfait HT":p } })).concat([{ id:"demo-m9", fields:{ "Type d'action":"Main d'œuvre à l'heure", "Taux horaire HT":65 } }]),
+};
+
+// Valeurs par défaut de la mise en page quand le client n'a rien configuré (démo IKO).
+function mepAvecDefauts(mep, demo) {
+  const m = { ...(mep || {}) };
+  const id = { ...(m.identite || {}) };
+  const as = { ...(m.assurance || {}) };
+  if (!id.raisonSociale) {
+    Object.assign(id, { raisonSociale: "IKO DEMO — Menuiserie", formeJuridique: "SAS", adresse: "12 rue de l'Atelier, 59000 Lille", siret: id.siret || "000 000 000 00000 (démo)", rcs: id.rcs || "Lille (démo)", tva: id.tva || "FR00 000000000 (démo)" });
+  }
+  if (!as.assureur) Object.assign(as, { assureur: "Assureur (démo)", numPolice: "DEMO-0000", zone: "France métropolitaine" });
+  m.identite = id; m.assurance = as;
+  if (!m.logoUrl && demo) { m.logoUrl = IKO_LOGO; m.logoW = 26; m.logoX = 18; m.logoY = 14; }
+  if (!m.piedPage && demo) m.piedPage = "Document de démonstration — IKO";
+  return m;
+}
+
+
+function LigneDevisEditeur({ produits, mo, lignes, ticket, onAjouter, onSupprimer, demo }) {
+  const [choix, setChoix] = React.useState("");
+  const [qte, setQte] = React.useState(1);
+  const refListe = React.useRef(null);
+  const [dernierAjout, setDernierAjout] = React.useState("");
+  const onAjouterVisible = (l) => {
+    onAjouter(l);
+    setDernierAjout("✓ Ajouté : " + l.designation + " ×" + l.qte);
+    setTimeout(() => { try { refListe.current && refListe.current.scrollIntoView({ behavior: "smooth", block: "nearest" }); } catch(e){} }, 80);
+    setTimeout(() => setDernierAjout(""), 3500);
+  };
+  const [libreOuvert, setLibreOuvert] = React.useState(false);
+  const [libre, setLibre] = React.useState({ designation: "", prix: "", qte: 1, tva: "0.2" });
+  const ajouterLibre = () => {
+    const pu = Number(String(libre.prix).replace(",", "."));
+    const q = Number(libre.qte) || 1;
+    if (!libre.designation.trim() || !(pu >= 0) || libre.prix === "") return;
+    const taux = Number(libre.tva);
+    const totalHT = q * pu;
+    onAjouterVisible({ designation: libre.designation.trim(), qte: q, puHT: pu, tauxTva: taux, totalHT, totalTTC: totalHT * (1 + taux) });
+    setLibre({ designation: "", prix: "", qte: 1, tva: libre.tva });
+  };
+
+  // ---- Suggestion IA (mode "devis_suggestion") ----
+  // Meme principe que le Bloc 2C deja livre cote technicien/Max
+  // (technicien.html / api/chat-technicien.js) : le catalogue reel deja
+  // charge (produits/mo) est envoye au serveur qui revalide chaque
+  // catalogue_id renvoye par l'IA. Ajout ligne par ligne apres validation
+  // manuelle, jamais d'ecriture automatique.
+  const [suggestionsDevis, setSuggestionsDevis] = React.useState(null);
+  const [elementsSansCorrespondance, setElementsSansCorrespondance] = React.useState([]);
+  const [chargementSuggestions, setChargementSuggestions] = React.useState(false);
+  const [erreurSuggestion, setErreurSuggestion] = React.useState("");
+  // Devis assisté depuis SAV V1 : quantité "à confirmer" (l.quantite === null,
+  // jamais inventée côté serveur) saisie ici par le responsable avant de
+  // pouvoir ajouter la ligne — jamais de valeur par défaut silencieuse.
+  const [qteAConfirmer, setQteAConfirmer] = React.useState({});
+
+  const demanderSuggestionsDevis = async () => {
+    if (!produits.length && !mo.length) return;
+    setChargementSuggestions(true);
+    setErreurSuggestion("");
+    setSuggestionsDevis(null);
+    setElementsSansCorrespondance([]);
+    setQteAConfirmer({});
+    try {
+      const catalogueEnvoye = [
+        ...produits.map(p => ({ id: p.id, type: 'produit', designation: p.fields?.["Désignation"] || '', prix: p.fields?.["Prix unitaire HT"] || 0 })),
+        ...mo.map(m => ({ id: m.id, type: 'mo', designation: m.fields?.["Type d'action"] || '', prix: m.fields?.["Prix forfait HT"] || m.fields?.["Taux horaire HT"] || 0 })),
+      ];
+      const r = await fetch('/api/chat-dashboard', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mode: 'devis_suggestion',
+          // Diagnostic technicien déjà enregistré sur le ticket (si présent) :
+          // réutilisé tel quel, aucun nouvel appel Airtable.
+          ticket: { produit: ticket?.fields?.Produit || '', probleme: ticket?.fields?.Problème || '', diagnostic: ticket?.fields?.Diagnostic || '' },
+          catalogue: catalogueEnvoye,
+        }),
+      });
+      const data = await r.json();
+      if (r.ok && !data.erreur) {
+        setSuggestionsDevis(data.lignes || []);
+        setElementsSansCorrespondance(data.elements_sans_correspondance || []);
+      } else {
+        setErreurSuggestion((data && data.erreur) || ("IKO n'a pas pu répondre (code " + r.status + "). Réessaie dans un instant."));
+      }
+    } catch (e) { setErreurSuggestion("IKO est injoignable pour le moment. Réessaie, ou ajoute les lignes à la main."); }
+    setChargementSuggestions(false);
+  };
+
+  const ajouterLigneSuggeree = (l) => {
+    // Quantité connue (fournie par IKO à partir du contexte) OU confirmée
+    // manuellement ci-dessous par le responsable : jamais une valeur
+    // par défaut inventée si elle n'a jamais été renseignée.
+    const quantiteFinale = l.quantite != null ? l.quantite : Number(qteAConfirmer[l.catalogue_id]);
+    if (!quantiteFinale || quantiteFinale <= 0) return;
+    const produitSource = produits.find(p => p.id === l.catalogue_id);
+    const tauxTva = l.type === 'produit' ? tauxTvaVersDecimal(produitSource?.fields?.["Taux TVA"]) : 0.20;
+    const totalHT = quantiteFinale * l.prix;
+    onAjouterVisible({ designation: l.designation, qte: quantiteFinale, puHT: l.prix, tauxTva, totalHT, totalTTC: totalHT * (1 + tauxTva) });
+    setSuggestionsDevis(prev => (prev || []).filter(x => x.catalogue_id !== l.catalogue_id));
+  };
+
+  const ajouter = () => {
+    if (!choix) return;
+    const [type, id] = choix.split('|');
+    const source = type === 'produit' ? produits.find(p => p.id === id) : mo.find(m => m.id === id);
+    if (!source) return;
+    const f = source.fields || {};
+    const designation = type === 'produit' ? (f["Désignation"] || '—') : (f["Type d'action"] || '—');
+    const puHT = type === 'produit' ? (f["Prix unitaire HT"] || 0) : (f["Prix forfait HT"] || f["Taux horaire HT"] || 0);
+    const tauxTva = type === 'produit' ? tauxTvaVersDecimal(f["Taux TVA"]) : 0.20;
+    const totalHT = (Number(qte) || 1) * puHT;
+    onAjouterVisible({ designation, qte: Number(qte) || 1, puHT, tauxTva, totalHT, totalTTC: totalHT * (1 + tauxTva) });
+    setChoix(""); setQte(1);
+  };
+
+  const total = lignes.reduce((s, l) => s + (l.totalHT || 0), 0);
+
+  return (
+    <div style={{marginBottom:"14px"}}>
+      <label style={{fontSize:"11px",fontWeight:"700",color:C.muted,display:"block",marginBottom:"6px"}}>Lignes du devis {demo ? "(catalogue démo)" : "(catalogue du client)"}</label>
+      {lignes.length === 0 && (
+        <div style={{border:"1px dashed "+C.border,borderRadius:"8px",padding:"12px",textAlign:"center",fontSize:"12px",color:C.muted,marginBottom:"10px"}}>Aucune ligne pour le moment — ajoute une prestation ci-dessous.</div>
+      )}
+      <div ref={refListe}/>
+      {lignes.length > 0 && (
+        <div style={{border:"1px solid "+C.border,borderRadius:"8px",overflow:"hidden",marginBottom:"6px"}}>
+          {lignes.map((l, i) => (
+            <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 12px",borderBottom:i<lignes.length-1?"1px solid "+C.border:"none",fontSize:"12px"}}>
+              <span>{l.designation} <span style={{color:C.muted}}>×{l.qte}</span></span>
+              <span style={{display:"flex",alignItems:"center",gap:"10px"}}>
+                <b>{l.totalHT.toFixed(2)} €</b>
+                <span onClick={() => onSupprimer(i)} style={{cursor:"pointer",color:C.muted}}>✕</span>
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+      <div style={{textAlign:"right",fontSize:"12px",color:C.muted}}>Total HT : {total.toFixed(2)} € · TVA : {(lignes.reduce((s,l)=>s+((l.totalTTC!=null?l.totalTTC:l.totalHT*1.2)-l.totalHT),0)).toFixed(2)} €</div>
+      <div style={{textAlign:"right",fontSize:"14px",fontWeight:"900",color:C.white}}>Total TTC : {(lignes.reduce((s,l)=>s+(l.totalTTC!=null?l.totalTTC:l.totalHT*1.2),0)).toFixed(2)} €</div>
+      <div style={{position:"sticky",bottom:0,zIndex:5,margin:"10px 0 0",display:"flex",justifyContent:"space-between",alignItems:"center",gap:"8px",background:"#FEFEFE",border:"1px solid "+C.orBord,borderRadius:"10px",padding:"8px 12px",fontSize:"12px",fontWeight:"800",color:C.white}}>
+        <span>🧾 {lignes.length} ligne{lignes.length>1?"s":""} dans le devis</span>
+        {dernierAjout ? <span style={{color:"#15803D"}}>{dernierAjout}</span> : <span>Total TTC : {(lignes.reduce((s,l)=>s+(l.totalTTC!=null?l.totalTTC:l.totalHT*1.2),0)).toFixed(2)} €</span>}
+      </div>
+      <div style={{fontSize:"11px",fontWeight:"700",color:C.muted,margin:"14px 0 6px"}}>➕ Ajouter une prestation</div>
+      <div style={{background:"rgba(0,0,0,0.03)",border:"1px solid "+C.border,borderRadius:"10px",padding:"10px"}}>
+      {(produits.length > 0 || mo.length > 0) && (
+        <>
+          <button type="button" onClick={demanderSuggestionsDevis} disabled={chargementSuggestions}
+            style={{width:"100%",padding:"8px",marginBottom:"8px",borderRadius:"8px",background:"rgba(var(--iko-primary-rgb),0.1)",border:"1px solid var(--iko-primary)",color:"var(--iko-primary)",fontSize:"11px",fontWeight:"700",cursor:chargementSuggestions?"not-allowed":"pointer"}}>
+            {chargementSuggestions ? "⏳ IKO prépare la proposition..." : "🧾 Laisser IKO proposer des lignes (selon le problème du ticket)"}
+          </button>
+          {erreurSuggestion && <div style={{fontSize:"11px",color:C.rouge,marginBottom:"8px"}}>⚠️ {erreurSuggestion}</div>}
+          {suggestionsDevis && (
+            <div style={{marginBottom:"8px",fontSize:"10px",color:C.muted}}>
+              🔎 Éléments identifiés : {ticket?.fields?.Produit || "produit non précisé"} — {ticket?.fields?.Problème || "problème non précisé"}
+              {ticket?.fields?.Diagnostic && " — diagnostic déjà enregistré"}
+            </div>
+          )}
+          {suggestionsDevis && suggestionsDevis.length === 0 && elementsSansCorrespondance.length === 0 && (
+            <div style={{fontSize:"10px",color:C.muted,marginBottom:"8px",fontStyle:"italic"}}>Informations insuffisantes pour proposer une ligne de devis sur ce ticket.</div>
+          )}
+          {suggestionsDevis && suggestionsDevis.length > 0 && (
+            <div style={{marginBottom:"8px",display:"flex",flexDirection:"column",gap:"5px"}}>
+              <div style={{fontSize:"10px",fontWeight:"700",color:C.muted}}>Lignes proposées :</div>
+              {suggestionsDevis.map(l => {
+                const quantiteInconnue = l.quantite == null;
+                const quantiteSaisie = Number(qteAConfirmer[l.catalogue_id]);
+                const ajoutPossible = !quantiteInconnue || quantiteSaisie > 0;
+                return (
+                  <div key={l.catalogue_id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:"6px",fontSize:"10px",background:"rgba(var(--iko-primary-rgb),0.06)",borderRadius:"6px",padding:"6px 8px"}}>
+                    <div>
+                      <b>{l.designation}</b> ×{quantiteInconnue ? (
+                        <input type="number" min="1" placeholder="?" value={qteAConfirmer[l.catalogue_id] || ""}
+                          onChange={e => setQteAConfirmer(prev => ({...prev, [l.catalogue_id]: e.target.value}))}
+                          style={{width:"46px",fontSize:"10px",padding:"2px 4px",marginLeft:"2px"}}/>
+                      ) : l.quantite} — {Number(l.prix).toFixed(2)} €
+                      {quantiteInconnue && <span style={{color:"var(--iko-primary)",fontWeight:"700",marginLeft:"4px"}}>Quantité à confirmer</span>}
+                      {l.justification && <div style={{color:C.muted,fontStyle:"italic",marginTop:"2px"}}>{l.justification}</div>}
+                    </div>
+                    <button type="button" onClick={() => ajouterLigneSuggeree(l)} disabled={!ajoutPossible}
+                      style={{flexShrink:0,padding:"5px 10px",borderRadius:"6px",background:ajoutPossible?"var(--iko-primary)":"#D1D5DB",color:"var(--iko-dark)",border:"none",fontWeight:"800",cursor:ajoutPossible?"pointer":"not-allowed",fontSize:"10px"}}>
+                      + Ajouter au devis
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          {elementsSansCorrespondance.length > 0 && (
+            <div style={{marginBottom:"8px",background:"rgba(var(--iko-primary-rgb),0.1)",border:"1px solid var(--iko-primary)",borderRadius:"6px",padding:"6px 8px"}}>
+              <div style={{fontSize:"10px",fontWeight:"700",color:"var(--iko-primary-fonce)",marginBottom:"3px"}}>⚠️ Éléments à confirmer (hors catalogue)</div>
+              {elementsSansCorrespondance.map((e, i) => (
+                <div key={i} style={{fontSize:"10px",color:"var(--iko-primary-fonce)"}}>· {e}</div>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+      <div style={{display:"flex",gap:"8px",marginBottom:"10px"}}>
+        <select value={choix} onChange={e => setChoix(e.target.value)} style={{flex:1}}>
+          <option value="">— Ajouter une ligne —</option>
+          {produits.length > 0 && <optgroup label="Produits">
+            {produits.map(p => <option key={p.id} value={"produit|"+p.id}>{p.fields?.["Désignation"]} — {(p.fields?.["Prix unitaire HT"]||0).toFixed(2)} € HT</option>)}
+          </optgroup>}
+          {mo.length > 0 && <optgroup label="Main d'œuvre">
+            {mo.map(m => <option key={m.id} value={"mo|"+m.id}>{m.fields?.["Type d'action"]} — {(m.fields?.["Prix forfait HT"]||m.fields?.["Taux horaire HT"]||0).toFixed(2)} € HT</option>)}
+          </optgroup>}
+        </select>
+        <input type="number" min="1" value={qte} onChange={e => setQte(e.target.value)} style={{width:"60px"}}/>
+        <button type="button" onClick={ajouter} style={{padding:"0 14px",background:"#F3F4F6",border:"1px solid "+C.border,borderRadius:"8px",cursor:"pointer",fontSize:"13px",fontWeight:"700"}}>+</button>
+      </div>
+      {demo && (
+        <div style={{fontSize:"11px",color:C.muted,marginBottom:"8px"}}>ℹ️ Catalogue de démonstration IKO (menuiserie). Pour un vrai client, le catalogue vient de sa fiche (Poste de pilotage → Devis &amp; Facturation).</div>
+      )}
+      {(produits.length === 0 && mo.length === 0) && (
+        <div style={{fontSize:"11px",color:C.rouge,marginBottom:"8px"}}>⚠️ Aucun catalogue pour ce client : utilise « Ligne libre » ou configure-le dans le Poste de pilotage.</div>
+      )}
+      <div style={{marginBottom:"10px"}}>
+        <button type="button" onClick={() => setLibreOuvert(!libreOuvert)} style={{background:"none",border:"none",color:C.or,fontSize:"12px",fontWeight:"800",cursor:"pointer",padding:0}}>
+          ✏️ Ligne libre {libreOuvert ? "▴" : "▾"}
+        </button>
+        {libreOuvert && (
+          <div style={{display:"flex",gap:"6px",flexWrap:"wrap",marginTop:"8px",alignItems:"center"}}>
+            <input placeholder="Désignation" value={libre.designation} onChange={e => setLibre({...libre, designation:e.target.value})} style={{flex:"2 1 160px"}}/>
+            <input placeholder="Prix HT" inputMode="decimal" value={libre.prix} onChange={e => setLibre({...libre, prix:e.target.value})} style={{width:"80px"}}/>
+            <input type="number" min="1" value={libre.qte} onChange={e => setLibre({...libre, qte:e.target.value})} style={{width:"56px"}}/>
+            <select value={libre.tva} onChange={e => setLibre({...libre, tva:e.target.value})} style={{width:"84px"}}>
+              <option value="0.2">TVA 20 %</option><option value="0.1">TVA 10 %</option><option value="0.055">TVA 5,5 %</option>
+            </select>
+            <button type="button" onClick={ajouterLibre} style={{padding:"8px 14px",background:C.or,color:"#fff",border:"none",borderRadius:"8px",fontWeight:"800",cursor:"pointer",fontSize:"12px"}}>Ajouter</button>
+          </div>
+        )}
+      </div>
+      </div>
+    </div>
+  );
+}
+
+function ModalDevis({ ticket, onClose, onSent }) {
+  const [chargement, setChargement] = React.useState(true);
+  const [catalogue, setCatalogue] = React.useState({ produits: [], mo: [], mep: null });
+  const [clientInfo, setClientInfo] = React.useState(null);
+  const [demoCat, setDemoCat] = React.useState(false);
+  const [etape, setEtape] = React.useState("edition");
+  const [apercuUrl, setApercuUrl] = React.useState(null);
+  const [conditions, setConditions] = React.useState("Acompte de 30 % à la commande, solde à la fin des travaux");
+  const [validite, setValidite] = React.useState(30);
+  const [numeroDevis] = React.useState(() => "DEV-" + new Date().getFullYear() + "-" + Math.floor(1000 + Math.random() * 9000));
+  const [lignes, setLignes] = React.useState([]);
+  const [email, setEmail] = React.useState(ticket.fields?.Email || "");
+  const [message, setMessage] = React.useState("");
+  const [saving, setSaving] = React.useState(false);
+  const [error, setError] = React.useState("");
+  const [envoye, setEnvoye] = React.useState(false);
+  const [debugEnvoi, setDebugEnvoi] = React.useState(null);
+
+  React.useEffect(() => {
+    (async () => {
+      let cat = { produits: [], mo: [], mep: null };
+      try {
+        const resolu = await resoudreClientDepuisAgence(ticket.fields?.Agence);
+        if (resolu) {
+          setClientInfo(resolu);
+          cat = await chargerCatalogueDevis(resolu.clientNom);
+        }
+      } catch(e) { console.error(e); }
+      // IKO DEMO (pas de ?client=) : catalogue menuiserie de démonstration si rien n'est configuré.
+      const estDemo = !new URLSearchParams(window.location.search).get('client');
+      if (estDemo && !cat.produits.length && !cat.mo.length) {
+        cat = { ...cat, ...CATALOGUE_DEMO_IKO };
+        setDemoCat(true);
+      }
+      setCatalogue(cat);
+      setChargement(false);
+    })();
+  }, []);
+
+  const mepEffectif = () => mepAvecDefauts({ ...(catalogue.mep || {}), conditionsPaiement: conditions, dureeValidite: validite }, demoCat);
+  const clientPdf = () => {
+    const cpMatch = (ticket.fields?.Adresse || "").match(/\b\d{5}\b/);
+    return { nom: ticket.fields?.Client, adresse: ticket.fields?.Adresse || "", cp: cpMatch ? cpMatch[0] : "" };
+  };
+  const voirApercu = async () => {
+    setError("");
+    if (!lignes.length) { setError("Ajoute au moins une ligne au devis."); return; }
+    setSaving(true);
+    try {
+      const blob = await genererPdfDevis({ numero: numeroDevis, ticket, client: clientPdf(), lignes, montantHT, montantTTC, mep: mepEffectif() });
+      if (apercuUrl) URL.revokeObjectURL(apercuUrl);
+      setApercuUrl(URL.createObjectURL(blob));
+      setEtape("apercu");
+    } catch(e) { console.error(e); setError("Impossible de générer l'aperçu : " + (e && e.message || e)); }
+    setSaving(false);
+  };
+
+  const genererToken = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-6);
+  const emailValide = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+  const montantHT = lignes.reduce((s, l) => s + (l.totalHT || 0), 0);
+  const montantTTC = lignes.reduce((s, l) => s + (l.totalTTC != null ? l.totalTTC : l.totalHT * 1.2), 0);
+
+  const envoyer = async () => {
+    if (!lignes.length) { setError("Ajoute au moins une ligne au devis."); return; }
+    if (!emailValide) { setError("Indique un email client valide."); return; }
+    if (!clientInfo && !demoCat) { setError("Impossible de résoudre le client de cette agence — vérifie la configuration."); return; }
+    setSaving(true); setError("");
+    const diag = { devisId: null, pdfGenere: false, yousignOk: false, yousignErreur: null, ticketMisAJour: false, webhookStatut: null, webhookErreur: null, lienDevis: null };
+    try {
+      const numero = numeroDevis;
+      const mep = mepEffectif();
+      const client = clientPdf();
+
+      const devisRes = await fetch('/api/airtable/Devis', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ records: [{ fields: (() => {
+          const champs = {
+            "N° devis": numero, "Ticket lié": [ticket.id],
+            "Nom client": client.nom, "Adresse client": client.adresse, "CP client": client.cp,
+            "Lignes devis (JSON)": JSON.stringify(lignes), "Montant HT": montantHT, "Montant TTC": montantTTC,
+            "Statut": "Envoyé", "Mode": "Manuel", "Conditions paiement": conditions,
+            "Date validité": new Date(Date.now() + validite * 86400000).toISOString().slice(0, 10),
+          };
+          if (clientInfo?.clientId) champs["Client"] = [clientInfo.clientId];
+          if (clientInfo?.agenceId) champs["Agence"] = [clientInfo.agenceId];
+          return champs;
+        })() }] })
+      });
+      const devisJson = await devisRes.json();
+      const devisRec = devisJson.records?.[0];
+      if (!devisRec) throw new Error("Création du devis échouée : " + JSON.stringify(devisJson));
+      diag.devisId = devisRec.id;
+
+      const pdfBlob = await genererPdfDevis({ numero, ticket, client, lignes, montantHT, montantTTC, mep });
+      diag.pdfGenere = !!(pdfBlob && pdfBlob.size);
+
+      let yousignFields = {};
+      try {
+        const { signatureRequestId, signerId, lienSignature } = await creerDemandeSignatureYousign(pdfBlob, numero, client.nom, email.trim(), ticket.fields?.Téléphone);
+        yousignFields = { "Yousign Request ID": signatureRequestId, "Yousign Signer ID": signerId, "Yousign Signer Link": lienSignature };
+        diag.yousignOk = true;
+        diag.lienSignature = lienSignature || "(pas encore prêt — devis.html le récupérera à l'ouverture)";
+      } catch (yousignErr) {
+        console.error('Yousign indisponible, devis envoyé sans signature électronique :', yousignErr);
+        diag.yousignErreur = String(yousignErr && yousignErr.message || yousignErr);
+      }
+      await fetch('/api/airtable/Devis/' + devisRec.id, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fields: yousignFields })
+      });
+
+      // Compatibilité avec le pipeline existant (ModalGestionDevis, badges, filtres par Statut de ticket).
+      const ticketPatchRes = await fetch('/api/airtable/tenant/Tickets%20SAV/' + ticket.id, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fields: { Statut: 'Devis envoyé', "Montant devis": Math.round(montantTTC * 100) / 100, Email: email.trim() } })
+      });
+      diag.ticketMisAJour = ticketPatchRes.ok;
+      if (!ticketPatchRes.ok) {
+        diag.ticketErreur = await ticketPatchRes.text().catch(() => '(corps illisible)');
+      }
+
+      const lienDevis = window.location.origin + '/devis.html?devisId=' + devisRec.id;
+      diag.lienDevis = lienDevis;
+      try {
+        const webhookRes = await fetch(WEBHOOK, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            marque: 'iko', action: 'devis_envoye',
+            ticket: ticket.fields?.Name, nom: ticket.fields?.Client, "e-mail": email.trim(),
+            agence: ticket.fields?.Agence, produit: ticket.fields?.Produit, probleme: ticket.fields?.Problème,
+            diagnostic: ticket.fields?.Diagnostic || '', montant: montantTTC.toFixed(2) + ' €', message, lien: lienDevis
+          })
+        });
+        diag.webhookStatut = webhookRes.status;
+      } catch (webhookErr) {
+        diag.webhookErreur = String(webhookErr && webhookErr.message || webhookErr);
+      }
+
+      setDebugEnvoi(diag);
+      setEnvoye(true);
+    } catch(e) {
+      console.error(e);
+      diag.erreurFatale = String(e && e.message || e);
+      setDebugEnvoi(diag);
+      setError("Erreur lors de l'envoi — détail dans le diagnostic ci-dessous.");
+    }
+    setSaving(false);
+  };
+
+  if (envoye) {
+    return (
+      <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
+        <div className="modal-box" style={{maxWidth:"520px"}}>
+          <div style={{fontSize:"16px",fontWeight:"900",color:C.white,marginBottom:"10px"}}>✓ Devis créé — diagnostic</div>
+          <div style={{background:"var(--iko-dark)",color:"var(--iko-primary)",borderRadius:"8px",padding:"12px",fontFamily:"monospace",fontSize:"10.5px",whiteSpace:"pre-wrap",wordBreak:"break-all",marginBottom:"14px",maxHeight:"320px",overflow:"auto"}}>
+            {JSON.stringify(debugEnvoi, null, 2)}
+          </div>
+          {!debugEnvoi?.yousignOk && (
+            <div style={{background:C.rougeDim,border:"1px solid rgba(var(--iko-erreur-rgb),0.3)",borderRadius:"8px",padding:"8px 12px",fontSize:"11px",color:C.rouge,marginBottom:"14px"}}>
+              ⚠️ Yousign a échoué ({debugEnvoi?.yousignErreur}) — le devis est créé mais sans lien de signature.
+            </div>
+          )}
+          {debugEnvoi?.webhookStatut && debugEnvoi.webhookStatut >= 300 && (
+            <div style={{background:C.rougeDim,border:"1px solid rgba(var(--iko-erreur-rgb),0.3)",borderRadius:"8px",padding:"8px 12px",fontSize:"11px",color:C.rouge,marginBottom:"14px"}}>
+              ⚠️ Le webhook Make a répondu avec le statut {debugEnvoi.webhookStatut} — l'email n'a probablement pas été envoyé.
+            </div>
+          )}
+          {debugEnvoi?.webhookStatut && debugEnvoi.webhookStatut < 300 && (
+            <div style={{background:"#F3F4F6",border:"1px solid "+C.border,borderRadius:"8px",padding:"8px 12px",fontSize:"11px",color:C.muted,marginBottom:"14px"}}>
+              Le webhook Make a bien été accepté (statut {debugEnvoi.webhookStatut}). Si aucun email n'arrive, le souci est dans le scénario Make lui-même (pas dans le code de l'app) — vérifie son historique d'exécution.
+            </div>
+          )}
+          <button onClick={() => { onSent(); }} style={{width:"100%",padding:"11px",background:"var(--iko-bg-sombre)",color:"#fff",border:"none",borderRadius:"10px",fontSize:"13px",fontWeight:"900",cursor:"pointer"}}>
+            Fermer
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="modal-box" style={{maxWidth:etape==="apercu"?"820px":"600px",width:"95%"}}>
+        <div style={{display:"flex",gap:"6px",marginBottom:"10px",fontSize:"11px",fontWeight:"800"}}>
+          <span style={{padding:"3px 10px",borderRadius:"12px",background:etape==="edition"?C.or:"rgba(0,0,0,0.06)",color:etape==="edition"?"#fff":C.muted}}>1 · Lignes</span>
+          <span style={{padding:"3px 10px",borderRadius:"12px",background:etape==="apercu"?C.or:"rgba(0,0,0,0.06)",color:etape==="apercu"?"#fff":C.muted}}>2 · Aperçu & envoi</span>
+        </div>
+        <div style={{fontSize:"16px",fontWeight:"900",color:C.white,marginBottom:"4px"}}>💶 Établir le devis</div>
+        <div style={{fontSize:"12px",color:C.or,fontFamily:"monospace",marginBottom:"14px"}}>{ticket.fields?.Name} — {ticket.fields?.Client}</div>
+        {ticket.fields?.Diagnostic && (
+          <div style={{background:"rgba(var(--iko-dark-rgb),0.05)",border:"1px solid rgba(var(--iko-dark-rgb),0.2)",borderRadius:"10px",padding:"10px 14px",marginBottom:"14px",fontSize:"12px",color:"var(--iko-bg-sombre)"}}>
+            📋 Diagnostic technicien : {ticket.fields.Diagnostic}
+          </div>
+        )}
+
+        {etape === "edition" && (<>
+        {chargement && <div style={{textAlign:"center",padding:"20px 0",color:C.muted,fontSize:"12px"}}>⏳ Chargement du catalogue client...</div>}
+
+        {!chargement && (
+          <LigneDevisEditeur demo={demoCat} produits={catalogue.produits} mo={catalogue.mo} lignes={lignes} ticket={ticket}
+            onAjouter={l => setLignes([...lignes, l])} onSupprimer={i => setLignes(lignes.filter((_,idx) => idx!==i))}/>
+        )}
+
+        <label style={{fontSize:"11px",fontWeight:"700",color:C.muted,display:"block",marginBottom:"6px"}}>Email client *</label>
+        <input type="email" placeholder="client@exemple.fr" value={email} onChange={e => setEmail(e.target.value)}
+          style={{marginBottom:"14px",border:"1.5px solid "+(email && !emailValide ? C.rouge : "#D1D5DB")}}/>
+        <label style={{fontSize:"11px",fontWeight:"700",color:C.muted,display:"block",marginBottom:"6px"}}>Message complémentaire (facultatif)</label>
+        <textarea rows={2} placeholder="Ex : délai de livraison estimé..." value={message} onChange={e => setMessage(e.target.value)} style={{resize:"none",marginBottom:"14px"}}/>
+
+        <div style={{display:"flex",gap:"10px",marginBottom:"14px",flexWrap:"wrap"}}>
+          <div style={{flex:"2 1 220px"}}>
+            <label style={{fontSize:"11px",fontWeight:"700",color:C.muted,display:"block",marginBottom:"6px"}}>Conditions de paiement</label>
+            <select value={conditions} onChange={e => setConditions(e.target.value)}>
+              <option>Acompte de 30 % à la commande, solde à la fin des travaux</option>
+              <option>Acompte de 50 % à la commande, solde à la livraison</option>
+              <option>Paiement comptant à la réception de la facture</option>
+              <option>Paiement à 30 jours</option>
+            </select>
+          </div>
+          <div style={{flex:"1 1 120px"}}>
+            <label style={{fontSize:"11px",fontWeight:"700",color:C.muted,display:"block",marginBottom:"6px"}}>Validité du devis</label>
+            <select value={validite} onChange={e => setValidite(Number(e.target.value))}>
+              <option value={15}>15 jours</option><option value={30}>30 jours</option><option value={60}>60 jours</option><option value={90}>90 jours</option>
+            </select>
+          </div>
+        </div>
+        <div style={{background:"#F3F4F6",border:"1px solid "+C.border,borderRadius:"8px",padding:"9px 12px",fontSize:"11px",color:C.muted,marginBottom:"14px"}}>
+          Le PDF reprend le logo, l'identité de l'entreprise et les mentions légales (SIRET, TVA, décennale, validité, paiement). Tu le vérifies à l'étape suivante avant l'envoi.
+        </div>
+        </>)}
+        {etape === "apercu" && (
+          <div style={{marginBottom:"12px"}}>
+            <div style={{fontSize:"12px",color:C.muted,marginBottom:"8px"}}>Aperçu du PDF tel que le client le recevra · {numeroDevis} · à {email}</div>
+            {apercuUrl && <iframe title="Aperçu devis" src={apercuUrl} style={{width:"100%",height:"58vh",border:"1px solid "+C.border,borderRadius:"10px",background:"#fff"}}/>}
+            {message && <div style={{fontSize:"11px",color:C.muted,marginTop:"8px"}}>Message joint : {message}</div>}
+          </div>
+        )}
+        {error && <div style={{background:C.rougeDim,border:"1px solid rgba(var(--iko-erreur-rgb),0.3)",borderRadius:"8px",padding:"8px 12px",fontSize:"11px",color:C.rouge,marginBottom:"14px"}}>{error}</div>}
+        {etape === "edition" ? (
+          <div style={{display:"flex",gap:"10px",alignItems:"center",flexWrap:"wrap"}}>
+            <button onClick={onClose} style={{flex:1,padding:"11px",background:"transparent",color:C.muted,border:"1px solid "+C.border,borderRadius:"10px",fontSize:"12px",cursor:"pointer"}}>Annuler</button>
+            <button onClick={voirApercu} disabled={saving||!lignes.length||!emailValide}
+              style={{flex:2,padding:"11px",background:saving||!lignes.length||!emailValide?"#D1D5DB":C.or,color:"#fff",border:"none",borderRadius:"10px",fontSize:"13px",fontWeight:"900",cursor:saving||!lignes.length||!emailValide?"not-allowed":"pointer"}}>
+              {saving ? "⏳ Génération..." : "👁️ Voir l'aperçu du devis"}
+            </button>
+            {(!lignes.length || !emailValide) && <div style={{flexBasis:"100%",fontSize:"11px",color:C.muted,textAlign:"right"}}>{!lignes.length ? "Ajoute au moins une ligne" : "Renseigne un e-mail client valide"} pour continuer.</div>}
+          </div>
+        ) : (
+          <div style={{display:"flex",gap:"10px"}}>
+            <button onClick={() => setEtape("edition")} style={{flex:1,padding:"11px",background:"transparent",color:C.muted,border:"1px solid "+C.border,borderRadius:"10px",fontSize:"12px",cursor:"pointer"}}>← Modifier</button>
+            <button onClick={envoyer} disabled={saving}
+              style={{flex:2,padding:"11px",background:saving?"#D1D5DB":C.or,color:"#fff",border:"none",borderRadius:"10px",fontSize:"13px",fontWeight:"900",cursor:saving?"not-allowed":"pointer"}}>
+              {saving ? "⏳ Envoi..." : "📧 Envoyer le devis au client"}
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ==================== /Devis professionnel ====================
+
 // ==================== /Devis Auto (Iko) ====================
 
 // Adresse de départ par défaut par agence (modifiable par le technicien à chaque calcul d'itinéraire)
@@ -1008,6 +1822,7 @@ function ModalAction({ ticket, onClose, onDone }) {
   // (PDF + Yousign), sans passer par l'agence.
   const [catalogueAuto, setCatalogueAuto] = React.useState({ produits: [], mo: [], mep: null });
   const [clientInfoAuto, setClientInfoAuto] = React.useState(null);
+  const [demoAuto, setDemoAuto] = React.useState(false);
   const [chargementCatalogueAuto, setChargementCatalogueAuto] = React.useState(false);
   const [lignesAuto, setLignesAuto] = React.useState([]);
   const [choixLigneAuto, setChoixLigneAuto] = React.useState("");
@@ -1204,17 +2019,24 @@ function ModalAction({ ticket, onClose, onDone }) {
   };
 
   React.useEffect(() => {
-    if (mode !== "devis_place" || catalogueAuto.mep !== null) return;
+    if (mode !== "devis_place" || catalogueAuto.mep !== null || catalogueAuto.produits.length || catalogueAuto.mo.length) return;
     setChargementCatalogueAuto(true);
     (async () => {
+      let cat = { produits: [], mo: [], mep: null };
       try {
         const resolu = await resoudreClientDepuisAgenceTech(ticket.fields?.Agence);
         if (resolu) {
           setClientInfoAuto(resolu);
-          const cat = await chargerCatalogueDevisTech(resolu.clientNom);
-          setCatalogueAuto(cat);
+          cat = await chargerCatalogueDevisTech(resolu.clientNom);
         }
       } catch(e) { console.error(e); }
+      // IKO DEMO (pas de ?client=) : catalogue menuiserie de démonstration si rien n'est configuré.
+      const estDemo = !new URLSearchParams(window.location.search).get('client');
+      if (estDemo && !cat.produits.length && !cat.mo.length) {
+        cat = { ...cat, ...CATALOGUE_DEMO_IKO, mep: cat.mep || {} };
+        setDemoAuto(true);
+      }
+      setCatalogueAuto(cat);
       setChargementCatalogueAuto(false);
     })();
   }, [mode]);
@@ -1244,21 +2066,22 @@ function ModalAction({ ticket, onClose, onDone }) {
 
   const envoyerDevisAuto = async () => {
     const emailValide = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailAuto.trim());
-    if (!lignesAuto.length || !emailValide || !clientInfoAuto) return;
+    if (!lignesAuto.length || !emailValide || (!clientInfoAuto && !demoAuto)) return;
     const numero = "DEV-" + new Date().getFullYear() + "-" + Math.floor(1000 + Math.random() * 9000);
     const montantHT = lignesAuto.reduce((s, l) => s + (l.totalHT || 0), 0);
     const montantTTC = lignesAuto.reduce((s, l) => s + (l.totalTTC != null ? l.totalTTC : l.totalHT * 1.2), 0);
     const cpMatch = (ticket.fields?.Adresse || "").match(/\b\d{5}\b/);
     const client = { nom: ticket.fields?.Client, adresse: ticket.fields?.Adresse || "", cp: cpMatch ? cpMatch[0] : "" };
-    const mep = catalogueAuto.mep || { identite: {}, assurance: {}, piedPage: "", dureeValidite: 30 };
+    const mep = mepAvecDefauts({ ...(catalogueAuto.mep || {}) }, demoAuto);
 
     const champsDevis = {
-      "N° devis": numero, "Ticket lié": [ticket.id], "Client": [clientInfoAuto.clientId],
+      "N° devis": numero, "Ticket lié": [ticket.id],
       "Nom client": client.nom, "Adresse client": client.adresse, "CP client": client.cp,
       "Lignes devis (JSON)": JSON.stringify(lignesAuto), "Montant HT": montantHT, "Montant TTC": montantTTC,
       "Statut": "Envoyé", "Mode": "Auto Iko",
     };
-    if (clientInfoAuto.agenceId) champsDevis["Agence"] = [clientInfoAuto.agenceId];
+    if (clientInfoAuto?.clientId) champsDevis["Client"] = [clientInfoAuto.clientId];
+    if (clientInfoAuto?.agenceId) champsDevis["Agence"] = [clientInfoAuto.agenceId];
 
     const devisRes = await fetch('/api/airtable/Devis', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -1268,7 +2091,7 @@ function ModalAction({ ticket, onClose, onDone }) {
     const devisRec = devisJson.records?.[0];
     if (!devisRec) throw new Error("Création du devis auto échouée.");
 
-    const pdfBlob = await genererPdfDevisTech({ numero, ticket, client, lignes: lignesAuto, montantHT, montantTTC, mep });
+    const pdfBlob = await genererPdfDevis({ numero, ticket, client, lignes: lignesAuto, montantHT, montantTTC, mep });
 
     let yousignFields = {};
     try {
@@ -1665,63 +2488,11 @@ function ModalAction({ ticket, onClose, onDone }) {
               Sélectionnez les pièces/actions posées, faites signer le client, encaissez, puis intervenez.
             </div>
 
-            <div style={{border:"1px solid "+C.border,borderRadius:"10px",padding:"12px",marginBottom:"14px"}}>
-              <label style={{fontSize:"11px",color:C.muted,display:"block",marginBottom:"8px",fontWeight:"700"}}>💶 Pièces/actions facturées *</label>
-              {chargementCatalogueAuto && <div style={{fontSize:"11px",color:C.muted}}>⏳ Chargement du catalogue...</div>}
-              {!chargementCatalogueAuto && !clientInfoAuto && (
-                <div style={{fontSize:"11px",color:C.muted,fontStyle:"italic"}}>Catalogue indisponible pour ce client.</div>
-              )}
-              {!chargementCatalogueAuto && clientInfoAuto && (
-                <>
-                  <button type="button" onClick={demanderSuggestionsDevis} disabled={chargementSuggestionsDevis}
-                    style={{width:"100%",padding:"8px",marginBottom:"8px",borderRadius:"8px",background:"rgba(var(--iko-primary-rgb),0.1)",border:"1px solid var(--iko-primary)",color:"var(--iko-primary)",fontSize:"11px",fontWeight:"700",cursor:chargementSuggestionsDevis?"not-allowed":"pointer"}}>
-                    {chargementSuggestionsDevis ? "⏳ Max réfléchit..." : "🧠 Suggestions Max"}
-                  </button>
-                  {suggestionsDevis && suggestionsDevis.length === 0 && (
-                    <div style={{fontSize:"10px",color:C.muted,marginBottom:"8px",fontStyle:"italic"}}>Aucune suggestion pertinente pour ce ticket.</div>
-                  )}
-                  {suggestionsDevis && suggestionsDevis.length > 0 && (
-                    <div style={{marginBottom:"8px",display:"flex",flexDirection:"column",gap:"5px"}}>
-                      {suggestionsDevis.map(l => (
-                        <div key={l.catalogue_id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:"6px",fontSize:"10px",background:"rgba(var(--iko-primary-rgb),0.06)",borderRadius:"6px",padding:"6px 8px"}}>
-                          <div>
-                            <b>{l.designation}</b> ×{l.quantite} — {Number(l.prix).toFixed(2)} €
-                            {l.justification && <div style={{color:C.muted,fontStyle:"italic",marginTop:"2px"}}>{l.justification}</div>}
-                          </div>
-                          <button type="button" onClick={() => ajouterLigneSuggeree(l)}
-                            style={{flexShrink:0,padding:"5px 10px",borderRadius:"6px",background:"var(--iko-primary)",color:"var(--iko-dark)",border:"none",fontWeight:"800",cursor:"pointer",fontSize:"10px"}}>
-                            + Ajouter
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  <div style={{display:"flex",gap:"6px",marginBottom:"8px"}}>
-                    <select value={choixLigneAuto} onChange={e => setChoixLigneAuto(e.target.value)} style={{flex:1,fontSize:"12px"}}>
-                      <option value="">— Ajouter une ligne —</option>
-                      {catalogueAuto.produits.length > 0 && <optgroup label="Produits">
-                        {catalogueAuto.produits.map(p => <option key={p.id} value={"produit|"+p.id}>{p.fields?.["Désignation"]} — {(p.fields?.["Prix unitaire HT"]||0).toFixed(2)} €</option>)}
-                      </optgroup>}
-                      {catalogueAuto.mo.length > 0 && <optgroup label="Main d'œuvre">
-                        {catalogueAuto.mo.map(m => <option key={m.id} value={"mo|"+m.id}>{m.fields?.["Type d'action"]} — {(m.fields?.["Prix forfait HT"]||m.fields?.["Taux horaire HT"]||0).toFixed(2)} €</option>)}
-                      </optgroup>}
-                    </select>
-                    <input type="number" min="1" value={qteLigneAuto} onChange={e => setQteLigneAuto(e.target.value)} style={{width:"50px",fontSize:"12px"}}/>
-                    <button type="button" onClick={ajouterLigneAuto} style={{padding:"0 12px",background:C.card2,border:"1px solid "+C.border,borderRadius:"8px",cursor:"pointer",fontWeight:"700"}}>+</button>
-                  </div>
-                  {lignesAuto.length > 0 && (
-                    <div style={{borderTop:"1px solid "+C.border,paddingTop:"8px",marginBottom:"8px"}}>
-                      {lignesAuto.map((l, i) => (
-                        <div key={i} style={{display:"flex",justifyContent:"space-between",fontSize:"11px",padding:"3px 0"}}>
-                          <span>{l.designation} ×{l.qte}</span>
-                          <span>{l.totalHT.toFixed(2)} € <span onClick={() => setLignesAuto(lignesAuto.filter((_,idx)=>idx!==i))} style={{cursor:"pointer",color:C.muted,marginLeft:"6px"}}>✕</span></span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  {!lignesAuto.length && <div style={{fontSize:"10px",color:C.muted}}>Ajoutez au moins une ligne pour générer le devis.</div>}
-                </>
-              )}
+            <div style={{marginBottom:"14px"}}>
+              {chargementCatalogueAuto
+                ? <div style={{fontSize:"12px",color:C.muted}}>⏳ Chargement du catalogue...</div>
+                : <LigneDevisEditeur demo={demoAuto} produits={catalogueAuto.produits} mo={catalogueAuto.mo} lignes={lignesAuto} ticket={ticket}
+                    onAjouter={l => setLignesAuto(prev => [...prev, l])} onSupprimer={i => setLignesAuto(prev => prev.filter((_,idx) => idx!==i))}/>}
             </div>
 
             <div style={{marginBottom:"14px"}}>
@@ -2090,7 +2861,7 @@ function ItineraireModal({ agence, tickets, onClose }) {
   );
 }
 
-function TicketCard({ ticket, onAction, onAcquitterRdv }) {
+function TicketCard({ ticket, onAction, onAcquitterRdv, onEtablirDevis }) {
   const urgent = ticket.fields?.Qualification === "Oui";
   const rdvModifie = ticket.fields?.["RDV modifié - notif technicien"] === true;
   // Extension Bloc 5 : même proxy createdTime que dashboard.html (aucune
@@ -2183,10 +2954,14 @@ function TicketCard({ ticket, onAction, onAcquitterRdv }) {
             🔓 Débloquer et intervenir plus tôt
           </button>
         )}
-        {(isDevisAFaire || isDevisRefuse) && (
-          <div style={{textAlign:"center",fontSize:"11px",color:C.muted,fontStyle:"italic",padding:"8px 0"}}>
-            {isDevisAFaire ? "En attente d'établissement du devis par le SAV" : "Le client a refusé ce devis"}
-          </div>
+        {isDevisAFaire && onEtablirDevis && (
+          <button onClick={() => onEtablirDevis(ticket)}
+            style={{width:"100%",padding:"14px",background:"linear-gradient(180deg, rgba(255,150,60,0.97), rgba(255,107,0,0.9))",border:"1px solid rgba(255,255,255,0.5)",color:"#fff",borderRadius:"12px",fontWeight:"800",fontSize:"14px",cursor:"pointer",boxShadow:"0 6px 18px rgba(255,107,0,0.35)"}}>
+            📋 Établir le devis
+          </button>
+        )}
+        {isDevisRefuse && (
+          <div style={{textAlign:"center",fontSize:"11px",color:C.muted,fontStyle:"italic",padding:"8px 0"}}>Le client a refusé ce devis</div>
         )}
       </div>
     </div>
@@ -2225,6 +3000,15 @@ function Technicien({ agence, onClose }) {
   const [loading, setLoading] = React.useState(true);
   const [onglet, setOnglet] = React.useState("aujourd_hui");
   const [selectedTicket, setSelectedTicket] = React.useState(null);
+  const [ticketDevis, setTicketDevis] = React.useState(null);
+  const [appInstallee, setAppInstallee] = React.useState(() => {
+    try { return !!(window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || window.navigator.standalone === true; } catch(e) { return false; }
+  });
+  React.useEffect(() => {
+    const f = () => setAppInstallee(true);
+    window.addEventListener('appinstalled', f);
+    return () => window.removeEventListener('appinstalled', f);
+  }, []);
   const [itineraireOpen, setItineraireOpen] = React.useState(false);
   const [noteOpen, setNoteOpen] = React.useState(false);
   const [lastRefresh, setLastRefresh] = React.useState(null);
@@ -2638,6 +3422,9 @@ function Technicien({ agence, onClose }) {
       {selectedTicket && (
         <ModalAction ticket={selectedTicket} onClose={() => setSelectedTicket(null)} onDone={() => { setSelectedTicket(null); charger(); }}/>
       )}
+      {ticketDevis && (
+        <ModalDevis ticket={ticketDevis} onClose={() => setTicketDevis(null)} onSent={() => { setTicketDevis(null); charger(); }}/>
+      )}
       {itineraireOpen && (
         <ItineraireModal agence={agence} tickets={filtered} onClose={() => setItineraireOpen(false)}/>
       )}
@@ -2661,18 +3448,18 @@ function Technicien({ agence, onClose }) {
             </div>
           </div>
           <div style={{display:"flex",alignItems:"center",gap:"6px",flexShrink:0}}>
-            <button onClick={() => window.ikoInstaller && window.ikoInstaller()} title="Installer l'appli sur cet appareil" style={{background:C.orDim,border:"1px solid "+C.orBord,color:C.or,borderRadius:"10px",width:"38px",height:"38px",fontSize:"16px",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>📲</button>
+            {!appInstallee && <button onClick={() => window.ikoInstaller && window.ikoInstaller()} title="Installer l'appli sur cet appareil" style={{background:C.orDim,border:"1px solid "+C.orBord,color:C.or,borderRadius:"10px",width:"38px",height:"38px",fontSize:"16px",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>📲</button>}
             <button onClick={charger} title="Rafraîchir" style={{background:C.orDim,border:"1px solid "+C.orBord,color:C.or,borderRadius:"10px",width:"38px",height:"38px",fontSize:"16px",fontWeight:"700",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>↺</button>
             <button onClick={onClose} title="Fermer la session" style={{background:"rgba(var(--iko-erreur-rgb),0.08)",border:"1px solid rgba(var(--iko-erreur-rgb),0.25)",color:"rgba(var(--iko-erreur-rgb),0.85)",borderRadius:"10px",width:"38px",height:"38px",cursor:"pointer",fontSize:"16px",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>✕</button>
           </div>
         </div>
-        <div style={{display:"flex",alignItems:"center",gap:"6px",marginTop:"8px",flexWrap:"nowrap",overflowX:"auto",paddingBottom:"2px"}}>
-          <button onClick={imprimerSemaine} title="Imprimer ma semaine" style={{background:C.orDim,border:"1px solid "+C.orBord,color:C.or,borderRadius:"10px",padding:"0 10px",height:"34px",fontSize:"12px",fontWeight:"700",cursor:"pointer",display:"flex",alignItems:"center",gap:"5px",whiteSpace:"nowrap",flexShrink:0}}>🖨️ Ma semaine</button>
-            <button onClick={() => setItineraireOpen(true)} title="Itinéraire optimisé" style={{background:"var(--iko-bg-sombre)",border:"1px solid var(--iko-bg-sombre)",color:"#fff",borderRadius:"10px",padding:"0 10px",height:"34px",fontSize:"12px",fontWeight:"700",cursor:"pointer",display:"flex",alignItems:"center",gap:"5px",whiteSpace:"nowrap",flexShrink:0}}>🗺️ Itinéraire</button>
-            <button onClick={() => setOnglet("devis")} title="Devis en attente" style={{background:onglet==="devis"?"var(--iko-primary)":"rgba(var(--iko-primary-rgb),0.12)",border:"1px solid var(--iko-primary)",color:onglet==="devis"?"var(--iko-dark)":"var(--iko-primary-fonce)",borderRadius:"10px",padding:"0 10px",height:"34px",fontSize:"12px",fontWeight:"700",cursor:"pointer",display:"flex",alignItems:"center",gap:"5px",whiteSpace:"nowrap",flexShrink:0}}>
+        <div style={{display:"flex",alignItems:"center",gap:"6px",marginTop:"8px",flexWrap:"nowrap",paddingBottom:"2px"}}>
+          <button onClick={imprimerSemaine} title="Imprimer ma semaine" style={{background:C.orDim,border:"1px solid "+C.orBord,color:C.or,borderRadius:"10px",padding:"0 7px",height:"34px",fontSize:"11px",fontWeight:"700",cursor:"pointer",display:"flex",alignItems:"center",gap:"4px",whiteSpace:"nowrap",flex:"1 1 auto",minWidth:0,justifyContent:"center"}}>🖨️ Ma semaine</button>
+            <button onClick={() => setItineraireOpen(true)} title="Itinéraire optimisé" style={{background:"var(--iko-bg-sombre)",border:"1px solid var(--iko-bg-sombre)",color:"#fff",borderRadius:"10px",padding:"0 7px",height:"34px",fontSize:"11px",fontWeight:"700",cursor:"pointer",display:"flex",alignItems:"center",gap:"4px",whiteSpace:"nowrap",flex:"1 1 auto",minWidth:0,justifyContent:"center"}}>🗺️ Itinéraire</button>
+            <button onClick={() => setOnglet("devis")} title="Devis en attente" style={{background:onglet==="devis"?"var(--iko-primary)":"rgba(var(--iko-primary-rgb),0.12)",border:"1px solid var(--iko-primary)",color:onglet==="devis"?"var(--iko-dark)":"var(--iko-primary-fonce)",borderRadius:"10px",padding:"0 7px",height:"34px",fontSize:"11px",fontWeight:"700",cursor:"pointer",display:"flex",alignItems:"center",gap:"4px",whiteSpace:"nowrap",flex:"1 1 auto",minWidth:0,justifyContent:"center"}}>
               📋 Devis {nbDevisAttente > 0 && <span style={{background:onglet==="devis"?"var(--iko-bg-sombre)":"var(--iko-primary)",color:"#fff",borderRadius:"10px",padding:"0 5px",fontSize:"10px"}}>{nbDevisAttente}</span>}
             </button>
-            <button onClick={() => setNoteOpen(true)} title="Ma note client" style={{background:"rgba(var(--iko-statut-attention-rgb),0.12)",border:"1px solid var(--iko-primary)",color:"var(--iko-primary-fonce)",borderRadius:"10px",padding:"0 10px",height:"34px",fontSize:"12px",fontWeight:"700",cursor:"pointer",display:"flex",alignItems:"center",gap:"5px",whiteSpace:"nowrap",flexShrink:0}}>
+            <button onClick={() => setNoteOpen(true)} title="Ma note client" style={{background:"rgba(var(--iko-statut-attention-rgb),0.12)",border:"1px solid var(--iko-primary)",color:"var(--iko-primary-fonce)",borderRadius:"10px",padding:"0 7px",height:"34px",fontSize:"11px",fontWeight:"700",cursor:"pointer",display:"flex",alignItems:"center",gap:"4px",whiteSpace:"nowrap",flex:"1 1 auto",minWidth:0,justifyContent:"center"}}>
               ⭐ {moyenneAgence ? moyenneAgence.toFixed(1) : "—"}
             </button>
             {noteOpen && (
@@ -2722,7 +3509,7 @@ function Technicien({ agence, onClose }) {
           </div>
         )}
         <div style={{display:"flex",flexDirection:"column",gap:"12px"}}>
-          {filtered.map(t => <TicketCard key={t.id} ticket={t} onAction={setSelectedTicket} onAcquitterRdv={acquitterRdv}/>)}
+          {filtered.map(t => <TicketCard key={t.id} ticket={t} onAction={setSelectedTicket} onAcquitterRdv={acquitterRdv} onEtablirDevis={setTicketDevis}/>)}
         </div>
         {lastRefresh && <div style={{textAlign:"center",fontSize:"9px",color:C.muted,marginTop:"20px"}}>Dernière mise à jour : {lastRefresh}</div>}
       </div>
