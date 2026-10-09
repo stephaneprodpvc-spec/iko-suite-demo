@@ -14,6 +14,7 @@
 
 import { creneauxLibres, identDepuisClientId } from './_planning.js';
 import crypto from 'crypto';
+import { handlePaiement, handleStripe, handleSauvegarde } from './_paiement.js';
 
 export const config = {
   api: {
@@ -55,6 +56,16 @@ async function handleDownload(req, res) {
 }
 
 export default async function handler(req, res) {
+  // Services annexes (réécritures vercel.json) : paiement en ligne, webhook Stripe, sauvegarde.
+  // Regroupés ici car Vercel Hobby plafonne à 12 fonctions serverless.
+  const service = req.query?.service;
+  if (service === 'paiement') {
+    let corps = {};
+    try { const brut = await readRawBody(req); corps = brut.length ? JSON.parse(brut.toString('utf8')) : {}; } catch (e) { return res.status(400).json({ error: 'Requête illisible.' }); }
+    return handlePaiement(req, res, corps);
+  }
+  if (service === 'stripe') return handleStripe(req, res, await readRawBody(req));
+  if (service === 'sauvegarde') return handleSauvegarde(req, res);
   if (req.method === 'GET') {
     return handleDownload(req, res);
   }
