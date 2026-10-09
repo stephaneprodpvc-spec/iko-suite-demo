@@ -17,6 +17,7 @@ import crypto from 'crypto';
 import { handlePaiement, handleStripe, handleSauvegarde } from './_paiement.js';
 import { handleRappelVeille } from './_rappels.js';
 import { handleAgenda } from './_agenda.js';
+import { verifierOrigine, verifierDebit } from './_securite.js';
 
 export const config = {
   api: {
@@ -57,85 +58,13 @@ async function handleDownload(req, res) {
   }
 }
 
-export default async function handler(req, res) {
-  // Services annexes (réécritures vercel.json) : paiement en ligne, webhook Stripe, sauvegarde.
-  // Regroupés ici car Vercel Hobby plafonne à 12 fonctions serverless.
-  const service = req.query?.service;
-  if (service === 'paiement') {
-    let corps = {};
-    try { const brut = await readRawBody(req); corps = brut.length ? JSON.parse(brut.toString('utf8')) : {}; } catch (e) { return res.status(400).json({ error: 'Requête illisible.' }); }
-    return handlePaiement(req, res, corps);
-  }
-  if (service === 'stripe') return handleStripe(req, res, await readRawBody(req));
-  if (service === 'sauvegarde') return handleSauvegarde(req, res);
-  if (service === 'rappel') return handleRappelVeille(req, res);
-  if (service === 'agenda') return handleAgenda(req, res);
-  if (req.method === 'GET') {
-    return handleDownload(req, res);
-  }
-
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
-  }
-
-  const secret = process.env.YOUSIGN_WEBHOOK_SECRET;
-  const airtableToken = process.env.AIRTABLE_TOKEN;
-
-  if (!secret || !airtableToken) {
-    console.error('YOUSIGN_WEBHOOK_SECRET ou AIRTABLE_TOKEN manquant.');
-    return res.status(500).json({ error: 'Configuration serveur incomplète.' });
-  }
-
-  const rawBody = await readRawBody(req);
-  const signatureHeader = req.headers['x-yousign-signature-256'] || '';
-  const digest = crypto.createHmac('sha256', secret).update(rawBody).digest('hex');
-  const computedSignature = 'sha256=' + digest;
-
-  const sigBuf = Buffer.from(signatureHeader);
-  const compBuf = Buffer.from(computedSignature);
-  const isValid = sigBuf.length === compBuf.length && crypto.timingSafeEqual(sigBuf, compBuf);
-
-  if (!isValid) {
-    console.error('Signature Yousign invalide — requête rejetée.');
-    return res.status(401).json({ error: 'Signature invalide' });
-  }
-
-  let payload;
-  try {
-    payload = JSON.parse(rawBody.toString('utf-8'));
-  } catch (e) {
-    return res.status(400).json({ error: 'JSON invalide' });
-  }
-
-  // On acquitte tout de suite les événements qui ne nous intéressent pas,
-  // Yousign attend un 2xx sous 1s sinon il retente l'envoi.
-  if (payload.event_name !== 'signature_request.done') {
-    return res.status(200).json({ ok: true, ignored: payload.event_name });
-  }
-
-  try {
-    const signatureRequestId = payload.data?.signature_request?.id;
-    if (!signatureRequestId) {
-      return res.status(200).json({ ok: true, note: 'Pas de signature_request.id dans le payload' });
-    }
-
-    const baseId = process.env.AIRTABLE_BASE_ID || 'appkI8RKHkYNWY86U'; // base démo Iko Suite
-    const filter = encodeURIComponent('{Yousign Request ID}="' + signatureRequestId + '"');
-    const headers = { Authorization: 'Bearer ' + airtableToken };
-
-    // Nouveau flux itemisé (table Devis, catalogue + mise en page) : on
-    // cherche en priorité ici. Ancien flux (montant libre sur le ticket)
-    // conservé en repli pour ne pas casser des liens déjà envoyés.
-    const devisSearchUrl = 'https://api.airtable.com/v0/' + baseId + '/Devis?filterByFormula=' + filter + '&maxRecords=1';
-    const devisSearchRes = await fetch(devisSearchUrl, { headers });
-    const devisSearchJson = await devisSearchRes.json();
-    const devisRecord = devisSearchJson.records?.[0];
-
-    if (devisRecord) {
+// Validation d'un devis signé (signature Yousign OU signature intégrée) : statut Validé, déduction des frais de
+// diagnostic, e-mail de confirmation et planification automatique du premier créneau libre.
+async function validerDevis(req, baseId, headers, devisRecord, champsSupp) {
       await fetch('https://api.airtable.com/v0/' + baseId + '/Devis/' + devisRecord.id, {
         method: 'PATCH',
         headers: { ...headers, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fields: { "Statut": "Validé", "Date validation client": new Date().toISOString() } })
+        body: JSON.stringify({ fields: { "Statut": "Validé", "Date validation client": new Date().toISOString(), ...(champsSupp || {}) } })
       });
 
       // Planifie automatiquement le prochain créneau libre de l'agence
@@ -241,6 +170,117 @@ export default async function handler(req, res) {
         console.error('Erreur planification automatique après signature', planErr);
       }
 
+}
+
+// Signature intégrée (secours quand Yousign est indisponible) : le client saisit son nom et accepte explicitement.
+// Réservé aux devis sans demande Yousign, jamais déjà validés ni refusés. Trace horodatée conservée dans « Notes ».
+async function handleSignatureIntegree(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  if (!verifierOrigine(req)) return res.status(403).json({ error: 'Origine non autorisée.' });
+  if (!verifierDebit(req, { max: 10, fenetreMs: 10 * 60 * 1000, cle: 'signature-integree' })) return res.status(429).json({ error: 'Trop de tentatives.' });
+  let corps = {};
+  try { const brut = await readRawBody(req); corps = brut.length ? JSON.parse(brut.toString('utf8')) : {}; } catch (e) { return res.status(400).json({ error: 'Requête invalide.' }); }
+  const devisId = String(corps.devisId || '');
+  const nom = String(corps.nom || '').trim().slice(0, 120);
+  if (!/^rec[A-Za-z0-9]{14}$/.test(devisId) || nom.length < 3 || corps.accepte !== true) return res.status(400).json({ error: 'Nom complet et acceptation obligatoires.' });
+  const token = process.env.AIRTABLE_TOKEN;
+  if (!token) return res.status(500).json({ error: 'Configuration serveur incomplète.' });
+  const baseId = process.env.AIRTABLE_BASE_ID || 'appkI8RKHkYNWY86U';
+  const headers = { Authorization: 'Bearer ' + token };
+  try {
+    const r = await fetch('https://api.airtable.com/v0/' + baseId + '/Devis/' + devisId, { headers });
+    if (!r.ok) return res.status(404).json({ error: 'Devis introuvable.' });
+    const devisRecord = await r.json();
+    const f = devisRecord.fields || {};
+    if (f['Yousign Request ID'] || f['Yousign Signer Link']) return res.status(409).json({ error: 'Ce devis se signe via le lien de signature électronique.' });
+    if (f.Statut === 'Validé' || f['Devis refusé']) return res.status(409).json({ error: 'Ce devis est déjà traité.' });
+    const ip = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim();
+    const trace = 'Signature intégrée — ' + nom + ' — ' + new Date().toISOString() + (ip ? ' — IP ' + ip : '');
+    await validerDevis(req, baseId, headers, devisRecord, { Notes: ((f.Notes ? f.Notes + '\n' : '') + trace) });
+    return res.status(200).json({ ok: true });
+  } catch (e) {
+    console.error('Signature intégrée', e);
+    return res.status(502).json({ error: 'Erreur serveur. Réessayez.' });
+  }
+}
+
+export default async function handler(req, res) {
+  // Services annexes (réécritures vercel.json) : paiement en ligne, webhook Stripe, sauvegarde.
+  // Regroupés ici car Vercel Hobby plafonne à 12 fonctions serverless.
+  const service = req.query?.service;
+  if (service === 'paiement') {
+    let corps = {};
+    try { const brut = await readRawBody(req); corps = brut.length ? JSON.parse(brut.toString('utf8')) : {}; } catch (e) { return res.status(400).json({ error: 'Requête illisible.' }); }
+    return handlePaiement(req, res, corps);
+  }
+  if (service === 'stripe') return handleStripe(req, res, await readRawBody(req));
+  if (service === 'sauvegarde') return handleSauvegarde(req, res);
+  if (service === 'rappel') return handleRappelVeille(req, res);
+  if (service === 'agenda') return handleAgenda(req, res);
+  if (service === 'signature') return handleSignatureIntegree(req, res);
+  if (req.method === 'GET') {
+    return handleDownload(req, res);
+  }
+
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  const secret = process.env.YOUSIGN_WEBHOOK_SECRET;
+  const airtableToken = process.env.AIRTABLE_TOKEN;
+
+  if (!secret || !airtableToken) {
+    console.error('YOUSIGN_WEBHOOK_SECRET ou AIRTABLE_TOKEN manquant.');
+    return res.status(500).json({ error: 'Configuration serveur incomplète.' });
+  }
+
+  const rawBody = await readRawBody(req);
+  const signatureHeader = req.headers['x-yousign-signature-256'] || '';
+  const digest = crypto.createHmac('sha256', secret).update(rawBody).digest('hex');
+  const computedSignature = 'sha256=' + digest;
+
+  const sigBuf = Buffer.from(signatureHeader);
+  const compBuf = Buffer.from(computedSignature);
+  const isValid = sigBuf.length === compBuf.length && crypto.timingSafeEqual(sigBuf, compBuf);
+
+  if (!isValid) {
+    console.error('Signature Yousign invalide — requête rejetée.');
+    return res.status(401).json({ error: 'Signature invalide' });
+  }
+
+  let payload;
+  try {
+    payload = JSON.parse(rawBody.toString('utf-8'));
+  } catch (e) {
+    return res.status(400).json({ error: 'JSON invalide' });
+  }
+
+  // On acquitte tout de suite les événements qui ne nous intéressent pas,
+  // Yousign attend un 2xx sous 1s sinon il retente l'envoi.
+  if (payload.event_name !== 'signature_request.done') {
+    return res.status(200).json({ ok: true, ignored: payload.event_name });
+  }
+
+  try {
+    const signatureRequestId = payload.data?.signature_request?.id;
+    if (!signatureRequestId) {
+      return res.status(200).json({ ok: true, note: 'Pas de signature_request.id dans le payload' });
+    }
+
+    const baseId = process.env.AIRTABLE_BASE_ID || 'appkI8RKHkYNWY86U'; // base démo Iko Suite
+    const filter = encodeURIComponent('{Yousign Request ID}="' + signatureRequestId + '"');
+    const headers = { Authorization: 'Bearer ' + airtableToken };
+
+    // Nouveau flux itemisé (table Devis, catalogue + mise en page) : on
+    // cherche en priorité ici. Ancien flux (montant libre sur le ticket)
+    // conservé en repli pour ne pas casser des liens déjà envoyés.
+    const devisSearchUrl = 'https://api.airtable.com/v0/' + baseId + '/Devis?filterByFormula=' + filter + '&maxRecords=1';
+    const devisSearchRes = await fetch(devisSearchUrl, { headers });
+    const devisSearchJson = await devisSearchRes.json();
+    const devisRecord = devisSearchJson.records?.[0];
+
+    if (devisRecord) {
+      await validerDevis(req, baseId, headers, devisRecord);
       return res.status(200).json({ ok: true, table: 'Devis' });
     }
 

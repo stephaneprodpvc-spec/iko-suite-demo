@@ -239,6 +239,22 @@ function DevisItemiseView({ devisId }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lienManquantMaisAttendu, tentativesPolling]);
 
+  // Signature intégrée (secours quand aucune demande Yousign n'existe pour ce devis).
+  const [nomSignature, setNomSignature] = React.useState("");
+  const [accepteSignature, setAccepteSignature] = React.useState(false);
+  const [signatureEnCours, setSignatureEnCours] = React.useState(false);
+  const [erreurSignature, setErreurSignature] = React.useState("");
+  const signerIntegre = async () => {
+    setSignatureEnCours(true); setErreurSignature("");
+    try {
+      const r = await fetch('/api/signature', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ devisId, nom: nomSignature.trim(), accepte: true }) });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(j.error || ('HTTP ' + r.status));
+      setResultat('accepte'); setStatutPage("termine");
+    } catch (e) { setErreurSignature("Signature impossible : " + (e.message || "erreur") + ". Réessayez dans un instant."); }
+    setSignatureEnCours(false);
+  };
+
   const refuser = async () => {
     setSaving(true);
     try {
@@ -323,11 +339,20 @@ function DevisItemiseView({ devisId }) {
             </div>
           ) : signatureIndisponible ? (
             <div>
-              <div style={{textAlign:"center",fontSize:"12px",color:F.marine,background:"#F3F4F6",border:"1px solid "+F.grisBord,borderRadius:"8px",padding:"14px 12px",marginBottom:"10px"}}>
-                <div style={{fontSize:"22px",marginBottom:"6px"}}>📞</div>
-                <div style={{fontWeight:"700",marginBottom:"4px"}}>Signature électronique momentanément indisponible</div>
-                <div style={{color:"#64748B"}}>Merci de contacter votre agence, ou de revenir un peu plus tard pour signer votre devis.</div>
+              <div style={{background:"#F3F4F6",border:"1px solid "+F.grisBord,borderRadius:"10px",padding:"14px 12px",marginBottom:"10px"}}>
+                <div style={{fontWeight:"800",color:F.marine,fontSize:"13px",marginBottom:"8px"}}>✍️ Signer mon devis</div>
+                <label style={{fontSize:"11px",fontWeight:"700",color:"#64748B",display:"block",marginBottom:"6px"}}>Nom et prénom *</label>
+                <input value={nomSignature} onChange={e => setNomSignature(e.target.value)} placeholder="Ex : Jean Dupont" style={{width:"100%",padding:"11px",borderRadius:"8px",border:"1px solid #D1D5DB",fontSize:"14px",boxSizing:"border-box",marginBottom:"10px"}}/>
+                <label style={{display:"flex",gap:"8px",alignItems:"flex-start",fontSize:"12px",color:"#374151",cursor:"pointer"}}>
+                  <input type="checkbox" checked={accepteSignature} onChange={e => setAccepteSignature(e.target.checked)} style={{marginTop:"2px",flexShrink:0}}/>
+                  <span>J'ai pris connaissance du devis et je l'accepte pour un montant de <strong>{(devis.fields["Montant TTC"]||0).toFixed(2)} € TTC</strong>.</span>
+                </label>
+                {erreurSignature && <div style={{marginTop:"8px",fontSize:"12px",color:F.rouge}}>{erreurSignature}</div>}
               </div>
+              <button onClick={signerIntegre} disabled={signatureEnCours || nomSignature.trim().length < 3 || !accepteSignature}
+                style={{width:"100%",padding:"13px",background:F.or,color:"#111",border:"none",borderRadius:"10px",fontSize:"13px",fontWeight:"900",cursor:"pointer",marginBottom:"10px",opacity:(signatureEnCours || nomSignature.trim().length < 3 || !accepteSignature)?0.5:1}}>
+                {signatureEnCours ? "⏳ Enregistrement..." : "✍️ Signer et accepter le devis"}
+              </button>
               <button onClick={() => setStatutPage("refuser")} style={{width:"100%",padding:"11px",background:"transparent",color:"#94A3B8",border:"none",fontSize:"12px",cursor:"pointer",textDecoration:"underline"}}>
                 Je refuse ce devis
               </button>
