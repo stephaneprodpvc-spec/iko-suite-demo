@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<link rel="stylesheet" href="/theme.css">
+<script src="/theme.js"></script>
+<title>Iko — Contrats d'entretien</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;font-family:-apple-system,"Segoe UI",Roboto,Arial,sans-serif;color:#0D0D0D;background:linear-gradient(160deg,#FF9A3C 0%,#FF6B00 55%,#C94F00 100%);background-attachment:fixed;padding:16px 12px 60px}
+.w{max-width:900px;margin:0 auto}
+h1{margin:0 0 4px;font-size:22px;color:#fff}.sub{margin:0 0 14px;color:rgba(255,255,255,.92);font-size:13px}
+.carte{background:rgba(255,255,255,.9);border:1px solid rgba(255,255,255,.7);border-radius:16px;padding:14px;margin-bottom:12px;box-shadow:0 8px 24px rgba(0,0,0,.14)}
+.kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px}
+.kpi{background:#0D0D0D;color:#fff;border-radius:14px;padding:12px;text-align:center}.kpi b{display:block;font-size:22px;color:#FF9A3C}.kpi span{font-size:11px;opacity:.85}
+label{display:block;font-size:11px;font-weight:700;color:#374151;margin:8px 0 4px}
+input,select,textarea{width:100%;padding:10px;border-radius:10px;border:1px solid #D1D5DB;font-size:14px;font-family:inherit;background:#fff}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:8px}@media(max-width:560px){.g2{grid-template-columns:1fr}}
+button{border:0;border-radius:10px;padding:10px 12px;font-size:13px;font-weight:800;cursor:pointer;color:#fff;background:linear-gradient(180deg,rgba(255,150,60,.97),rgba(255,107,0,.9))}
+button.n{background:#0D0D0D}button.b{background:#fff;color:#0D0D0D;border:1px solid #D1D5DB}button:disabled{opacity:.5}
+.ligne{display:flex;justify-content:space-between;gap:8px;align-items:flex-start;flex-wrap:wrap}
+.badge{display:inline-block;border-radius:20px;padding:3px 9px;font-size:11px;font-weight:800}
+.ret{background:#0D0D0D;color:#FF9A3C}.pro{background:#FF6B00;color:#fff}.ok{background:#fff;color:#0D0D0D;border:1px solid #D1D5DB}
+.actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}.petit{font-size:12px;color:#6B7280}
+.carnet{margin-top:8px;border-top:1px solid #E5E7EB;padding-top:6px;font-size:12px}
+</style>
+</head>
+<body>
+<div class="w">
+  <h1>🛠️ Contrats d'entretien</h1>
+  <p class="sub">Carnet d'entretien par client, rappel automatique avant la visite annuelle et devis de maintenance.</p>
+  <div class="kpis"><div class="kpi"><b id="kAct">0</b><span>contrats actifs</span></div><div class="kpi"><b id="kProche">0</b><span>visites sous 30 j</span></div><div class="kpi"><b id="kCA">0 €</b><span>revenu récurrent / an HT</span></div></div>
+  <div class="carte"><div class="ligne"><b>Nouveau contrat</b><button class="b" id="bForm">＋ Ajouter</button></div>
+    <form id="form" style="display:none">
+      <div class="g2"><div><label>Client *</label><input id="fNom" required></div><div><label>E-mail</label><input id="fMail" type="email"></div>
+      <div><label>Téléphone</label><input id="fTel"></div><div><label>Agence</label><input id="fAg"></div></div>
+      <label>Adresse</label><input id="fAdr">
+      <label>Équipements couverts</label><textarea id="fEq" rows="2" placeholder="Ex : 6 fenêtres PVC, 1 baie coulissante, volets roulants"></textarea>
+      <div class="g2"><div><label>Périodicité</label><select id="fPer"><option value="12">Annuelle</option><option value="6">Semestrielle</option><option value="24">Tous les 2 ans</option></select></div>
+      <div><label>Montant annuel HT (€)</label><input id="fMt" type="number" min="0" step="1"></div>
+      <div><label>Début du contrat *</label><input id="fDeb" type="date" required></div><div><label>Prochaine visite</label><input id="fProch" type="date"></div></div>
+      <div class="actions"><button type="submit">Enregistrer le contrat</button></div><div class="petit" id="fMsg"></div>
+    </form></div>
+  <div id="liste"><div class="carte petit">Chargement…</div></div>
+</div>
+<script>
+(function(){
+  var $=function(i){return document.getElementById(i)};
+  var TABLE='/api/airtable/Contrats%20entretien', WEBHOOK='/api/airtable/webhook', ctx={id:null}, contrats=[];
+  var esc=function(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})};
+  var iso=function(d){return d.toISOString().slice(0,10)};
+  var ajoutMois=function(dateIso,m){var d=new Date(dateIso+'T12:00:00');d.setMonth(d.getMonth()+m);return iso(d)};
+  var fr=function(d){return d?new Date(d+'T12:00:00').toLocaleDateString('fr-FR'):'—'};
+  var jours=function(d){return Math.round((new Date(d+'T12:00:00')-new Date(iso(new Date())+'T12:00:00'))/86400000)};
+
+  async function contexte(){
+    var r=await fetch('/api/verif-securite?action=session');
+    if(r.status===401){location.href='/auth-login.html?retour='+encodeURIComponent('/entretien.html');return false}
+    var s=await r.json();
+    if(s.role==='TENANT_ADMIN'&&s.tenantId){ctx.id=s.tenantId;return true}
+    if(s.role==='SUPER_ADMIN_IKO'){
+      var slug=new URLSearchParams(location.search).get('client');
+      try{if(slug)localStorage.setItem('iko_client_slug',slug);else slug=localStorage.getItem('iko_client_slug')}catch(e){}
+      if(slug){var rr=await fetch('/api/airtable/Clients?filterByFormula='+encodeURIComponent('{Slug}="'+slug.replace(/"/g,'')+'"')+'&maxRecords=1');var j=await rr.json();if(j.records&&j.records[0])ctx.id=j.records[0].id}
+      return true;
+    }
+    $('liste').innerHTML='<div class="carte">Accès réservé aux administrateurs.</div>';return false;
+  }
+  async function charger(){
+    var r=await fetch(TABLE+'?maxRecords=200');
+    if(!r.ok){$('liste').innerHTML='<div class="carte">Chargement impossible ('+r.status+').</div>';return}
+    var j=await r.json();
+    contrats=(j.records||[]).filter(function(c){return (c.fields['Statut contrat']||'Actif')!=='Résilié'});
+    contrats.sort(function(a,b){return (a.fields['Prochaine visite']||'9999').localeCompare(b.fields['Prochaine visite']||'9999')});
+    afficher();
+  }
+  function afficher(){
+    var actifs=contrats.filter(function(c){return (c.fields['Statut contrat']||'Actif')==='Actif'});
+    $('kAct').textContent=actifs.length;
+    $('kProche').textContent=actifs.filter(function(c){var p=c.fields['Prochaine visite'];return p&&jours(p)<=30}).length;
+    var ca=0;actifs.forEach(function(c){ca+=Number(c.fields['Montant annuel HT'])||0});
+    $('kCA').textContent=Math.round(ca).toLocaleString('fr-FR')+' €';
+    if(!contrats.length){$('liste').innerHTML='<div class="carte petit">Aucun contrat pour le moment. Ajoutez votre premier client sous contrat.</div>';return}
+    $('liste').innerHTML=contrats.map(function(c){
+      var f=c.fields,p=f['Prochaine visite'],d=p?jours(p):null,carnet=[];
+      try{carnet=JSON.parse(f['Carnet (JSON)']||'[]')}catch(e){}
+      var badge=!p?'':d<0?'<span class="badge ret">En retard de '+(-d)+' j</span>':d<=30?'<span class="badge pro">Dans '+d+' j</span>':'<span class="badge ok">Dans '+d+' j</span>';
+      var susp=(f['Statut contrat']||'Actif')==='Suspendu'?' <span class="badge ok">Suspendu</span>':'';
+      return '<div class="carte" data-id="'+c.id+'"><div class="ligne"><div><b>'+esc(f.Client)+'</b>'+susp+'<div class="petit">'+esc(f['Adresse']||'')+(f.Agence?' · '+esc(f.Agence):'')+'</div></div><div style="text-align:right">'+badge+'<div class="petit">Visite prévue : '+fr(p)+'</div></div></div>'
+        +(f['Équipements']?'<div class="petit" style="margin-top:6px">'+esc(f['Équipements'])+'</div>':'')
+        +'<div class="petit" style="margin-top:4px">'+(f['Montant annuel HT']?Number(f['Montant annuel HT']).toLocaleString('fr-FR')+' € HT/an · ':'')+'tous les '+(f['Périodicité (mois)']||12)+' mois · dernière visite : '+fr(f['Dernière visite'])+(f['Dernier rappel']?' · rappel envoyé le '+fr(f['Dernier rappel']):'')+'</div>'
+        +'<div class="actions"><button data-a="visite">✅ Visite effectuée</button><button class="n" data-a="rappel">📣 Rappeler le client</button><button class="b" data-a="devis">💶 Devis de maintenance</button><button class="b" data-a="susp">'+(susp?'Réactiver':'Suspendre')+'</button><button class="b" data-a="resilier">Résilier</button></div>'
+        +(carnet.length?'<div class="carnet"><b>📒 Carnet d\'entretien</b>'+carnet.slice().reverse().map(function(v){return '<div>'+fr(v.date)+' — '+esc(v.observations||'Visite réalisée')+(v.technicien?' ('+esc(v.technicien)+')':'')+'</div>'}).join('')+'</div>':'')
+        +'</div>';
+    }).join('');
+  }
+  async function maj(id,fields){
+    var r=await fetch(TABLE+'/'+id,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({fields:fields})});
+    if(!r.ok){alert('Enregistrement impossible ('+r.status+').');return false}
+    var c=contrats.find(function(x){return x.id===id});if(c)Object.assign(c.fields,fields);return true;
+  }
+  async function webhook(action,f,extra){
+    try{await fetch(WEBHOOK,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(Object.assign({marque:'iko',action:action,nom:f.Client,'e-mail':f.Email||'',tel:f['Téléphone']||'',agence:f.Agence||''},extra||{}))})}catch(e){}
+  }
+  $('liste').addEventListener('click',async function(e){
+    var b=e.target.closest('button[data-a]');if(!b)return;
+    var id=b.closest('[data-id]').dataset.id,c=contrats.find(function(x){return x.id===id}),f=c.fields,a=b.dataset.a;
+    b.disabled=true;
+    try{
+      if(a==='visite'){
+        var obs=prompt('Observations de la visite (facultatif) :','');if(obs===null)return;
+        var carnet=[];try{carnet=JSON.parse(f['Carnet (JSON)']||'[]')}catch(x){}
+        var aujourdhui=iso(new Date());carnet.push({date:aujourdhui,observations:obs});
+        await maj(id,{'Dernière visite':aujourdhui,'Prochaine visite':ajoutMois(aujourdhui,Number(f['Périodicité (mois)'])||12),'Carnet (JSON)':JSON.stringify(carnet)});
+      }else if(a==='rappel'){
+        if(!f.Email&&!f['Téléphone']){alert('Aucun e-mail ni téléphone pour ce client.');return}
+        await webhook('entretien_rappel',f,{date_visite:fr(f['Prochaine visite']),equipements:f['Équipements']||''});
+        await maj(id,{'Dernier rappel':iso(new Date())});
+      }else if(a==='devis'){
+        var nom='ENT-'+Date.now().toString(36).toUpperCase();
+        var r=await fetch('/api/airtable/tenant/Tickets%20SAV',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({fields:{Name:nom,Statut:'Devis à faire',Client:f.Client,Email:f.Email||'',Téléphone:f['Téléphone']||'',Adresse:f.Adresse||'',Agence:f.Agence||'',Produit:f['Équipements']||'',Problème:"Contrat d'entretien — visite de maintenance"+(f['Montant annuel HT']?' ('+f['Montant annuel HT']+' € HT/an)':'')}})});
+        alert(r.ok?'Dossier « '+nom+' » créé : retrouvez-le dans le tableau de bord (Devis à faire) pour établir le devis de maintenance.':'Création impossible ('+r.status+').');
+      }else if(a==='susp'){
+        await maj(id,{'Statut contrat':(f['Statut contrat']||'Actif')==='Suspendu'?'Actif':'Suspendu'});
+      }else if(a==='resilier'){
+        if(confirm('Résilier ce contrat ?'))await maj(id,{'Statut contrat':'Résilié'});
+        contrats=contrats.filter(function(x){return (x.fields['Statut contrat']||'Actif')!=='Résilié'});
+      }
+    }finally{b.disabled=false}
+    afficher();
+  });
+  $('bForm').onclick=function(){$('form').style.display=$('form').style.display==='none'?'block':'none'};
+  $('form').onsubmit=async function(ev){
+    ev.preventDefault();
+    var per=Number($('fPer').value)||12,deb=$('fDeb').value;
+    var fields={Client:$('fNom').value.trim(),Email:$('fMail').value.trim()||undefined,'Téléphone':$('fTel').value.trim(),Agence:$('fAg').value.trim(),Adresse:$('fAdr').value.trim(),'Équipements':$('fEq').value.trim(),
+      'Périodicité (mois)':per,'Date début':deb,'Prochaine visite':$('fProch').value||ajoutMois(deb,per),'Statut contrat':'Actif','Carnet (JSON)':'[]'};
+    if($('fMt').value)fields['Montant annuel HT']=Number($('fMt').value);
+    if(ctx.id)fields['Compte client']=[ctx.id];
+    $('fMsg').textContent='Enregistrement…';
+    var r=await fetch(TABLE,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({fields:fields})});
+    if(!r.ok){$('fMsg').textContent='Échec ('+r.status+').';return}
+    $('form').reset();$('form').style.display='none';$('fMsg').textContent='';await charger();
+  };
+  contexte().then(function(ok){if(ok)charger()});
+})();
+</script>
+</body>
+</html>

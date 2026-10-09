@@ -38,5 +38,34 @@ export async function handleRappelVeille(req, res) {
       } catch (e) { ignores++; }
     }
   } catch (e) { return res.status(502).json({ error: 'Erreur du rappel.' }); }
-  return res.status(200).json({ actif: true, date: libelle, envoyes, ignores });
+
+  // Contrats d'entretien : rappel automatique quand la visite tombe dans les 30 prochains jours
+  // (une seule fois par cycle : pas de rappel si déjà prévenu dans les 45 jours précédant la visite).
+  let entretiens = 0;
+  try {
+    const formuleEnt = 'AND({Statut contrat}="Actif", {Prochaine visite}, DATETIME_DIFF({Prochaine visite}, TODAY(), "days")>=0, DATETIME_DIFF({Prochaine visite}, TODAY(), "days")<=30, OR({Dernier rappel}=BLANK(), DATETIME_DIFF({Prochaine visite}, {Dernier rappel}, "days")>45))';
+    const re = await fetch('https://api.airtable.com/v0/' + baseId + '/Contrats%20entretien?filterByFormula=' + encodeURIComponent(formuleEnt) + '&maxRecords=100', { headers });
+    if (re.ok) {
+      const je = await re.json();
+      for (const c of (je.records || [])) {
+        const f = c.fields || {};
+        if (!f.Email && !f['Téléphone']) continue;
+        try {
+          const w = await fetch(MAKE_WEBHOOK, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ marque: 'iko', action: 'entretien_rappel', nom: f.Client, 'e-mail': f.Email || '', tel: f['Téléphone'] || '', agence: f.Agence || '',
+              date_visite: f['Prochaine visite'], equipements: f['Équipements'] || '' }),
+          });
+          if (w.ok) {
+            await fetch('https://api.airtable.com/v0/' + baseId + '/Contrats%20entretien/' + c.id, {
+              method: 'PATCH', headers: { ...headers, 'Content-Type': 'application/json' },
+              body: JSON.stringify({ fields: { 'Dernier rappel': new Date().toISOString().slice(0, 10) } }),
+            });
+            entretiens++;
+          }
+        } catch (e) { /* un contrat en échec n'empêche pas les autres */ }
+      }
+    }
+  } catch (e) { /* rappels d'entretien facultatifs */ }
+  return res.status(200).json({ actif: true, date: libelle, envoyes, ignores, entretiens });
 }

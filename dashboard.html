@@ -5889,6 +5889,7 @@ function Dashboard({ agenceAccess, onClose }) {
             style={{background:C.or,border:"none",color:"var(--iko-dark)",borderRadius:"8px",padding:"8px 14px",fontSize:"12px",fontWeight:"900",cursor:"pointer",display:"flex",alignItems:"center",gap:"6px"}}>
             📋 Devis {stats.devisEnAttente > 0 && <span style={{background:"var(--iko-bg-sombre)",color:"#fff",borderRadius:"10px",padding:"1px 6px",fontSize:"10px"}}>{stats.devisEnAttente}</span>}
           </button>
+          <a href="/entretien.html" style={{background:C.or,color:"var(--iko-dark)",borderRadius:"8px",padding:"8px 14px",fontSize:"12px",fontWeight:"900",textDecoration:"none",display:"flex",alignItems:"center",gap:"6px"}}>🛠️ Entretien</a>
           {/* TODO (plus tard, décision du patron) : mot de passe propre au bouton Central. */}
           {agenceAccess === "global" && (
           <button onClick={() => setShowModalDirigeant(true)} title="Réservé à la direction : analytics, intelligence commerciale, vue toutes agences"

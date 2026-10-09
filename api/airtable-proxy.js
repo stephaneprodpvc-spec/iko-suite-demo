@@ -190,7 +190,7 @@ const ACTIONS_WEBHOOK_AUTORISEES = [
   'devis_envoye', 'reponse_agence', 'renvoi_technicien', 'renvoi_client',
   'devis_auto_envoye', 'devis_deblocage', 'demande_note', 'rdv_commercial',
   'technicien_en_route', 'rappel_veille', 'demande_paiement', 'avis_google',
-  'piece_a_commander', 'piece_commandee', 'piece_recue',
+  'piece_a_commander', 'piece_commandee', 'piece_recue', 'entretien_rappel',
 ];
 // Whitelist separee et distincte pour le scenario metreur/BE (URL Make
 // differente ci-dessus) : jamais melangee avec la liste principale.
@@ -1202,6 +1202,7 @@ export default async function handler(req, res) {
     'Métrés': { champ: 'Compte client', filtrageListeFiable: false },
     'Agences': { champ: 'Client', filtrageListeFiable: false },
     'RDV Commercial': { champ: 'Compte client', filtrageListeFiable: false },
+    'Contrats entretien': { champ: 'Compte client', filtrageListeFiable: false },
   };
 
   if (session && session.role !== 'SUPER_ADMIN_IKO' && TABLES_TENANT_CONFIRME[premierSegment]) {
