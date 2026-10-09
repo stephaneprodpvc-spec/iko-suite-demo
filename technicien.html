@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <link rel="stylesheet" href="/theme.css">
 <script src="/theme.js"></script>
+<script src="/creneaux.js"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Iko Suite — Espace Technicien</title>
 <link rel="manifest" href="/manifest-technicien.json">
@@ -1433,7 +1434,8 @@ async function chargerNomsAgencesClient() {
       const j = await r.json();
       noms = (j.records || [])
         .filter(a => Array.isArray(a.fields["Client"]) && a.fields["Client"].includes(clientId) && a.fields["Nom agence"])
-        .map(a => a.fields["Nom agence"]);
+        .map(a => a.fields["Nom agence"])
+        .sort((x, y) => String(x).localeCompare(String(y), "fr", { numeric: true })); // ordre naturel : Agence 1, 2, 3… (et non l'ordre de saisie Airtable)
     }
   } catch (e) {}
   if (!noms.length && nbBrut) noms = Array.from({ length: plafond }, (_, i) => "Agence " + (i + 1));
@@ -2272,6 +2274,28 @@ function ModalAction({ ticket, onClose, onDone }) {
         setErreurFermeture("La fermeture du ticket a échoué (" + rFermeture.status + "). Réessayez." + (detailFermeture ? " — " + detailFermeture : ""));
         setSaving(false);
         return;
+      }
+      // Cohérence du planning : quand le technicien déplace le rendez-vous, l'ancien
+      // créneau doit être libéré et le nouveau réservé (comme côté client/tableau de bord),
+      // sinon l'agenda reste faux et le même créneau peut être reproposé à un autre client.
+      if ((mode === "replanifier" || mode === "debloquer") && newDate) {
+        try {
+          const ancienPlanningId = ticket.fields?.PlanningID || "";
+          let nouveauPlanningId = "";
+          if (window.IKO_creneaux) {
+            const libres = await window.IKO_creneaux.charger({ agence: ticket.fields?.Agence, creneau: newCreneau, date: newDate, admin: 1, clientId: window.IKO_CLIENT_ID });
+            if (libres.length) nouveauPlanningId = libres[0].id;
+          }
+          if (nouveauPlanningId && nouveauPlanningId !== ancienPlanningId) {
+            await fetch('/api/airtable/Planning/' + nouveauPlanningId, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ fields: { Statut: 'Pris' } }) });
+          }
+          if (ancienPlanningId && ancienPlanningId !== nouveauPlanningId) {
+            await fetch('/api/airtable/Planning/' + ancienPlanningId, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ fields: { Statut: 'Libre' } }) });
+          }
+          if (ancienPlanningId !== nouveauPlanningId) {
+            await fetch('/api/airtable/tenant/Tickets%20SAV/' + ticket.id, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ fields: { PlanningID: nouveauPlanningId } }) });
+          }
+        } catch (e) { console.error('Mise à jour du planning après déplacement', e); }
       }
       // Creation de l'intervention SAV (passage technicien) : apres le
       // PATCH du ticket, avant les effets secondaires (email, webhook),

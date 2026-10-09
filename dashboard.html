@@ -198,7 +198,8 @@ async function chargerNomsAgencesClient() {
       const j = await r.json();
       noms = (j.records || [])
         .filter(a => Array.isArray(a.fields["Client"]) && a.fields["Client"].includes(clientId) && a.fields["Nom agence"])
-        .map(a => a.fields["Nom agence"]);
+        .map(a => a.fields["Nom agence"])
+        .sort((x, y) => String(x).localeCompare(String(y), "fr", { numeric: true })); // ordre naturel : Agence 1, 2, 3… (et non l'ordre de saisie Airtable)
     }
   } catch (e) {}
   if (!noms.length && nbBrut) noms = Array.from({ length: plafond }, (_, i) => "Agence " + (i + 1));
