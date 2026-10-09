@@ -5,6 +5,7 @@
 // le secret CRON_SECRET (Vercel l'envoie automatiquement aux crons). Il envoie l'action « rappel_veille » au
 // scénario Make : le SMS / e-mail part seulement quand une route correspondante existe dans Make.
 import { lienSuivi } from './_suivi.js';
+import { enteteMake } from './_make.js';
 
 const MAKE_WEBHOOK = 'https://hook.eu1.make.com/n3lwi92wldkf22jcemmjfem334p4mv6a'; // scénario démo isolé (même URL que le proxy)
 
@@ -30,7 +31,7 @@ export async function handleRappelVeille(req, res) {
       try { lien = lienSuivi(null, { email: f.Email, tel: f['Téléphone'], ticket: f.Name }) || ''; } catch (e) { /* lien facultatif */ }
       try {
         const w = await fetch(MAKE_WEBHOOK, {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          method: 'POST', headers: enteteMake({ 'Content-Type': 'application/json' }),
           body: JSON.stringify({ marque: 'iko', action: 'rappel_veille', ticket: f.Name, nom: f.Client, 'e-mail': f.Email || '', tel: f['Téléphone'] || '',
             agence: f.Agence, produit: f.Produit, creneau: f['Créneau'], lien_suivi: lien }),
         });
@@ -52,7 +53,7 @@ export async function handleRappelVeille(req, res) {
         if (!f.Email && !f['Téléphone']) continue;
         try {
           const w = await fetch(MAKE_WEBHOOK, {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            method: 'POST', headers: enteteMake({ 'Content-Type': 'application/json' }),
             body: JSON.stringify({ marque: 'iko', action: 'entretien_rappel', nom: f.Client, 'e-mail': f.Email || '', tel: f['Téléphone'] || '', agence: f.Agence || '',
               date_visite: f['Prochaine visite'], equipements: f['Équipements'] || '' }),
           });
