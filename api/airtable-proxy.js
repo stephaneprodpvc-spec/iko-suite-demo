@@ -1227,6 +1227,7 @@ export default async function handler(req, res) {
     'Agences': { champ: 'Client', filtrageListeFiable: false },
     'RDV Commercial': { champ: 'Compte client', filtrageListeFiable: false },
     'Contrats entretien': { champ: 'Compte client', filtrageListeFiable: false },
+    'Techniciens': { champ: 'Compte client', filtrageListeFiable: false },
   };
 
   if (session && session.role !== 'SUPER_ADMIN_IKO' && TABLES_TENANT_CONFIRME[premierSegment]) {

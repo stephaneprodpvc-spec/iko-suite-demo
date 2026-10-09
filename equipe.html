@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<link rel="stylesheet" href="/theme.css">
+<script src="/theme.js"></script>
+<title>Iko — Équipe technique</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;font-family:-apple-system,"Segoe UI",Roboto,Arial,sans-serif;color:#0D0D0D;background:linear-gradient(160deg,#FF9A3C 0%,#FF6B00 55%,#C94F00 100%);background-attachment:fixed;padding:16px 12px 60px}
+.w{max-width:900px;margin:0 auto}
+h1{margin:0 0 4px;font-size:22px;color:#fff}.sub{margin:0 0 14px;color:rgba(255,255,255,.92);font-size:13px}
+.carte{background:rgba(255,255,255,.9);border:1px solid rgba(255,255,255,.7);border-radius:16px;padding:14px;margin-bottom:12px;box-shadow:0 8px 24px rgba(0,0,0,.14)}
+.kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px}
+.kpi{background:#0D0D0D;color:#fff;border-radius:14px;padding:12px;text-align:center}.kpi b{display:block;font-size:22px;color:#FF9A3C}.kpi span{font-size:11px;opacity:.85}
+label{display:block;font-size:11px;font-weight:700;color:#374151;margin:8px 0 4px}
+input,select,textarea{width:100%;padding:10px;border-radius:10px;border:1px solid #D1D5DB;font-size:14px;font-family:inherit;background:#fff}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:8px}@media(max-width:560px){.g2{grid-template-columns:1fr}}
+button{border:0;border-radius:10px;padding:10px 12px;font-size:13px;font-weight:800;cursor:pointer;color:#fff;background:linear-gradient(180deg,rgba(255,150,60,.97),rgba(255,107,0,.9))}
+button.n{background:#0D0D0D}button.b{background:#fff;color:#0D0D0D;border:1px solid #D1D5DB}button:disabled{opacity:.5}
+.ligne{display:flex;justify-content:space-between;gap:8px;align-items:flex-start;flex-wrap:wrap}
+.badge{display:inline-block;border-radius:20px;padding:3px 9px;font-size:11px;font-weight:800}
+.ret{background:#0D0D0D;color:#FF9A3C}.pro{background:#FF6B00;color:#fff}.ok{background:#fff;color:#0D0D0D;border:1px solid #D1D5DB}
+.actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}.petit{font-size:12px;color:#6B7280}
+.carnet{margin-top:8px;border-top:1px solid #E5E7EB;padding-top:6px;font-size:12px}
+</style>
+</head>
+<body>
+<div class="w">
+  <h1>👷 Équipe technique</h1>
+  <p class="sub">Zone, compétences et capacité de chaque technicien : le tableau de bord vous propose automatiquement le bon technicien pour chaque SAV.</p>
+  <div class="carte"><div class="ligne"><b>Nouveau technicien</b><button class="b" id="bForm">＋ Ajouter</button></div>
+    <form id="form" style="display:none">
+      <div class="g2"><div><label>Nom *</label><input id="fNom" required></div><div><label>Agence</label><input id="fAg"></div>
+      <div><label>E-mail</label><input id="fMail" type="email"></div><div><label>Téléphone</label><input id="fTel"></div></div>
+      <label>Zone d'intervention (départements ou codes postaux, séparés par des virgules)</label><input id="fZone" placeholder="31, 09, 82100">
+      <label>Compétences (mots-clés séparés par des virgules)</label><input id="fComp" placeholder="alu, pvc, volet, porte, vitrage">
+      <label>Capacité (interventions par jour)</label><input id="fCap" type="number" min="1" value="4">
+      <div class="actions"><button type="submit">Enregistrer</button></div><div class="petit" id="fMsg"></div>
+    </form></div>
+  <div id="liste"><div class="carte petit">Chargement…</div></div>
+</div>
+<script>
+(function(){
+  var $=function(i){return document.getElementById(i)};
+  var TABLE='/api/airtable/Techniciens', ctx={id:null}, items=[];
+  var esc=function(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})};
+  var ZONE='Zone (départements ou codes postaux)';
+  async function contexte(){
+    var r=await fetch('/api/verif-securite?action=session');
+    if(r.status===401){location.href='/auth-login.html?retour='+encodeURIComponent('/equipe.html');return false}
+    var s=await r.json();
+    if(s.role==='TENANT_ADMIN'&&s.tenantId){ctx.id=s.tenantId;return true}
+    if(s.role==='SUPER_ADMIN_IKO'){
+      var slug=new URLSearchParams(location.search).get('client');
+      try{if(slug)localStorage.setItem('iko_client_slug',slug);else slug=localStorage.getItem('iko_client_slug')}catch(e){}
+      if(slug){var rr=await fetch('/api/airtable/Clients?filterByFormula='+encodeURIComponent('{Slug}="'+slug.replace(/"/g,'')+'"')+'&maxRecords=1');var j=await rr.json();if(j.records&&j.records[0])ctx.id=j.records[0].id}
+      return true;
+    }
+    $('liste').innerHTML='<div class="carte">Accès réservé aux administrateurs.</div>';return false;
+  }
+  async function charger(){
+    var r=await fetch(TABLE+'?maxRecords=100');
+    if(!r.ok){$('liste').innerHTML='<div class="carte">Chargement impossible ('+r.status+').</div>';return}
+    items=(await r.json()).records||[];afficher();
+  }
+  function afficher(){
+    if(!items.length){$('liste').innerHTML='<div class="carte petit">Aucun technicien. Ajoutez votre équipe pour activer le rattachement automatique.</div>';return}
+    $('liste').innerHTML=items.map(function(t){var f=t.fields;
+      return '<div class="carte" data-id="'+t.id+'"><div class="ligne"><div><b>'+esc(f.Nom)+'</b> '+(f.Actif?'<span class="badge ok">Actif</span>':'<span class="badge ret">Inactif</span>')+'<div class="petit">'+esc(f.Agence||'')+(f.Email?' · '+esc(f.Email):'')+(f['Téléphone']?' · '+esc(f['Téléphone']):'')+'</div></div><div class="petit" style="text-align:right">'+(f['Capacité par jour']||'—')+' interv./jour</div></div>'
+        +'<div class="petit" style="margin-top:6px">📍 '+esc(f[ZONE]||'toute zone')+'<br>🔧 '+esc(f['Compétences']||'toutes compétences')+'</div>'
+        +'<div class="actions"><button class="b" data-a="act">'+(f.Actif?'Désactiver':'Activer')+'</button><button class="b" data-a="sup">Supprimer</button></div></div>'}).join('');
+  }
+  $('liste').addEventListener('click',async function(e){
+    var b=e.target.closest('button[data-a]');if(!b)return;
+    var id=b.closest('[data-id]').dataset.id,t=items.find(function(x){return x.id===id});
+    if(b.dataset.a==='act'){
+      var r=await fetch(TABLE+'/'+id,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({fields:{Actif:!t.fields.Actif}})});
+      if(r.ok)t.fields.Actif=!t.fields.Actif;else alert('Échec ('+r.status+').');
+    }else if(confirm('Supprimer ce technicien ?')){
+      var r2=await fetch(TABLE+'/'+id,{method:'DELETE'});
+      if(r2.ok)items=items.filter(function(x){return x.id!==id});else alert('Échec ('+r2.status+').');
+    }
+    afficher();
+  });
+  $('bForm').onclick=function(){$('form').style.display=$('form').style.display==='none'?'block':'none'};
+  $('form').onsubmit=async function(ev){
+    ev.preventDefault();
+    var fields={Nom:$('fNom').value.trim(),Agence:$('fAg').value.trim(),'Téléphone':$('fTel').value.trim(),Actif:true,'Capacité par jour':Number($('fCap').value)||4,'Compétences':$('fComp').value.trim()};
+    fields[ZONE]=$('fZone').value.trim();
+    if($('fMail').value.trim())fields.Email=$('fMail').value.trim();
+    if(ctx.id)fields['Compte client']=[ctx.id];
+    $('fMsg').textContent='Enregistrement…';
+    var r=await fetch(TABLE,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({fields:fields})});
+    if(!r.ok){$('fMsg').textContent='Échec ('+r.status+').';return}
+    $('form').reset();$('form').style.display='none';$('fMsg').textContent='';await charger();
+  };
+  contexte().then(function(ok){if(ok)charger()});
+})();
+</script>
+</body>
+</html>

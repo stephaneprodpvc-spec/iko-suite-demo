@@ -610,6 +610,44 @@ function PhoneChatModal({ clientName, entries, texteReponse, onChangeTexte, onEn
   );
 }
 
+// Rattachement du technicien : score = zone (code postal) + compétences (mots-clés produit/problème) + même agence − charge en cours.
+function suggererTechnicien(t, techniciens, chargeTech) {
+  const f = t.fields || {};
+  const cp = ((f.Adresse || "").match(/\b\d{5}\b/) || [""])[0];
+  const texte = ((f.Produit || "") + " " + (f["Problème"] || "")).toLowerCase();
+  const liste = (v) => String(v || "").split(/[,;\n]/).map(x => x.trim().toLowerCase()).filter(Boolean);
+  return (techniciens || []).filter(x => x.fields?.Actif).map(x => {
+    const g = x.fields || {};
+    let score = 0; const raisons = [];
+    if (cp && liste(g["Zone (départements ou codes postaux)"]).some(z => cp.startsWith(z))) { score += 50; raisons.push("secteur " + cp); }
+    const nbComp = liste(g["Compétences"]).filter(k => texte.includes(k)).length;
+    if (nbComp) { score += Math.min(30, nbComp * 15); raisons.push(nbComp + " compétence" + (nbComp > 1 ? "s" : "")); }
+    if (f.Agence && g.Agence && String(g.Agence).toLowerCase() === String(f.Agence).toLowerCase()) { score += 10; raisons.push("même agence"); }
+    const charge = chargeTech[g.Nom] || 0;
+    score -= charge * 5; raisons.push(charge + " SAV en cours");
+    if (g["Capacité par jour"] && charge >= g["Capacité par jour"] * 3) score -= 20;
+    return { nom: g.Nom, score, raisons: raisons.join(" · ") };
+  }).sort((a, b) => b.score - a.score);
+}
+
+function AssignBloc({ t, techniciens, chargeTech, onAssigner }) {
+  const propositions = React.useMemo(() => suggererTechnicien(t, techniciens, chargeTech), [t.id, techniciens, chargeTech]);
+  const actuel = t.fields?.["Technicien assigné"] || "";
+  const [choix, setChoix] = React.useState(actuel || propositions[0]?.nom || "");
+  if (!propositions.length) return null;
+  return (
+    <div style={{marginTop:"10px",padding:"8px 10px",borderRadius:"10px",background:"rgba(var(--iko-dark-rgb),0.05)",border:"1px solid "+C.border}}>
+      <div style={{fontSize:"11px",fontWeight:"800",color:"var(--iko-bg-sombre)",marginBottom:"6px"}}>👷 Technicien : {actuel || "non assigné"}{!actuel && propositions[0] ? " — suggestion : " + propositions[0].nom + " (" + propositions[0].raisons + ")" : ""}</div>
+      <div style={{display:"flex",gap:"6px"}}>
+        <select value={choix} onChange={e => setChoix(e.target.value)} style={{flex:1}}>
+          {propositions.map(p => <option key={p.nom} value={p.nom}>{p.nom} — {p.raisons}</option>)}
+        </select>
+        <button disabled={!choix || choix === actuel} onClick={() => onAssigner(t, choix)} style={{background:"var(--iko-primary)",color:"#fff",border:"none",borderRadius:"8px",padding:"8px 12px",fontWeight:"700",fontSize:"12px",cursor:"pointer",opacity:(!choix||choix===actuel)?0.5:1}}>Assigner</button>
+      </div>
+    </div>
+  );
+}
+
 function PieceBloc({ t, onPiece }) {
   const [fournisseur, setFournisseur] = React.useState(t.fields?.["Fournisseur pièce"] || "");
   const [datePrevue, setDatePrevue] = React.useState(t.fields?.["Date réception prévue"] || "");
@@ -635,7 +673,7 @@ function PieceBloc({ t, onPiece }) {
   );
 }
 
-function TicketRow({ t, onStatusChange, onAnnuler, onSupprimer, onSupprimerDefinitivement, onRenvoyerMail, onRenvoyerMailClient, onDevis, onPiece, onRepondreClient, onMarquerLu, isMessagePanelOpen, onToggleMessagePanel, onCloseMessagePanel, onRefreshTicket }) {
+function TicketRow({ t, onStatusChange, onAnnuler, onSupprimer, onSupprimerDefinitivement, onRenvoyerMail, onRenvoyerMailClient, onDevis, onPiece, techniciens, chargeTech, onAssigner, onRepondreClient, onMarquerLu, isMessagePanelOpen, onToggleMessagePanel, onCloseMessagePanel, onRefreshTicket }) {
   const [texteReponse, setTexteReponse] = React.useState("");
   const [envoiReponse, setEnvoiReponse] = React.useState(null); // null | 'sending' | 'ok'
   const nonLu = !!t.fields?.["Message client non lu"];
@@ -762,6 +800,7 @@ function TicketRow({ t, onStatusChange, onAnnuler, onSupprimer, onSupprimerDefin
         {t.fields?.["Montant devis"] && (statut === "Devis envoyé" || statut === "Devis refusé") && (
           <div style={{marginTop:"8px",fontSize:"12px",color:C.text}}>💶 Devis envoyé : <strong>{t.fields["Montant devis"]} € TTC</strong></div>
         )}
+        {techniciens && techniciens.length > 0 && !["Terminé","Annulé","Supprimé"].includes(statut) && <AssignBloc t={t} techniciens={techniciens} chargeTech={chargeTech || {}} onAssigner={onAssigner}/>}
         {statut === "Attente pièce" && <PieceBloc t={t} onPiece={onPiece}/>}
         {statut === "Devis à faire" && (
           <button onClick={() => onDevis(t)} style={{marginTop:"10px",width:"100%",background:"var(--iko-bg-sombre)",color:"#fff",border:"none",borderRadius:"8px",padding:"10px",fontWeight:"700",fontSize:"12px",cursor:"pointer"}}>
@@ -5332,6 +5371,24 @@ function Dashboard({ agenceAccess, onClose }) {
     });
   };
 
+  // Techniciens de l'équipe (table Techniciens, filtrée par client côté serveur) et charge en cours par technicien.
+  const [techniciens, setTechniciens] = React.useState([]);
+  React.useEffect(() => {
+    (async () => {
+      try { await window.IKO_CLIENT_READY; const r = await fetch('/api/airtable/Techniciens?maxRecords=100'); if (r.ok) setTechniciens((await r.json()).records || []); } catch (e) {}
+    })();
+  }, []);
+  const chargeTech = React.useMemo(() => {
+    const m = {};
+    tickets.forEach(x => { const n = x.fields?.["Technicien assigné"]; if (n && !["Terminé","Annulé","Supprimé"].includes(x.fields?.Statut)) m[n] = (m[n] || 0) + 1; });
+    return m;
+  }, [tickets]);
+  const assignerTechnicien = async (t, nom) => {
+    const r = await fetch('/api/airtable/tenant/Tickets SAV/' + t.id, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ fields: { "Technicien assigné": nom } }) });
+    if (!r.ok) { alert("Assignation impossible (" + r.status + ")."); return; }
+    setTickets(prev => prev.map(x => x.id === t.id ? { ...x, fields: { ...x.fields, "Technicien assigné": nom } } : x));
+  };
+
   // Suivi des pièces à commander : « Commandée » (fournisseur + date prévue) puis « Reçue » (le ticket repasse en
   // « Nouveau » et le client est invité par le webhook à reprendre RDV via son lien de suivi).
   const majPiece = async (t, etape, extra) => {
@@ -5890,6 +5947,7 @@ function Dashboard({ agenceAccess, onClose }) {
             📋 Devis {stats.devisEnAttente > 0 && <span style={{background:"var(--iko-bg-sombre)",color:"#fff",borderRadius:"10px",padding:"1px 6px",fontSize:"10px"}}>{stats.devisEnAttente}</span>}
           </button>
           <a href="/entretien.html" style={{background:C.or,color:"var(--iko-dark)",borderRadius:"8px",padding:"8px 14px",fontSize:"12px",fontWeight:"900",textDecoration:"none",display:"flex",alignItems:"center",gap:"6px"}}>🛠️ Entretien</a>
+          <a href="/equipe.html" style={{background:C.or,color:"var(--iko-dark)",borderRadius:"8px",padding:"8px 14px",fontSize:"12px",fontWeight:"900",textDecoration:"none",display:"flex",alignItems:"center",gap:"6px"}}>👷 Équipe</a>
           {/* TODO (plus tard, décision du patron) : mot de passe propre au bouton Central. */}
           {agenceAccess === "global" && (
           <button onClick={() => setShowModalDirigeant(true)} title="Réservé à la direction : analytics, intelligence commerciale, vue toutes agences"
@@ -6074,7 +6132,7 @@ function Dashboard({ agenceAccess, onClose }) {
               <div style={{textAlign:"center",padding:"60px",color:C.muted,border:"1px dashed "+C.border,borderRadius:"12px"}}>Aucun ticket trouvé</div>
             )}
             <div style={{display:"flex",flexDirection:"column",gap:"8px"}}>
-              {sorted.map(t => <TicketRow key={t.id} t={t} onStatusChange={updateStatus} onAnnuler={setModalAnnulation} onSupprimer={setModalSuppression} onSupprimerDefinitivement={setModalSuppressionDefinitive} onRenvoyerMail={renvoyerMailTechnicien} onRenvoyerMailClient={renvoyerMailClient} onDevis={setModalDevis} onPiece={majPiece} onRepondreClient={repondreClient} onMarquerLu={marquerMessageLu} isMessagePanelOpen={openMessageTicketId===t.id} onToggleMessagePanel={() => setOpenMessageTicketId(prev => prev===t.id ? null : t.id)} onCloseMessagePanel={() => setOpenMessageTicketId(null)} onRefreshTicket={rafraichirTicketMessage}/>)}
+              {sorted.map(t => <TicketRow key={t.id} t={t} onStatusChange={updateStatus} onAnnuler={setModalAnnulation} onSupprimer={setModalSuppression} onSupprimerDefinitivement={setModalSuppressionDefinitive} onRenvoyerMail={renvoyerMailTechnicien} onRenvoyerMailClient={renvoyerMailClient} onDevis={setModalDevis} onPiece={majPiece} techniciens={techniciens} chargeTech={chargeTech} onAssigner={assignerTechnicien} onRepondreClient={repondreClient} onMarquerLu={marquerMessageLu} isMessagePanelOpen={openMessageTicketId===t.id} onToggleMessagePanel={() => setOpenMessageTicketId(prev => prev===t.id ? null : t.id)} onCloseMessagePanel={() => setOpenMessageTicketId(null)} onRefreshTicket={rafraichirTicketMessage}/>)}
             </div>
           </div>
         )}
