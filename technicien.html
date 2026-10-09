@@ -1327,6 +1327,106 @@ function ModalDevis({ ticket, onClose, onSent }) {
 
 // ==================== /Devis professionnel ====================
 
+// ==================== Clôture terrain : cause, durée, coûts, signature, bon d'intervention ====================
+const CAUSES_SAV = ["Défaut produit","Erreur de pose","Réglage","Casse transport","Usure normale","Mauvaise utilisation client","Pièce défectueuse","Malfaçon fabrication","SAV préventif","Autre"];
+
+// Zone de signature tactile (doigt, stylet ou souris) — identique sur téléphone, tablette et PC.
+function SignaturePad({ onChange }) {
+  const ref = React.useRef(null);
+  const dessine = React.useRef(false);
+  const [vide, setVide] = React.useState(true);
+  React.useEffect(() => {
+    const c = ref.current; if (!c) return;
+    const dpr = window.devicePixelRatio || 1;
+    c.width = c.clientWidth * dpr; c.height = c.clientHeight * dpr;
+    const ctx = c.getContext("2d"); ctx.scale(dpr, dpr);
+    ctx.lineWidth = 2.4; ctx.lineCap = "round"; ctx.lineJoin = "round"; ctx.strokeStyle = "#111";
+  }, []);
+  const pos = (e) => { const r = ref.current.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
+  const debut = (e) => { e.preventDefault(); ref.current.setPointerCapture(e.pointerId); dessine.current = true; const p = pos(e); const ctx = ref.current.getContext("2d"); ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(p.x + 0.1, p.y + 0.1); ctx.stroke(); };
+  const trace = (e) => { if (!dessine.current) return; e.preventDefault(); const p = pos(e); const ctx = ref.current.getContext("2d"); ctx.lineTo(p.x, p.y); ctx.stroke(); };
+  const fin = () => { if (!dessine.current) return; dessine.current = false; setVide(false); onChange(ref.current.toDataURL("image/png")); };
+  const effacer = () => { const c = ref.current; c.getContext("2d").clearRect(0, 0, c.width, c.height); setVide(true); onChange(null); };
+  return (
+    <div>
+      <div style={{position:"relative",background:"#fff",border:"1.5px dashed rgba(255,107,0,0.6)",borderRadius:"12px",height:"130px",overflow:"hidden"}}>
+        <canvas ref={ref} onPointerDown={debut} onPointerMove={trace} onPointerUp={fin} onPointerCancel={fin}
+          style={{width:"100%",height:"100%",touchAction:"none",display:"block"}}/>
+        {vide && <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",color:"#9CA3AF",fontSize:"12px",pointerEvents:"none"}}>✍️ Le client signe ici avec le doigt</div>}
+      </div>
+      {!vide && <button type="button" onClick={effacer} style={{marginTop:"6px",background:"none",border:"none",color:"#6B7280",fontSize:"11px",textDecoration:"underline",cursor:"pointer"}}>Effacer la signature</button>}
+    </div>
+  );
+}
+
+// Bloc affiché à la fin d'une intervention : alimente les analyses « coût du SAV » et le bon d'intervention signé.
+function BlocClotureTerrain({ cause, setCause, duree, setDuree, coutPieces, setCoutPieces, setSignature }) {
+  const lib = { fontSize:"11px", color:"#6B7280", display:"block", marginBottom:"6px", fontWeight:"700" };
+  return (
+    <div style={{marginBottom:"14px"}}>
+      <label style={lib}>Cause du SAV</label>
+      <div style={{display:"flex",flexWrap:"wrap",gap:"6px",marginBottom:"12px"}}>
+        {CAUSES_SAV.map(c => (
+          <button key={c} type="button" onClick={() => setCause(cause === c ? "" : c)}
+            style={{padding:"7px 10px",borderRadius:"16px",fontSize:"11px",fontWeight:"700",cursor:"pointer",
+              border:"1px solid " + (cause === c ? "#FF6B00" : "rgba(0,0,0,0.15)"),
+              background: cause === c ? "linear-gradient(180deg, rgba(255,150,60,0.97), rgba(255,107,0,0.9))" : "rgba(255,255,255,0.7)",
+              color: cause === c ? "#fff" : "#374151"}}>{c}</button>
+        ))}
+      </div>
+      <div style={{display:"flex",gap:"10px",marginBottom:"12px"}}>
+        <div style={{flex:1}}>
+          <label style={lib}>Durée sur place (min)</label>
+          <input type="number" inputMode="numeric" min="0" value={duree} onChange={e => setDuree(e.target.value)} placeholder="Ex : 45"/>
+        </div>
+        <div style={{flex:1}}>
+          <label style={lib}>Pièces utilisées (€ HT)</label>
+          <input type="number" inputMode="decimal" min="0" step="0.01" value={coutPieces} onChange={e => setCoutPieces(e.target.value)} placeholder="Ex : 18.50"/>
+        </div>
+      </div>
+      <label style={lib}>Signature du client (bon d'intervention)</label>
+      <SignaturePad onChange={setSignature}/>
+      <div style={{fontSize:"10px",color:"#6B7280",marginTop:"6px"}}>Un bon d'intervention PDF signé est généré et envoyé au client à la validation.</div>
+    </div>
+  );
+}
+
+// Bon d'intervention PDF (preuve de passage). Renvoie un Blob, ou null si jsPDF est indisponible.
+function genererBonIntervention({ ticket, cause, duree, coutPieces, commentaire, diagnostic, signature, modePaiement }) {
+  if (!window.jspdf) return null;
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ unit: "mm", format: "a4" });
+  const f = ticket.fields || {};
+  let y = 18;
+  doc.setFont("helvetica", "bold"); doc.setFontSize(18); doc.setTextColor(255, 107, 0);
+  doc.text("Bon d'intervention", 15, y); y += 8;
+  doc.setFontSize(10); doc.setTextColor(90); doc.setFont("helvetica", "normal");
+  doc.text("N° " + (f.Name || ticket.id) + "  ·  " + new Date().toLocaleDateString("fr-FR") + "  ·  " + (f.Agence || ""), 15, y); y += 10;
+  const ligne = (titre, val) => {
+    if (!val) return;
+    doc.setFont("helvetica", "bold"); doc.setTextColor(30); doc.setFontSize(10); doc.text(titre, 15, y);
+    doc.setFont("helvetica", "normal"); doc.setTextColor(60);
+    const lignes = doc.splitTextToSize(String(val), 135);
+    doc.text(lignes, 60, y); y += Math.max(6, lignes.length * 5 + 1);
+  };
+  ligne("Client", f.Client); ligne("Adresse", f.Adresse); ligne("Téléphone", f["Téléphone"]);
+  ligne("Produit", f.Produit); ligne("Problème signalé", f["Problème"]);
+  ligne("Créneau", f["Créneau"]);
+  y += 3; doc.setDrawColor(255, 107, 0); doc.line(15, y, 195, y); y += 8;
+  ligne("Cause du SAV", cause); ligne("Durée sur place", duree ? duree + " min" : "");
+  ligne("Pièces utilisées", coutPieces ? Number(coutPieces).toFixed(2) + " € HT" : "");
+  ligne("Travaux réalisés", diagnostic || commentaire);
+  ligne("Garantie", f.Garantie); ligne("Règlement", modePaiement);
+  y = Math.max(y + 8, 215);
+  doc.setFont("helvetica", "bold"); doc.setTextColor(30); doc.text("Signature du client", 15, y); y += 3;
+  if (signature) { try { doc.addImage(signature, "PNG", 15, y, 70, 30); } catch (e) { /* signature illisible : on continue sans */ } }
+  else { doc.setFont("helvetica", "italic"); doc.setTextColor(150); doc.text("(non signé)", 15, y + 10); }
+  doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.setTextColor(130);
+  doc.text("Document généré par Iko Suite — il atteste du passage du technicien et des travaux décrits ci-dessus.", 15, 285);
+  return doc.output("blob");
+}
+// ==================== /Clôture terrain ====================
+
 // ==================== /Devis Auto (Iko) ====================
 
 // Adresse de départ par défaut par agence (modifiable par le technicien à chaque calcul d'itinéraire)
@@ -1833,6 +1933,10 @@ function ModalAction({ ticket, onClose, onDone }) {
   const [qteLigneAuto, setQteLigneAuto] = React.useState(1);
   const [emailAuto, setEmailAuto] = React.useState(ticket.fields?.Email || "");
   const [modePaiementPlace, setModePaiementPlace] = React.useState("");
+  const [causeSav, setCauseSav] = React.useState("");
+  const [dureeMin, setDureeMin] = React.useState("");
+  const [coutPieces, setCoutPieces] = React.useState("");
+  const [signatureClient, setSignatureClient] = React.useState(null);
 
   // ---- Bloc 3 - axe B : photo terrain ----
   // Réutilise l'infrastructure Cloudinary existante (même compte/preset que
@@ -2155,6 +2259,8 @@ function ModalAction({ ticket, onClose, onDone }) {
     };
     if (/^rec[A-Za-z0-9]{14}$/.test(window.IKO_USER_ID || "")) fieldsIntervention["Technicien"] = [window.IKO_USER_ID]; // ignoré si ce n'est pas un vrai identifiant Airtable (session démo/admin)
     if (diagnosticTexte) fieldsIntervention["Constat / Diagnostic"] = diagnosticTexte;
+    if ((mode === "terminer" || mode === "devis_place") && Number(dureeMin) > 0) fieldsIntervention["Durée (min)"] = Number(dureeMin);
+    if ((mode === "terminer" || mode === "devis_place") && Number(coutPieces) > 0) fieldsIntervention["Coût pièces"] = Number(coutPieces);
     // Compte client est stampe cote serveur (AUTH #008) : jamais envoye
     // depuis le navigateur.
     // NB : lignesAuto (devis sur place) ne conserve pas la distinction
@@ -2253,6 +2359,7 @@ function ModalAction({ ticket, onClose, onDone }) {
       // seul appel Airtable, et le diagnostic n'est plus perdu par oubli.
       // Ne touche rien si déjà gardé manuellement (ne pas écraser un texte
       // éventuellement mis à jour entre-temps).
+      if ((mode === "terminer" || mode === "devis_place") && causeSav) fields["Cause SAV"] = causeSav;
       if ((mode === "terminer" || mode === "devis_place") && resultatDiagnostic && !diagnosticGarde) {
         fields["IKO Diagnostic"] = formaterTexteDiagnosticMax(resultatDiagnostic);
         fields["IKO Diagnostic Date"] = new Date().toISOString();
@@ -2352,6 +2459,18 @@ function ModalAction({ ticket, onClose, onDone }) {
       if (mode === "devis_place" && lignesAuto.length > 0) {
         try { await envoyerDevisAuto(); } catch(e) { console.error('Erreur devis auto', e); }
       }
+      let lienBon = "";
+      if (mode === "terminer" || mode === "devis_place") {
+        try {
+          const blobBon = genererBonIntervention({ ticket, cause: causeSav, duree: dureeMin, coutPieces, commentaire, diagnostic: diagnosticTexte, signature: signatureClient, modePaiement: mode === "devis_place" ? modePaiementPlace : "" });
+          if (blobBon) {
+            lienBon = await uploadCloudinaryTech(new File([blobBon], "bon-" + (ticket.fields?.Name || ticket.id) + ".pdf", { type: "application/pdf" }));
+            if (lienBon) {
+              await fetch('/api/airtable/tenant/Tickets%20SAV/' + ticket.id, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fields: { "Bon intervention URL": lienBon } }) });
+            }
+          }
+        } catch (e) { console.error("Bon d'intervention non généré", e); lienBon = ""; }
+      }
       if ((mode === "terminer" || mode === "devis_place") && ticket.fields?.Email) {
         try {
           const lienNote = window.location.origin + '/avis.html?token=' + noteToken;
@@ -2361,7 +2480,7 @@ function ModalAction({ ticket, onClose, onDone }) {
               marque: 'iko', action: 'demande_note',
               ticket: ticket.fields?.Name, nom: ticket.fields?.Client, "e-mail": ticket.fields?.Email,
               agence: ticket.fields?.Agence, produit: ticket.fields?.Produit, probleme: ticket.fields?.Problème,
-              lien: lienNote
+              lien: lienNote, lien_bon_intervention: lienBon
             })
           });
         } catch(e) { console.error(e); }
@@ -2498,6 +2617,7 @@ function ModalAction({ ticket, onClose, onDone }) {
               texteDicteBrut={texteDicteBrut} setTexteDicteBrut={setTexteDicteBrut}
               structurationEnCours={structurationEnCours} structurerCompteRendu={structurerCompteRendu}
               compteRenduStructure={compteRenduStructure} utiliserCompteRenduStructure={utiliserCompteRenduStructure}/>
+            <BlocClotureTerrain cause={causeSav} setCause={setCauseSav} duree={dureeMin} setDuree={setDureeMin} coutPieces={coutPieces} setCoutPieces={setCoutPieces} setSignature={setSignatureClient}/>
             <button onClick={confirmer} disabled={saving}
               style={{width:"100%",padding:"14px",background:saving?"#D1D5DB":C.vert,color:saving?C.muted:"#fff",border:"none",borderRadius:"12px",fontSize:"14px",fontWeight:"900",cursor:saving?"not-allowed":"pointer"}}>
               {saving ? "⏳ Enregistrement..." : "✓ Confirmer — SAV terminé"}
@@ -2546,6 +2666,7 @@ function ModalAction({ ticket, onClose, onDone }) {
               structurationEnCours={structurationEnCours} structurerCompteRendu={structurerCompteRendu}
               compteRenduStructure={compteRenduStructure} utiliserCompteRenduStructure={utiliserCompteRenduStructure}/>
 
+            <BlocClotureTerrain cause={causeSav} setCause={setCauseSav} duree={dureeMin} setDuree={setDureeMin} coutPieces={coutPieces} setCoutPieces={setCoutPieces} setSignature={setSignatureClient}/>
             <button onClick={confirmer} disabled={saving||!lignesAuto.length||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailAuto.trim())||!modePaiementPlace}
               style={{width:"100%",padding:"14px",background:(saving||!lignesAuto.length||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailAuto.trim())||!modePaiementPlace)?"#D1D5DB":C.vert,color:(saving||!lignesAuto.length)?C.muted:"#fff",border:"none",borderRadius:"12px",fontSize:"14px",fontWeight:"900",cursor:saving?"not-allowed":"pointer"}}>
               {saving ? "⏳ Enregistrement..." : "💶 Confirmer devis, encaissement et intervention"}
@@ -2887,7 +3008,8 @@ function ItineraireModal({ agence, tickets, onClose }) {
   );
 }
 
-function TicketCard({ ticket, onAction, onAcquitterRdv, onEtablirDevis }) {
+function TicketCard({ ticket, onAction, onAcquitterRdv, onEtablirDevis, onEnRoute }) {
+  const [choixEta, setChoixEta] = React.useState(false);
   const urgent = ticket.fields?.Qualification === "Oui";
   const rdvModifie = ticket.fields?.["RDV modifié - notif technicien"] === true;
   // Extension Bloc 5 : même proxy createdTime que dashboard.html (aucune
@@ -2968,6 +3090,30 @@ function TicketCard({ ticket, onAction, onAcquitterRdv, onEtablirDevis }) {
         {ticket.fields?.["Montant devis"] && (isDevisEnvoye || isDevisRefuse) && (
           <div style={{fontSize:"12px",color:C.text,marginBottom:"12px"}}>💶 Devis envoyé : <strong>{ticket.fields["Montant devis"]} € TTC</strong></div>
         )}
+        {!isTermine && !isAnnule && !isEnAttenteDevis && onEnRoute && (() => {
+          const depuis = ticket.fields?.["En route depuis"] ? new Date(ticket.fields["En route depuis"]) : null;
+          const enRoute = depuis && (Date.now() - depuis.getTime()) < 4 * 3600000;
+          if (enRoute) {
+            const arr = ticket.fields?.["Arrivée estimée"] ? new Date(ticket.fields["Arrivée estimée"]).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Paris" }) : "";
+            return <div style={{marginBottom:"10px",padding:"10px 12px",borderRadius:"12px",background:"rgba(255,107,0,0.12)",border:"1px solid rgba(255,107,0,0.4)",fontSize:"12px",fontWeight:"800",color:C.or}}>🚗 Client prévenu — arrivée vers {arr}</div>;
+          }
+          if (!choixEta) return (
+            <button onClick={() => setChoixEta(true)}
+              style={{width:"100%",marginBottom:"10px",padding:"12px",background:"rgba(255,107,0,0.10)",border:"1px solid rgba(255,107,0,0.45)",color:C.or,borderRadius:"12px",fontSize:"13px",fontWeight:"900",cursor:"pointer"}}>
+              🚗 Je pars — prévenir le client
+            </button>);
+          return (
+            <div style={{marginBottom:"10px",padding:"10px 12px",borderRadius:"12px",background:"rgba(255,107,0,0.08)",border:"1px solid rgba(255,107,0,0.35)"}}>
+              <div style={{fontSize:"11px",fontWeight:"800",color:C.muted,marginBottom:"8px"}}>J'arrive chez le client dans environ :</div>
+              <div style={{display:"flex",gap:"6px",flexWrap:"wrap"}}>
+                {[10,15,20,30,45,60].map(m => (
+                  <button key={m} onClick={() => { setChoixEta(false); onEnRoute(ticket, m); }}
+                    style={{flex:"1 1 auto",padding:"10px 8px",borderRadius:"10px",border:"1px solid #FF6B00",background:"linear-gradient(180deg, rgba(255,150,60,0.97), rgba(255,107,0,0.9))",color:"#fff",fontWeight:"900",fontSize:"13px",cursor:"pointer"}}>{m} min</button>
+                ))}
+              </div>
+              <button onClick={() => setChoixEta(false)} style={{marginTop:"8px",background:"none",border:"none",color:C.muted,fontSize:"11px",textDecoration:"underline",cursor:"pointer"}}>Annuler</button>
+            </div>);
+        })()}
         {!isTermine && !isAnnule && !isEnAttenteDevis && (
           <button onClick={() => onAction(ticket)}
             style={{width:"100%",padding:"16px",background:C.or,color:"var(--iko-dark)",border:"none",borderRadius:"12px",fontSize:"15px",fontWeight:"900",cursor:"pointer"}}>
@@ -3128,6 +3274,26 @@ function Technicien({ agence, onClose }) {
         body:JSON.stringify({fields:{"RDV modifié - notif technicien": false}})
       });
     } catch(e) { console.error(e); }
+  };
+
+  // « Je pars » : enregistre l'heure d'arrivée estimée (visible dans le suivi du client) et prévient le client
+  // par le webhook (le SMS / e-mail part via le scénario Make, avec le lien de suivi personnel).
+  const partirEnRoute = async (ticket, minutes) => {
+    const maintenant = new Date();
+    const arrivee = new Date(maintenant.getTime() + minutes * 60000);
+    const champs = { "En route depuis": maintenant.toISOString(), "Arrivée estimée": arrivee.toISOString() };
+    setTickets(prev => prev.map(t => t.id === ticket.id ? { ...t, fields: { ...t.fields, ...champs } } : t));
+    try {
+      await fetch('/api/airtable/tenant/Tickets%20SAV/' + ticket.id, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fields: champs }) });
+      await fetch(WEBHOOK, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          marque: 'iko', action: 'technicien_en_route',
+          ticket: ticket.fields?.Name, nom: ticket.fields?.Client, "e-mail": ticket.fields?.Email || '', tel: ticket.fields?.["Téléphone"] || '',
+          agence: ticket.fields?.Agence, minutes, arrivee: arrivee.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Paris' })
+        })
+      });
+    } catch (e) { console.error(e); }
   };
 
   const todayStr = new Date().toLocaleDateString('fr-FR');
@@ -3535,7 +3701,7 @@ function Technicien({ agence, onClose }) {
           </div>
         )}
         <div style={{display:"flex",flexDirection:"column",gap:"12px"}}>
-          {filtered.map(t => <TicketCard key={t.id} ticket={t} onAction={setSelectedTicket} onAcquitterRdv={acquitterRdv} onEtablirDevis={setTicketDevis}/>)}
+          {filtered.map(t => <TicketCard key={t.id} ticket={t} onAction={setSelectedTicket} onAcquitterRdv={acquitterRdv} onEtablirDevis={setTicketDevis} onEnRoute={partirEnRoute}/>)}
         </div>
         {lastRefresh && <div style={{textAlign:"center",fontSize:"9px",color:C.muted,marginTop:"20px"}}>Dernière mise à jour : {lastRefresh}</div>}
       </div>

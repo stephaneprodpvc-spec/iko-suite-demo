@@ -828,6 +828,20 @@ function App() {
               )}
             </div>
 
+            {!isStatutClos(statut) && ticket.fields?.["En route depuis"] && (Date.now() - new Date(ticket.fields["En route depuis"]).getTime()) < 4 * 3600000 && (
+              <div style={{background:"linear-gradient(180deg, rgba(255,150,60,0.97), rgba(255,107,0,0.92))",color:"#fff",borderRadius:"14px",padding:"16px 18px",marginBottom:"16px",boxShadow:"0 6px 20px rgba(255,107,0,0.35)"}}>
+                <div style={{fontSize:"15px",fontWeight:"900"}}>🚗 Votre technicien est en route</div>
+                {ticket.fields?.["Arrivée estimée"] && <div style={{fontSize:"13px",marginTop:"4px"}}>Arrivée prévue vers <b>{new Date(ticket.fields["Arrivée estimée"]).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Paris" })}</b></div>}
+              </div>
+            )}
+
+            {statut === "Terminé" && ticket.fields?.["Bon intervention URL"] && (
+              <a href={ticket.fields["Bon intervention URL"]} target="_blank" rel="noopener noreferrer"
+                style={{display:"block",textAlign:"center",textDecoration:"none",background:F.blanc,border:"1px solid "+F.grisBord,borderRadius:"12px",padding:"13px",marginBottom:"16px",fontWeight:"800",fontSize:"13px",color:F.marine}}>
+                📄 Télécharger mon bon d'intervention signé
+              </a>
+            )}
+
             {statut === "Terminé" && (
               <AvisPanel ticket={ticket} onEnvoye={(n, c) => setTicket(prev => ({ ...prev, fields: { ...prev.fields, Note: n, "Note Commentaire": c } }))}/>
             )}
