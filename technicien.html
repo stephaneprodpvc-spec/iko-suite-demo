@@ -2206,7 +2206,7 @@ function ModalAction({ ticket, onClose, onDone }) {
         fields["Note Token"] = noteToken;
       } else if (mode === "devis_place") {
         fields.Statut = "Terminé";
-        fields["Mode paiement"] = modePaiementPlace;
+        fields["Mode paiement"] = ({ "CB":"CB", "Chèque":"CHEQUE", "Virement":"VIREMENT", "Signature électronique":"SIGNATURE" })[modePaiementPlace] || modePaiementPlace;
         if (commentaire) fields.Commentaire = commentaire;
         noteToken = Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-6);
         fields["Note Token"] = noteToken;
@@ -2267,7 +2267,7 @@ function ModalAction({ ticket, onClose, onDone }) {
         // une fermeture réussie). Le technicien reste sur l'écran, voit
         // l'erreur, et peut réessayer.
         let detailFermeture = "";
-        try { const dataFermeture = await rFermeture.json(); detailFermeture = dataFermeture?.error || ""; } catch (e) { /* corps non-JSON, ignore */ }
+        try { const dataFermeture = await rFermeture.json(); const e0 = dataFermeture?.error; detailFermeture = typeof e0 === "string" ? e0 : (e0?.message || (e0 ? JSON.stringify(e0) : "")); } catch (e) { /* corps non-JSON, ignore */ }
         console.error('Échec fermeture ticket SAV — HTTP ' + rFermeture.status + (detailFermeture ? ' : ' + detailFermeture : ''));
         setErreurFermeture("La fermeture du ticket a échoué (" + rFermeture.status + "). Réessayez." + (detailFermeture ? " — " + detailFermeture : ""));
         setSaving(false);
