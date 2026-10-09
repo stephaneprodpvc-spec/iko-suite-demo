@@ -1215,9 +1215,10 @@ function ModalDevis({ ticket, onClose, onSent }) {
     return (
       <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
         <div className="modal-box" style={{maxWidth:"520px"}}>
-          <div style={{fontSize:"16px",fontWeight:"900",color:C.white,marginBottom:"10px"}}>✓ Devis créé — diagnostic</div>
-          <div style={{background:"var(--iko-dark)",color:"var(--iko-primary)",borderRadius:"8px",padding:"12px",fontFamily:"monospace",fontSize:"10.5px",whiteSpace:"pre-wrap",wordBreak:"break-all",marginBottom:"14px",maxHeight:"320px",overflow:"auto"}}>
-            {JSON.stringify(debugEnvoi, null, 2)}
+          <div style={{textAlign:"center",padding:"10px 0 16px"}}>
+            <div style={{fontSize:"42px"}}>✅</div>
+            <div style={{fontSize:"17px",fontWeight:"900",color:C.white,marginTop:"6px"}}>Devis envoyé au client</div>
+            <div style={{fontSize:"12px",color:C.muted,marginTop:"4px"}}>{numeroDevis} · {montantTTC.toFixed(2)} € TTC</div>
           </div>
           {!debugEnvoi?.yousignOk && (
             <div style={{background:C.rougeDim,border:"1px solid rgba(var(--iko-erreur-rgb),0.3)",borderRadius:"8px",padding:"8px 12px",fontSize:"11px",color:C.rouge,marginBottom:"14px"}}>
@@ -1227,11 +1228,6 @@ function ModalDevis({ ticket, onClose, onSent }) {
           {debugEnvoi?.webhookStatut && debugEnvoi.webhookStatut >= 300 && (
             <div style={{background:C.rougeDim,border:"1px solid rgba(var(--iko-erreur-rgb),0.3)",borderRadius:"8px",padding:"8px 12px",fontSize:"11px",color:C.rouge,marginBottom:"14px"}}>
               ⚠️ Le webhook Make a répondu avec le statut {debugEnvoi.webhookStatut} — l'email n'a probablement pas été envoyé.
-            </div>
-          )}
-          {debugEnvoi?.webhookStatut && debugEnvoi.webhookStatut < 300 && (
-            <div style={{background:"#F3F4F6",border:"1px solid "+C.border,borderRadius:"8px",padding:"8px 12px",fontSize:"11px",color:C.muted,marginBottom:"14px"}}>
-              Le webhook Make a bien été accepté (statut {debugEnvoi.webhookStatut}). Si aucun email n'arrive, le souci est dans le scénario Make lui-même (pas dans le code de l'app) — vérifie son historique d'exécution.
             </div>
           )}
           <button onClick={() => { onSent(); }} style={{width:"100%",padding:"11px",background:"var(--iko-bg-sombre)",color:"#fff",border:"none",borderRadius:"10px",fontSize:"13px",fontWeight:"900",cursor:"pointer"}}>
@@ -1245,10 +1241,6 @@ function ModalDevis({ ticket, onClose, onSent }) {
   return (
     <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
       <div className="modal-box" style={{maxWidth:etape==="apercu"?"820px":"600px",width:"95%"}}>
-        <div style={{display:"flex",gap:"6px",marginBottom:"10px",fontSize:"11px",fontWeight:"800"}}>
-          <span style={{padding:"3px 10px",borderRadius:"12px",background:etape==="edition"?C.or:"rgba(0,0,0,0.06)",color:etape==="edition"?"#fff":C.muted}}>1 · Lignes</span>
-          <span style={{padding:"3px 10px",borderRadius:"12px",background:etape==="apercu"?C.or:"rgba(0,0,0,0.06)",color:etape==="apercu"?"#fff":C.muted}}>2 · Aperçu & envoi</span>
-        </div>
         <div style={{fontSize:"16px",fontWeight:"900",color:C.white,marginBottom:"4px"}}>💶 Établir le devis</div>
         <div style={{fontSize:"12px",color:C.or,fontFamily:"monospace",marginBottom:"14px"}}>{ticket.fields?.Name} — {ticket.fields?.Client}</div>
         {ticket.fields?.Diagnostic && (
@@ -1289,7 +1281,7 @@ function ModalDevis({ ticket, onClose, onSent }) {
           </div>
         </div>
         <div style={{background:"#F3F4F6",border:"1px solid "+C.border,borderRadius:"8px",padding:"9px 12px",fontSize:"11px",color:C.muted,marginBottom:"14px"}}>
-          Le PDF reprend le logo, l'identité de l'entreprise et les mentions légales (SIRET, TVA, décennale, validité, paiement). Tu le vérifies à l'étape suivante avant l'envoi.
+          Le PDF reprend le logo, l'identité de l'entreprise et les mentions légales (SIRET, TVA, décennale, validité, paiement). Tu peux le vérifier avec « Voir le PDF avant » ou envoyer directement.
         </div>
         </>)}
         {etape === "apercu" && (
@@ -1301,13 +1293,23 @@ function ModalDevis({ ticket, onClose, onSent }) {
         )}
         {error && <div style={{background:C.rougeDim,border:"1px solid rgba(var(--iko-erreur-rgb),0.3)",borderRadius:"8px",padding:"8px 12px",fontSize:"11px",color:C.rouge,marginBottom:"14px"}}>{error}</div>}
         {etape === "edition" ? (
-          <div style={{display:"flex",gap:"10px",alignItems:"center",flexWrap:"wrap"}}>
-            <button onClick={onClose} style={{flex:1,padding:"11px",background:"transparent",color:C.muted,border:"1px solid "+C.border,borderRadius:"10px",fontSize:"12px",cursor:"pointer"}}>Annuler</button>
-            <button onClick={voirApercu} disabled={saving||!lignes.length||!emailValide}
-              style={{flex:2,padding:"11px",background:saving||!lignes.length||!emailValide?"#D1D5DB":C.or,color:"#fff",border:"none",borderRadius:"10px",fontSize:"13px",fontWeight:"900",cursor:saving||!lignes.length||!emailValide?"not-allowed":"pointer"}}>
-              {saving ? "⏳ Génération..." : "👁️ Voir l'aperçu du devis"}
+          <div style={{display:"flex",flexDirection:"column",gap:"8px"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",padding:"10px 14px",background:"rgba(255,107,0,0.10)",border:"1px solid rgba(255,107,0,0.35)",borderRadius:"12px"}}>
+              <span style={{fontSize:"12px",fontWeight:"800",color:C.muted}}>Total TTC</span>
+              <span style={{fontSize:"20px",fontWeight:"900",color:C.or}}>{montantTTC.toFixed(2)} €</span>
+            </div>
+            <button onClick={envoyer} disabled={saving||!lignes.length||!emailValide||(!clientInfo&&!demoCat)}
+              style={{width:"100%",padding:"15px",background:(saving||!lignes.length||!emailValide)?"#D1D5DB":"linear-gradient(180deg, rgba(255,150,60,0.97), rgba(255,107,0,0.9))",color:"#fff",border:"none",borderRadius:"12px",fontSize:"15px",fontWeight:"900",cursor:(saving||!lignes.length||!emailValide)?"not-allowed":"pointer"}}>
+              {saving ? "⏳ Envoi en cours..." : "📧 Envoyer le devis au client"}
             </button>
-            {(!lignes.length || !emailValide) && <div style={{flexBasis:"100%",fontSize:"11px",color:C.muted,textAlign:"right"}}>{!lignes.length ? "Ajoute au moins une ligne" : "Renseigne un e-mail client valide"} pour continuer.</div>}
+            {(!lignes.length || !emailValide) && <div style={{fontSize:"11px",color:C.muted,textAlign:"center"}}>{!lignes.length ? "Ajoute au moins une ligne" : "Renseigne un e-mail client valide"} pour envoyer.</div>}
+            <div style={{display:"flex",gap:"8px"}}>
+              <button onClick={onClose} style={{flex:1,padding:"10px",background:"transparent",color:C.muted,border:"1px solid "+C.border,borderRadius:"10px",fontSize:"12px",cursor:"pointer"}}>Annuler</button>
+              <button onClick={voirApercu} disabled={saving||!lignes.length||!emailValide}
+                style={{flex:1,padding:"10px",background:"transparent",color:C.or,border:"1px solid "+C.orBord,borderRadius:"10px",fontSize:"12px",fontWeight:"700",cursor:"pointer",opacity:(saving||!lignes.length||!emailValide)?0.5:1}}>
+                👁️ Voir le PDF avant
+              </button>
+            </div>
           </div>
         ) : (
           <div style={{display:"flex",gap:"10px"}}>

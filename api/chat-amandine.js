@@ -411,7 +411,18 @@ async function executerOutil(nom, input, clientId, tradeId, agencesObjets) {
     if (!agencesNoms.includes(input.agence)) {
       return { erreur: "Agence invalide." };
     }
-    const numero = "SAV-" + new Date().getFullYear() + "-" + (Math.floor(Math.random() * 9000) + 1000);
+    // Numéro tiré au hasard (4 chiffres) : on vérifie qu'il n'existe pas déjà pour éviter deux tickets
+    // avec le même numéro (suivi client et recherche se baseraient sur le mauvais dossier).
+    let numero = "";
+    for (let essai = 0; essai < 6; essai++) {
+      const candidat = "SAV-" + new Date().getFullYear() + "-" + (Math.floor(Math.random() * 9000) + 1000);
+      numero = candidat;
+      try {
+        const rDoublon = await fetch("https://api.airtable.com/v0/" + AIRTABLE_BASE + "/Tickets%20SAV?filterByFormula=" + encodeURIComponent('{Name}="' + candidat + '"') + "&maxRecords=1&fields%5B%5D=Name", { headers: airtableHeaders() });
+        const jDoublon = await rDoublon.json();
+        if (!(jDoublon.records || []).length) break;
+      } catch (e) { break; }
+    }
     const garantieTexte = input.garantie === "oui" ? "Oui - Facture " + (input.numero_facture || "") : input.garantie === "non" ? "Non / Hors garantie" : "N/A";
     const agenceInfo = (agencesObjets || []).find(function (a) { return a.nom === input.agence; });
 
