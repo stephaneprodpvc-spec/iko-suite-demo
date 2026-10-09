@@ -27,6 +27,7 @@ import webpush from 'web-push';
 import { verifierSession, verifierDebit, verifierOrigine } from './_securite.js';
 import { lienSuivi, lireJeton, normaliserEmail, normaliserTel } from './_suivi.js';
 import { creneauxLibres, identDepuisClientId, AGENCES_DEMO } from './_planning.js';
+import { enteteMake } from './_make.js';
 
 // Champs d'un ticket renvoyes au client par la route publique "suivi"
 // (liste blanche : ni e-mail, ni telephone, ni adresse, ni notes internes).
@@ -342,7 +343,7 @@ async function relayerWebhook(req, res, urlCible, actionsAutorisees, ctx) {
       if (valeur !== undefined) qs.append(cle, valeur);
     }
     try {
-      const webhookRes = await fetch(urlCible + (qs.toString() ? '?' + qs.toString() : ''));
+      const webhookRes = await fetch(urlCible + (qs.toString() ? '?' + qs.toString() : ''), { headers: enteteMake() });
       return res.status(webhookRes.ok ? 200 : 502).json({ ok: webhookRes.ok });
     } catch (err) {
       console.error('Erreur relais webhook Make (GET):', err);
@@ -403,7 +404,7 @@ async function relayerWebhook(req, res, urlCible, actionsAutorisees, ctx) {
   try {
     const webhookRes = await fetch(urlCible, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: enteteMake({ 'Content-Type': 'application/json' }),
       body: JSON.stringify(corpsRelaye),
     });
     // Nouvelle demande d'un client pro : rattache le ticket au client (best-effort, non bloquant).

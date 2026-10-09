@@ -17,6 +17,7 @@ import vocabMenuiserie from "./_trades/menuiserie.js";
 import vocabPlomberieChauffage from "./_trades/plomberie_chauffage.js";
 import { extraireConnaissanceDuRecord, blocPromptConnaissance, affinerPourPrompt } from "./_connaissance.js";
 import { nomAssistant as resoudreNomAssistant, NOMS_PAR_DEFAUT } from "./_assistants.js";
+import { enteteMake } from './_make.js';
 
 // Vocabulaire parametrable par metier (voir trades/*.js). Menuiserie reste
 // le repli par defaut pour ne rien casser sur les clients demo existants.
@@ -456,7 +457,7 @@ async function executerOutil(nom, input, clientId, tradeId, agencesObjets) {
 
     const r = await fetch(MAKE_WEBHOOK, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: enteteMake({ "Content-Type": "application/json" }),
       body: JSON.stringify(payload),
     });
     if (!r.ok) {

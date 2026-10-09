@@ -17,6 +17,7 @@ import crypto from 'crypto';
 import { handlePaiement, handleStripe, handleSauvegarde } from './_paiement.js';
 import { handleRappelVeille } from './_rappels.js';
 import { handleAgenda } from './_agenda.js';
+import { enteteMake } from './_make.js';
 
 export const config = {
   api: {
@@ -189,7 +190,7 @@ export default async function handler(req, res) {
               const montantTTC = Number(devisRecord.fields?.["Montant TTC"]) || 0;
               await fetch('https://hook.eu1.make.com/n3lwi92wldkf22jcemmjfem334p4mv6a', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: enteteMake({ 'Content-Type': 'application/json' }),
                 body: JSON.stringify({
                   marque: 'iko', action: 'devis_signe',
                   ticket: devisRecord.fields?.["N° devis"] || '',
