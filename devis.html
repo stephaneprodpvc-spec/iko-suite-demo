@@ -144,6 +144,20 @@ function DevisItemiseView({ devisId }) {
   const [categorieRefus, setCategorieRefus] = React.useState("Non précisé");
   const CATEGORIES_REFUS = ["Prix trop élevé", "Délai trop long", "Concurrent choisi", "Projet abandonné / reporté", "Produit / prestation non conforme", "Autre", "Non précisé"];
   const [saving, setSaving] = React.useState(false);
+  const [paiementEnCours, setPaiementEnCours] = React.useState(false);
+  const [paiementMsg, setPaiementMsg] = React.useState("");
+  const retourPaiement = new URLSearchParams(window.location.search).get('paiement');
+  // Paiement en ligne (Stripe) : le montant est recalculé côté serveur à partir du devis signé.
+  const payer = async (type) => {
+    setPaiementEnCours(true); setPaiementMsg("");
+    try {
+      const r = await fetch('/api/paiement', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ devisId, type }) });
+      const j = await r.json().catch(() => ({}));
+      if (r.ok && j.url) { window.location.href = j.url; return; }
+      setPaiementMsg(r.status === 503 ? "Le paiement en ligne n'est pas encore activé : votre agence vous indiquera comment régler." : (j.error || "Le paiement n'a pas pu démarrer, merci de réessayer."));
+    } catch (e) { setPaiementMsg("Le paiement n'a pas pu démarrer, merci de réessayer."); }
+    setPaiementEnCours(false);
+  };
   const [resultat, setResultat] = React.useState(null); // 'accepte' | 'refuse'
   const [refreshing, setRefreshing] = React.useState(false);
   // Vérification automatique du lien Yousign (cause n°2) : évite d'exiger un
@@ -365,6 +379,27 @@ function DevisItemiseView({ devisId }) {
           {devis?.fields?.["Date intervention proposée"] && (
             <div style={{background:F.marine,borderRadius:"10px",padding:"12px",color:F.or,fontWeight:"700",fontSize:"13px"}}>
               {new Date(devis.fields["Date intervention proposée"] + 'T12:00:00').toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}
+            </div>
+          )}
+          {retourPaiement === 'ok' && (
+            <div style={{marginTop:"14px",background:"#ECFDF5",border:"1px solid #A7F3D0",borderRadius:"10px",padding:"12px",color:"#065F46",fontSize:"13px",fontWeight:"700"}}>💳 Merci, votre paiement a bien été reçu. Une confirmation vous sera envoyée.</div>
+          )}
+          {devis?.fields?.["Statut paiement"] !== "Payé" && retourPaiement !== 'ok' && (
+            <div style={{marginTop:"14px"}}>
+              {devis?.fields?.["Statut paiement"] !== "Acompte reçu" && (
+                <button onClick={() => payer('acompte')} disabled={paiementEnCours}
+                  style={{width:"100%",padding:"14px",background:F.or,color:"#fff",border:"none",borderRadius:"10px",fontSize:"14px",fontWeight:"900",cursor:paiementEnCours?"wait":"pointer"}}>
+                  {paiementEnCours ? "⏳ Redirection…" : "💳 Payer l'acompte (30 %) en ligne"}
+                </button>
+              )}
+              {devis?.fields?.["Statut paiement"] === "Acompte reçu" && (
+                <button onClick={() => payer('solde')} disabled={paiementEnCours}
+                  style={{width:"100%",padding:"14px",background:F.or,color:"#fff",border:"none",borderRadius:"10px",fontSize:"14px",fontWeight:"900",cursor:paiementEnCours?"wait":"pointer"}}>
+                  {paiementEnCours ? "⏳ Redirection…" : "💳 Régler le solde en ligne"}
+                </button>
+              )}
+              {paiementMsg && <div style={{marginTop:"8px",fontSize:"12px",color:"#B45309"}}>{paiementMsg}</div>}
+              <div style={{marginTop:"6px",fontSize:"10px",color:"#94A3B8"}}>Paiement sécurisé par carte bancaire. Facultatif : vous pouvez aussi régler selon les conditions du devis.</div>
             </div>
           )}
         </div>
