@@ -5674,34 +5674,29 @@ function Dashboard({ agenceAccess, onClose }) {
         </div>
         {amandineErreur && <div style={{color:"var(--iko-erreur)",fontSize:"12px",marginTop:"10px"}}>{amandineErreur}</div>}
 
-        <div style={{marginTop:"26px",width:"90%",maxWidth:"380px",display:"flex",gap:"8px"}}>
+        <div style={{marginTop:"26px",width:"90%",maxWidth:"460px",display:"flex",gap:"10px",alignItems:"center"}}>
+          <button
+              onPointerDown={() => { debloquerVoixIOS(); lancerEcouteAmandine(); }}
+              onPointerUp={arreterEcouteAmandine}
+              onPointerLeave={arreterEcouteAmandine}
+              onPointerCancel={arreterEcouteAmandine}
+              style={{flexShrink:0,width:"56px",height:"56px",borderRadius:"50%",background:amandineEcoute?"var(--iko-erreur)":"radial-gradient(circle at 35% 30%, var(--iko-primary-pale), var(--iko-primary) 55%, var(--iko-primary-fonce) 100%)",border:"none",color:"#fff",cursor:"pointer",fontSize:"24px",boxShadow:"0 6px 24px rgba(var(--iko-primary-rgb),0.45)"}}>
+              🎙️
+            </button>
           <input id="ikoChampTexte" type="text" value={amandineTexte}
             onChange={e => setAmandineTexte(e.target.value)}
             onKeyDown={e => { if (e.key === "Enter" && amandineTexte.trim()) { debloquerVoixIOS(); envoyerAmandine(amandineTexte.trim()); setAmandineTexte(""); } }}
             placeholder="Tapez ou dictez (🎤 sur le clavier)"
-            style={{flex:1,padding:"12px 14px",borderRadius:"10px",background:"#1a1a1a",border:"1px solid rgba(var(--iko-primary-rgb),0.3)",color:"#fff",fontSize:"14px"}}/>
+            style={{flex:1,minWidth:0,padding:"14px",borderRadius:"12px",background:"#1a1a1a",border:"1px solid rgba(var(--iko-primary-rgb),0.3)",color:"#fff",fontSize:"14px"}}/>
           <button onClick={() => { if (amandineTexte.trim()) { debloquerVoixIOS(); envoyerAmandine(amandineTexte.trim()); setAmandineTexte(""); } }}
-            style={{padding:"12px 16px",borderRadius:"10px",background:"var(--iko-primary)",border:"none",color:"var(--iko-dark)",fontWeight:"800",cursor:"pointer"}}>
+            style={{flexShrink:0,width:"48px",height:"48px",borderRadius:"12px",background:"var(--iko-primary)",border:"none",color:"#fff",fontWeight:"800",cursor:"pointer",fontSize:"18px"}}>
             →
           </button>
         </div>
-
-        <div style={{position:"fixed",bottom:"36px",left:"36px"}}>
-          <button
-            onPointerDown={() => { debloquerVoixIOS(); lancerEcouteAmandine(); }}
-            onPointerUp={arreterEcouteAmandine}
-            onPointerLeave={arreterEcouteAmandine}
-            onPointerCancel={arreterEcouteAmandine}
-            style={{width:"64px",height:"64px",borderRadius:"50%",background:amandineEcoute?"var(--iko-erreur)":"var(--iko-primary)",border:"none",color:"var(--iko-dark)",cursor:"pointer",fontSize:"26px",boxShadow:"0 6px 24px rgba(var(--iko-primary-rgb),0.4)",touchAction:"none",userSelect:"none"}}>
-            🎙️
-          </button>
-        </div>
-        <div style={{position:"fixed",bottom:"36px",right:"36px"}}>
-          <button onClick={() => setVueMode("tableau")}
-            style={{padding:"16px 22px",borderRadius:"30px",background:"#1a1a1a",border:"1px solid rgba(var(--iko-primary-rgb),0.35)",color:"#fff",cursor:"pointer",fontSize:"13px",fontWeight:"700"}}>
-            📊 Voir le tableau
-          </button>
-        </div>
+        <button onClick={() => setVueMode("tableau")}
+          style={{marginTop:"16px",padding:"14px 30px",borderRadius:"14px",background:"linear-gradient(180deg, rgba(255,150,60,0.97), rgba(255,107,0,0.9))",border:"1px solid rgba(255,255,255,0.5)",color:"#fff",cursor:"pointer",fontSize:"14px",fontWeight:"800",boxShadow:"0 6px 18px rgba(255,107,0,0.4)"}}>
+          📊 Voir le tableau
+        </button>
         <style>{`
           @keyframes ikoRespire{0%,100%{transform:scale(1);}50%{transform:scale(1.06);}}
           @keyframes ikoPulseRapide{0%,100%{transform:scale(1);}50%{transform:scale(1.12);}}

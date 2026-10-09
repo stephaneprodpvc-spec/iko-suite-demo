@@ -2594,13 +2594,8 @@ function Technicien({ agence, onClose }) {
         <div style={{position:"absolute",top:"20px",left:"20px",color:"#8a8a8a",fontSize:"12px",letterSpacing:"2px",textTransform:"uppercase"}}>
           {agence === "global" ? "Toutes agences" : agence}
         </div>
-        <button onClick={() => setVueMode("liste")}
-          style={{position:"absolute",top:"14px",right:"14px",padding:"10px 16px",borderRadius:"20px",background:"#1a1a1a",border:"1px solid rgba(var(--iko-primary-rgb),0.35)",color:"#fff",cursor:"pointer",fontSize:"12px",fontWeight:"700"}}>
-          📋 Mes tickets
-        </button>
         <div style={{width:"220px",height:"220px",borderRadius:"50%",
-          background:"radial-gradient(circle at 35% 30%, #4a4a4a, var(--iko-bg-sombre) 55%, #000000 100%)",
-          border:"2px solid var(--iko-primary)",
+          background:"radial-gradient(circle at 35% 30%, var(--iko-primary-pale), var(--iko-primary) 55%, var(--iko-primary-fonce) 100%)",
           boxShadow:"0 0 90px rgba(var(--iko-primary-rgb),0.35)",
           animation: maxEcoute ? "pulseMaxEcran 1s ease-in-out infinite" : "respireMax 3.2s ease-in-out infinite"}}/>
         <div style={{marginTop:"32px",color:"#b8b8b8",fontSize:"14px",maxWidth:"320px",textAlign:"center",minHeight:"40px",lineHeight:"1.5",padding:"0 16px"}}>
@@ -2608,23 +2603,29 @@ function Technicien({ agence, onClose }) {
         </div>
         {maxErreur && <div style={{color:"var(--iko-erreur)",fontSize:"12px",marginTop:"10px",padding:"0 16px",textAlign:"center"}}>{maxErreur}</div>}
 
-        <div style={{position:"fixed",bottom:"28px",left:"16px",right:"16px",display:"flex",gap:"10px",alignItems:"center"}}>
+        <div style={{position:"fixed",bottom:"28px",left:"16px",right:"16px",display:"flex",flexDirection:"column",gap:"14px",alignItems:"center"}}>
+          <div style={{display:"flex",gap:"10px",alignItems:"center",width:"100%",maxWidth:"460px"}}>
+          <button
+            onPointerDown={() => { debloquerVoixIOS(); lancerEcouteMax(); }}
+            onPointerUp={arreterEcouteMax}
+            onPointerLeave={arreterEcouteMax}
+            onPointerCancel={arreterEcouteMax}
+            style={{flexShrink:0,width:"56px",height:"56px",borderRadius:"50%",background:maxEcoute?"var(--iko-erreur)":"radial-gradient(circle at 35% 30%, var(--iko-primary-pale), var(--iko-primary) 55%, var(--iko-primary-fonce) 100%)",border:"none",color:"#fff",cursor:"pointer",fontSize:"24px",boxShadow:"0 6px 24px rgba(var(--iko-primary-rgb),0.45)"}}>
+            🎙️
+          </button>
           <input id="maxChampTexte" type="text" value={maxTexte}
             onChange={e => setMaxTexte(e.target.value)}
             onKeyDown={e => { if (e.key === "Enter" && maxTexte.trim()) { debloquerVoixIOS(); envoyerMax(maxTexte.trim()); setMaxTexte(""); } }}
             placeholder="Tapez ou dictez..."
             style={{flex:1,minWidth:0,padding:"14px",borderRadius:"12px",background:"#1a1a1a",border:"1px solid rgba(var(--iko-primary-rgb),0.3)",color:"#fff",fontSize:"14px"}}/>
           <button onClick={() => { if (maxTexte.trim()) { debloquerVoixIOS(); envoyerMax(maxTexte.trim()); setMaxTexte(""); } }}
-            style={{flexShrink:0,width:"48px",height:"48px",borderRadius:"12px",background:"var(--iko-primary)",border:"none",color:"var(--iko-dark)",fontWeight:"800",cursor:"pointer",fontSize:"18px"}}>
+            style={{flexShrink:0,width:"48px",height:"48px",borderRadius:"12px",background:"var(--iko-primary)",border:"none",color:"#fff",fontWeight:"800",cursor:"pointer",fontSize:"18px"}}>
             →
           </button>
-          <button
-            onPointerDown={() => { debloquerVoixIOS(); lancerEcouteMax(); }}
-            onPointerUp={arreterEcouteMax}
-            onPointerLeave={arreterEcouteMax}
-            onPointerCancel={arreterEcouteMax}
-            style={{flexShrink:0,width:"48px",height:"48px",borderRadius:"50%",background:maxEcoute?"var(--iko-erreur)":"radial-gradient(circle at 35% 30%, #4a4a4a, var(--iko-bg-sombre) 55%, #000000 100%)",border:"2px solid var(--iko-primary)",color:"#fff",cursor:"pointer",fontSize:"20px",boxShadow:"0 6px 24px rgba(var(--iko-primary-rgb),0.35)",touchAction:"none",userSelect:"none"}}>
-            🎙️
+          </div>
+          <button onClick={() => setVueMode("liste")}
+            style={{padding:"14px 30px",borderRadius:"14px",background:"linear-gradient(180deg, rgba(255,150,60,0.97), rgba(255,107,0,0.9))",border:"1px solid rgba(255,255,255,0.5)",color:"#fff",cursor:"pointer",fontSize:"14px",fontWeight:"800",boxShadow:"0 6px 18px rgba(255,107,0,0.4)"}}>
+            📋 Mes tickets
           </button>
         </div>
         <style>{`
