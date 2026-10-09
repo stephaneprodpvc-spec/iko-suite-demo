@@ -341,7 +341,7 @@
   var paramsUrl = new URLSearchParams(window.location.search);
   var clientSlug = paramsUrl.get('client');
   if (clientSlug) { localStorage.setItem('iko_client_slug', clientSlug); }
-  else { clientSlug = localStorage.getItem('iko_client_slug'); }
+  else { clientSlug = null; try { localStorage.removeItem('iko_client_slug'); } catch (e) {} }
 
   const SUGGESTIONS = [
     "PVC ou aluminium ?",

@@ -55,7 +55,7 @@ button.n{background:#0D0D0D}button.b{background:#fff;color:#0D0D0D;border:1px so
     if(s.role==='TENANT_ADMIN'&&s.tenantId){ctx.id=s.tenantId;return true}
     if(s.role==='SUPER_ADMIN_IKO'){
       var slug=new URLSearchParams(location.search).get('client');
-      try{if(slug)localStorage.setItem('iko_client_slug',slug);else slug=localStorage.getItem('iko_client_slug')}catch(e){}
+      try{if(slug)localStorage.setItem('iko_client_slug',slug);else{slug=null;localStorage.removeItem('iko_client_slug')}}catch(e){}
       if(slug){var rr=await fetch('/api/airtable/Clients?filterByFormula='+encodeURIComponent('{Slug}="'+slug.replace(/"/g,'')+'"')+'&maxRecords=1');var j=await rr.json();if(j.records&&j.records[0])ctx.id=j.records[0].id}
       return true;
     }

@@ -113,7 +113,7 @@ window.IKO_CLIENT_READY = (async function () {
     var params = new URLSearchParams(window.location.search);
     var slug = params.get('client');
     if (slug) { localStorage.setItem('iko_client_slug', slug); }
-    else { slug = localStorage.getItem('iko_client_slug'); }
+    else { slug = null; try { localStorage.removeItem('iko_client_slug'); } catch (e) {} } // IKO DEMO : sans ?client= on reste toujours en démo (aucun client mémorisé)
     if (!slug) return null;
     var formule = encodeURIComponent('{Slug}="' + slug + '"');
     var r = await fetch('/api/airtable/Clients?filterByFormula=' + formule + '&maxRecords=1', {});
