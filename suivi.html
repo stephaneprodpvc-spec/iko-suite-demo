@@ -286,6 +286,15 @@ function AvisPanel({ ticket, onEnvoye }) {
   const [envoi, setEnvoi] = React.useState(false);
   const [erreur, setErreur] = React.useState(false);
   const dejaNote = typeof ticket.fields?.Note === "number";
+  const [lienGoogle, setLienGoogle] = React.useState("");
+  const compteId = (ticket.fields?.["Compte client"] || [])[0];
+  React.useEffect(() => {
+    if (!compteId) return;
+    fetch('/api/airtable/Clients/' + compteId).then(r => r.json()).then(d => {
+      const l = d && d.fields && d.fields["Lien avis Google"];
+      if (typeof l === "string" && /^https?:\/\//.test(l)) setLienGoogle(l);
+    }).catch(() => {});
+  }, [compteId]);
   const carte = {background:F.blanc,border:"1px solid "+F.grisBord,borderRadius:"14px",padding:"22px",boxShadow:"0 4px 20px rgba(0,0,0,0.05)",marginBottom:"16px"};
 
   if (dejaNote) {
@@ -295,6 +304,11 @@ function AvisPanel({ ticket, onEnvoye }) {
         <div style={{fontSize:"26px",marginBottom:"6px"}}>{"⭐".repeat(n)}{"☆".repeat(Math.max(0, 5 - n))}</div>
         <div style={{fontSize:"14px",fontWeight:"800",color:F.marine}}>Merci pour votre avis !</div>
         {ticket.fields?.["Note Commentaire"] && <div style={{fontSize:"12px",color:"#6B7280",marginTop:"6px",fontStyle:"italic"}}>« {ticket.fields["Note Commentaire"]} »</div>}
+        {n >= 4 && lienGoogle && (
+          <a href={lienGoogle} target="_blank" rel="noopener noreferrer"
+            style={{display:"block",textDecoration:"none",marginTop:"14px",padding:"12px",background:F.or,color:"#fff",borderRadius:"10px",fontSize:"13px",fontWeight:"800"}}>⭐ Laisser aussi un avis sur Google</a>
+        )}
+        {n <= 2 && <div style={{marginTop:"12px",fontSize:"12px",fontWeight:"700",color:F.marine}}>Nous sommes désolés — l'agence va vous recontacter rapidement.</div>}
       </div>
     );
   }

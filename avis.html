@@ -47,6 +47,7 @@ function App() {
   const [noteHover, setNoteHover] = React.useState(0);
   const [commentaire, setCommentaire] = React.useState("");
   const [saving, setSaving] = React.useState(false);
+  const [lienGoogle, setLienGoogle] = React.useState("");
 
   const token = new URLSearchParams(window.location.search).get('token');
 
@@ -65,6 +66,7 @@ function App() {
           const respClient = await fetch('/api/airtable/Clients/' + compteClientIdAvis);
           const dataClient = await respClient.json();
           if (dataClient?.fields?.["Accès bloqué"] === true) { setStatutPage("bloque"); return; }
+          if (/^https?:\/\//.test(dataClient?.fields?.["Lien avis Google"] || "")) setLienGoogle(dataClient.fields["Lien avis Google"]);
         } catch (e) {}
       }
       setTicket(t);
@@ -149,6 +151,16 @@ function App() {
             <div style={{fontSize:"40px",marginBottom:"10px"}}>🙏</div>
             <div style={{fontSize:"16px",fontWeight:"900",color:F.marine,marginBottom:"6px"}}>Merci pour votre avis !</div>
             <div style={{fontSize:"13px",color:"#64748B"}}>Il nous aide à améliorer notre service.</div>
+            {note >= 4 && lienGoogle && (
+              <div style={{marginTop:"18px"}}>
+                <div style={{fontSize:"13px",color:F.marine,fontWeight:"700",marginBottom:"10px"}}>Content de notre intervention ? Un avis Google nous aiderait beaucoup :</div>
+                <a href={lienGoogle} target="_blank" rel="noopener noreferrer"
+                  style={{display:"block",textDecoration:"none",padding:"14px",background:F.or,color:"#fff",borderRadius:"10px",fontSize:"14px",fontWeight:"900"}}>⭐ Laisser un avis sur Google</a>
+              </div>
+            )}
+            {note <= 2 && (
+              <div style={{marginTop:"16px",fontSize:"13px",color:F.marine,fontWeight:"700"}}>Nous sommes désolés. Notre équipe va vous recontacter rapidement pour trouver une solution.</div>
+            )}
           </div>
         )}
 

@@ -839,6 +839,10 @@
         <input type="number" id="fMontantDiag" min="0" step="0.01" placeholder="Ex : 45.00" style="width:100%;padding:12px 14px;border-radius:13px;border:1px solid var(--border);background:rgba(255,255,255,0.04);color:var(--texte);font-size:13.5px;outline:none;font-family:inherit;">
         <div class="hint" style="font-size:11px;color:var(--texte-faint);margin-top:5px;">Facturé au client non garanti et non existant si le technicien n'a pas le matériel sur place. Déduit automatiquement si le devis proposé ensuite est accepté.</div>
 
+        <label>Lien avis Google (facultatif)</label>
+        <input type="url" id="fLienGoogle" placeholder="https://g.page/r/…/review" style="width:100%;padding:12px 14px;border-radius:13px;border:1px solid var(--border);background:rgba(255,255,255,0.04);color:var(--texte);font-size:13.5px;outline:none;font-family:inherit;">
+        <div class="hint" style="font-size:11px;color:var(--texte-faint);margin-top:5px;margin-bottom:12px;">Proposé automatiquement aux clients qui donnent 4 ou 5 étoiles après leur SAV.</div>
+
         <div id="agencesWrap" style="display:none;">
           <button type="button" class="secondary" id="agencesToggleBtn" style="width:100%;text-align:left;display:flex;justify-content:space-between;align-items:center;margin-top:18px;">
             <span>Agences <span id="agencesCount" style="color:var(--texte-faint);font-weight:400;"></span></span><span id="agencesChevron">▾</span>
@@ -1873,6 +1877,7 @@ function chargerDansFormulaire(id){
   document.getElementById("fAccesBloque").checked = f["Accès bloqué"] === true;
   document.getElementById("fNbAgences").value = f["Nombre agences"] || 1;
   document.getElementById("fMontantDiag").value = f["Montant diagnostic HT"] != null ? f["Montant diagnostic HT"] : "";
+  document.getElementById("fLienGoogle").value = f["Lien avis Google"] || "";
   setModulesActifs(f["Modules actifs"]);
   dessinerDiagramme();
   document.getElementById("submitBtn").textContent = "Enregistrer les modifications";
@@ -2786,6 +2791,7 @@ function reinitialiserFormulaire(){
   document.getElementById("diagramWrap").style.display = "none";
   document.getElementById("fNbAgences").value = 1;
   document.getElementById("fMontantDiag").value = "";
+  document.getElementById("fLienGoogle").value = "";
   document.getElementById("agencesWrap").style.display = "none";
   document.getElementById("utilisateursWrap").style.display = "none";
   document.getElementById("questionnaireWrap").style.display = "none";
@@ -2816,7 +2822,8 @@ document.getElementById("clientForm").addEventListener("submit", function(e){
     "Code postal": document.getElementById("fCodePostal").value.trim(),
     "Ville": document.getElementById("fVille").value.trim(),
     "Nombre agences": Math.max(1, Math.min(10, parseInt(document.getElementById("fNbAgences").value, 10) || 1)),
-    "Montant diagnostic HT": document.getElementById("fMontantDiag").value.trim() === "" ? null : Math.max(0, parseFloat(document.getElementById("fMontantDiag").value) || 0)
+    "Montant diagnostic HT": document.getElementById("fMontantDiag").value.trim() === "" ? null : Math.max(0, parseFloat(document.getElementById("fMontantDiag").value) || 0),
+    "Lien avis Google": /^https?:\/\//.test(document.getElementById("fLienGoogle").value.trim()) ? document.getElementById("fLienGoogle").value.trim() : null
   };
   if (logoUrl) fields["Logo"] = [{ url: logoUrl }];
 
