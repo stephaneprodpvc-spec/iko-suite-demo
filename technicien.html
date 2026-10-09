@@ -2603,8 +2603,8 @@ function Technicien({ agence, onClose }) {
         </div>
         {maxErreur && <div style={{color:"var(--iko-erreur)",fontSize:"12px",marginTop:"10px",padding:"0 16px",textAlign:"center"}}>{maxErreur}</div>}
 
-        <div style={{position:"fixed",bottom:"28px",left:"16px",right:"16px",display:"flex",flexDirection:"column",gap:"14px",alignItems:"center"}}>
-          <div style={{display:"flex",gap:"10px",alignItems:"center",width:"100%",maxWidth:"460px"}}>
+        <div style={{marginTop:"26px",width:"90%",maxWidth:"460px",display:"flex",flexDirection:"column",gap:"16px",alignItems:"center"}}>
+          <div style={{display:"flex",gap:"10px",alignItems:"center",width:"100%"}}>
           <button
             onPointerDown={() => { debloquerVoixIOS(); lancerEcouteMax(); }}
             onPointerUp={arreterEcouteMax}
