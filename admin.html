@@ -570,6 +570,7 @@
         <div class="menu-item" id="actionActualiser"><span class="ico">↻</span>Actualiser la liste</div>
         <div class="menu-sep"></div>
         <div class="menu-item" id="actionVerifSecu"><span class="ico">◇</span>Vérification sécurité</div>
+        <div class="menu-item" id="actionSauvegarde"><span class="ico">⬇</span><span id="actionSauvegardeTxt">Sauvegarde complète (JSON)</span></div>
       </div>
     </div>
   </div>
@@ -3377,6 +3378,35 @@ document.getElementById("chatInput").addEventListener("keydown", function(e){
   });
   var actionActualiser = document.getElementById("actionActualiser");
   if (actionActualiser) actionActualiser.addEventListener("click", chargerClients);
+  // Sauvegarde complète : télécharge toutes les tables en un seul fichier JSON (réversibilité / RGPD).
+  var actionSauv = document.getElementById("actionSauvegarde");
+  if (actionSauv) actionSauv.addEventListener("click", async function(){
+    var txt = document.getElementById("actionSauvegardeTxt");
+    if (actionSauv.dataset.encours === "1") return;
+    actionSauv.dataset.encours = "1";
+    try {
+      var rl = await fetch("/api/sauvegarde?liste=1"); var jl = await rl.json();
+      if (!rl.ok) throw new Error(jl.error || "Accès refusé");
+      var sortie = { genere_le: new Date().toISOString(), tables: {} };
+      for (var i = 0; i < jl.tables.length; i++) {
+        var nom = jl.tables[i], offset = "", tous = [];
+        do {
+          txt.textContent = "Sauvegarde… " + nom + " (" + (i + 1) + "/" + jl.tables.length + ")";
+          var r = await fetch("/api/sauvegarde?table=" + encodeURIComponent(nom) + (offset ? "&offset=" + encodeURIComponent(offset) : ""));
+          var j = await r.json();
+          if (!r.ok) throw new Error(nom + " : " + (j.error || r.status));
+          tous = tous.concat(j.records); offset = j.offset || "";
+        } while (offset);
+        sortie.tables[nom] = tous;
+      }
+      var blob = new Blob([JSON.stringify(sortie, null, 1)], { type: "application/json" });
+      var a = document.createElement("a"); a.href = URL.createObjectURL(blob);
+      a.download = "iko-sauvegarde-" + new Date().toISOString().slice(0, 10) + ".json";
+      document.body.appendChild(a); a.click(); a.remove();
+      txt.textContent = "Sauvegarde terminée ✓";
+    } catch (e) { txt.textContent = "Sauvegarde échouée : " + e.message; }
+    setTimeout(function(){ txt.textContent = "Sauvegarde complète (JSON)"; actionSauv.dataset.encours = "0"; }, 4000);
+  });
   var actionVerif = document.getElementById("actionVerifSecu");
   if (actionVerif) actionVerif.addEventListener("click", function(){
     var boutonVerif = document.getElementById("verifRunBtn");

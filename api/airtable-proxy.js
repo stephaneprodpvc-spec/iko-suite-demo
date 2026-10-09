@@ -492,6 +492,31 @@ function journaliserSansSession(req, premierSegment) {
   } catch (e) { /* la journalisation ne doit jamais casser une requete */ }
 }
 
+// Journal d'audit (RGPD / traçabilité) : une ligne par écriture réussie. Ne contient JAMAIS les valeurs
+// saisies, seulement les noms des champs touchés. Best-effort : n'empêche jamais l'action principale.
+async function journaliser({ baseId, token, session, methode, table, recordId, champs, statut }) {
+  try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 1500);
+    await fetch('https://api.airtable.com/v0/' + baseId + '/Journal%20actions', {
+      method: 'POST', signal: ctrl.signal,
+      headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fields: {
+        'Action': methode + ' ' + table,
+        'Date': new Date().toISOString(),
+        'Utilisateur': session && session.userId ? String(session.userId) : 'public',
+        'Rôle': session && session.role ? String(session.role) : 'public',
+        'Tenant': session && session.tenantId ? String(session.tenantId) : '',
+        'Table': table,
+        'Enregistrement': recordId || '',
+        'Champs modifiés': (champs || []).join(', ').slice(0, 1500),
+        'HTTP': statut,
+      } }),
+    });
+    clearTimeout(timer);
+  } catch (e) { /* silencieux : le journal ne doit jamais bloquer le service */ }
+}
+
 export default async function handler(req, res) {
   const token = process.env.AIRTABLE_TOKEN;
   const appSecret = process.env.APP_PROXY_SECRET;
@@ -637,6 +662,14 @@ export default async function handler(req, res) {
 
   if (premierSegment.toLowerCase() === 'utilisateurs') {
     return res.status(403).json({ error: 'Accès à cette ressource non autorisé via ce proxy.' });
+  }
+
+  // Journal d'audit : alimenté UNIQUEMENT par ce serveur (voir journaliser ci-dessous). Écriture interdite
+  // via le proxy ; lecture réservée au super-admin IKO (poste de pilotage).
+  if (premierSegment.toLowerCase() === 'journal actions' || premierSegment.toLowerCase() === 'journal%20actions') {
+    if (req.method !== 'GET' || !session || session.role !== 'SUPER_ADMIN_IKO') {
+      return res.status(403).json({ error: 'Accès à cette ressource non autorisé via ce proxy.' });
+    }
   }
 
   // CORRECTION SECURITE #1 — recherche publique d'un ticket par numero.
@@ -1575,6 +1608,11 @@ export default async function handler(req, res) {
           }
         });
       }
+    }
+    if (req.method !== 'GET' && req.method !== 'HEAD' && airtableRes.ok && premierSegment.toLowerCase() !== 'journal actions') {
+      const corps = req.body || {};
+      const champs = Object.keys(corps.fields || (Array.isArray(corps.records) && corps.records[0] && corps.records[0].fields) || {});
+      await journaliser({ baseId, token, session, methode: req.method, table: premierSegment, recordId: subPathRaw.split('/').filter(Boolean)[1] || '', champs, statut: airtableRes.status });
     }
     res.status(airtableRes.status).json(data);
   } catch (err) {
