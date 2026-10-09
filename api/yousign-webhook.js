@@ -15,6 +15,7 @@
 import { creneauxLibres, identDepuisClientId } from './_planning.js';
 import crypto from 'crypto';
 import { handlePaiement, handleStripe, handleSauvegarde } from './_paiement.js';
+import { handleRappelVeille } from './_rappels.js';
 
 export const config = {
   api: {
@@ -66,6 +67,7 @@ export default async function handler(req, res) {
   }
   if (service === 'stripe') return handleStripe(req, res, await readRawBody(req));
   if (service === 'sauvegarde') return handleSauvegarde(req, res);
+  if (service === 'rappel') return handleRappelVeille(req, res);
   if (req.method === 'GET') {
     return handleDownload(req, res);
   }
