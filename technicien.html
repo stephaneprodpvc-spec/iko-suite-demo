@@ -2149,7 +2149,7 @@ function ModalAction({ ticket, onClose, onDone }) {
       "Date intervention": new Date().toISOString().slice(0, 10),
       "Statut intervention": statutIntervention,
     };
-    if (window.IKO_USER_ID) fieldsIntervention["Technicien"] = [window.IKO_USER_ID];
+    if (/^rec[A-Za-z0-9]{14}$/.test(window.IKO_USER_ID || "")) fieldsIntervention["Technicien"] = [window.IKO_USER_ID]; // ignoré si ce n'est pas un vrai identifiant Airtable (session démo/admin)
     if (diagnosticTexte) fieldsIntervention["Constat / Diagnostic"] = diagnosticTexte;
     // Compte client est stampe cote serveur (AUTH #008) : jamais envoye
     // depuis le navigateur.
@@ -2175,7 +2175,7 @@ function ModalAction({ ticket, onClose, onDone }) {
         // detail retourne par le serveur et on remonte un resultat clair
         // a confirmer(), qui decide de l'affichage.
         let detail = "";
-        try { const data = await r.json(); detail = data?.error || ""; } catch (e) { /* corps non-JSON, ignore */ }
+        try { const data = await r.json(); const e1 = data?.error; detail = typeof e1 === "string" ? e1 : (e1?.message || (e1 ? JSON.stringify(e1) : "")); if (data?.details && typeof data.details === "string") detail += " " + data.details; } catch (e) { /* corps non-JSON, ignore */ }
         console.error('Échec création intervention SAV — HTTP ' + r.status + (detail ? ' : ' + detail : ''));
         return { ok: false, statut: r.status, detail };
       }
