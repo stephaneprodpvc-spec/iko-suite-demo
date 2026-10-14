@@ -25,7 +25,7 @@
 
 import webpush from 'web-push';
 import { alerter } from './_alertes.js';
-import { photosHtml, adressesPhotos, ajouterMailsAuCorps } from './_mail.js';
+import { photosHtml, adressesPhotos, ajouterMailsAuCorps, marqueClient } from './_mail.js';
 import { verifierSession, verifierDebit, verifierOrigine } from './_securite.js';
 import { lienSuivi, lireJeton, normaliserEmail, normaliserTel } from './_suivi.js';
 import { creneauxLibres, identDepuisClientId, AGENCES_DEMO } from './_planning.js';
@@ -406,7 +406,9 @@ async function relayerWebhook(req, res, urlCible, actionsAutorisees, ctx) {
       if (lien) corpsRelaye.lien_suivi = lien;
     }
   }
-  ajouterMailsAuCorps(corpsRelaye, actionDemandee); // mail_objet / mail_html déjà prêts pour Make
+  // Mails aux couleurs du client pro (fiche « Clients » de l'Admin) ; sans client identifié : orange et noir IKO.
+  const marqueMail = await marqueClient(/^rec/.test(clientARattacher || '') ? clientARattacher : (ctx && ctx.tenantId) || null);
+  ajouterMailsAuCorps(corpsRelaye, actionDemandee, marqueMail); // mail_objet / mail_html déjà prêts pour Make
   try {
     const webhookRes = await fetch(urlCible, {
       method: 'POST',
@@ -746,7 +748,7 @@ export default async function handler(req, res) {
   }
 
   if (subPathRaw === 'webhook') {
-    return relayerWebhook(req, res, MAKE_WEBHOOK_URL, ACTIONS_WEBHOOK_AUTORISEES, { baseId, headers });
+    return relayerWebhook(req, res, MAKE_WEBHOOK_URL, ACTIONS_WEBHOOK_AUTORISEES, { baseId, headers, tenantId: session && session.tenantId });
   }
 
   if (subPathRaw === 'creneaux') {

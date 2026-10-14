@@ -6,7 +6,23 @@
 
 const ADRESSE_AUTORISEE = /^https:\/\/res\.cloudinary\.com\/[A-Za-z0-9_\-./%]+$/;
 const ADRESSE_LOCALE = /^http:\/\/localhost:\d+\/__iko-local\/fichier\/[A-Za-z0-9_\-.]+$/; // mode local uniquement
-const OR = '#FF6B00', NOIR = '#0D0D0D';
+const OR_IKO = '#FF6B00', NOIR_IKO = '#0D0D0D';
+let OR = OR_IKO, NOIR = NOIR_IKO, NOM_MARQUE = 'Iko Suite', SIGLE = 'IKO', MARQUE_CLIENT = false;
+const HEX = /^#[0-9a-fA-F]{6}$/;
+const luminance = (hex) => { const c = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255).map((v) => (v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4))); return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]; };
+const ratio = (a, b) => { const x = luminance(a), y = luminance(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); };
+const contraste = (fond) => (luminance(fond) > 0.45 ? '#0D0D0D' : '#FFFFFF');          // texte lisible sur ce fond
+const lisible = (fg, fond) => (ratio(fg, fond) >= 3 ? fg : contraste(fond));              // couleur d'accent lisible sur ce fond
+// marque : { nom, principale, secondaire } (fiche client dans l'Admin). Couleurs invalides ou absentes : orange et noir IKO.
+function appliquerMarque(m) {
+  m = m || {};
+  const pro = !!(m.nom || m.principale || m.secondaire);
+  MARQUE_CLIENT = pro;
+  OR = HEX.test(m.principale || '') ? m.principale : OR_IKO;
+  NOIR = HEX.test(m.secondaire || '') ? m.secondaire : (pro ? '#111111' : NOIR_IKO);
+  NOM_MARQUE = pro && m.nom ? String(m.nom).slice(0, 60) : 'Iko Suite';
+  SIGLE = pro && m.nom ? String(m.nom).trim().split(/\s+/).map((w) => w[0]).join('').slice(0, 3).toUpperCase() : 'IKO';
+}
 const URL_SURE = /^(https:\/\/[^\s"'<>]+|http:\/\/localhost:\d+\/[^\s"'<>]*)$/;
 
 const esc = (t) => String(t == null ? '' : t).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -26,12 +42,13 @@ export function photosHtml(photos) {
 }
 
 // ---------- éléments de mise en page ----------
-const ligne = (l, v) => `<tr><td style="padding:8px 0;width:36%;font:700 12px Arial,sans-serif;color:#6B6B6B;text-transform:uppercase;letter-spacing:.5px;vertical-align:top;">${l}</td><td style="padding:8px 0;font:14px Arial,sans-serif;color:${NOIR};vertical-align:top;">${v}</td></tr>`;
+const ligne = (l, v) => `<tr><td style="padding:8px 0;width:36%;font:700 12px Arial,sans-serif;color:#6B6B6B;text-transform:uppercase;letter-spacing:.5px;vertical-align:top;">${l}</td><td style="padding:8px 0;font:14px Arial,sans-serif;color:#0D0D0D;vertical-align:top;">${v}</td></tr>`;
 const recap = (lignes) => `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-top:1px solid #EEE;margin:18px 0 6px;">${lignes.filter(([, v]) => v !== '' && v != null).map(([l, v]) => ligne(l, v)).join('')}</table>`;
-const bouton = (texte, url) => (lien(url) ? `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:22px auto 6px;"><tr><td style="background:${OR};border-radius:10px;"><a href="${esc(lien(url))}" style="display:inline-block;padding:14px 30px;font:700 15px Arial,sans-serif;color:#FFFFFF;text-decoration:none;">${esc(texte)}</a></td></tr></table>` : '');
-const encart = (html, fond = '#FFF3EA', bord = OR) => `<div style="background:${fond};border-left:4px solid ${bord};border-radius:8px;padding:14px 16px;margin:18px 0;font:14px/1.5 Arial,sans-serif;color:${NOIR};">${html}</div>`;
+const bouton = (texte, url) => (lien(url) ? `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:22px auto 6px;"><tr><td style="background:${OR};border-radius:10px;"><a href="${esc(lien(url))}" style="display:inline-block;padding:14px 30px;font:700 15px Arial,sans-serif;color:${contraste(OR)};text-decoration:none;">${esc(texte)}</a></td></tr></table>` : '');
+const teinte = (hex, a) => `rgba(${[1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16)).join(',')},${a})`; // fond léger de la couleur du client
+const encart = (html, fond = null, bord = OR) => `<div style="background:${fond || teinte(OR, 0.1)};border-left:4px solid ${bord};border-radius:8px;padding:14px 16px;margin:18px 0;font:14px/1.5 Arial,sans-serif;color:#0D0D0D;">${html}</div>`;
 const p = (html) => `<p style="margin:0 0 14px;font:15px/1.6 Arial,sans-serif;color:#2B2B2B;">${html}</p>`;
-const ticketBloc = (t) => `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${NOIR};border-radius:12px;margin:6px 0 18px;"><tr><td style="padding:18px;text-align:center;"><div style="font:700 11px Arial,sans-serif;letter-spacing:2px;color:#BDBDBD;text-transform:uppercase;">Votre numéro de ticket</div><div style="font:900 28px 'Courier New',monospace;letter-spacing:2px;color:${OR};margin-top:6px;">${esc(t)}</div></td></tr></table>`;
+const ticketBloc = (t) => `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${NOIR};border-radius:12px;margin:6px 0 18px;"><tr><td style="padding:18px;text-align:center;"><div style="font:700 11px Arial,sans-serif;letter-spacing:2px;color:${contraste(NOIR) === '#FFFFFF' ? '#BDBDBD' : '#555555'};text-transform:uppercase;">Votre numéro de ticket</div><div style="font:900 28px 'Courier New',monospace;letter-spacing:2px;color:${lisible(OR, NOIR)};margin-top:6px;">${esc(t)}</div></td></tr></table>`;
 
 function cadre({ resume, bandeau, titre, corps, pied }) {
   const basPage = pied || 'Cet e-mail est envoyé automatiquement par Iko Suite. Pour toute question, répondez simplement à ce message.';
@@ -42,11 +59,11 @@ function cadre({ resume, bandeau, titre, corps, pied }) {
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#F4F1EE;padding:24px 12px;"><tr><td align="center">
 <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="width:100%;max-width:600px;background:#FFFFFF;border-radius:16px;overflow:hidden;">
 <tr><td style="background:${NOIR};padding:22px 28px;"><table role="presentation" cellpadding="0" cellspacing="0"><tr>
-<td style="background:${OR};border-radius:10px;width:46px;height:46px;text-align:center;font:900 20px Arial,sans-serif;color:${NOIR};">IKO</td>
-<td style="padding-left:14px;font:700 15px Arial,sans-serif;color:#FFFFFF;">Iko Suite<br><span style="font:400 12px Arial,sans-serif;color:#BDBDBD;">${esc(bandeau)}</span></td></tr></table></td></tr>
+<td style="background:${OR};border-radius:10px;width:46px;height:46px;text-align:center;font:900 ${SIGLE.length > 2 ? 15 : 20}px Arial,sans-serif;color:${contraste(OR)};">${esc(SIGLE)}</td>
+<td style="padding-left:14px;font:700 15px Arial,sans-serif;color:${contraste(NOIR)};">${esc(NOM_MARQUE)}<br><span style="font:400 12px Arial,sans-serif;color:${contraste(NOIR) === '#FFFFFF' ? '#BDBDBD' : '#555555'};">${esc(bandeau)}</span></td></tr></table></td></tr>
 <tr><td style="background:${OR};height:5px;line-height:5px;font-size:0;">&nbsp;</td></tr>
-<tr><td style="padding:30px 28px 10px;"><h1 style="margin:0 0 16px;font:800 22px/1.3 Arial,sans-serif;color:${NOIR};">${esc(titre)}</h1>${corps}</td></tr>
-<tr><td style="padding:18px 28px 26px;border-top:1px solid #EEE;font:12px/1.5 Arial,sans-serif;color:#8A8A8A;text-align:center;">${esc(basPage)}<br><span style="color:${OR};font-weight:700;">Iko Suite</span> — le SAV intelligent</td></tr>
+<tr><td style="padding:30px 28px 10px;"><h1 style="margin:0 0 16px;font:800 22px/1.3 Arial,sans-serif;color:#0D0D0D;">${esc(titre)}</h1>${corps}</td></tr>
+<tr><td style="padding:18px 28px 26px;border-top:1px solid #EEE;font:12px/1.5 Arial,sans-serif;color:#8A8A8A;text-align:center;">${esc(basPage)}<br>${MARQUE_CLIENT ? `<span style="color:${lisible(OR, '#FFFFFF')};font-weight:700;">${esc(NOM_MARQUE)}</span> — SAV propulsé par Iko Suite` : `<span style="color:${OR};font-weight:700;">Iko Suite</span> — le SAV intelligent`}</td></tr>
 </table></td></tr></table></body></html>`;
 }
 
@@ -54,8 +71,9 @@ const bonjour = (d) => p(d.nom ? `Bonjour ${esc(d.nom)},` : 'Bonjour,');
 const SITE = 'https://iko-suite-demo.vercel.app';
 
 // Construit les mails d'une action. Retourne { objet, html } (client) et, pour une nouvelle demande, { objet_agence, html_agence }.
-export function construireMails(action, d) {
+export function construireMails(action, d, marque) {
   d = d || {};
+  appliquerMarque(marque);
   const t = d.ticket || '';
   const photos = photosHtml(d.photos);
   switch (action || 'nouvelle_demande') {
@@ -81,36 +99,36 @@ export function construireMails(action, d) {
     case 'rdv_modifie':
       return { objet: `${t} : votre rendez-vous a été modifié`, html: cadre({ resume: 'Votre rendez-vous a été modifié.', bandeau: 'Service après-vente', titre: 'Votre rendez-vous a été modifié',
         corps: p(`Le rendez-vous de votre demande <b>${esc(t)}</b>${d.agence ? ' (' + esc(d.agence) + ')' : ''} a été modifié.`) +
-          recap([['Ancien créneau', esc(d.ancien_creneau)], ['Nouveau créneau', `<b style="color:${OR};">${esc(d.nouveau_creneau)}</b>`]]) +
+          recap([['Ancien créneau', esc(d.ancien_creneau)], ['Nouveau créneau', `<b style="color:${lisible(OR, '#FFFFFF')};">${esc(d.nouveau_creneau)}</b>`]]) +
           p("Si ce nouveau créneau ne vous convient pas, répondez à ce message : nous vous en proposerons un autre.") }) };
     case 'technicien_en_route':
       return { objet: `${t} : votre technicien est en route`, html: cadre({ resume: `Votre technicien arrive vers ${d.arrivee || ''}.`, bandeau: 'Service après-vente', titre: 'Votre technicien est en route',
         corps: bonjour(d) + p('Votre technicien vient de partir pour votre intervention.') +
-          encart(`Arrivée estimée vers <b style="font-size:20px;color:${OR};">${esc(d.arrivee)}</b>${d.minutes ? ' (dans environ ' + esc(d.minutes) + ' minutes)' : ''}.`) +
+          encart(`Arrivée estimée vers <b style="font-size:20px;color:${lisible(OR, '#FFFFFF')};">${esc(d.arrivee)}</b>${d.minutes ? ' (dans environ ' + esc(d.minutes) + ' minutes)' : ''}.`) +
           recap([['Demande', esc(t)], ['Agence', esc(d.agence)]]) + p("<span style=\"font-size:13px;color:#6B6B6B;\">Merci de prévoir l'accès au produit concerné.</span>") }) };
     case 'rappel_veille':
       return { objet: `Rappel : votre rendez-vous de demain (${t})`, html: cadre({ resume: 'Rappel de votre rendez-vous de demain.', bandeau: 'Service après-vente', titre: 'Rappel de votre rendez-vous',
         corps: bonjour(d) + p('Nous vous rappelons votre rendez-vous de <b>demain</b> :') +
-          recap([['Rendez-vous', `<b style="color:${OR};">${esc(d.creneau)}</b>`], ['Produit', esc(d.produit)], ['Agence', esc(d.agence)], ['Demande', esc(t)]]) + bouton('Voir ou modifier mon rendez-vous', d.lien_suivi) }) };
+          recap([['Rendez-vous', `<b style="color:${lisible(OR, '#FFFFFF')};">${esc(d.creneau)}</b>`], ['Produit', esc(d.produit)], ['Agence', esc(d.agence)], ['Demande', esc(t)]]) + bouton('Voir ou modifier mon rendez-vous', d.lien_suivi) }) };
     case 'devis_envoye':
     case 'devis_auto_envoye':
       return { objet: `${t} : votre devis de ${d.montant || ''}`.trim(), html: cadre({ resume: 'Votre devis est disponible.', bandeau: 'Devis', titre: 'Votre devis est prêt',
         corps: bonjour(d) + p(`Suite à l'examen de votre demande <b>${esc(t)}</b>, voici votre devis.`) +
-          recap([['Produit', esc(d.produit)], ['Problème', esc(d.probleme)], ['Montant TTC', `<b style="font-size:18px;color:${OR};">${esc(d.montant)}</b>`]]) +
+          recap([['Produit', esc(d.produit)], ['Problème', esc(d.probleme)], ['Montant TTC', `<b style="font-size:18px;color:${lisible(OR, '#FFFFFF')};">${esc(d.montant)}</b>`]]) +
           (d.message ? encart(esc(d.message)) : '') + bouton('Consulter et signer mon devis', d.lien) +
           p('<span style="font-size:13px;color:#6B6B6B;">Vous pouvez accepter ou refuser le devis en ligne, en quelques clics.</span>') }) };
     case 'devis_deblocage':
       return { objet: `${t} : intervention avancée`, html: cadre({ resume: 'Votre intervention a été avancée.', bandeau: 'Service après-vente', titre: 'Votre intervention est avancée',
         corps: bonjour(d) + p(`Bonne nouvelle : l'intervention de votre demande <b>${esc(t)}</b> a été avancée.`) +
-          recap([['Nouveau rendez-vous', `<b style="color:${OR};">${esc(d.creneau)}</b>`], ['Produit', esc(d.produit)], ['Montant du devis', esc(d.montant)]]) }) };
+          recap([['Nouveau rendez-vous', `<b style="color:${lisible(OR, '#FFFFFF')};">${esc(d.creneau)}</b>`], ['Produit', esc(d.produit)], ['Montant du devis', esc(d.montant)]]) }) };
     case 'demande_note':
       return { objet: `${t} : votre avis nous intéresse`, html: cadre({ resume: 'Donnez-nous votre avis en 30 secondes.', bandeau: 'Votre avis', titre: "Comment s'est passée votre intervention ?",
         corps: bonjour(d) + p(`Votre intervention (<b>${esc(t)}</b>${d.produit ? ', ' + esc(d.produit) : ''}) est terminée. Votre avis nous aide à nous améliorer : cela prend 30 secondes.`) +
-          bouton('Donner mon avis', d.lien) + (lien(d.lien_bon_intervention) ? `<p style="text-align:center;font:13px Arial,sans-serif;"><a href="${esc(lien(d.lien_bon_intervention))}" style="color:${OR};">Télécharger mon bon d'intervention</a></p>` : '') }) };
+          bouton('Donner mon avis', d.lien) + (lien(d.lien_bon_intervention) ? `<p style="text-align:center;font:13px Arial,sans-serif;"><a href="${esc(lien(d.lien_bon_intervention))}" style="color:${lisible(OR, '#FFFFFF')};">Télécharger mon bon d'intervention</a></p>` : '') }) };
     case 'entretien_rappel':
       return { objet: `Votre visite d'entretien approche${d.date_visite ? ' (' + d.date_visite + ')' : ''}`, html: cadre({ resume: "Votre visite d'entretien approche.", bandeau: "Contrat d'entretien", titre: "Votre visite d'entretien approche",
         corps: bonjour(d) + p("Votre prochaine visite d'entretien est prévue prochainement.") +
-          recap([['Date prévue', `<b style="color:${OR};">${esc(d.date_visite)}</b>`], ['Équipements', esc(d.equipements)], ['Agence', esc(d.agence)]]) + p('Répondez à ce message pour confirmer ou choisir une autre date.') }) };
+          recap([['Date prévue', `<b style="color:${lisible(OR, '#FFFFFF')};">${esc(d.date_visite)}</b>`], ['Équipements', esc(d.equipements)], ['Agence', esc(d.agence)]]) + p('Répondez à ce message pour confirmer ou choisir une autre date.') }) };
     case 'piece_a_commander':
       return { objet: `${t} : pièce à commander`, html: cadre({ resume: 'Une pièce est à commander.', bandeau: 'Notification agence', titre: 'Pièce à commander', pied: 'Notification automatique Iko Suite — ne pas répondre à ce message.',
         corps: recap([['Demande', esc(t)], ['Client', esc(d.nom)], ['Agence', esc(d.agence)], ['Pièce', `<b>${esc(d.piece)}</b>`]]) + bouton('Ouvrir le tableau de bord', SITE + '/dashboard.html') }) };
@@ -124,9 +142,9 @@ export function construireMails(action, d) {
 
 // Ajoute au corps envoyé à Make les champs mail_objet / mail_html (et *_agence). Ne remplace jamais une valeur existante du navigateur :
 // ces champs sont toujours recalculés ici.
-export function ajouterMailsAuCorps(corps, action) {
+export function ajouterMailsAuCorps(corps, action, marque) {
   try {
-    const m = construireMails(action, corps);
+    const m = construireMails(action, corps, marque);
     if (!m) return corps;
     corps.mail_objet = m.objet; corps.mail_html = m.html;
     if (m.html_agence) {
@@ -138,4 +156,21 @@ export function ajouterMailsAuCorps(corps, action) {
     }
   } catch (e) { /* un souci de mise en page ne doit jamais empêcher l'envoi */ }
   return corps;
+}
+
+const cacheMarque = new Map();
+// Retourne { nom, principale, secondaire } pour un client pro (identifiant rec…), ou null (mails aux couleurs d'IKO).
+export async function marqueClient(clientId) {
+  try {
+    if (!/^rec[A-Za-z0-9]{14}$/.test(String(clientId || ''))) return null;
+    const hit = cacheMarque.get(clientId);
+    if (hit && Date.now() - hit.t < 5 * 60 * 1000) return hit.v;
+    const base = process.env.AIRTABLE_BASE_ID || 'appkI8RKHkYNWY86U';
+    const r = await fetch('https://api.airtable.com/v0/' + base + '/Clients/' + clientId, { headers: { Authorization: 'Bearer ' + process.env.AIRTABLE_TOKEN } });
+    if (!r.ok) return null;
+    const f = (await r.json()).fields || {};
+    const v = { nom: f['Nom client'] || '', principale: f['Couleur principale'] || '', secondaire: f['Couleur secondaire'] || '' };
+    cacheMarque.set(clientId, { t: Date.now(), v });
+    return v;
+  } catch (e) { return null; }
 }
