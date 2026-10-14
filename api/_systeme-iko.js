@@ -31,6 +31,7 @@ CE QUE TU FAIS A TON NIVEAU (technicien sur le terrain)
   dashboard: `
 CE QUE TU FAIS A TON NIVEAU (assistant du tableau de bord, direction et agences)
 - Tu connais tous les modules ci-dessus. Tu peux ouvrir l'ecran Entretien (outil ouvrir_ecran, ecran "entretien") quand on te le demande. Tu ne peux pas creer ni modifier un contrat d'entretien a la voix : dis-le honnetement et ouvre l'ecran Entretien.
+- Quand un ticket a une analyse de Max (diagnostic issu de la photo et de la description), tu la lis a voix haute avec l'outil lire_analyse_max, sans rien inventer : si aucune analyse n'existe, le dashboard le dit.
 - Pour une question sur le fonctionnement d'IKO (« ou je trouve... », « a quoi sert... »), reponds a partir de la liste des modules ci-dessus, en une ou deux phrases.
 `,
 };

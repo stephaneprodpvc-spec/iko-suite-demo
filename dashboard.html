@@ -5552,6 +5552,47 @@ function Dashboard({ agenceAccess, onClose }) {
       setSauvEnPause(false);
     } catch (err) { console.warn('Sauvegarde automatique :', err); }
   };
+  // Pré-analyse automatique par Max : tout ticket récent avec photo et sans analyse est analysé (2 à la fois, une seule tentative
+  // par ticket et par navigateur). Le résultat est enregistré sur le ticket ("IKO Diagnostic") SANS le marquer « validé »
+  // par le technicien ("IKO Utilisé" reste inchangé) : il garde la main pour confirmer ou refaire le diagnostic.
+  const [preAnalyseEnCours, setPreAnalyseEnCours] = React.useState(false);
+  React.useEffect(() => {
+    if (preAnalyseEnCours || !tickets.length) return;
+    let essais = {};
+    try { const brut = JSON.parse(localStorage.getItem('iko_preanalyse') || '{}'); essais = Array.isArray(brut) ? {} : brut; } catch (e) {}
+    const recent = (id) => essais[id] && (Date.now() - essais[id]) < 3600 * 1000;
+    const sauverEssais = () => { try { const cles = Object.keys(essais); if (cles.length > 300) cles.slice(0, cles.length - 300).forEach(k => delete essais[k]); localStorage.setItem('iko_preanalyse', JSON.stringify(essais)); } catch (e) {} };
+    const candidats = tickets.filter(t => t.fields?.Photos && !t.fields?.["IKO Diagnostic"] && !recent(t.id) &&
+      ["Nouveau", "En cours"].includes(t.fields?.Statut || "Nouveau")).slice(0, 2);
+    if (!candidats.length) return;
+    setPreAnalyseEnCours(true);
+    (async () => {
+      for (const t of candidats) {
+        essais[t.id] = Date.now(); sauverEssais();
+        try {
+          const photosUrls = String(t.fields.Photos).split(',').map(s => s.trim()).filter(Boolean);
+          const r = await fetch('/api/chat-technicien', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              mode: 'diagnostic', message: '', analyserPhoto: photosUrls.length > 0, photosUrls,
+              metier: metierEntrepriseLocal(), connaissance: connaissanceEntrepriseLocale(),
+              ticket: { numero: t.fields?.Name || "", produit: t.fields?.Produit || "", probleme: t.fields?.["Problème"] || "", garantie: t.fields?.Garantie || "",
+                adresse: t.fields?.Adresse || "", commentaireExistant: t.fields?.Commentaire || "", urgence: t.fields?.Qualification || "" },
+            }),
+          });
+          const d = await r.json();
+          if (!r.ok || d.erreur) continue;
+          const LABELS = { faible: "Confiance faible", moyenne: "Confiance moyenne", elevee: "Confiance élevée" };
+          const texte = (LABELS[d.confiance] || "Confiance moyenne") + "\n\n" + "FAIT : " + (d.fait || "—") + "\n" + "SIGNAL : " + (d.signal || "—") + "\n" +
+            "PISTE : " + (d.piste || "—") + "\n" + "PROPOSITION : " + (d.proposition || "—") + "\n\n(Pré-analyse automatique à l'arrivée du ticket, à confirmer par le technicien.)";
+          const champs = { "IKO Diagnostic": texte, "IKO Diagnostic Date": new Date().toISOString() };
+          const p = await fetch('/api/airtable/tenant/Tickets%20SAV/' + t.id, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fields: champs }) });
+          if (p.ok) setTickets(prev => prev.map(x => x.id === t.id ? { ...x, fields: { ...x.fields, ...champs } } : x));
+        } catch (e) { console.warn('Pré-analyse Max :', e); }
+      }
+      setPreAnalyseEnCours(false);
+    })();
+  }, [tickets]);
   React.useEffect(() => {
     const t0 = setTimeout(() => executerSauvAuto(false), 6000);
     const iv = setInterval(() => executerSauvAuto(false), 30 * 60 * 1000);
@@ -6078,7 +6119,26 @@ function Dashboard({ agenceAccess, onClose }) {
     } catch (e) { parlerNavigateurNatif(texte); }
   };
 
+  // Texte lu à voix haute : uniquement ce que Max a réellement enregistré sur le ticket.
+  const texteAnalyseMax = (t) => {
+    const ident = (t.fields?.Client || "ce client") + ", ticket " + (t.fields?.Name || "");
+    const brut = t.fields?.["IKO Diagnostic"];
+    if (!brut) return "Il n'y a pas encore d'analyse de Max pour " + ident + ".";
+    const { confiance, corps } = extraireConfianceDiagnosticMax(brut);
+    const champ = (nom) => { const m = corps.match(new RegExp(nom + " : ([^\\n]*)")); const v = m && m[1].trim(); return v && v !== "—" ? v : ""; };
+    const parties = ["Analyse de Max pour " + ident + "."];
+    if (confiance) parties.push(confiance + ".");
+    const f = champ("FAIT"), s = champ("SIGNAL"), pi = champ("PISTE"), pr = champ("PROPOSITION");
+    if (f) parties.push("Constat : " + f);
+    if (s) parties.push("Point d'attention : " + s);
+    if (pi) parties.push("Piste : " + pi);
+    if (pr) parties.push("Proposition : " + pr);
+    if (parties.length === 1) parties.push(corps.slice(0, 400));
+    return parties.join(" ");
+  };
+
   const executerActionsAmandine = (actions) => {
+    let remplacement = null; // texte lu à la place de la réponse standard (ex. analyse de Max)
     // Depuis l'écran vocal, une action doit être visible : on bascule sur le tableau et on garde la réponse d'IKO affichée.
     if ((actions || []).some(x => x.name !== 'reponse_vocale')) { setVueMode('tableau'); setAmandineOuverte(true); }
     (actions || []).forEach(a => {
@@ -6149,8 +6209,12 @@ function Dashboard({ agenceAccess, onClose }) {
         if (['planning', 'tickets', 'devis'].includes(e)) setVueMode('tableau');
       } else if (a.name === 'prochain_rdv_disponible') {
         annoncerProchainsCreneaux(a.input.agence, a.input.ticket_id);
+      } else if (a.name === 'lire_analyse_max') {
+        const cible = tickets.find(x => x.id === a.input.ticket_id || x.fields?.Name === a.input.numero);
+        remplacement = cible ? texteAnalyseMax(cible) : "Je n'ai pas trouvé ce ticket dans la liste.";
       }
     });
+    return remplacement;
   };
 
   // Lit le planning réel (créneaux libres, délai minimum appliqué par le serveur) et annonce le résultat à voix haute.
@@ -6198,8 +6262,8 @@ function Dashboard({ agenceAccess, onClose }) {
       });
       const data = await r.json();
       if (data.erreur) { setAmandineErreur(data.erreur); setAmandineEnCours(false); return; }
-      executerActionsAmandine(data.actions || []);
-      const texte = data.reponse || "C'est fait.";
+      const remplacement = executerActionsAmandine(data.actions || []);
+      const texte = remplacement || data.reponse || "C'est fait.";
       setAmandineDernier(texte);
       setIkoHistorique(prev => [...prev, { role: 'user', texte: transcript }, { role: 'assistant', texte }].slice(-8));
       parlerAmandine(texte);

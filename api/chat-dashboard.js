@@ -405,6 +405,17 @@ const TOOLS = [
     },
   },
   {
+    name: "lire_analyse_max",
+    description: "Lit a voix haute l'analyse de Max (constat, piste, proposition) enregistree sur un ticket. A utiliser quand on demande le compte rendu ou l'analyse de Max pour un client ou un ticket (par exemple 'analyse de Max pour monsieur Dupont'). N'ecrit rien : le dashboard lit lui-meme l'analyse reelle, n'en invente jamais. Identifie le ticket dans la liste fournie, par le nom du client ou le numero.",
+    input_schema: {
+      type: "object",
+      properties: {
+        ticket_id: { type: "string", description: "Identifiant exact (champ id) du ticket dans la liste fournie." },
+      },
+      required: ["ticket_id"],
+    },
+  },
+  {
     name: "ouvrir_ecran",
     description: "Ouvre un ecran du dashboard (lecture seule, n'ecrit rien) : centrale_direction (centrale de direction / central), facturation (facturation et compta), intelligence_commerciale (indicateurs commerciaux), analytics_sav, devis (devis en attente), equipe, entretien (contrats d'entretien), planning (vue planning des rendez-vous), tickets (liste des tickets SAV).",
     input_schema: {
@@ -733,6 +744,7 @@ precis :
       const a0 = actions[0];
       if (a0.name === "ouvrir_ecran") texteReponse = "J'ouvre " + (NOMS_ECRANS[a0.input?.ecran] || "cet écran") + ".";
       else if (a0.name === "prochain_rdv_disponible") texteReponse = "Je consulte le planning.";
+      else if (a0.name === "lire_analyse_max") texteReponse = "Je consulte l'analyse de Max.";
       else if (a0.name === "filtrer_statut" && a0.input?.statut) texteReponse = "J'affiche les tickets au statut « " + a0.input.statut + " ».";
     }
     if (!texteReponse) {
