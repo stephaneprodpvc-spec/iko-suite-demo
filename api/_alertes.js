@@ -11,6 +11,7 @@
 import webpush from 'web-push';
 import { verifierOrigine, verifierSession, reponseBloquee } from './_securite.js';
 import { enteteMake } from './_make.js';
+import { ajouterMailsAuCorps } from './_mail.js';
 
 const MAKE_WEBHOOK = 'https://hook.eu1.make.com/n3lwi92wldkf22jcemmjfem334p4mv6a'; // même scénario que le proxy
 const CONFIG_RECORD_ID = 'rec45X231n9dXnyaU';
@@ -65,7 +66,7 @@ async function envoyer(c, { titre, message }) {
     try {
       const w = await fetch(MAKE_WEBHOOK, {
         method: 'POST', headers: enteteMake({ 'Content-Type': 'application/json' }),
-        body: JSON.stringify({ marque: 'iko', action: 'alerte_incident', titre, message, email: a.email || '', tel: a.tel || '', quand: new Date().toISOString() }),
+        body: JSON.stringify(ajouterMailsAuCorps({ marque: 'iko', action: 'alerte_incident', titre, message, email: a.email || '', tel: a.tel || '', quand: new Date().toLocaleString('fr-FR', { timeZone: 'Europe/Paris' }) }, 'alerte_incident')),
       });
       res.make = w.ok;
     } catch (e) { res.make = false; }

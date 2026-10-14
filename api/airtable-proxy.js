@@ -25,7 +25,7 @@
 
 import webpush from 'web-push';
 import { alerter } from './_alertes.js';
-import { photosHtml, adressesPhotos } from './_mail.js';
+import { photosHtml, adressesPhotos, ajouterMailsAuCorps } from './_mail.js';
 import { verifierSession, verifierDebit, verifierOrigine } from './_securite.js';
 import { lienSuivi, lireJeton, normaliserEmail, normaliserTel } from './_suivi.js';
 import { creneauxLibres, identDepuisClientId, AGENCES_DEMO } from './_planning.js';
@@ -406,6 +406,7 @@ async function relayerWebhook(req, res, urlCible, actionsAutorisees, ctx) {
       if (lien) corpsRelaye.lien_suivi = lien;
     }
   }
+  ajouterMailsAuCorps(corpsRelaye, actionDemandee); // mail_objet / mail_html déjà prêts pour Make
   try {
     const webhookRes = await fetch(urlCible, {
       method: 'POST',

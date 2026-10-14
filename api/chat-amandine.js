@@ -17,7 +17,7 @@ import vocabMenuiserie from "./_trades/menuiserie.js";
 import vocabPlomberieChauffage from "./_trades/plomberie_chauffage.js";
 import { blocSystemeIko } from "./_systeme-iko.js";
 import { alerter } from "./_alertes.js";
-import { photosHtml, adressesPhotos } from "./_mail.js";
+import { photosHtml, adressesPhotos, ajouterMailsAuCorps } from "./_mail.js";
 import { blocMetierMenuiserie } from "./_metier-menuiserie.js";
 import { extraireConnaissanceDuRecord, blocPromptConnaissance, affinerPourPrompt } from "./_connaissance.js";
 import { nomAssistant as resoudreNomAssistant, NOMS_PAR_DEFAUT } from "./_assistants.js";
@@ -502,6 +502,7 @@ async function executerOutil(nom, input, clientId, tradeId, agencesObjets, photo
       email_technicien: (agenceInfo && agenceInfo.emailTechnicien) || "",
     };
 
+    ajouterMailsAuCorps(payload, undefined); // mail_objet / mail_html déjà prêts pour Make
     const r = await fetch(MAKE_WEBHOOK, {
       method: "POST",
       headers: enteteMake({ "Content-Type": "application/json" }),
