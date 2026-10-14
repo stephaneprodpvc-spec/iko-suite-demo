@@ -129,7 +129,13 @@ export function ajouterMailsAuCorps(corps, action) {
     const m = construireMails(action, corps);
     if (!m) return corps;
     corps.mail_objet = m.objet; corps.mail_html = m.html;
-    if (m.html_agence) { corps.mail_objet_agence = m.objet_agence; corps.mail_html_agence = m.html_agence; }
+    if (m.html_agence) {
+      corps.mail_objet_agence = m.objet_agence; corps.mail_html_agence = m.html_agence;
+      // Destinataire du mail agence : l'e-mail de l'agence s'il est renseigné, sinon le responsable IKO (variable EMAIL_RESPONSABLE_IKO).
+      const valide = (e) => /^[^\s@,;<>"']+@[^\s@,;<>"']+\.[^\s@,;<>"']+$/.test(String(e || '').trim());
+      const secours = process.env.EMAIL_RESPONSABLE_IKO || 'stephane.prodpvc@gmail.com';
+      corps.mail_a_agence = valide(corps.email_agence) ? String(corps.email_agence).trim() : secours;
+    }
   } catch (e) { /* un souci de mise en page ne doit jamais empêcher l'envoi */ }
   return corps;
 }
