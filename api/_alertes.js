@@ -203,3 +203,22 @@ export async function handleSurveillance(req, res) {
   }
   return res.status(200).json({ controle: new Date().toISOString(), problemes, alerte });
 }
+
+// Notification en direct (téléphone) aux techniciens d'une agence : appareils enregistrés avec cette agence (ou « global »).
+// Ne lève jamais d'exception. Retourne le nombre d'appareils prévenus.
+export async function pousserAgence({ agence, titre, message, url = '/technicien.html' }) {
+  try {
+    if (!process.env.VAPID_PUBLIC_KEY || !process.env.VAPID_PRIVATE_KEY) return 0;
+    webpush.setVapidDetails(process.env.VAPID_SUBJECT || 'mailto:stephane.prodpvc@gmail.com', process.env.VAPID_PUBLIC_KEY, process.env.VAPID_PRIVATE_KEY);
+    const c = await lireConfig();
+    const ag = String(agence || '');
+    const cibles = c.pushSubscriptions.filter((s) => s.agence !== AGENCE_PUSH && (s.agence === 'global' || (ag && (String(s.agence).startsWith(ag) || ag.startsWith(String(s.agence))))));
+    let envoyes = 0; const morts = [];
+    await Promise.all(cibles.map(async (s) => {
+      try { await webpush.sendNotification({ endpoint: s.endpoint, keys: s.keys }, JSON.stringify({ title: titre, body: message, url })); envoyes++; }
+      catch (err) { if (err.statusCode === 404 || err.statusCode === 410) morts.push(s.endpoint); }
+    }));
+    if (morts.length) { c.pushSubscriptions = c.pushSubscriptions.filter((s) => !morts.includes(s.endpoint)); await ecrireConfig(c); }
+    return envoyes;
+  } catch (e) { return 0; }
+}
