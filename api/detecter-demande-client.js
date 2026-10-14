@@ -150,6 +150,7 @@ async function classifierMessage(texte, creneauActuelLabel, ticket) {
         "(question technique complexe, prix, urgence...), dis simplement qu'un conseiller de l'agence revient " +
         "vers lui rapidement. Ne donne jamais de prix, ne confirme jamais un rendez-vous ou une info que tu " +
         "n'es pas sur. " +
+        "Quand le client demande ou en est son dossier, cite le statut EXACTEMENT tel qu'il est ecrit dans les faits (ex. Nouveau, En cours) et son rendez-vous, sans rien ajouter ni deviner. " +
         "FAITS REELS DU DOSSIER DE CE CLIENT (reponds uniquement d'apres eux, n'invente rien) :\n" + faitsTicket(ticket) + "\n" +
         blocSystemeIko("amandine") + blocMetierMenuiserie("amandine"),
       messages: [{ role: "user", content: texte.slice(0, MAX_CHARS_MESSAGE) }],
