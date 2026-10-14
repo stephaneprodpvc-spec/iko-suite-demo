@@ -13,9 +13,9 @@
     --noir:#0A0A0A; --panel: rgba(255,255,255,0.045); --panel-hover: rgba(255,255,255,0.07);
     --g2:#151517; --g3:#1C1C1F;
     --border: rgba(255,255,255,0.09); --border-strong: rgba(255,255,255,0.18); --vert:#22C55E; --vert-dim: rgba(34,197,94,0.15); --vert-glow: rgba(34,197,94,0.5);
-    --teal:#2DD4BF; --teal-dim: rgba(45,212,191,0.14); --teal-glow: rgba(45,212,191,0.45);
+    --teal:#FF9A3C; --teal-dim: rgba(255,154,60,0.14); --teal-glow: rgba(255,154,60,0.45);
     --corail:#FF6452; --corail-dim: rgba(255,100,82,0.14); --corail-glow: rgba(255,100,82,0.5);
-    --violet:#8B7FFF; --violet-dim: rgba(139,127,255,0.14); --violet-glow: rgba(139,127,255,0.5);
+    --violet:#FFD9BF; --violet-dim: rgba(255,217,191,0.14); --violet-glow: rgba(255,217,191,0.5);
     --texte:#F5F5F7; --texte-dim:#98989D; --texte-faint:#636366;
     --radius:20px; --radius-sm:12px;
     --shadow: 0 20px 60px rgba(0,0,0,0.5);
@@ -30,7 +30,7 @@
     font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","SF Pro Text","Segoe UI",sans-serif;
     background:
       radial-gradient(circle at 15% 0%, rgba(34,197,94,0.10), transparent 45%),
-      radial-gradient(circle at 85% 100%, rgba(45,212,191,0.07), transparent 40%),
+      radial-gradient(circle at 85% 100%, rgba(255,154,60,0.07), transparent 40%),
       var(--noir);
     color:var(--texte); min-height:100vh; letter-spacing:-0.01em;
   }
@@ -273,7 +273,7 @@
   .devis-liste-item{display:flex;justify-content:space-between;align-items:center;padding:11px 13px;border-radius:11px;border:1px solid var(--border);margin-bottom:8px;font-size:12.5px;}
   .devis-liste-statut{font-size:10px;padding:2.5px 9px;border-radius:7px;font-weight:600;}
   .devis-liste-statut.Brouillon{background:var(--g3);color:var(--texte-dim);}
-  .devis-liste-statut.Envoyé{background:rgba(10,132,255,0.18);color:#5FAAFF;}
+  .devis-liste-statut.Envoyé{background:rgba(255,154,60,0.18);color:#FF9A3C;}
   .devis-liste-statut.Validé{background:rgba(50,215,75,0.18);color:#32D74B;}
   .devis-liste-statut.Expiré{background:rgba(255,69,58,0.18);color:#FF453A;}
   .msg{font-size:12.5px;margin-top:12px;min-height:16px;font-weight:500;}
@@ -342,11 +342,11 @@
   /* ---- Bloc statistiques Clients restylé (mêmes couleurs que les jauges) ---- */
   .stats-carte{background:linear-gradient(160deg,var(--g2),var(--g3));border:1px solid var(--border);border-radius:14px;padding:16px 16px 14px;margin-bottom:14px;}
   .stats-hero{display:flex;align-items:center;gap:16px;margin-bottom:14px;padding:10px 16px;border-radius:12px;
-    background:linear-gradient(135deg,rgba(34,197,94,0.07),rgba(45,212,191,0.03) 60%,rgba(255,255,255,0.015));
+    background:linear-gradient(135deg,rgba(34,197,94,0.07),rgba(255,154,60,0.03) 60%,rgba(255,255,255,0.015));
     border:1px solid rgba(34,197,94,0.16);position:relative;overflow:hidden;}
   .stats-hero-bloc{position:relative;z-index:1;}
   .stats-hero-num{font-family:var(--f-mono);font-size:22px;font-weight:700;line-height:1;color:var(--texte);letter-spacing:-.01em;}
-  .stats-hero-num.actifs{font-size:18px;color:#2DD4BF;}
+  .stats-hero-num.actifs{font-size:18px;color:#FF9A3C;}
   .stats-hero-lbl{font-size:9px;color:var(--texte-faint);text-transform:uppercase;letter-spacing:.07em;font-weight:600;margin-top:3px;}
   .stats-hero-sep{width:1px;height:26px;background:var(--border);position:relative;z-index:1;}
   .stats-groupe{margin-top:10px;}
@@ -505,6 +505,18 @@
   .ide-nav-item[data-cible="sec-abonnements"]{--accent:var(--corail);}
   .ide-nav-item[data-cible="sec-bareme"]{--accent:#F5A623;}
   .ide-nav-item[data-cible="sec-securite"]{--accent:#EDEDEF;}
+  .ide-nav-item[data-cible="sec-alertes"]{--accent:#FF453A;}
+  #sec-alertes{--accent:#FF453A;}
+  .al-badge{margin-left:auto;min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:#FF453A;color:#fff;font-size:10.5px;font-weight:700;display:none;align-items:center;justify-content:center;}
+  .al-ligne{border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:10px;background:rgba(255,255,255,0.03);}
+  .al-ligne.nouvelle{border-color:rgba(255,69,58,0.45);background:rgba(255,69,58,0.07);}
+  .al-tete{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:4px;}
+  .al-client{font-weight:700;font-size:13.5px;}
+  .al-titre{font-size:12.5px;color:var(--texte);}
+  .al-msg{font-size:12px;color:var(--texte-dim);margin-top:2px;line-height:1.45;}
+  .al-meta{font-size:11px;color:var(--texte-faint);margin-top:6px;display:flex;gap:12px;align-items:center;flex-wrap:wrap;}
+  .al-pastille{font-size:10px;padding:2px 8px;border-radius:999px;font-weight:700;background:rgba(255,69,58,0.18);color:#FF6B61;}
+  .al-pastille.ok{background:rgba(34,197,94,0.15);color:var(--vert);}
   .ide-nav-item:before{
     content:"";position:absolute;left:-12px;top:6px;bottom:6px;width:2.5px;border-radius:2px;
     background:var(--accent);opacity:0;transition:opacity .18s var(--ease),box-shadow .18s var(--ease);
@@ -551,6 +563,7 @@
   <div class="ide-nav-item" data-cible="sec-apps"><span class="ico">▦</span><span class="lbl">Applications</span></div>
   <div class="ide-nav-item" data-cible="sec-abonnements"><span class="ico">◈</span><span class="lbl">Abonnements</span></div>
   <div class="ide-nav-item" data-cible="sec-bareme"><span class="ico">💶</span><span class="lbl">Barème RSIA</span></div>
+  <div class="ide-nav-item" data-cible="sec-alertes"><span class="ico">⚠</span><span class="lbl">Alertes clients</span><span class="al-badge" id="alBadge"></span></div>
   <div class="ide-nav-item" data-cible="sec-securite"><span class="ico">◇</span><span class="lbl">Sécurité</span></div>
   <div class="ide-nav-item" id="canularBtn" style="-webkit-touch-callout:none;-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent;touch-action:manipulation;"><span class="ico" style="pointer-events:none;">●</span><span class="lbl" style="pointer-events:none;">&nbsp;</span></div>
 </aside>
@@ -733,6 +746,18 @@
       </table>
       <button type="button" class="secondary" id="baremeAjouterBtn" style="margin-top:12px;">＋ Ajouter un module</button>
       <div class="msg" id="baremeMsg"></div>
+    </div>
+
+    <div class="card" id="sec-alertes">
+      <h2>Alertes clients</h2>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">
+        <button type="button" class="secondary" id="alFiltreNouvelles" style="flex:none;padding:8px 14px;">Nouvelles</button>
+        <button type="button" class="secondary" id="alFiltreToutes" style="flex:none;padding:8px 14px;">Toutes</button>
+        <button type="button" class="secondary" id="alRafraichir" style="flex:none;padding:8px 14px;">Actualiser</button>
+        <button type="button" class="primary" id="alToutTraiter" style="flex:none;padding:8px 14px;">Tout marquer comme traité</button>
+      </div>
+      <div id="alListe"><div class="chat-hint">Chargement…</div></div>
+      <div class="chat-hint">Un incident qui touche un client remonte ici : échec de création d'une demande, messages (Make) ou signature (Yousign) en panne, ticket urgent sans technicien, message client sans réponse. Vous recevez aussi l'alerte sur votre téléphone, par mail ou par SMS selon les réglages du tableau de bord (Centrale &gt; Gestion d'incident &gt; Alertes).</div>
     </div>
 
     <div class="card" id="sec-securite">
@@ -1422,7 +1447,7 @@ function rendreLegendeJauge(id, zones){
 var ZONES_JAUGE_CLIENTS = [
   { jusqua: 250, couleur: "#FF6452", label: "Démarrage" },
   { jusqua: 500, couleur: "#F5A623", label: "En croissance" },
-  { jusqua: 750, couleur: "#2DD4BF", label: "Bonne dynamique" },
+  { jusqua: 750, couleur: "#FF9A3C", label: "Bonne dynamique" },
   { jusqua: 1000, couleur: "#22C55E", label: "Objectif" }
 ];
 var CA_OBJECTIF_MAX = (function(){
@@ -1435,7 +1460,7 @@ var CA_OBJECTIF_MAX = (function(){
 var ZONES_JAUGE_CA = [
   { jusqua: CA_OBJECTIF_MAX * 0.25, couleur: "#FF6452", label: "Démarrage" },
   { jusqua: CA_OBJECTIF_MAX * 0.50, couleur: "#F5A623", label: "En croissance" },
-  { jusqua: CA_OBJECTIF_MAX * 0.75, couleur: "#2DD4BF", label: "Bonne dynamique" },
+  { jusqua: CA_OBJECTIF_MAX * 0.75, couleur: "#FF9A3C", label: "Bonne dynamique" },
   { jusqua: CA_OBJECTIF_MAX, couleur: "#22C55E", label: "Objectif" }
 ];
 
@@ -1501,7 +1526,7 @@ function rendreObjectifsAnnuelsCA(){
 function afficherStats(){
   var el = document.getElementById("statsBar");
   if (!el) return;
-  var PALETTE = ["#FF6452", "#F5A623", "#2DD4BF", "#22C55E"];
+  var PALETTE = ["#FF6452", "#F5A623", "#FF9A3C", "#22C55E"];
   if (!clients.length){
     el.innerHTML = "<div class='stats-carte'>Aucun client pour l'instant.</div>";
     animerCompteur(document.getElementById("heroTotalClients"), 0);
@@ -4405,6 +4430,54 @@ function afficherDevisListe(){
 
 var baremeAjouterBtnEl = document.getElementById("baremeAjouterBtn");
 if (baremeAjouterBtnEl) baremeAjouterBtnEl.addEventListener("click", ajouterModuleBareme);
+
+// --- Alertes clients (journal des incidents) ---
+(function(){
+  var filtre = "nouvelles";
+  var journal = [];
+  var liste = document.getElementById("alListe");
+  var badge = document.getElementById("alBadge");
+  if (!liste) return;
+  function esc(t){ return String(t == null ? "" : t).replace(/[&<>"]/g, function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]; }); }
+  function nomClient(id){
+    if (!id) return "Plateforme IKO (client non identifié)";
+    var c = (typeof clients !== "undefined" ? clients : []).filter(function(x){ return x.id === id; })[0];
+    return c && c.fields && c.fields["Nom client"] ? c.fields["Nom client"] : "Client " + id;
+  }
+  function quand(iso){ return new Date(iso).toLocaleString("fr-FR", { day:"2-digit", month:"2-digit", hour:"2-digit", minute:"2-digit" }); }
+  function afficher(){
+    var vues = journal.filter(function(j){ return filtre === "toutes" || j.statut === "nouvelle"; });
+    if (!vues.length) { liste.innerHTML = "<div class='chat-hint'>" + (filtre === "toutes" ? "Aucune alerte enregistrée." : "Aucune nouvelle alerte. Tout va bien.") + "</div>"; return; }
+    liste.innerHTML = vues.map(function(j){
+      var nouvelle = j.statut === "nouvelle";
+      return "<div class='al-ligne " + (nouvelle ? "nouvelle" : "") + "'>" +
+        "<div class='al-tete'><span class='al-client'>" + esc(nomClient(j.client)) + "</span><span class='al-pastille " + (nouvelle ? "" : "ok") + "'>" + (nouvelle ? "À traiter" : "Traitée") + "</span></div>" +
+        "<div class='al-titre'>" + esc(j.titre) + (j.compteur > 1 ? " <b>(×" + j.compteur + ")</b>" : "") + "</div>" +
+        "<div class='al-msg'>" + esc(j.message) + "</div>" +
+        "<div class='al-meta'><span>Premier signalement : " + quand(j.quand) + "</span>" + (j.compteur > 1 ? "<span>Dernier : " + quand(j.derniere) + "</span>" : "") +
+        (nouvelle ? "<button type='button' class='secondary al-traiter' data-id='" + esc(j.id) + "' style='flex:none;padding:5px 12px;font-size:11.5px;'>Marquer comme traité</button>" : "<span>Traitée le " + quand(j.traiteeLe) + "</span>") + "</div></div>";
+    }).join("");
+  }
+  function majBadge(n){ if (!badge) return; badge.textContent = n; badge.style.display = n > 0 ? "flex" : "none"; }
+  function charger(){
+    fetch("/api/alerte?journal=1").then(function(r){ if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); }).then(function(j){
+      journal = j.journal || []; majBadge(j.nbNouvelles || 0); afficher();
+    }).catch(function(){ liste.innerHTML = "<div class='chat-hint' style='color:#FF453A;'>Journal indisponible (connexion super-administrateur requise).</div>"; });
+  }
+  function agir(corps){
+    return fetch("/api/alerte", { method:"POST", headers:{ "Content-Type":"application/json" }, body: JSON.stringify(corps) }).then(charger);
+  }
+  liste.addEventListener("click", function(e){ var b = e.target.closest(".al-traiter"); if (b) agir({ action:"traiter", id: b.getAttribute("data-id") }); });
+  document.getElementById("alFiltreNouvelles").addEventListener("click", function(){ filtre = "nouvelles"; afficher(); });
+  document.getElementById("alFiltreToutes").addEventListener("click", function(){ filtre = "toutes"; afficher(); });
+  document.getElementById("alRafraichir").addEventListener("click", charger);
+  document.getElementById("alToutTraiter").addEventListener("click", function(){ if (confirm("Marquer toutes les alertes comme traitées ?")) agir({ action:"tout_traiter" }); });
+  charger();
+  setInterval(charger, 60000);
+  window.IKO_alertesActualiser = charger;
+  // les noms de clients arrivent après le journal : on réaffiche une fois la liste des clients chargée
+  setTimeout(afficher, 2500);
+})();
 
 // --- Navigation sidebar (rail IDE) ---
 (function(){

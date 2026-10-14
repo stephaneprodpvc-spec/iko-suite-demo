@@ -1,4 +1,6 @@
 import { limiterChat } from "./_securite.js";
+import { blocSystemeIko } from "./_systeme-iko.js";
+import { blocMetierMenuiserie } from "./_metier-menuiserie.js";
 import { normaliserConnaissance, blocPromptConnaissance, affinerPourPrompt } from "./_connaissance.js";
 import { blocPromptAnalyticsSAV, genererRecommandationsSAV, blocPromptRecommandationsSAV } from "../analytics-sav.js";
 
@@ -193,6 +195,13 @@ REGLES
   ticket, identifie-le dans la liste fournie (par numero de ticket ou
   nom de client cite) et utilise son identifiant exact (champ id) dans
   ticket_id, jamais le numero affiche.
+- ouvrir_ecran ouvre un ecran en lecture seule (centrale de direction,
+  facturation, indicateurs commerciaux...). prochain_rdv_disponible
+  lit le planning reel : le dashboard annonce lui-meme les creneaux
+  trouves, n'invente JAMAIS de date ni de disponibilite. Tu ne peux ni
+  reserver ni deplacer un rendez-vous a la voix : si on te le demande,
+  utilise prochain_rdv_disponible pour proposer les creneaux libres et
+  precise que la modification du rendez-vous se fait depuis le ticket.
 - Les actions preparer_blocage_dates, ouvrir_nouveau_rdv,
   preparer_annulation_ticket et preparer_suppression_ticket ouvrent
   seulement un formulaire pre-rempli : elles n'ecrivent rien tant que
@@ -243,7 +252,7 @@ function buildSystemPrompt(connaissanceEntrees, analyticsSAVResume) {
   // donnees, uniquement une lecture croisee de ce qui est deja calcule) -
   // voir genererRecommandationsSAV dans analytics-sav.js.
   const recommandationsSAV = genererRecommandationsSAV(analyticsSAVResume, connaissanceEntrees);
-  return SYSTEM_PROMPT_BASE + blocPromptConnaissance(connaissanceEntrees) + blocPromptAnalyticsSAV(analyticsSAVResume) + blocPromptRecommandationsSAV(recommandationsSAV);
+  return SYSTEM_PROMPT_BASE + blocSystemeIko("dashboard") + blocMetierMenuiserie("dashboard") + blocPromptConnaissance(connaissanceEntrees) + blocPromptAnalyticsSAV(analyticsSAVResume) + blocPromptRecommandationsSAV(recommandationsSAV);
 }
 
 const TOOLS = [
@@ -271,7 +280,7 @@ const TOOLS = [
   },
   {
     name: "filtrer_statut",
-    description: "Filtre la liste des tickets sur un statut precis, ou revient a tous les statuts.",
+    description: "Filtre la liste des tickets sur un statut precis, ou revient a tous les statuts. \"En attente\" sans precision = Nouveau (demandes pas encore prises en charge) ; seulement \"attente piece\" ou \"attente fournisseur\" si dit explicitement.",
     input_schema: {
       type: "object",
       properties: {
@@ -392,6 +401,29 @@ const TOOLS = [
     input_schema: {
       type: "object",
       properties: {},
+      required: [],
+    },
+  },
+  {
+    name: "ouvrir_ecran",
+    description: "Ouvre un ecran du dashboard (lecture seule, n'ecrit rien) : centrale_direction (centrale de direction / central), facturation (facturation et compta), intelligence_commerciale (indicateurs commerciaux), analytics_sav, devis (devis en attente), equipe, entretien (contrats d'entretien), planning (vue planning des rendez-vous), tickets (liste des tickets SAV).",
+    input_schema: {
+      type: "object",
+      properties: {
+        ecran: { type: "string", enum: ["centrale_direction", "facturation", "intelligence_commerciale", "analytics_sav", "devis", "equipe", "planning", "tickets", "entretien"] },
+      },
+      required: ["ecran"],
+    },
+  },
+  {
+    name: "prochain_rdv_disponible",
+    description: "Cherche dans le planning reel le ou les prochains creneaux de rendez-vous LIBRES (delai minimum applique). N'ecrit rien et ne reserve rien : le dashboard annonce lui-meme les creneaux trouves. A utiliser pour 'trouve le prochain rendez-vous disponible' ou 'propose un nouveau rendez-vous a ce client' (indique alors ticket_id si un ticket precis est designe).",
+    input_schema: {
+      type: "object",
+      properties: {
+        agence: { type: "string", enum: AGENCES_VALIDES },
+        ticket_id: { type: "string", description: "Identifiant exact (champ id) du ticket du client concerne, si designe : l'agence du ticket est alors utilisee." },
+      },
       required: [],
     },
   },
@@ -688,9 +720,20 @@ precis :
     for (const appel of appelsOutils) {
       if (appel.name === "reponse_vocale") {
         texteReponse = String(appel.input?.message || "").slice(0, 400);
+      } else if (appel.name === "filtrer_statut" && appel.input && ![...STATUTS_VALIDES, "tous"].includes(appel.input.statut)) {
+        // Valeur hors liste (le modele peut inventer un statut) : "en attente" = Nouveau, sinon on n'applique rien.
+        if (/attente/i.test(String(appel.input.statut))) { appel.input.statut = "Nouveau"; actions.push(appel); }
+        else texteReponse = "Je n'ai pas reconnu ce statut de ticket.";
       } else {
         actions.push(appel);
       }
+    }
+    if (!texteReponse && actions.length) {
+      const NOMS_ECRANS = { centrale_direction: "la centrale de direction", facturation: "la facturation", intelligence_commerciale: "les indicateurs commerciaux", analytics_sav: "les analytics SAV", devis: "les devis en attente", equipe: "l'équipe", entretien: "les contrats d'entretien", planning: "le planning", tickets: "la liste des tickets" };
+      const a0 = actions[0];
+      if (a0.name === "ouvrir_ecran") texteReponse = "J'ouvre " + (NOMS_ECRANS[a0.input?.ecran] || "cet écran") + ".";
+      else if (a0.name === "prochain_rdv_disponible") texteReponse = "Je consulte le planning.";
+      else if (a0.name === "filtrer_statut" && a0.input?.statut) texteReponse = "J'affiche les tickets au statut « " + a0.input.statut + " ».";
     }
     if (!texteReponse) {
       const texteBrut = blocs.filter(b => b.type === "text").map(b => b.text || "").join(" ").trim();

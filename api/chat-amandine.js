@@ -15,6 +15,9 @@ import { lienSuivi } from "./_suivi.js";
 import { creneauxLibres, identDepuisClientId } from "./_planning.js";
 import vocabMenuiserie from "./_trades/menuiserie.js";
 import vocabPlomberieChauffage from "./_trades/plomberie_chauffage.js";
+import { blocSystemeIko } from "./_systeme-iko.js";
+import { alerter } from "./_alertes.js";
+import { blocMetierMenuiserie } from "./_metier-menuiserie.js";
 import { extraireConnaissanceDuRecord, blocPromptConnaissance, affinerPourPrompt } from "./_connaissance.js";
 import { nomAssistant as resoudreNomAssistant, NOMS_PAR_DEFAUT } from "./_assistants.js";
 import { enteteMake } from './_make.js';
@@ -154,6 +157,8 @@ QUELQUES PISTES DE DIAGNOSTIC DE BASE (a titre indicatif, jamais une garantie)
 ${listeDiagnostics}
 ${blocQuestionnaire}
 ${blocConnaissance}
+${blocSystemeIko("amandine")}
+${vocab.trade_id === "menuiserie" ? blocMetierMenuiserie("amandine") : ""}
 `;
 }
 // Construit la liste d'outils pour UN appel donne, avec l'enum d'agences et
@@ -182,9 +187,12 @@ function buildTools(agencesNoms, vocab) {
     input_schema: {
       type: "object",
       properties: {
-        planning_id: { type: "string", description: "Identifiant du creneau, tel que renvoye par lister_creneaux." },
+        planning_id: { type: "string", description: "Identifiant du creneau, tel que renvoye par lister_creneaux. Si tu ne l'as plus (conversation reprise), laisse vide et donne agence + date." },
+        agence: { type: "string", description: "Agence du creneau choisi (ex. Agence 4)." },
+        date: { type: "string", description: "Date choisie par le client, AAAA-MM-JJ ou texte (ex. mercredi 21 octobre)." },
+        horaire: { type: "string", description: "Horaire choisi si precise (ex. 9h00 — 10h00)." },
       },
-      required: ["planning_id"],
+      required: [],
     },
   },
   {
@@ -360,7 +368,7 @@ function filtreAvecClientServeur(baseFormula, clientId) {
   return baseFormula ? "AND(" + baseFormula + "," + clause + ")" : clause;
 }
 
-async function executerOutil(nom, input, clientId, tradeId, agencesObjets) {
+async function executerOutil(nom, input, clientId, tradeId, agencesObjets, photosJointes) {
   const agencesNoms = (agencesObjets && agencesObjets.length > 0) ? agencesObjets.map(function (a) { return a.nom; }) : AGENCES_VALIDES;
   try {
     if (nom === "lister_creneaux") {
@@ -399,7 +407,43 @@ async function executerOutil(nom, input, clientId, tradeId, agencesObjets) {
     }
 
   if (nom === "reserver_creneau") {
-    const r = await fetch("https://api.airtable.com/v0/" + AIRTABLE_BASE + "/Planning/" + encodeURIComponent(input.planning_id), {
+    // L'historique de conversation ne garde que le texte : l'identifiant donne par lister_creneaux est perdu d'un tour
+    // à l'autre et le modèle peut en inventer un. On le vérifie ; sinon on retrouve le créneau réel par agence + date.
+    const MOIS_FR = { janvier: 1, "février": 2, fevrier: 2, mars: 3, avril: 4, mai: 5, juin: 6, juillet: 7, "août": 8, aout: 8, septembre: 9, octobre: 10, novembre: 11, "décembre": 12, decembre: 12 };
+    const versIso = function (txt) {
+      const t = String(txt || "").trim();
+      if (/^\d{4}-\d{2}-\d{2}$/.test(t)) return t;
+      const m = /(\d{1,2})\s+(\p{L}+)(?:\s+(\d{4}))?/u.exec(t);
+      if (!m || !MOIS_FR[m[2].toLowerCase()]) return null;
+      const auj = new Date();
+      let an = m[3] ? parseInt(m[3], 10) : auj.getFullYear();
+      let d = new Date(an, MOIS_FR[m[2].toLowerCase()] - 1, parseInt(m[1], 10), 12);
+      if (!m[3] && d < new Date(auj.getTime() - 86400000)) d = new Date(an + 1, d.getMonth(), d.getDate(), 12);
+      return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+    };
+    const dateIso = versIso(input.date);
+    const urlPlanning = "https://api.airtable.com/v0/" + AIRTABLE_BASE + "/Planning/";
+    let cible = null;
+    if (input.planning_id && /^rec[A-Za-z0-9]{10,}$/.test(String(input.planning_id))) {
+      const g = await fetch(urlPlanning + encodeURIComponent(input.planning_id), { headers: airtableHeaders() });
+      if (g.ok) {
+        const f = (await g.json()).fields || {};
+        if (f.Statut !== "Pris" && f.Statut !== "Bloqué" && (!dateIso || f.Date === dateIso)) cible = input.planning_id;
+      }
+    }
+    if (!cible && input.agence && dateIso) {
+      const ctxPl = { baseId: AIRTABLE_BASE, headers: airtableHeaders(), finAt: Date.now() + 7000 };
+      const ident = await identDepuisClientId(ctxPl, clientId);
+      if (ident && !ident.bloque) {
+        const dispo = await creneauxLibres(ctxPl, ident, { agence: input.agence, date: dateIso });
+        const duJour = (dispo.creneaux || []).filter(function (c) { return c.date === dateIso; });
+        const h = String(input.horaire || "").toLowerCase();
+        const choisi = (h && duJour.find(function (c) { return String(c.creneau || "").toLowerCase().indexOf(h) !== -1; })) || duJour[0];
+        if (choisi) cible = choisi.id;
+      }
+    }
+    if (!cible) return { erreur: "Ce creneau n'est plus disponible, merci d'en choisir un autre." };
+    const r = await fetch(urlPlanning + encodeURIComponent(cible), {
       method: "PATCH",
       headers: airtableHeaders(),
       body: JSON.stringify({ fields: { Statut: "Pris" } }),
@@ -441,7 +485,7 @@ async function executerOutil(nom, input, clientId, tradeId, agencesObjets) {
       garantie: garantieTexte,
       facture: input.numero_facture || "",
       urgent: input.urgent ? "Oui" : "Non",
-      photos: "",
+      photos: Array.isArray(photosJointes) ? photosJointes.join(",") : "",
       facture_photo: "",
       planningId: input.planning_id || "",
       source: "Amandine (IA)",
@@ -469,6 +513,7 @@ async function executerOutil(nom, input, clientId, tradeId, agencesObjets) {
           });
         } catch (e) { console.error("Libération du créneau après échec de création du ticket", e); }
       }
+      alerter({ cle: "amandine-ticket-echec", client: clientId || null, titre: "IKO : un client n'a pas pu créer sa demande", message: "La création d'un ticket via Amandine a échoué (agence : " + String(input.agence || "?") + ", produit : " + String(input.produit || "?") + "). Vérifiez le scénario Make." });
       return { erreur: "La creation du ticket a echoue, merci de reessayer." };
     }
 
@@ -591,7 +636,19 @@ try {
   if (!Array.isArray(messages) || messages.length === 0) {
     return res.status(400).json({ error: "Aucun message recu" });
   }
-  const messagesUtiles = messages.length > MAX_MESSAGES ? messages.slice(-MAX_MESSAGES) : messages;
+  let messagesUtiles = messages.length > MAX_MESSAGES ? messages.slice(-MAX_MESSAGES) : messages;
+  // Photos jointes par le client (adresses d'images déjà téléversées par le navigateur). Jamais fournies par le modèle.
+  let ticketCreeActuel = null;
+  const photosJointesActuelles = (Array.isArray((req.body || {}).photos) ? req.body.photos : [])
+    .filter(function (u) { return typeof u === "string" && u.length < 400 && /^https:\/\/res\.cloudinary\.com\/|^http:\/\/localhost:\d+\/__iko-local\/fichier\//.test(u); })
+    .slice(0, 5);
+  if (photosJointesActuelles.length) {
+    // Le modèle doit savoir que des photos sont déjà jointes (elles partiront avec le ticket) : il n'en redemande pas.
+    messagesUtiles = messagesUtiles.map(function (m, i) {
+      return i === messagesUtiles.length - 1 && m && m.role !== "assistant"
+        ? Object.assign({}, m, { texte: String(m.texte || "") + " [Le client a joint " + photosJointesActuelles.length + " photo(s) : elles seront rattachées automatiquement au ticket, ne les redemande pas.]" }) : m;
+    });
+  }
   // Dernier message du client (deja dans req.body, aucun appel
   // supplementaire) : sert uniquement a prioriser la connaissance la plus
   // pertinente pour SA question dans le budget de contexte transmis.
@@ -680,13 +737,14 @@ sait deja qui tu es, ce n'est pas ta premiere reunion avec eux.
         reponse: "Desole, je n'ai pas pu formuler de reponse. Pouvez-vous reformuler votre question ?",
       });
     }
-    return res.status(200).json({ reponse: texte });
+    return res.status(200).json({ reponse: texte, ...(ticketCreeActuel ? { ticket_cree: ticketCreeActuel } : {}) });
   }
 
   convertis.push({ role: "assistant", content: blocs });
     const resultats = [];
     for (const appel of appelsOutils) {
-      const resultat = await executerOutil(appel.name, appel.input || {}, clientIdActuel, tradeIdActuel, agencesObjetsActuels);
+      const resultat = await executerOutil(appel.name, appel.input || {}, clientIdActuel, tradeIdActuel, agencesObjetsActuels, photosJointesActuelles);
+      if (appel.name === "creer_ticket" && resultat && resultat.ok) ticketCreeActuel = resultat.ticket;
       resultats.push({
         type: "tool_result",
         tool_use_id: appel.id,

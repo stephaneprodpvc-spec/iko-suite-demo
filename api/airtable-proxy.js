@@ -24,6 +24,7 @@
 // Appelé via /api/airtable/push (même route réécrite que le reste).
 
 import webpush from 'web-push';
+import { alerter } from './_alertes.js';
 import { verifierSession, verifierDebit, verifierOrigine } from './_securite.js';
 import { lienSuivi, lireJeton, normaliserEmail, normaliserTel } from './_suivi.js';
 import { creneauxLibres, identDepuisClientId, AGENCES_DEMO } from './_planning.js';
@@ -411,8 +412,10 @@ async function relayerWebhook(req, res, urlCible, actionsAutorisees, ctx) {
     if (webhookRes.ok && ctx && clientARattacher && /^rec[A-Za-z0-9]{14}$/.test(clientARattacher) && corpsRelaye.ticket && actionDemandee === undefined) {
       await rattacherTicketAuClient(ctx.baseId, ctx.headers, corpsRelaye.ticket, clientARattacher);
     }
+    if (!webhookRes.ok) await alerter({ cle: 'make-echec', client: (/^rec/.test(clientARattacher || '') ? clientARattacher : (ctx && ctx.tenantId) || null), titre: "IKO : l'envoi de messages (Make) a échoué", message: "Le scénario Make a répondu en erreur (HTTP " + webhookRes.status + ")" + (actionDemandee ? " pour l'action « " + actionDemandee + " »" : " pour une nouvelle demande") + ". Des mails/SMS clients peuvent ne pas être partis." });
     return res.status(webhookRes.ok ? 200 : 502).json({ ok: webhookRes.ok });
   } catch (err) {
+    await alerter({ cle: 'make-injoignable', client: (/^rec/.test(clientARattacher || '') ? clientARattacher : (ctx && ctx.tenantId) || null), titre: "IKO : Make est injoignable", message: "Impossible de contacter le scénario Make : les mails et SMS clients ne partent pas." });
     // Ne jamais renvoyer le detail brut de l'erreur au client : un message
     // d'erreur reseau (DNS, connexion) peut contenir l'URL/l'hote Make, ce
     // qui romprait exactement la protection visee par ce relais. Logue cote

@@ -17,6 +17,7 @@ import crypto from 'crypto';
 import { handlePaiement, handleStripe, handleSauvegarde } from './_paiement.js';
 import { handleRappelVeille } from './_rappels.js';
 import { handleAgenda } from './_agenda.js';
+import { handleAlerte, handleSurveillance } from './_alertes.js';
 import { verifierOrigine, verifierDebit } from './_securite.js';
 import { enteteMake } from './_make.js';
 
@@ -218,6 +219,8 @@ export default async function handler(req, res) {
   if (service === 'sauvegarde') return handleSauvegarde(req, res);
   if (service === 'rappel') return handleRappelVeille(req, res);
   if (service === 'agenda') return handleAgenda(req, res);
+  if (service === 'alerte') return handleAlerte(req, res);
+  if (service === 'surveillance') return handleSurveillance(req, res);
   if (service === 'signature') return handleSignatureIntegree(req, res);
   if (req.method === 'GET') {
     return handleDownload(req, res);

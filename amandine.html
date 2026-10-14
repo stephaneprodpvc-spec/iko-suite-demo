@@ -298,7 +298,7 @@
   <div class="amandine-sphere" id="amandine-sphere-btn"></div>
   <div class="amandine-landing-texte" id="amandine-landing-texte">Bonjour, je suis Amandine. Dites-moi ce qui vous amène, ou tapez votre message.</div>
   <div id="amandine-choix" style="display:flex;flex-direction:column;gap:10px;align-items:center;">
-    <button class="amandine-landing-bouton" id="amandine-landing-bouton" style="margin-top:26px;">Déclarer une demande</button>
+    <button class="amandine-landing-bouton" id="amandine-landing-bouton" style="margin-top:26px;">Remplir un formulaire<span style="display:block;font-size:11px;font-weight:500;opacity:.9;margin-top:2px;">Déclarer ma demande moi-même</span></button>
     <button class="amandine-landing-bouton" id="amandine-suivre-bouton" style="margin-top:0;">Suivre mes demandes</button>
   </div>
   <form id="amandine-suivi-form" style="display:none;margin-top:22px;width:min(320px,86vw);flex-direction:column;gap:9px;">
@@ -324,7 +324,10 @@
 
 <div id="suggestions"></div>
 
+<div id="pj-liste" style="display:none;gap:8px;flex-wrap:wrap;padding:8px 12px;background:#fff;border-top:1px solid #eee;"></div>
 <div id="zone-saisie">
+  <button id="joindre" type="button" aria-label="Joindre des photos" title="Joindre des photos (5 max)" style="flex-shrink:0;width:44px;height:44px;border-radius:50%;border:none;background:rgba(255,107,0,0.14);color:#d4550a;font-size:20px;cursor:pointer;">&#128206;</button>
+  <input id="pj-fichiers" type="file" accept="image/*,application/pdf" multiple style="display:none">
   <button id="micro" aria-label="Dicter votre message" title="Dicter"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v4M8 22h8"/></svg></button>
   <textarea id="saisie" rows="1" placeholder="Décrivez votre problème…" aria-label="Votre message"></textarea>
   <button id="envoyer" aria-label="Envoyer"><svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button>
@@ -452,7 +455,7 @@ window.IKO_CLIENT_READY = (async function () {
       const reponse = await fetch('/api/chat-amandine', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: historique, client_slug: window.IKO_CLIENT_SLUG || null }),
+        body: JSON.stringify({ messages: historique, client_slug: window.IKO_CLIENT_SLUG || null, photos: pjUrls }),
       });
       const data = await reponse.json();
       frappe.remove();
@@ -463,6 +466,7 @@ window.IKO_CLIENT_READY = (async function () {
         if (texteSphere) texteSphere.textContent = msg;
       } else {
         ajouterBulle(data.reponse, 'conseiller');
+        if (data.ticket_cree) { pjUrls = []; pjAfficher(); }
         historique.push({ role: 'assistant', texte: data.reponse });
         if (texteSphere) texteSphere.textContent = data.reponse;
         lireAVoixHaute(data.reponse);
@@ -478,6 +482,59 @@ window.IKO_CLIENT_READY = (async function () {
       saisie.focus();
     }
   }
+
+  // ---- Pièces jointes (photos du problème) : téléversées tout de suite, rattachées au ticket par le serveur ----
+  var pjUrls = [];
+  var pjListe = document.getElementById('pj-liste');
+  var pjInput = document.getElementById('pj-fichiers');
+  function pjAfficher() {
+    pjListe.innerHTML = '';
+    pjListe.style.display = pjUrls.length ? 'flex' : 'none';
+    pjUrls.forEach(function (u, i) {
+      var c = document.createElement('div');
+      c.style.cssText = 'position:relative;width:54px;height:54px;border-radius:8px;overflow:hidden;border:1px solid #ddd;background:#f4f4f4;display:flex;align-items:center;justify-content:center;font-size:11px;';
+      if (/\.pdf($|\?)/i.test(u)) c.textContent = 'PDF'; else { var im = document.createElement('img'); im.src = u; im.style.cssText = 'width:100%;height:100%;object-fit:cover;'; c.appendChild(im); }
+      var x = document.createElement('button'); x.type = 'button'; x.textContent = '\u00d7'; x.setAttribute('aria-label', 'Retirer cette photo');
+      x.style.cssText = 'position:absolute;top:0;right:0;width:18px;height:18px;border:none;background:rgba(0,0,0,.6);color:#fff;font-size:13px;line-height:18px;cursor:pointer;padding:0;';
+      x.onclick = function () { pjUrls.splice(i, 1); pjAfficher(); };
+      c.appendChild(x); pjListe.appendChild(c);
+    });
+  }
+  function pjCompresser(fichier) {
+    return new Promise(function (ok) {
+      if (!/^image\//.test(fichier.type) || /gif/.test(fichier.type)) return ok(fichier);
+      var img = new Image(), url = URL.createObjectURL(fichier);
+      img.onload = function () {
+        var max = 1600, k = Math.min(1, max / Math.max(img.width, img.height));
+        var c = document.createElement('canvas'); c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+        c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+        URL.revokeObjectURL(url);
+        c.toBlob(function (b) { ok(b || fichier); }, 'image/jpeg', 0.82);
+      };
+      img.onerror = function () { URL.revokeObjectURL(url); ok(fichier); };
+      img.src = url;
+    });
+  }
+  document.getElementById('joindre').addEventListener('click', function () { pjInput.click(); });
+  pjInput.addEventListener('change', async function () {
+    var fichiers = Array.from(pjInput.files || []); pjInput.value = '';
+    if (!fichiers.length) return;
+    var place = 5 - pjUrls.length;
+    if (place <= 0) { ajouterBulle('Vous pouvez joindre 5 fichiers au maximum.', 'erreur'); return; }
+    var bouton = document.getElementById('joindre'); bouton.disabled = true; bouton.style.opacity = '.5';
+    for (var i = 0; i < Math.min(place, fichiers.length); i++) {
+      try {
+        var f = await pjCompresser(fichiers[i]);
+        var fd = new FormData(); fd.append('file', f, fichiers[i].name); fd.append('upload_preset', 'rsia_sav_unsigned'); fd.append('folder', 'iko-suite-sav');
+        var r = await fetch('https://api.cloudinary.com/v1_1/dvbh3llqq/auto/upload', { method: 'POST', body: fd });
+        var d = await r.json();
+        if (d && d.secure_url) pjUrls.push(d.secure_url); else throw new Error('x');
+      } catch (e) { ajouterBulle("Une photo n'a pas pu être envoyée. Réessayez.", 'erreur'); }
+    }
+    bouton.disabled = false; bouton.style.opacity = '1';
+    pjAfficher();
+    if (pjUrls.length) ajouterBulle('\ud83d\udcce ' + pjUrls.length + ' fichier(s) joint(s) \u2014 ils partiront avec votre demande.', 'visiteur');
+  });
 
   boutonEnvoyer.addEventListener('click', function () { envoyer(); });
 
@@ -715,7 +772,8 @@ window.IKO_CLIENT_READY = (async function () {
   const landingBtn = document.getElementById('amandine-landing-bouton');
   const retourBtn = document.getElementById('amandine-retour-sphere');
   if (sphereBtn) sphereBtn.addEventListener('click', function () { debloquerAudioIOS(); if (boutonMicro) boutonMicro.click(); });
-  if (landingBtn) landingBtn.addEventListener('click', ouvrirConversation);
+  // Ouvre le vrai formulaire SAV de la page d'accueil (parent) ; hors iframe, repli sur la conversation écrite.
+  if (landingBtn) landingBtn.addEventListener('click', function () { try { if (window.parent !== window && typeof window.parent.toggleWidget === 'function') { window.parent.toggleWidget(); return; } } catch (e) {} ouvrirConversation(); });
   if (retourBtn) retourBtn.addEventListener('click', retournerSphere);
 
   // ---- Accueil : "Suivre mes demandes" = numéro + e-mail/téléphone (jamais le

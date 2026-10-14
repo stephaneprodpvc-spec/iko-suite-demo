@@ -1,4 +1,6 @@
 import { limiterChat } from "./_securite.js";
+import { blocSystemeIko } from "./_systeme-iko.js";
+import { blocMetierMenuiserie } from "./_metier-menuiserie.js";
 import { normaliserConnaissance, blocPromptConnaissance, affinerPourPrompt } from "./_connaissance.js";
 import { blocPromptAnalyticsSAV, genererRecommandationsSAV, blocPromptRecommandationsSAV } from "../analytics-sav.js";
 import { nomAssistantDepuisEntree } from "./_assistants.js";
@@ -95,7 +97,7 @@ function buildSystemPrompt(connaissanceEntrees, analyticsSAVResume, nomAssistant
   // (natures differentes) - jamais fusionnes. Recommandations = 3e bloc,
   // deduit des deux precedents (voir chat-dashboard.js pour le detail).
   const recommandationsSAV = genererRecommandationsSAV(analyticsSAVResume, connaissanceEntrees);
-  return construireSystemPromptBase(nomAssistant) + blocPromptConnaissance(connaissanceEntrees) + blocPromptAnalyticsSAV(analyticsSAVResume) + blocPromptRecommandationsSAV(recommandationsSAV);
+  return construireSystemPromptBase(nomAssistant) + blocSystemeIko("technicien") + blocMetierMenuiserie("technicien") + blocPromptConnaissance(connaissanceEntrees) + blocPromptAnalyticsSAV(analyticsSAVResume) + blocPromptRecommandationsSAV(recommandationsSAV);
 }
 
 // ==================== Bloc 1 : diagnostic assisté ====================

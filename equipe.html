@@ -24,28 +24,31 @@ button.n{background:#0D0D0D}button.b{background:#fff;color:#0D0D0D;border:1px so
 .badge{display:inline-block;border-radius:20px;padding:3px 9px;font-size:11px;font-weight:800}
 .ret{background:#0D0D0D;color:#FF9A3C}.pro{background:#FF6B00;color:#fff}.ok{background:#fff;color:#0D0D0D;border:1px solid #D1D5DB}
 .actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}.petit{font-size:12px;color:#6B7280}
-.carnet{margin-top:8px;border-top:1px solid #E5E7EB;padding-top:6px;font-size:12px}
+.vide{color:#9CA3AF;font-style:italic}.carnet{margin-top:8px;border-top:1px solid #E5E7EB;padding-top:6px;font-size:12px}
 </style>
 </head>
 <body>
 <div class="w">
+  <button class="b" id="bRetour" style="margin-bottom:10px">← Retour au tableau de bord</button>
   <h1>👷 Équipe technique</h1>
-  <p class="sub">Zone, compétences et capacité de chaque technicien : le tableau de bord vous propose automatiquement le bon technicien pour chaque SAV.</p>
-  <div class="carte"><div class="ligne"><b>Nouveau technicien</b><button class="b" id="bForm">＋ Ajouter</button></div>
+  <p class="sub">Ici vous gérez vos techniciens. Le tableau de bord s'en sert pour proposer le bon technicien sur chaque SAV.</p>
+  <div class="carte"><b>Comment ça marche ?</b>
+    <div class="petit" style="margin-top:6px;line-height:1.5">1. Pour chaque technicien, indiquez sa <b>zone</b> (départements ou codes postaux), ses <b>compétences</b> (alu, pvc, volet…) et sa <b>capacité</b> par jour.<br>2. Sur un nouveau SAV, le tableau de bord propose celui dont la zone et les compétences correspondent, de la même agence, le moins chargé.<br>3. Un champ laissé vide = pas de limite : le technicien peut être proposé partout. Vous gardez toujours le dernier mot (bouton « Assigner »).</div></div>
+  <div class="carte"><div class="ligne"><b id="fTitre">Nouveau technicien</b><button class="b" id="bForm">＋ Ajouter</button></div>
     <form id="form" style="display:none">
-      <div class="g2"><div><label>Nom *</label><input id="fNom" required></div><div><label>Agence</label><input id="fAg"></div>
+      <div class="g2"><div><label>Nom *</label><input id="fNom" required></div><div><label>Agence de rattachement *</label><select id="fAg" required><option value="">— Choisir l'agence —</option></select></div>
       <div><label>E-mail</label><input id="fMail" type="email"></div><div><label>Téléphone</label><input id="fTel"></div></div>
       <label>Zone d'intervention (départements ou codes postaux, séparés par des virgules)</label><input id="fZone" placeholder="31, 09, 82100">
       <label>Compétences (mots-clés séparés par des virgules)</label><input id="fComp" placeholder="alu, pvc, volet, porte, vitrage">
       <label>Capacité (interventions par jour)</label><input id="fCap" type="number" min="1" value="4">
-      <div class="actions"><button type="submit">Enregistrer</button></div><div class="petit" id="fMsg"></div>
+      <div class="actions"><button type="submit">Enregistrer</button><button type="button" class="b" id="bAnnul">Annuler</button></div><div class="petit" id="fMsg"></div>
     </form></div>
   <div id="liste"><div class="carte petit">Chargement…</div></div>
 </div>
 <script>
 (function(){
   var $=function(i){return document.getElementById(i)};
-  var TABLE='/api/airtable/Techniciens', ctx={id:null}, items=[];
+  var TABLE='/api/airtable/Techniciens', ctx={id:null}, items=[], edit=null;
   var esc=function(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})};
   var ZONE='Zone (départements ou codes postaux)';
   async function contexte(){
@@ -61,6 +64,17 @@ button.n{background:#0D0D0D}button.b{background:#fff;color:#0D0D0D;border:1px so
     }
     $('liste').innerHTML='<div class="carte">Accès réservé aux administrateurs.</div>';return false;
   }
+  async function chargerAgences(){
+    var noms=[];
+    try{
+      var r=await fetch('/api/airtable/Agences?maxRecords=50');
+      if(r.ok){noms=((await r.json()).records||[]).filter(function(a){
+        var f=a.fields;if(!f['Nom agence'])return false;if(f.Actif===false)return false;
+        return !ctx.id||!Array.isArray(f.Client)||f.Client.indexOf(ctx.id)>-1}).map(function(a){return a.fields['Nom agence']})}
+    }catch(e){}
+    noms.sort(function(a,b){return String(a).localeCompare(String(b),'fr',{numeric:true})});
+    $('fAg').innerHTML='<option value="">— Choisir l\'agence —</option>'+noms.map(function(n){return '<option>'+esc(n)+'</option>'}).join('');
+  }
   async function charger(){
     var r=await fetch(TABLE+'?maxRecords=100');
     if(!r.ok){$('liste').innerHTML='<div class="carte">Chargement impossible ('+r.status+').</div>';return}
@@ -69,13 +83,19 @@ button.n{background:#0D0D0D}button.b{background:#fff;color:#0D0D0D;border:1px so
   function afficher(){
     if(!items.length){$('liste').innerHTML='<div class="carte petit">Aucun technicien. Ajoutez votre équipe pour activer le rattachement automatique.</div>';return}
     $('liste').innerHTML=items.map(function(t){var f=t.fields;
-      return '<div class="carte" data-id="'+t.id+'"><div class="ligne"><div><b>'+esc(f.Nom)+'</b> '+(f.Actif?'<span class="badge ok">Actif</span>':'<span class="badge ret">Inactif</span>')+'<div class="petit">'+esc(f.Agence||'')+(f.Email?' · '+esc(f.Email):'')+(f['Téléphone']?' · '+esc(f['Téléphone']):'')+'</div></div><div class="petit" style="text-align:right">'+(f['Capacité par jour']||'—')+' interv./jour</div></div>'
-        +'<div class="petit" style="margin-top:6px">📍 '+esc(f[ZONE]||'toute zone')+'<br>🔧 '+esc(f['Compétences']||'toutes compétences')+'</div>'
-        +'<div class="actions"><button class="b" data-a="act">'+(f.Actif?'Désactiver':'Activer')+'</button><button class="b" data-a="sup">Supprimer</button></div></div>'}).join('');
+      return '<div class="carte" data-id="'+t.id+'"><div class="ligne"><div><b>'+esc(f.Nom)+'</b> '+(f.Actif?'<span class="badge ok">Actif</span>':'<span class="badge ret">Inactif</span>')+'<div class="petit">'+esc(f.Agence||'')+(f.Email?' · '+esc(f.Email):'')+(f['Téléphone']?' · '+esc(f['Téléphone']):'')+'</div></div><div class="petit" style="text-align:right">'+(f['Capacité par jour']?'Capacité : '+esc(f['Capacité par jour'])+' interv./jour':'<span class="vide">Capacité : non renseignée</span>')+'</div></div>'
+        +'<div class="petit" style="margin-top:6px">📍 Zone : '+(f[ZONE]?esc(f[ZONE]):'<span class="vide">non définie → proposé partout</span>')+'<br>🔧 Compétences : '+(f['Compétences']?esc(f['Compétences']):'<span class="vide">non définies → toutes</span>')+'</div>'
+        +'<div class="actions"><button class="b" data-a="mod">✏️ Modifier</button><button class="b" data-a="act">'+(f.Actif?'Désactiver':'Activer')+'</button><button class="b" data-a="sup">Supprimer</button></div></div>'}).join('');
   }
   $('liste').addEventListener('click',async function(e){
     var b=e.target.closest('button[data-a]');if(!b)return;
     var id=b.closest('[data-id]').dataset.id,t=items.find(function(x){return x.id===id});
+    if(b.dataset.a==='mod'){
+      var f=t.fields;edit=id;
+      $('fNom').value=f.Nom||'';if(f.Agence&&![].some.call($('fAg').options,function(o){return o.value===f.Agence})){var o=document.createElement('option');o.textContent=f.Agence;$('fAg').appendChild(o)}$('fAg').value=f.Agence||'';$('fMail').value=f.Email||'';$('fTel').value=f['Téléphone']||'';
+      $('fZone').value=f[ZONE]||'';$('fComp').value=f['Compétences']||'';$('fCap').value=f['Capacité par jour']||4;
+      $('fTitre').textContent='Modifier : '+(f.Nom||'');$('form').style.display='block';window.scrollTo({top:0,behavior:'smooth'});return;
+    }
     if(b.dataset.a==='act'){
       var r=await fetch(TABLE+'/'+id,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({fields:{Actif:!t.fields.Actif}})});
       if(r.ok)t.fields.Actif=!t.fields.Actif;else alert('Échec ('+r.status+').');
@@ -85,7 +105,10 @@ button.n{background:#0D0D0D}button.b{background:#fff;color:#0D0D0D;border:1px so
     }
     afficher();
   });
-  $('bForm').onclick=function(){$('form').style.display=$('form').style.display==='none'?'block':'none'};
+  function fermerForm(){edit=null;$('form').reset();$('form').style.display='none';$('fMsg').textContent='';$('fTitre').textContent='Nouveau technicien'}
+  $('bForm').onclick=function(){if($('form').style.display==='none'){edit=null;$('form').reset();$('fTitre').textContent='Nouveau technicien';$('form').style.display='block'}else fermerForm()};
+  $('bAnnul').onclick=fermerForm;
+  $('bRetour').onclick=function(){var c='';try{c=localStorage.getItem('iko_client_slug')||''}catch(e){}location.href='/dashboard.html'+(c?'?client='+encodeURIComponent(c):'')};
   $('form').onsubmit=async function(ev){
     ev.preventDefault();
     var fields={Nom:$('fNom').value.trim(),Agence:$('fAg').value.trim(),'Téléphone':$('fTel').value.trim(),Actif:true,'Capacité par jour':Number($('fCap').value)||4,'Compétences':$('fComp').value.trim()};
@@ -93,11 +116,12 @@ button.n{background:#0D0D0D}button.b{background:#fff;color:#0D0D0D;border:1px so
     if($('fMail').value.trim())fields.Email=$('fMail').value.trim();
     if(ctx.id)fields['Compte client']=[ctx.id];
     $('fMsg').textContent='Enregistrement…';
-    var r=await fetch(TABLE,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({fields:fields})});
+    if(edit){delete fields.Actif;delete fields['Compte client']}
+    var r=await fetch(edit?TABLE+'/'+edit:TABLE,{method:edit?'PATCH':'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({fields:fields})});
     if(!r.ok){$('fMsg').textContent='Échec ('+r.status+').';return}
-    $('form').reset();$('form').style.display='none';$('fMsg').textContent='';await charger();
+    fermerForm();await charger();
   };
-  contexte().then(function(ok){if(ok)charger()});
+  contexte().then(function(ok){if(ok){chargerAgences();charger()}});
 })();
 </script>
 </body>

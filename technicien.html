@@ -51,6 +51,10 @@ div[style*="background: rgb(255, 255, 255)"], button[style*="background: rgb(255
 input, select, textarea { background: rgba(255,255,255,0.75) !important; border: 1px solid rgba(255,255,255,0.85) !important; border-radius: 12px !important; }
 button[style*="background: var(--iko-primary)"] { background: linear-gradient(180deg, rgba(255,150,60,0.95), rgba(255,107,0,0.85)) !important; border: 1px solid rgba(255,255,255,0.55) !important; box-shadow: 0 4px 14px rgba(255,107,0,0.35), inset 0 1px 0 rgba(255,255,255,0.5) !important; color: #fff !important; }
 button[style*="background: var(--iko-bg-sombre)"] { background: rgba(20,20,22,0.78) !important; -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); border: 1px solid rgba(255,255,255,0.3) !important; box-shadow: inset 0 1px 0 rgba(255,255,255,0.25) !important; }
+.glass-btn { background: rgba(255,255,255,0.34) !important; -webkit-backdrop-filter: blur(16px) saturate(170%); backdrop-filter: blur(16px) saturate(170%); border: 1px solid rgba(255,255,255,0.65) !important; color: #7a2e00 !important; border-radius: 12px; box-shadow: 0 4px 14px rgba(120,40,0,0.18), inset 0 1px 0 rgba(255,255,255,0.7) !important; font-weight: 800; cursor: pointer; transition: background .18s, transform .12s, box-shadow .18s; }
+.glass-btn:hover { background: rgba(255,255,255,0.5) !important; }
+.glass-btn:active { transform: scale(0.97); }
+.glass-btn.actif { background: rgba(255,255,255,0.88) !important; color: #c24a00 !important; box-shadow: 0 6px 18px rgba(120,40,0,0.25), inset 0 1px 0 #fff !important; }
 </style>
 </head>
 <body>
@@ -2326,6 +2330,7 @@ function ModalAction({ ticket, onClose, onDone }) {
       } else if (mode === "annuler") {
         fields.Statut = "Annulé";
         fields.Commentaire = "Annulé : " + commentaire;
+        fields["Raison annulation"] = commentaire.trim(); // exigé par le serveur pour toute annulation
         const planningId = ticket.fields?.PlanningID;
         if (planningId) {
           await fetch('/api/airtable/Planning/'+planningId, {
@@ -2517,7 +2522,8 @@ function ModalAction({ ticket, onClose, onDone }) {
   return (
     <div className="modal-overlay" onClick={e => e.target===e.currentTarget && onClose()}>
       <div className="modal-box">
-        <div style={{width:"36px",height:"4px",background:"#D1D5DB",borderRadius:"2px",margin:"0 auto 20px"}}/>
+        <div style={{width:"36px",height:"4px",background:"#D1D5DB",borderRadius:"2px",margin:"0 auto 12px"}}/>
+        {!mode && <button className="glass-btn" onClick={onClose} style={{padding:"7px 14px",fontSize:"12px",marginBottom:"12px"}}>← Retour aux interventions</button>}
         <div style={{marginBottom:"20px"}}>
           <div style={{fontSize:"11px",color:C.or,fontWeight:"700",fontFamily:"monospace",marginBottom:"4px"}}>{ticket.fields?.Name}</div>
           <div style={{fontSize:"16px",fontWeight:"900",color:C.white}}>{ticket.fields?.Client}</div>
@@ -2536,7 +2542,7 @@ function ModalAction({ ticket, onClose, onDone }) {
               style={{display:"flex",alignItems:"center",justifyContent:"center",width:"100%",padding:"14px",borderRadius:"12px",background:photoEnCoursUpload?"#D1D5DB":"rgba(var(--iko-primary-rgb),0.1)",border:"2px solid var(--iko-primary)",color:"var(--iko-primary)",fontSize:"14px",fontWeight:"900",cursor:photoEnCoursUpload?"not-allowed":"pointer"}}>
               {photoEnCoursUpload ? (progressionPhotos ? "⏳ Envoi " + (progressionPhotos.fait + 1) + "/" + progressionPhotos.total + "..." : "⏳ Envoi...") : "📷 Ajouter des photos"}
             </label>
-            {photosTicket && <div style={{fontSize:"11px",color:C.muted,marginTop:"6px",textAlign:"center"}}>{photosTicket.split(",").filter(Boolean).length} photo(s) sur ce ticket</div>}
+            {photosTicket && <div style={{fontSize:"11px",color:C.muted,marginTop:"6px",textAlign:"center"}}>{photosTicket.split(",").filter(Boolean).length} photo(s) sur ce ticket{(() => { const urls = String(photosTicket || "").split(",").map(u => u.trim()).filter(Boolean); return urls.length ? (<div style={{display:"flex",gap:"6px",flexWrap:"wrap",marginTop:"6px"}}>{urls.map((u, i) => /\.pdf($|\?)/i.test(u) ? <a key={i} href={u} target="_blank" rel="noopener" style={{width:"56px",height:"56px",borderRadius:"8px",border:"1px solid #ddd",background:"#f4f4f4",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"11px",fontWeight:"700",color:"#444",textDecoration:"none"}}>PDF</a> : <a key={i} href={u} target="_blank" rel="noopener"><img src={u} alt={"Photo " + (i + 1)} loading="lazy" style={{width:"56px",height:"56px",objectFit:"cover",borderRadius:"8px",border:"1px solid #ddd",display:"block"}}/></a>)}</div>) : null; })()}</div>}
           </div>
           {erreurPhoto && <div style={{fontSize:"11px",color:"var(--iko-erreur)",marginTop:"6px"}}>{erreurPhoto}</div>}
           {analysePhotoEnCours && <div style={{fontSize:"11px",color:C.muted,marginTop:"8px",textAlign:"center"}}>⏳ Max regarde la photo...</div>}
@@ -2615,7 +2621,7 @@ function ModalAction({ ticket, onClose, onDone }) {
         {mode === "devis_choix" && (
           <>
             <div style={{display:"flex",alignItems:"center",gap:"8px",marginBottom:"16px"}}>
-              <button onClick={() => setMode(null)} style={{background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:"18px"}}>←</button>
+              <button className="glass-btn" onClick={() => setMode(null)} style={{padding:"6px 12px",fontSize:"12px"}}>← Retour</button>
               <span style={{fontSize:"14px",fontWeight:"700",color:C.white}}>💶 Devis</span>
             </div>
             <div style={{fontSize:"12px",color:C.muted,marginBottom:"14px",textAlign:"center"}}>As-tu le matériel disponible pour le poser aujourd'hui ?</div>
@@ -2634,7 +2640,7 @@ function ModalAction({ ticket, onClose, onDone }) {
         {mode === "terminer" && (
           <>
             <div style={{display:"flex",alignItems:"center",gap:"8px",marginBottom:"16px"}}>
-              <button onClick={() => setMode(null)} style={{background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:"18px"}}>←</button>
+              <button className="glass-btn" onClick={() => setMode(null)} style={{padding:"6px 12px",fontSize:"12px"}}>← Retour</button>
               <span style={{fontSize:"14px",fontWeight:"700",color:C.white}}>✓ Valider l'intervention</span>
             </div>
             <div style={{background:C.vertDim,border:"1px solid rgba(var(--iko-primary-rgb),0.3)",borderRadius:"10px",padding:"10px 14px",marginBottom:"14px",fontSize:"12px",color:C.vert}}>
@@ -2656,7 +2662,7 @@ function ModalAction({ ticket, onClose, onDone }) {
         {mode === "devis_place" && (
           <>
             <div style={{display:"flex",alignItems:"center",gap:"8px",marginBottom:"16px"}}>
-              <button onClick={() => setMode(null)} style={{background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:"18px"}}>←</button>
+              <button className="glass-btn" onClick={() => setMode("devis_choix")} style={{padding:"6px 12px",fontSize:"12px"}}>← Retour</button>
               <span style={{fontSize:"14px",fontWeight:"700",color:C.white}}>💶 Devis sur place</span>
             </div>
             <div style={{background:C.vertDim,border:"1px solid rgba(var(--iko-primary-rgb),0.3)",borderRadius:"10px",padding:"10px 14px",marginBottom:"14px",fontSize:"12px",color:C.vert}}>
@@ -2705,7 +2711,7 @@ function ModalAction({ ticket, onClose, onDone }) {
         {mode === "annuler" && (
           <>
             <div style={{display:"flex",alignItems:"center",gap:"8px",marginBottom:"16px"}}>
-              <button onClick={() => setMode(null)} style={{background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:"18px"}}>←</button>
+              <button className="glass-btn" onClick={() => setMode(null)} style={{padding:"6px 12px",fontSize:"12px"}}>← Retour</button>
               <span style={{fontSize:"14px",fontWeight:"700",color:C.white}}>❌ Annuler le RDV</span>
             </div>
             <div style={{background:C.rougeDim,border:"1px solid rgba(var(--iko-erreur-rgb),0.3)",borderRadius:"10px",padding:"10px 14px",marginBottom:"14px",fontSize:"12px",color:C.rouge}}>
@@ -2725,7 +2731,7 @@ function ModalAction({ ticket, onClose, onDone }) {
         {mode === "piece" && (
           <>
             <div style={{display:"flex",alignItems:"center",gap:"8px",marginBottom:"16px"}}>
-              <button onClick={() => setMode(null)} style={{background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:"18px"}}>←</button>
+              <button className="glass-btn" onClick={() => setMode(null)} style={{padding:"6px 12px",fontSize:"12px"}}>← Retour</button>
               <span style={{fontSize:"14px",fontWeight:"700",color:C.white}}>🔧 Pièce à commander</span>
             </div>
             <div style={{background:"rgba(var(--iko-primary-rgb),0.08)",border:"1px solid var(--iko-primary)",borderRadius:"10px",padding:"10px 14px",marginBottom:"14px",fontSize:"12px",color:"var(--iko-bg-sombre)"}}>
@@ -2744,7 +2750,7 @@ function ModalAction({ ticket, onClose, onDone }) {
         {mode === "replanifier" && (
           <>
             <div style={{display:"flex",alignItems:"center",gap:"8px",marginBottom:"16px"}}>
-              <button onClick={() => setMode(null)} style={{background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:"18px"}}>←</button>
+              <button className="glass-btn" onClick={() => setMode(null)} style={{padding:"6px 12px",fontSize:"12px"}}>← Retour</button>
               <span style={{fontSize:"14px",fontWeight:"700",color:C.white}}>🔄 Replanifier l'intervention</span>
             </div>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"10px",marginBottom:"12px"}}>
@@ -2773,7 +2779,8 @@ function ModalAction({ ticket, onClose, onDone }) {
         )}
         {mode === "debloquer" && (
           <>
-            <div style={{marginBottom:"16px"}}>
+            <div style={{display:"flex",alignItems:"center",gap:"8px",marginBottom:"16px"}}>
+              <button className="glass-btn" onClick={onClose} style={{padding:"6px 12px",fontSize:"12px"}}>← Retour</button>
               <span style={{fontSize:"14px",fontWeight:"700",color:C.white}}>🔓 Débloquer un créneau plus tôt</span>
             </div>
             <div style={{background:"rgba(var(--iko-dark-rgb),0.05)",border:"1px solid rgba(var(--iko-dark-rgb),0.2)",borderRadius:"10px",padding:"10px 14px",marginBottom:"14px",fontSize:"12px",color:"var(--iko-bg-sombre)"}}>
@@ -2809,7 +2816,7 @@ function ModalAction({ ticket, onClose, onDone }) {
         {mode === "devis" && (
           <>
             <div style={{display:"flex",alignItems:"center",gap:"8px",marginBottom:"16px"}}>
-              <button onClick={() => setMode(null)} style={{background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:"18px"}}>←</button>
+              <button className="glass-btn" onClick={() => setMode(null)} style={{padding:"6px 12px",fontSize:"12px"}}>← Retour</button>
               <span style={{fontSize:"14px",fontWeight:"700",color:C.white}}>📋 Demande de devis</span>
             </div>
             <div style={{background:"rgba(var(--iko-dark-rgb),0.05)",border:"1px solid rgba(var(--iko-dark-rgb),0.2)",borderRadius:"10px",padding:"10px 14px",marginBottom:"14px",fontSize:"12px",color:"var(--iko-bg-sombre)"}}>
@@ -3058,6 +3065,7 @@ function ItineraireModal({ agence, tickets, onClose }) {
 
 function TicketCard({ ticket, onAction, onAcquitterRdv, onEtablirDevis, onEnRoute }) {
   const [choixEta, setChoixEta] = React.useState(false);
+  const [ouvert, setOuvert] = React.useState(false);
   const urgent = ticket.fields?.Qualification === "Oui";
   const rdvModifie = ticket.fields?.["RDV modifié - notif technicien"] === true;
   // Extension Bloc 5 : même proxy createdTime que dashboard.html (aucune
@@ -3106,44 +3114,43 @@ function TicketCard({ ticket, onAction, onAcquitterRdv, onEtablirDevis, onEnRout
             <span style={{fontSize:"14px"}}>📅</span>
             <span style={{fontSize:"12px",color:C.text,fontWeight:"600"}}>{ticket.fields?.["Créneau"]}</span>
           </div>
-          {ticket.fields?.Adresse && (
+          {ouvert && ticket.fields?.Adresse && (
             <div style={{display:"flex",gap:"8px",alignItems:"center"}}>
               <span style={{fontSize:"14px"}}>📍</span>
               <span style={{fontSize:"12px",color:C.muted}}>{ticket.fields?.Adresse}</span>
             </div>
           )}
-          {ticket.fields?.["Téléphone"] && (
+          {ouvert && ticket.fields?.["Téléphone"] && (
             <a href={"tel:"+ticket.fields["Téléphone"]} style={{display:"flex",gap:"8px",alignItems:"center",textDecoration:"none"}}>
               <span style={{fontSize:"14px"}}>📞</span>
               <span style={{fontSize:"12px",color:C.or,fontWeight:"700"}}>{ticket.fields?.["Téléphone"]}</span>
             </a>
           )}
-          {ticket.fields?.Photos && (
-            <a href={ticket.fields.Photos.split(',')[0].trim()} target="_blank" style={{display:"flex",gap:"8px",alignItems:"center",textDecoration:"none"}}>
-              <span style={{fontSize:"14px"}}>📎</span>
-              <span style={{fontSize:"12px",color:C.or,fontWeight:"700"}}>Voir la/les photo(s)</span>
-            </a>
-          )}
+          {ouvert && ticket.fields?.Photos && (() => { const urls = String(ticket.fields.Photos || "").split(",").map(u => u.trim()).filter(Boolean); return urls.length ? (<div style={{display:"flex",gap:"6px",flexWrap:"wrap",marginTop:"6px"}}>{urls.map((u, i) => /\.pdf($|\?)/i.test(u) ? <a key={i} href={u} target="_blank" rel="noopener" style={{width:"56px",height:"56px",borderRadius:"8px",border:"1px solid #ddd",background:"#f4f4f4",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"11px",fontWeight:"700",color:"#444",textDecoration:"none"}}>PDF</a> : <a key={i} href={u} target="_blank" rel="noopener"><img src={u} alt={"Photo " + (i + 1)} loading="lazy" style={{width:"56px",height:"56px",objectFit:"cover",borderRadius:"8px",border:"1px solid #ddd",display:"block"}}/></a>)}</div>) : null; })()}
         </div>
-        {commentaire && (
+        {ouvert && commentaire && (
           <div style={{background:C.card2,border:"1px solid "+C.border,borderRadius:"8px",padding:"8px 12px",marginBottom:"12px",fontSize:"11px",color:C.muted,fontStyle:"italic"}}>
             💬 {commentaire}
           </div>
         )}
-        {diagnostic && (
+        {ouvert && diagnostic && (
           <div style={{background:"rgba(var(--iko-dark-rgb),0.04)",border:"1px solid rgba(var(--iko-dark-rgb),0.15)",borderRadius:"8px",padding:"8px 12px",marginBottom:"12px",fontSize:"11px",color:"var(--iko-bg-sombre)"}}>
             📋 {diagnostic}
           </div>
         )}
-        {ticket.fields?.["Montant devis"] && (isDevisEnvoye || isDevisRefuse) && (
+        {ouvert && ticket.fields?.["Montant devis"] && (isDevisEnvoye || isDevisRefuse) && (
           <div style={{fontSize:"12px",color:C.text,marginBottom:"12px"}}>💶 Devis envoyé : <strong>{ticket.fields["Montant devis"]} € TTC</strong></div>
         )}
-        {!isTermine && !isAnnule && !isEnAttenteDevis && onEnRoute && (() => {
+        {(ouvert || choixEta || ticket.fields?.["En route depuis"]) && !isTermine && !isAnnule && !isEnAttenteDevis && onEnRoute && (() => {
           const depuis = ticket.fields?.["En route depuis"] ? new Date(ticket.fields["En route depuis"]) : null;
           const enRoute = depuis && (Date.now() - depuis.getTime()) < 4 * 3600000;
           if (enRoute) {
             const arr = ticket.fields?.["Arrivée estimée"] ? new Date(ticket.fields["Arrivée estimée"]).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Paris" }) : "";
-            return <div style={{marginBottom:"10px",padding:"10px 12px",borderRadius:"12px",background:"rgba(255,107,0,0.12)",border:"1px solid rgba(255,107,0,0.4)",fontSize:"12px",fontWeight:"800",color:C.or}}>🚗 Client prévenu — arrivée vers {arr}</div>;
+            const nf = ticket.fields?._notif;
+            const msg = nf === 'echec' ? "⚠️ Heure enregistrée (arrivée vers " + arr + "), mais l'envoi au client a échoué — appelez-le"
+              : nf === 'sans_contact' ? "Heure enregistrée (arrivée vers " + arr + ") — aucun e-mail ni téléphone sur ce ticket : le client n'est pas prévenu"
+              : "🚗 Client prévenu — arrivée vers " + arr;
+            return <div style={{marginBottom:"10px",padding:"10px 12px",borderRadius:"12px",background:"rgba(255,107,0,0.12)",border:"1px solid rgba(255,107,0,0.4)",fontSize:"12px",fontWeight:"800",color:C.or}}>{msg}</div>;
           }
           if (!choixEta) return (
             <button onClick={() => setChoixEta(true)}
@@ -3162,6 +3169,10 @@ function TicketCard({ ticket, onAction, onAcquitterRdv, onEtablirDevis, onEnRout
               <button onClick={() => setChoixEta(false)} style={{marginTop:"8px",background:"none",border:"none",color:C.muted,fontSize:"11px",textDecoration:"underline",cursor:"pointer"}}>Annuler</button>
             </div>);
         })()}
+        <button className="glass-btn" aria-expanded={ouvert} onClick={() => setOuvert(o => !o)}
+          style={{width:"100%",marginBottom:"10px",padding:"9px",fontSize:"12px"}}>
+          {ouvert ? "Réduire ▴" : "Afficher les détails ▾"}
+        </button>
         {!isTermine && !isAnnule && !isEnAttenteDevis && (
           <button onClick={() => onAction(ticket)}
             style={{width:"100%",padding:"16px",background:C.or,color:"var(--iko-dark)",border:"none",borderRadius:"12px",fontSize:"15px",fontWeight:"900",cursor:"pointer"}}>
@@ -3331,9 +3342,13 @@ function Technicien({ agence, onClose }) {
     const arrivee = new Date(maintenant.getTime() + minutes * 60000);
     const champs = { "En route depuis": maintenant.toISOString(), "Arrivée estimée": arrivee.toISOString() };
     setTickets(prev => prev.map(t => t.id === ticket.id ? { ...t, fields: { ...t.fields, ...champs } } : t));
+    // Le résultat réel de l'envoi est mémorisé (_notif) pour ne pas afficher « Client prévenu » si rien n'est parti.
+    const majNotif = (v) => setTickets(prev => prev.map(t => t.id === ticket.id ? { ...t, fields: { ...t.fields, _notif: v } } : t));
+    const contactClient = !!(ticket.fields?.Email || ticket.fields?.["Téléphone"]);
     try {
-      await fetch('/api/airtable/tenant/Tickets%20SAV/' + ticket.id, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fields: champs }) });
-      await fetch(WEBHOOK, {
+      const rPatch = await fetch('/api/airtable/tenant/Tickets%20SAV/' + ticket.id, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fields: champs }) });
+      if (!rPatch.ok) majNotif('echec');
+      const rHook = await fetch(WEBHOOK, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           marque: 'iko', action: 'technicien_en_route',
@@ -3341,7 +3356,8 @@ function Technicien({ agence, onClose }) {
           agence: ticket.fields?.Agence, minutes, arrivee: arrivee.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Paris' })
         })
       });
-    } catch (e) { console.error(e); }
+      majNotif(!rHook.ok ? 'echec' : (contactClient ? 'ok' : 'sans_contact'));
+    } catch (e) { console.error(e); majNotif('echec'); }
   };
 
   const [lienAgenda, setLienAgenda] = React.useState("");
@@ -3681,10 +3697,35 @@ function Technicien({ agence, onClose }) {
       {itineraireOpen && (
         <ItineraireModal agence={agence} tickets={filtered} onClose={() => setItineraireOpen(false)}/>
       )}
+      {noteOpen && (
+        <div className="modal-overlay" onClick={e => e.target===e.currentTarget && setNoteOpen(false)}>
+          <div className="modal-box" style={{textAlign:"center"}}>
+            <div style={{fontSize:"14px",fontWeight:"900",color:C.white,marginBottom:"14px"}}>⭐ Note client — {agenceShort}</div>
+            {moyenneAgence ? (
+              <>
+                <div style={{fontSize:"40px",fontWeight:"900",color:"var(--iko-primary)",marginBottom:"6px"}}>{moyenneAgence.toFixed(1)} / 5</div>
+                <div style={{fontSize:"20px",marginBottom:"10px"}}>{"⭐".repeat(Math.round(moyenneAgence))}{"☆".repeat(5-Math.round(moyenneAgence))}</div>
+                <div style={{fontSize:"11px",color:C.muted,marginBottom:"18px"}}>Basé sur {notesAgence.length} avis client{notesAgence.length>1?"s":""}</div>
+                <div style={{display:"flex",flexDirection:"column",gap:"8px",maxHeight:"220px",overflowY:"auto",textAlign:"left"}}>
+                  {notesAgence.filter(t => t.fields?.["Note Commentaire"]).slice(0,5).map(t => (
+                    <div key={t.id} style={{background:C.card2,border:"1px solid "+C.border,borderRadius:"8px",padding:"8px 10px",fontSize:"11px"}}>
+                      <div style={{color:"var(--iko-primary)",marginBottom:"3px"}}>{"⭐".repeat(t.fields.Note)}</div>
+                      <div style={{color:C.muted,fontStyle:"italic"}}>{t.fields["Note Commentaire"]}</div>
+                    </div>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <div style={{fontSize:"12px",color:C.muted,padding:"20px 0"}}>Aucun avis client pour le moment.</div>
+            )}
+            <button onClick={() => setNoteOpen(false)} style={{width:"100%",marginTop:"16px",padding:"11px",background:"transparent",color:C.muted,border:"1px solid "+C.border,borderRadius:"10px",fontSize:"12px",cursor:"pointer"}}>Fermer</button>
+          </div>
+        </div>
+      )}
       <div style={{background:C.card,borderBottom:"1px solid "+C.border,padding:"8px 12px 8px",position:"sticky",top:0,zIndex:100}}>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:"6px",flexWrap:"nowrap"}}>
           <div style={{display:"flex",alignItems:"center",gap:"8px",minWidth:0}}>
-            <div style={{width:"64px",height:"36px",background:"#FFFFFF",borderRadius:"10px",display:"flex",alignItems:"center",justifyContent:"center",padding:"3px",boxSizing:"border-box"}}>
+            <div style={{width:"84px",height:"46px",background:"transparent",display:"flex",alignItems:"center",justifyContent:"center",boxSizing:"border-box"}}>
               <img data-iko-logo src={CONFIG_ENTREPRISE.logoUrl || IKO_LOGO} alt="Iko" style={{width:"100%",height:"100%",objectFit:"contain"}}/>
             </div>
             <button title="Maintenir pour parler"
@@ -3695,10 +3736,13 @@ function Technicien({ agence, onClose }) {
             style={{width:"38px",height:"38px",borderRadius:"50%",flexShrink:0,background:"radial-gradient(circle at 35% 30%, var(--iko-primary-pale), var(--iko-primary) 55%, var(--iko-primary-fonce) 100%)",border:"2px solid var(--iko-primary)",color:"#fff",cursor:"pointer",fontSize:"20px",boxShadow:"0 0 26px rgba(var(--iko-primary-rgb),0.35)",animation:maxEcoute?"pulseMax 1.2s infinite":"none",touchAction:"none",userSelect:"none"}}>
             🎙️
           </button>
-            <div>
-              <div style={{fontSize:"12px",fontWeight:"800",color:C.muted,lineHeight:1.1}}>Technicien</div>
-              <div style={{fontSize:"11px",color:C.or,marginTop:"1px",fontWeight:"700",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>📍 {agenceShort}</div>
-            </div>
+            <button className="glass-btn" onClick={() => setNoteOpen(true)} title="Ma note client" aria-label="Ma note client"
+              style={{height:"38px",padding:"0 10px",fontSize:"12px",flexShrink:0,whiteSpace:"nowrap"}}>
+              ⭐ {moyenneAgence ? moyenneAgence.toFixed(1) : "—"}
+            </button>
+            {agenceShort && agenceShort !== "global" && (
+              <div style={{fontSize:"12px",color:C.or,fontWeight:"800",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{agenceShort}</div>
+            )}
           </div>
           <div style={{display:"flex",alignItems:"center",gap:"6px",flexShrink:0}}>
             {!appInstallee && <button onClick={() => window.ikoInstaller && window.ikoInstaller()} title="Installer l'appli sur cet appareil" style={{background:C.orDim,border:"1px solid "+C.orBord,color:C.or,borderRadius:"10px",width:"38px",height:"38px",fontSize:"16px",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>📲</button>}
@@ -3707,39 +3751,11 @@ function Technicien({ agence, onClose }) {
           </div>
         </div>
         <div style={{display:"flex",alignItems:"center",gap:"6px",marginTop:"8px",flexWrap:"nowrap",paddingBottom:"2px"}}>
-          <button onClick={imprimerSemaine} title="Imprimer ma semaine" style={{background:C.orDim,border:"1px solid "+C.orBord,color:C.or,borderRadius:"10px",padding:"0 7px",height:"34px",fontSize:"11px",fontWeight:"700",cursor:"pointer",display:"flex",alignItems:"center",gap:"4px",whiteSpace:"nowrap",flex:"1 1 auto",minWidth:0,justifyContent:"center"}}>🖨️ Ma semaine</button>
-            <button onClick={() => setItineraireOpen(true)} title="Itinéraire optimisé" style={{background:"var(--iko-bg-sombre)",border:"1px solid var(--iko-bg-sombre)",color:"#fff",borderRadius:"10px",padding:"0 7px",height:"34px",fontSize:"11px",fontWeight:"700",cursor:"pointer",display:"flex",alignItems:"center",gap:"4px",whiteSpace:"nowrap",flex:"1 1 auto",minWidth:0,justifyContent:"center"}}>🗺️ Itinéraire</button>
-            <button onClick={() => setOnglet("devis")} title="Devis en attente" style={{background:onglet==="devis"?"var(--iko-primary)":"rgba(var(--iko-primary-rgb),0.12)",border:"1px solid var(--iko-primary)",color:onglet==="devis"?"var(--iko-dark)":"var(--iko-primary-fonce)",borderRadius:"10px",padding:"0 7px",height:"34px",fontSize:"11px",fontWeight:"700",cursor:"pointer",display:"flex",alignItems:"center",gap:"4px",whiteSpace:"nowrap",flex:"1 1 auto",minWidth:0,justifyContent:"center"}}>
-              📋 Devis {nbDevisAttente > 0 && <span style={{background:onglet==="devis"?"var(--iko-bg-sombre)":"var(--iko-primary)",color:"#fff",borderRadius:"10px",padding:"0 5px",fontSize:"10px"}}>{nbDevisAttente}</span>}
-            </button>
-            <button onClick={() => setNoteOpen(true)} title="Ma note client" style={{background:"rgba(var(--iko-statut-attention-rgb),0.12)",border:"1px solid var(--iko-primary)",color:"var(--iko-primary-fonce)",borderRadius:"10px",padding:"0 7px",height:"34px",fontSize:"11px",fontWeight:"700",cursor:"pointer",display:"flex",alignItems:"center",gap:"4px",whiteSpace:"nowrap",flex:"1 1 auto",minWidth:0,justifyContent:"center"}}>
-              ⭐ {moyenneAgence ? moyenneAgence.toFixed(1) : "—"}
-            </button>
-            {noteOpen && (
-              <div className="modal-overlay" onClick={e => e.target===e.currentTarget && setNoteOpen(false)}>
-                <div className="modal-box" style={{textAlign:"center"}}>
-                  <div style={{fontSize:"14px",fontWeight:"900",color:C.white,marginBottom:"14px"}}>⭐ Note client — {agenceShort}</div>
-                  {moyenneAgence ? (
-                    <>
-                      <div style={{fontSize:"40px",fontWeight:"900",color:"var(--iko-primary)",marginBottom:"6px"}}>{moyenneAgence.toFixed(1)} / 5</div>
-                      <div style={{fontSize:"20px",marginBottom:"10px"}}>{"⭐".repeat(Math.round(moyenneAgence))}{"☆".repeat(5-Math.round(moyenneAgence))}</div>
-                      <div style={{fontSize:"11px",color:C.muted,marginBottom:"18px"}}>Basé sur {notesAgence.length} avis client{notesAgence.length>1?"s":""}</div>
-                      <div style={{display:"flex",flexDirection:"column",gap:"8px",maxHeight:"220px",overflowY:"auto",textAlign:"left"}}>
-                        {notesAgence.filter(t => t.fields?.["Note Commentaire"]).slice(0,5).map(t => (
-                          <div key={t.id} style={{background:C.card2,border:"1px solid "+C.border,borderRadius:"8px",padding:"8px 10px",fontSize:"11px"}}>
-                            <div style={{color:"var(--iko-primary)",marginBottom:"3px"}}>{"⭐".repeat(t.fields.Note)}</div>
-                            <div style={{color:C.muted,fontStyle:"italic"}}>{t.fields["Note Commentaire"]}</div>
-                          </div>
-                        ))}
-                      </div>
-                    </>
-                  ) : (
-                    <div style={{fontSize:"12px",color:C.muted,padding:"20px 0"}}>Aucun avis client pour le moment.</div>
-                  )}
-                  <button onClick={() => setNoteOpen(false)} style={{width:"100%",marginTop:"16px",padding:"11px",background:"transparent",color:C.muted,border:"1px solid "+C.border,borderRadius:"10px",fontSize:"12px",cursor:"pointer"}}>Fermer</button>
-                </div>
-              </div>
-            )}
+          <button className="glass-btn" onClick={imprimerSemaine} title="Imprimer ma semaine" style={{padding:"0 7px",height:"36px",fontSize:"12px",whiteSpace:"nowrap",flex:"1 1 0",minWidth:0}}>Ma semaine</button>
+          <button className="glass-btn" onClick={() => setItineraireOpen(true)} title="Itinéraire optimisé" style={{padding:"0 7px",height:"36px",fontSize:"12px",whiteSpace:"nowrap",flex:"1 1 0",minWidth:0}}>Itinéraire</button>
+          <button className={"glass-btn"+(onglet==="devis"?" actif":"")} onClick={() => setOnglet("devis")} title="Devis en attente" style={{padding:"0 7px",height:"36px",fontSize:"12px",whiteSpace:"nowrap",flex:"1 1 0",minWidth:0,display:"flex",alignItems:"center",justifyContent:"center",gap:"5px"}}>
+            Devis {nbDevisAttente > 0 && <span style={{background:"var(--iko-primary)",color:"#fff",borderRadius:"10px",padding:"0 6px",fontSize:"10px"}}>{nbDevisAttente}</span>}
+          </button>
         </div>
         <div style={{display:"flex",gap:"6px",marginTop:"8px",flexWrap:"nowrap"}}>
           {[["aujourd_hui","Aujourd'hui",nbAujourdhui],["a_venir","À venir",nbAVenir],["urgent","⚡ Urgent",nbUrgent],["termines","Terminés",nbTermines],["annules","Annulés",nbAnnules]].map(([id,label,count]) => (
