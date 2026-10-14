@@ -896,6 +896,24 @@ function ModalRdv({ agenceAccess, onClose, onSuccess, initialAgence }) {
 
   const set = (k, v) => setForm(prev => ({...prev, [k]: v}));
 
+  // Code postal -> villes correspondantes (base officielle des communes)
+  const [villesCP, setVillesCP] = React.useState([]);
+  React.useEffect(() => {
+    const cp = form.codePostal;
+    if (!/^\d{5}$/.test(cp || "")) { setVillesCP([]); return; }
+    let annule = false;
+    fetch('https://geo.api.gouv.fr/communes?codePostal=' + cp + '&fields=nom&format=json')
+      .then(r => r.ok ? r.json() : [])
+      .then(l => {
+        if (annule) return;
+        const noms = (Array.isArray(l) ? l : []).map(c => c.nom).sort((a, b) => a.localeCompare(b, 'fr'));
+        setVillesCP(noms);
+        if (noms.length >= 1) setForm(prev => (prev.codePostal === cp && !noms.includes(prev.ville)) ? { ...prev, ville: noms.length === 1 ? noms[0] : "" } : prev);
+      })
+      .catch(() => { if (!annule) setVillesCP([]); });
+    return () => { annule = true; };
+  }, [form.codePostal]);
+
   const handleProduit = (p) => {
     set("produit", p);
     set("probleme", PROBLEMES[p]?.[0]?.l || "Autre");
@@ -997,7 +1015,11 @@ function ModalRdv({ agenceAccess, onClose, onSuccess, initialAgence }) {
         </div>
         <div style={{display:"grid",gridTemplateColumns:"1fr 2fr",gap:"10px",marginBottom:"14px"}}>
           <div><label style={labelStyle}>Code postal *</label><input placeholder="75000" inputMode="numeric" maxLength={5} value={form.codePostal} onChange={e => set("codePostal",e.target.value.replace(/\D/g,''))}/></div>
-          <div><label style={labelStyle}>Ville *</label><input placeholder="Tarbes" value={form.ville} onChange={e => set("ville",e.target.value)}/></div>
+          <div><label style={labelStyle}>Ville *</label>
+            {villesCP.length > 1
+              ? <select value={form.ville} onChange={e => set("ville",e.target.value)}><option value="">Choisissez la ville ({villesCP.length})</option>{villesCP.map(v => <option key={v} value={v}>{v}</option>)}</select>
+              : <input placeholder="Tarbes" value={form.ville} onChange={e => set("ville",e.target.value)}/>}
+          </div>
         </div>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"10px",marginBottom:"14px"}}>
           <div>

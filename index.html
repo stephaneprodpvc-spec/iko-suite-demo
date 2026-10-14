@@ -527,6 +527,22 @@ function App() {
   const [garantie, setGarantie] = React.useState(null);
   const [facture, setFacture] = React.useState("");
   const [client, setClient] = React.useState({ nom: "", adresse: "", codePostal: "", ville: "", tel: "", email: "" });
+  const [villesCP, setVillesCP] = React.useState([]);
+  React.useEffect(() => {
+    const cp = client.codePostal;
+    if (!/^\d{5}$/.test(cp)) { setVillesCP([]); return; }
+    let annule = false;
+    fetch('https://geo.api.gouv.fr/communes?codePostal=' + cp + '&fields=nom&format=json')
+      .then(r => r.ok ? r.json() : [])
+      .then(l => {
+        if (annule) return;
+        const noms = (Array.isArray(l) ? l : []).map(c => c.nom).sort((a, b) => a.localeCompare(b, 'fr'));
+        setVillesCP(noms);
+        if (noms.length >= 1) setClient(c => (c.codePostal === cp && !noms.includes(c.ville)) ? { ...c, ville: noms.length === 1 ? noms[0] : "" } : c);
+      })
+      .catch(() => { if (!annule) setVillesCP([]); });
+    return () => { annule = true; };
+  }, [client.codePostal]);
   const adresseComplete = client.adresse.trim() + (client.codePostal || client.ville ? ', ' + client.codePostal + ' ' + client.ville : '');
   const [erreurs, setErreurs] = React.useState({});
   const [produit, setProduit] = React.useState(null);
@@ -653,14 +669,7 @@ function App() {
     <div style={{fontFamily:"'Segoe UI',sans-serif",background:F.grisClair,height:"100%",display:"flex",flexDirection:"column",width:"100%"}}>
       <div style={{background:F.marine,padding:"12px 16px 8px",flexShrink:0}}>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-          <div style={{display:"flex",alignItems:"center",gap:"10px"}}>
-            <div style={{width:"65px",height:"34px",background:"#FFFFFF",borderRadius:"8px",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,padding:"3px",boxSizing:"border-box"}}>
-              <img data-iko-logo src={IKO_LOGO} alt="Iko" style={{width:"100%",height:"100%",objectFit:"contain"}}/>
-            </div>
-            <div>
-              <div style={{color:"rgba(255,255,255,0.4)",fontSize:"8px",letterSpacing:"2px",textTransform:"uppercase",marginTop:"2px"}}>Solutions IA · SAV</div>
-            </div>
-          </div>
+          <div/>
           <div style={{display:"flex",alignItems:"center",gap:"8px"}}>
             {etape !== "agence" && etape !== "merci" && !(agences && agences.length === 1 && etape === "identification") && (
               <button onClick={goBack} style={{background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.25)",color:"rgba(255,255,255,0.85)",borderRadius:"8px",padding:"4px 9px",fontSize:"10px",cursor:"pointer"}}>← Retour</button>
@@ -670,10 +679,6 @@ function App() {
             )}
             <button onClick={() => window.toggleWidget()} style={{background:"rgba(255,255,255,0.1)",border:"1px solid rgba(255,255,255,0.2)",color:"rgba(255,255,255,0.7)",borderRadius:"8px",width:"28px",height:"28px",cursor:"pointer",fontSize:"14px",display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>
           </div>
-        </div>
-        <div style={{marginTop:"6px",display:"flex",alignItems:"center",gap:"6px"}}>
-          <div style={{width:"7px",height:"7px",background:"var(--iko-primary)",borderRadius:"50%"}}></div>
-          <span style={{color:F.orClair,fontSize:"11px",fontWeight:"500"}}>Stef — SAV en ligne</span>
         </div>
       </div>
       <div style={{height:"3px",background:"linear-gradient(90deg," + F.or + "," + F.orClair + "," + F.or + ")",flexShrink:0}} />
@@ -777,8 +782,16 @@ function App() {
                   </div>
                   <div>
                     <label style={{fontSize:"10px",fontWeight:"600",color:"#64748B",display:"block",marginBottom:"3px"}}>Ville *</label>
-                    <input type="text" placeholder="Tarbes" value={client.ville} onChange={e => setClient({...client,ville:e.target.value})}
-                      style={{width:"100%",padding:"8px 10px",border:"1.5px solid " + (erreurs.ville?F.rouge:F.grisBord),borderRadius:"8px",fontSize:"12px",boxSizing:"border-box",outline:"none"}} />
+                    {villesCP.length > 1 ? (
+                      <select value={client.ville} onChange={e => setClient({...client,ville:e.target.value})}
+                        style={{width:"100%",padding:"8px 10px",border:"1.5px solid " + (erreurs.ville?F.rouge:F.grisBord),borderRadius:"8px",fontSize:"12px",boxSizing:"border-box",outline:"none",background:"#fff"}}>
+                        <option value="">Choisissez votre ville ({villesCP.length})</option>
+                        {villesCP.map(v => <option key={v} value={v}>{v}</option>)}
+                      </select>
+                    ) : (
+                      <input type="text" placeholder="Tarbes" value={client.ville} onChange={e => setClient({...client,ville:e.target.value})}
+                        style={{width:"100%",padding:"8px 10px",border:"1.5px solid " + (erreurs.ville?F.rouge:F.grisBord),borderRadius:"8px",fontSize:"12px",boxSizing:"border-box",outline:"none"}} />
+                    )}
                     {erreurs.ville && <span style={{fontSize:"10px",color:F.rouge}}>Champ obligatoire</span>}
                   </div>
                 </div>
