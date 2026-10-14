@@ -2523,7 +2523,8 @@ function ModalAction({ ticket, onClose, onDone }) {
     <div className="modal-overlay" onClick={e => e.target===e.currentTarget && onClose()}>
       <div className="modal-box">
         <div style={{width:"36px",height:"4px",background:"#D1D5DB",borderRadius:"2px",margin:"0 auto 12px"}}/>
-        {!mode && <button className="glass-btn" onClick={onClose} style={{padding:"7px 14px",fontSize:"12px",marginBottom:"12px"}}>← Retour aux interventions</button>}
+        <button className="glass-btn" onClick={() => { if (mode === "devis_place") setMode("devis_choix"); else if (mode === "debloquer") onClose(); else if (mode) setMode(null); else onClose(); }}
+          style={{padding:"7px 14px",fontSize:"12px",marginBottom:"12px"}}>{mode ? "← Retour" : "← Retour aux interventions"}</button>
         <div style={{marginBottom:"20px"}}>
           <div style={{fontSize:"11px",color:C.or,fontWeight:"700",fontFamily:"monospace",marginBottom:"4px"}}>{ticket.fields?.Name}</div>
           <div style={{fontSize:"16px",fontWeight:"900",color:C.white}}>{ticket.fields?.Client}</div>
@@ -2621,7 +2622,6 @@ function ModalAction({ ticket, onClose, onDone }) {
         {mode === "devis_choix" && (
           <>
             <div style={{display:"flex",alignItems:"center",gap:"8px",marginBottom:"16px"}}>
-              <button className="glass-btn" onClick={() => setMode(null)} style={{padding:"6px 12px",fontSize:"12px"}}>← Retour</button>
               <span style={{fontSize:"14px",fontWeight:"700",color:C.white}}>💶 Devis</span>
             </div>
             <div style={{fontSize:"12px",color:C.muted,marginBottom:"14px",textAlign:"center"}}>As-tu le matériel disponible pour le poser aujourd'hui ?</div>
@@ -2640,7 +2640,6 @@ function ModalAction({ ticket, onClose, onDone }) {
         {mode === "terminer" && (
           <>
             <div style={{display:"flex",alignItems:"center",gap:"8px",marginBottom:"16px"}}>
-              <button className="glass-btn" onClick={() => setMode(null)} style={{padding:"6px 12px",fontSize:"12px"}}>← Retour</button>
               <span style={{fontSize:"14px",fontWeight:"700",color:C.white}}>✓ Valider l'intervention</span>
             </div>
             <div style={{background:C.vertDim,border:"1px solid rgba(var(--iko-primary-rgb),0.3)",borderRadius:"10px",padding:"10px 14px",marginBottom:"14px",fontSize:"12px",color:C.vert}}>
@@ -2662,7 +2661,6 @@ function ModalAction({ ticket, onClose, onDone }) {
         {mode === "devis_place" && (
           <>
             <div style={{display:"flex",alignItems:"center",gap:"8px",marginBottom:"16px"}}>
-              <button className="glass-btn" onClick={() => setMode("devis_choix")} style={{padding:"6px 12px",fontSize:"12px"}}>← Retour</button>
               <span style={{fontSize:"14px",fontWeight:"700",color:C.white}}>💶 Devis sur place</span>
             </div>
             <div style={{background:C.vertDim,border:"1px solid rgba(var(--iko-primary-rgb),0.3)",borderRadius:"10px",padding:"10px 14px",marginBottom:"14px",fontSize:"12px",color:C.vert}}>
@@ -2711,7 +2709,6 @@ function ModalAction({ ticket, onClose, onDone }) {
         {mode === "annuler" && (
           <>
             <div style={{display:"flex",alignItems:"center",gap:"8px",marginBottom:"16px"}}>
-              <button className="glass-btn" onClick={() => setMode(null)} style={{padding:"6px 12px",fontSize:"12px"}}>← Retour</button>
               <span style={{fontSize:"14px",fontWeight:"700",color:C.white}}>❌ Annuler le RDV</span>
             </div>
             <div style={{background:C.rougeDim,border:"1px solid rgba(var(--iko-erreur-rgb),0.3)",borderRadius:"10px",padding:"10px 14px",marginBottom:"14px",fontSize:"12px",color:C.rouge}}>
@@ -2731,7 +2728,6 @@ function ModalAction({ ticket, onClose, onDone }) {
         {mode === "piece" && (
           <>
             <div style={{display:"flex",alignItems:"center",gap:"8px",marginBottom:"16px"}}>
-              <button className="glass-btn" onClick={() => setMode(null)} style={{padding:"6px 12px",fontSize:"12px"}}>← Retour</button>
               <span style={{fontSize:"14px",fontWeight:"700",color:C.white}}>🔧 Pièce à commander</span>
             </div>
             <div style={{background:"rgba(var(--iko-primary-rgb),0.08)",border:"1px solid var(--iko-primary)",borderRadius:"10px",padding:"10px 14px",marginBottom:"14px",fontSize:"12px",color:"var(--iko-bg-sombre)"}}>
@@ -2750,7 +2746,6 @@ function ModalAction({ ticket, onClose, onDone }) {
         {mode === "replanifier" && (
           <>
             <div style={{display:"flex",alignItems:"center",gap:"8px",marginBottom:"16px"}}>
-              <button className="glass-btn" onClick={() => setMode(null)} style={{padding:"6px 12px",fontSize:"12px"}}>← Retour</button>
               <span style={{fontSize:"14px",fontWeight:"700",color:C.white}}>🔄 Replanifier l'intervention</span>
             </div>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"10px",marginBottom:"12px"}}>
@@ -2780,7 +2775,6 @@ function ModalAction({ ticket, onClose, onDone }) {
         {mode === "debloquer" && (
           <>
             <div style={{display:"flex",alignItems:"center",gap:"8px",marginBottom:"16px"}}>
-              <button className="glass-btn" onClick={onClose} style={{padding:"6px 12px",fontSize:"12px"}}>← Retour</button>
               <span style={{fontSize:"14px",fontWeight:"700",color:C.white}}>🔓 Débloquer un créneau plus tôt</span>
             </div>
             <div style={{background:"rgba(var(--iko-dark-rgb),0.05)",border:"1px solid rgba(var(--iko-dark-rgb),0.2)",borderRadius:"10px",padding:"10px 14px",marginBottom:"14px",fontSize:"12px",color:"var(--iko-bg-sombre)"}}>
@@ -2816,7 +2810,6 @@ function ModalAction({ ticket, onClose, onDone }) {
         {mode === "devis" && (
           <>
             <div style={{display:"flex",alignItems:"center",gap:"8px",marginBottom:"16px"}}>
-              <button className="glass-btn" onClick={() => setMode(null)} style={{padding:"6px 12px",fontSize:"12px"}}>← Retour</button>
               <span style={{fontSize:"14px",fontWeight:"700",color:C.white}}>📋 Demande de devis</span>
             </div>
             <div style={{background:"rgba(var(--iko-dark-rgb),0.05)",border:"1px solid rgba(var(--iko-dark-rgb),0.2)",borderRadius:"10px",padding:"10px 14px",marginBottom:"14px",fontSize:"12px",color:"var(--iko-bg-sombre)"}}>
@@ -3094,6 +3087,7 @@ function TicketCard({ ticket, onAction, onAcquitterRdv, onEtablirDevis, onEnRout
           {urgent && <span style={{background:C.rougeDim,color:C.rouge,fontSize:"9px",fontWeight:"700",padding:"2px 7px",borderRadius:"20px",animation:"clignoteUrgent 1.1s ease-in-out infinite"}}>URGENT</span>}
           {rdvModifie && <span onClick={() => onAcquitterRdv && onAcquitterRdv(ticket)} title="Cliquer pour marquer comme vu" style={{background:C.rougeDim,color:C.rouge,fontSize:"9px",fontWeight:"700",padding:"2px 7px",borderRadius:"20px",animation:"clignoteUrgent 1.1s ease-in-out infinite",cursor:"pointer"}}>📅 RDV MODIFIÉ{ageJoursRdv !== null && ageJoursRdv >= SEUIL_RDV_MODIFIE_JOURS ? " (" + ageJoursRdv + "j)" : ""} — cliquer pour valider</span>}
           {diagnosticMaxAFinaliser && <span title="Un diagnostic Max existe déjà sur ce ticket" style={{background:"rgba(var(--iko-primary-rgb),0.12)",color:"var(--iko-primary)",fontSize:"9px",fontWeight:"700",padding:"2px 7px",borderRadius:"20px"}}>🧠 DIAGNOSTIC MAX À FINALISER</span>}
+          {!isTermine && !isAnnule && !isEnAttenteDevis && <span style={{background:"rgba(var(--iko-dark-rgb),0.08)",color:C.text,fontSize:"9px",fontWeight:"700",padding:"2px 7px",borderRadius:"20px"}}>{statut.toUpperCase()}</span>}
           {isTermine && <span style={{background:C.vertDim,color:C.vert,fontSize:"9px",fontWeight:"700",padding:"2px 7px",borderRadius:"20px"}}>✓ TERMINÉ</span>}
           {isAnnule && <span style={{background:C.rougeDim,color:C.rouge,fontSize:"9px",fontWeight:"700",padding:"2px 7px",borderRadius:"20px"}}>❌ ANNULÉ</span>}
           {isDevisAFaire && <span style={{background:"rgba(var(--iko-dark-rgb),0.1)",color:"var(--iko-bg-sombre)",fontSize:"9px",fontWeight:"700",padding:"2px 7px",borderRadius:"20px"}}>📋 DEVIS À FAIRE</span>}
@@ -3105,10 +3099,10 @@ function TicketCard({ ticket, onAction, onAcquitterRdv, onEtablirDevis, onEnRout
       </div>
       <div style={{padding:"14px 16px"}}>
         <div style={{fontSize:"16px",fontWeight:"900",color:C.white,marginBottom:"4px"}}>{ticket.fields?.Client}</div>
-        <div style={{display:"flex",gap:"6px",flexWrap:"wrap",marginBottom:"12px"}}>
+        {ouvert && <div style={{display:"flex",gap:"6px",flexWrap:"wrap",marginBottom:"12px"}}>
           <span style={{fontSize:"11px",background:C.card2,border:"1px solid "+C.border,borderRadius:"6px",padding:"3px 8px",color:C.text}}>{ticket.fields?.Produit}</span>
           <span style={{fontSize:"11px",background:C.card2,border:"1px solid "+C.border,borderRadius:"6px",padding:"3px 8px",color:C.muted}}>{ticket.fields?.["Problème"]}</span>
-        </div>
+        </div>}
         <div style={{display:"flex",flexDirection:"column",gap:"6px",marginBottom:"14px"}}>
           <div style={{display:"flex",gap:"8px",alignItems:"center"}}>
             <span style={{fontSize:"14px"}}>📅</span>
