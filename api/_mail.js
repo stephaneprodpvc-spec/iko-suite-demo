@@ -96,11 +96,14 @@ export function construireMails(action, d, marque) {
     case 'reponse_agence':
       return { objet: `${t} : l'agence vous répond`, html: cadre({ resume: "L'agence a répondu à votre message.", bandeau: 'Service après-vente', titre: "L'agence vous répond",
         corps: p('Bonjour,') + p(`Voici la réponse de l'agence à votre demande <b>${esc(t)}</b> :`) + encart(esc(d.message)) + p('Vous pouvez répondre depuis votre page de suivi ou directement à ce message.') }) };
-    case 'rdv_modifie':
-      return { objet: `${t} : votre rendez-vous a été modifié`, html: cadre({ resume: 'Votre rendez-vous a été modifié.', bandeau: 'Service après-vente', titre: 'Votre rendez-vous a été modifié',
+    case 'rdv_modifie': {
+      const agenceHtml = cadre({ resume: 'Un rendez-vous a été modifié.', bandeau: 'Notification agence', titre: 'Rendez-vous modifié', pied: 'Notification automatique Iko Suite — ne pas répondre à ce message.',
+        corps: ticketBloc(t) + recap([['Client', esc(d.nom)], ['Téléphone', esc(d.tel)], ['Agence', esc(d.agence)], ['Ancien créneau', esc(d.ancien_creneau)], ['Nouveau créneau', `<b style="color:${lisible(OR, '#FFFFFF')};">${esc(d.nouveau_creneau)}</b>`], ['Modifié par', esc(d.auteur_modification || 'client')]]) + bouton('Ouvrir le tableau de bord', SITE + '/dashboard.html') });
+      return { objet_agence: `RDV modifié — ${t}${d.nom ? ' — ' + d.nom : ''}`, html_agence: agenceHtml, objet: `${t} : votre rendez-vous a été modifié`, html: cadre({ resume: 'Votre rendez-vous a été modifié.', bandeau: 'Service après-vente', titre: 'Votre rendez-vous a été modifié',
         corps: p(`Le rendez-vous de votre demande <b>${esc(t)}</b>${d.agence ? ' (' + esc(d.agence) + ')' : ''} a été modifié.`) +
           recap([['Ancien créneau', esc(d.ancien_creneau)], ['Nouveau créneau', `<b style="color:${lisible(OR, '#FFFFFF')};">${esc(d.nouveau_creneau)}</b>`]]) +
           p("Si ce nouveau créneau ne vous convient pas, répondez à ce message : nous vous en proposerons un autre.") }) };
+    }
     case 'technicien_en_route':
       return { objet: `${t} : votre technicien est en route`, html: cadre({ resume: `Votre technicien arrive vers ${d.arrivee || ''}.`, bandeau: 'Service après-vente', titre: 'Votre technicien est en route',
         corps: bonjour(d) + p('Votre technicien vient de partir pour votre intervention.') +
@@ -117,6 +120,14 @@ export function construireMails(action, d, marque) {
           recap([['Produit', esc(d.produit)], ['Problème', esc(d.probleme)], ['Montant TTC', `<b style="font-size:18px;color:${lisible(OR, '#FFFFFF')};">${esc(d.montant)}</b>`]]) +
           (d.message ? encart(esc(d.message)) : '') + bouton('Consulter et signer mon devis', d.lien) +
           p('<span style="font-size:13px;color:#6B6B6B;">Vous pouvez accepter ou refuser le devis en ligne, en quelques clics.</span>') }) };
+    case 'devis_accepte':
+      return { objet: `${t} : votre devis est signé`, html: cadre({ resume: 'Merci, votre devis est signé.', bandeau: 'Devis', titre: 'Votre devis est signé',
+        corps: bonjour(d) + p(`Nous avons bien reçu la signature de votre devis pour la demande <b>${esc(t)}</b>. Merci de votre confiance.`) +
+          recap([['Produit', esc(d.produit)], ['Problème', esc(d.probleme)], ['Montant TTC', d.montant ? `<b style="color:${lisible(OR, '#FFFFFF')};">${esc(d.montant)}</b>` : '']]) +
+          encart('<b>Et maintenant ?</b> L\'agence vous contacte pour planifier l\'intervention.') + bouton('Suivre ma demande', d.lien_suivi) }) };
+    case 'devis_refuse':
+      return { objet: `${t} : votre devis a été refusé`, html: cadre({ resume: 'Nous avons bien noté votre refus.', bandeau: 'Devis', titre: 'Nous avons bien noté votre décision',
+        corps: bonjour(d) + p(`Votre devis pour la demande <b>${esc(t)}</b> a été refusé. Si vous souhaitez en discuter ou obtenir une autre proposition, répondez simplement à ce message.`) }) };
     case 'devis_deblocage':
       return { objet: `${t} : intervention avancée`, html: cadre({ resume: 'Votre intervention a été avancée.', bandeau: 'Service après-vente', titre: 'Votre intervention est avancée',
         corps: bonjour(d) + p(`Bonne nouvelle : l'intervention de votre demande <b>${esc(t)}</b> a été avancée.`) +
@@ -172,5 +183,24 @@ export async function marqueClient(clientId) {
     const v = { nom: f['Nom client'] || '', principale: f['Couleur principale'] || '', secondaire: f['Couleur secondaire'] || '' };
     cacheMarque.set(clientId, { t: Date.now(), v });
     return v;
+  } catch (e) { return null; }
+}
+
+// Complète le corps d'un envoi avec les détails réels du ticket (nom, produit, créneau…) quand le navigateur n'a envoyé que le numéro.
+// Ne remplace jamais une valeur déjà présente. Retourne l'identifiant du client pro du ticket (pour ses couleurs), ou null.
+export async function enrichirDepuisTicket(corps, ctx) {
+  try {
+    const num = String(corps.ticket || '').trim().toUpperCase();
+    if (!/^[A-Z0-9-]{4,30}$/.test(num) || !ctx || !ctx.baseId || !ctx.headers) return null;
+    const r = await fetch('https://api.airtable.com/v0/' + ctx.baseId + '/Tickets%20SAV?filterByFormula=' + encodeURIComponent('UPPER({Name})="' + num + '"') + '&maxRecords=1', { headers: ctx.headers });
+    if (!r.ok) return null;
+    const rec = ((await r.json()).records || [])[0];
+    if (!rec) return null;
+    const f = rec.fields || {};
+    const mettre = (k, v) => { if ((corps[k] === undefined || corps[k] === '') && v) corps[k] = String(v); };
+    mettre('nom', f.Client); mettre('produit', f.Produit); mettre('probleme', f['Problème']); mettre('creneau', f['Créneau']);
+    mettre('adresse', f.Adresse); mettre('tel', f['Téléphone']); mettre('e-mail', f.Email); mettre('agence', f.Agence);
+    mettre('montant', f['Montant devis'] ? f['Montant devis'] + ' €' : '');
+    return Array.isArray(f['Compte client']) && f['Compte client'][0] ? f['Compte client'][0] : null;
   } catch (e) { return null; }
 }
