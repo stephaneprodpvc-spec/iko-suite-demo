@@ -17,6 +17,7 @@ import vocabMenuiserie from "./_trades/menuiserie.js";
 import vocabPlomberieChauffage from "./_trades/plomberie_chauffage.js";
 import { blocSystemeIko } from "./_systeme-iko.js";
 import { alerter } from "./_alertes.js";
+import { photosHtml, adressesPhotos } from "./_mail.js";
 import { blocMetierMenuiserie } from "./_metier-menuiserie.js";
 import { extraireConnaissanceDuRecord, blocPromptConnaissance, affinerPourPrompt } from "./_connaissance.js";
 import { nomAssistant as resoudreNomAssistant, NOMS_PAR_DEFAUT } from "./_assistants.js";
@@ -486,6 +487,8 @@ async function executerOutil(nom, input, clientId, tradeId, agencesObjets, photo
       facture: input.numero_facture || "",
       urgent: input.urgent ? "Oui" : "Non",
       photos: Array.isArray(photosJointes) ? photosJointes.join(",") : "",
+      photos_html: photosHtml(Array.isArray(photosJointes) ? photosJointes.join(",") : ""),
+      nb_photos: adressesPhotos(Array.isArray(photosJointes) ? photosJointes.join(",") : "").length,
       facture_photo: "",
       planningId: input.planning_id || "",
       source: "Amandine (IA)",

@@ -25,6 +25,7 @@
 
 import webpush from 'web-push';
 import { alerter } from './_alertes.js';
+import { photosHtml, adressesPhotos } from './_mail.js';
 import { verifierSession, verifierDebit, verifierOrigine } from './_securite.js';
 import { lienSuivi, lireJeton, normaliserEmail, normaliserTel } from './_suivi.js';
 import { creneauxLibres, identDepuisClientId, AGENCES_DEMO } from './_planning.js';
@@ -368,6 +369,9 @@ async function relayerWebhook(req, res, urlCible, actionsAutorisees, ctx) {
   let clientARattacher = null; // slug puis identifiant du client (nouvelle demande d'un client pro)
   if (actionsAutorisees === ACTIONS_WEBHOOK_AUTORISEES && actionDemandee === undefined) {
     delete corpsRelaye.lien_suivi;
+    // Miniatures des photos pour le mail (construites ici, jamais prises telles quelles du navigateur).
+    corpsRelaye.photos_html = photosHtml(corpsRelaye.photos);
+    corpsRelaye.nb_photos = adressesPhotos(corpsRelaye.photos).length;
     // E-mails de l'agence choisie (Make les utilise pour notifier l'agence) :
     // JAMAIS pris du navigateur (un tiers pourrait faire envoyer un mail a une
     // adresse arbitraire) ; resolus ici depuis la table Agences (lecture seule)
