@@ -49,6 +49,7 @@ div[style*="position: fixed"][style*="rgba(0, 0, 0, 0.5)"] { background: rgba(60
 @media (max-width: 900px) { .ik-mobbar { display: flex; gap: 10px; position: fixed; left: 0; right: 0; bottom: 0; z-index: 150; padding: 10px 14px calc(10px + env(safe-area-inset-bottom)); background: rgba(255,255,255,0.7); -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px); border-top: 1px solid rgba(255,255,255,0.8); } }
 @media print { body { background: #fff !important; } .ik-noprint { display: none !important; } }
 </style>
+<script src="/iko-retour.js" defer></script>
 </head>
 <body>
 <div id="root"></div>
@@ -441,7 +442,7 @@ function buildSchemaSvgString(o, fixed, areaW, areaH, miroir) {
     '<defs><linearGradient id="' + gradId + '" x1="0%" y1="0%" x2="100%" y2="100%">' +
     '<stop offset="0%" stop-color="#F7F3EE"/>' +
     '<stop offset="45%" stop-color="#E2DAD1"/>' +
-    '<stop offset="100%" stop-color="#7FB2D4"/>' +
+    '<stop offset="100%" stop-color="#B8B0A6"/>' +
     '</linearGradient></defs>'
   );
   const vitrageFill = 'url(#' + gradId + ')';

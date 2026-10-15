@@ -6,54 +6,128 @@
 <meta name="robots" content="noindex">
 <link rel="stylesheet" href="/theme.css">
 <script src="/theme.js"></script>
+<script src="/iko-retour.js" defer></script>
 <title>Iko — Contrats d'entretien</title>
 <style>
 *{box-sizing:border-box}
 body{margin:0;min-height:100vh;font-family:-apple-system,"Segoe UI",Roboto,Arial,sans-serif;color:#0D0D0D;background:linear-gradient(160deg,#FF9A3C 0%,#FF6B00 55%,#C94F00 100%);background-attachment:fixed;padding:16px 12px 60px}
-.w{max-width:900px;margin:0 auto}
-h1{margin:0 0 4px;font-size:22px;color:#fff}.sub{margin:0 0 14px;color:rgba(255,255,255,.92);font-size:13px}
-.carte{background:rgba(255,255,255,.9);border:1px solid rgba(255,255,255,.7);border-radius:16px;padding:14px;margin-bottom:12px;box-shadow:0 8px 24px rgba(0,0,0,.14)}
-.kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px}
-.kpi{background:#0D0D0D;color:#fff;border-radius:14px;padding:12px;text-align:center}.kpi b{display:block;font-size:22px;color:#FF9A3C}.kpi span{font-size:11px;opacity:.85}
-label{display:block;font-size:11px;font-weight:700;color:#374151;margin:8px 0 4px}
+.feuille{max-width:1000px;margin:0 auto;background:rgba(255,255,255,.96);border-radius:22px;padding:18px;box-shadow:0 18px 50px rgba(0,0,0,.28)}
+.retour{display:inline-block;margin:0 0 12px;padding:6px 12px;font:800 12px inherit;font-family:inherit;border-radius:12px;cursor:pointer;color:#8a3300;background:rgba(255,255,255,.45);border:1px solid rgba(255,107,0,.40);box-shadow:0 3px 12px rgba(120,40,0,.14),inset 0 1px 0 rgba(255,255,255,.8)}
+.retour:hover{background:rgba(255,255,255,.7)}
+.titre{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+h1{margin:0;font-size:21px;font-weight:900}.sous{font-size:12px;color:#6B7280;margin-top:2px}
+/* --- cockpit sombre --- */
+.cockpit{position:relative;overflow:hidden;border-radius:18px;padding:14px;color:#fff;border:1px solid rgba(255,107,0,.4);margin-bottom:16px;
+  background:radial-gradient(ellipse at 50% -10%,rgba(255,107,0,.32),transparent 62%),linear-gradient(180deg,#1a130d,#0b0b0b);box-shadow:0 12px 34px rgba(0,0,0,.4)}
+.cockpit::before{content:"";position:absolute;inset:-6%;pointer-events:none;background-image:linear-gradient(rgba(255,255,255,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.05) 1px,transparent 1px);background-size:30px 30px;-webkit-mask-image:radial-gradient(ellipse at 50% 40%,#000 25%,transparent 78%);mask-image:radial-gradient(ellipse at 50% 40%,#000 25%,transparent 78%);animation:miseAuPoint 11s ease-in-out infinite}
+@keyframes miseAuPoint{0%,100%{transform:scale(1);filter:blur(0)}50%{transform:scale(1.07);filter:blur(1.6px)}}
+.cockpit .balayage{position:absolute;top:0;bottom:0;width:170px;left:-220px;pointer-events:none;z-index:1;background:linear-gradient(90deg,transparent,rgba(255,154,60,.1),transparent);-webkit-backdrop-filter:blur(2.6px) brightness(1.12);backdrop-filter:blur(2.6px) brightness(1.12);-webkit-mask-image:linear-gradient(90deg,transparent,#000 35%,#000 65%,transparent);mask-image:linear-gradient(90deg,transparent,#000 35%,#000 65%,transparent);animation:balayage 19s cubic-bezier(.45,.05,.55,.95) infinite}
+@keyframes balayage{0%{left:-220px}100%{left:calc(100% + 60px)}}
+.cockpit>*:not(.balayage){position:relative;z-index:2}
+.kpis{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+.kpi{flex:1 1 120px;min-width:110px;padding:8px 12px;border-radius:12px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.14)}
+.kpi b{display:block;font-family:monospace;font-size:24px;font-weight:900;line-height:1.1}.kpi span{font-size:11px;font-weight:700;opacity:.8}
+.kpi.alerte{background:rgba(229,57,53,.18);border-color:#e53935}.kpi.alerte b{color:#ff8a80}
+.jauges{display:flex;gap:6px;flex-wrap:wrap;justify-content:space-around;margin:4px 0 10px}
+.jauge{flex:1 1 130px;min-width:120px;text-align:center}.jauge svg{width:100%;max-width:160px;overflow:visible}
+.jauge .lib{font-size:11.5px;font-weight:800;margin-top:-6px}.jauge .sl{font-size:10px;opacity:.6}
+.titre-sec{font-size:11px;font-weight:800;letter-spacing:1px;color:#FF9A3C;text-transform:uppercase;margin:6px 0 6px}
+.barres{display:flex;align-items:flex-end;gap:6px;height:84px}
+.barres .col{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;gap:3px}
+.barres .b{width:100%;border-radius:5px 5px 2px 2px;min-height:3px;height:0;transition:height 1.1s cubic-bezier(.2,.8,.2,1)}
+.barres .b[data-h="0"]{min-height:0;box-shadow:none!important}
+.barres .n{font-size:10px;font-weight:800}.barres .m{font-size:9px;opacity:.65;text-transform:capitalize}
+/* --- sections et cartes --- */
+.sec{font-size:11px;font-weight:800;letter-spacing:1px;color:#6B7280;text-transform:uppercase;margin:16px 0 8px}
+.grille{display:grid;grid-template-columns:repeat(auto-fill,minmax(310px,1fr));gap:12px}
+.carte{background:#fff;border:1px solid #E5E7EB;border-radius:16px;padding:14px;box-shadow:0 4px 14px rgba(0,0,0,.06);border-left:4px solid #FF6B00}
+.carte.demande{border:2px solid #FF6B00;background:#FFF7F0}
+.carte.susp{border-left-color:#9CA3AF;opacity:.85}
+.ligne{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}
+.nom{font-size:15px;font-weight:900}.petit{font-size:12px;color:#6B7280}
+.puce{display:inline-block;font-size:10.5px;font-weight:800;padding:3px 9px;border-radius:20px;background:#F3F4F6;color:#374151}
+.puce.or{background:#FF6B00;color:#fff}.puce.noir{background:#0D0D0D;color:#FF9A3C}.puce.rouge{background:#FDECEC;color:#B42318}.puce.vert{background:#E8F7EC;color:#1a7f37}
+.visites{margin-top:10px;display:flex;flex-wrap:wrap;gap:6px}
+.vis{display:inline-flex;align-items:center;gap:6px;background:#FFF1E6;border:1px solid #FFC48A;color:#8a3300;border-radius:20px;padding:4px 6px 4px 11px;font-size:11.5px;font-weight:800}
+.vis button{border:0;background:rgba(138,51,0,.12);color:#8a3300;border-radius:50%;width:18px;height:18px;line-height:1;font-size:11px;cursor:pointer;padding:0}
+.actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:12px}
+button.g,.btn{font:800 12px inherit;font-family:inherit;padding:8px 13px;border-radius:12px;cursor:pointer;color:#8a3300;background:rgba(255,255,255,.55);border:1px solid rgba(255,107,0,.45);box-shadow:0 2px 8px rgba(120,40,0,.1);transition:background .18s}
+button.g:hover{background:#fff}
+button.g.p{background:linear-gradient(180deg,#FF9A3C,#FF6B00);color:#fff;border-color:rgba(255,255,255,.5)}
+button.g.s{background:#0D0D0D;color:#FF9A3C;border-color:#0D0D0D}
+button:disabled{opacity:.55;cursor:wait}
+label{display:block;font-size:11px;font-weight:800;color:#374151;margin:10px 0 4px}
 input,select,textarea{width:100%;padding:10px;border-radius:10px;border:1px solid #D1D5DB;font-size:14px;font-family:inherit;background:#fff}
-.g2{display:grid;grid-template-columns:1fr 1fr;gap:8px}@media(max-width:560px){.g2{grid-template-columns:1fr}}
-button{border:0;border-radius:10px;padding:10px 12px;font-size:13px;font-weight:800;cursor:pointer;color:#fff;background:linear-gradient(180deg,rgba(255,150,60,.97),rgba(255,107,0,.9))}
-button.n{background:#0D0D0D}button.b{background:#fff;color:#0D0D0D;border:1px solid #D1D5DB}button:disabled{opacity:.5}
-.ligne{display:flex;justify-content:space-between;gap:8px;align-items:flex-start;flex-wrap:wrap}
-.badge{display:inline-block;border-radius:20px;padding:3px 9px;font-size:11px;font-weight:800}
-.ret{background:#0D0D0D;color:#FF9A3C}.pro{background:#FF6B00;color:#fff}.ok{background:#fff;color:#0D0D0D;border:1px solid #D1D5DB}
-.actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}.petit{font-size:12px;color:#6B7280}
-.carnet{margin-top:8px;border-top:1px solid #E5E7EB;padding-top:6px;font-size:12px}
+input:focus,select:focus,textarea:focus{outline:none;border-color:#FF6B00;box-shadow:0 0 0 3px rgba(255,107,0,.16)}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:10px}@media(max-width:560px){.g2{grid-template-columns:1fr}}
+/* --- calendrier de planification --- */
+.plan{margin-top:12px;border:1px solid #FFC48A;background:#FFFAF5;border-radius:14px;padding:12px}
+.plan-tete{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.plan-tete b{text-transform:capitalize;font-size:14px}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px}
+.chip{font:800 11.5px inherit;font-family:inherit;padding:6px 12px;border-radius:18px;cursor:pointer;border:1px solid #D1D5DB;background:#fff;color:#374151}
+.chip.on{background:#FFF1E6;border-color:#FF6B00;color:#8a3300}
+.cal{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px}
+.cal .j{font-size:10px;font-weight:800;color:#9CA3AF;text-align:center;padding:2px 0}
+.cal .d{min-width:0;aspect-ratio:1/0.82;border-radius:10px;border:1px solid #EEE;background:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:13px;font-weight:800;color:#9CA3AF;position:relative}
+.cal .d.libre{color:#0D0D0D;border-color:#FFC48A;cursor:pointer;background:#FFF7F0}
+.cal .d.libre:hover{background:#FFE9D6}
+.cal .d.sel{background:#FF6B00;color:#fff;border-color:#FF6B00}
+.cal .d.vis-j{box-shadow:inset 0 0 0 2px #0D0D0D}
+.cal .d small{font-size:8.5px;font-weight:700;opacity:.8}
+.creneaux{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.msg{font-size:12px;font-weight:700;color:#B42318;margin:6px 0}
+.vide{padding:20px;text-align:center;color:#6B7280;font-size:13px}
 </style>
 </head>
 <body>
-<div class="w">
-  <h1>🛠️ Contrats d'entretien</h1>
-  <p class="sub">Carnet d'entretien par client, rappel automatique avant la visite annuelle et devis de maintenance.</p>
-  <div class="kpis"><div class="kpi"><b id="kAct">0</b><span>contrats actifs</span></div><div class="kpi"><b id="kProche">0</b><span>visites sous 30 j</span></div><div class="kpi"><b id="kCA">0 €</b><span>revenu récurrent / an HT</span></div></div>
-  <div class="carte"><div class="ligne"><b>Nouveau contrat</b><button class="b" id="bForm">＋ Ajouter</button></div>
-    <form id="form" style="display:none">
+<div class="feuille">
+  <button class="retour" data-iko-retour type="button">← Retour</button>
+  <div class="titre">
+    <div><h1>Contrats d'entretien</h1><div class="sous">Gérés à part du SAV, sur le même planning que les agences : aucun rendez-vous en double.</div></div>
+    <button class="g p" id="bForm">Nouveau contrat</button>
+  </div>
+
+  <div class="cockpit" id="cockpit">
+    <div class="balayage"></div>
+    <div class="kpis" id="kpis"></div>
+    <div class="jauges" id="jauges"></div>
+    <div class="titre-sec">Visites des 12 prochains mois</div>
+    <div class="barres" id="barres"></div>
+  </div>
+
+  <div class="carte" id="carteForm" style="display:none;margin-bottom:14px">
+    <form id="form">
+      <div class="nom" style="margin-bottom:4px">Nouveau contrat</div>
       <div class="g2"><div><label>Client *</label><input id="fNom" required></div><div><label>E-mail</label><input id="fMail" type="email"></div>
-      <div><label>Téléphone</label><input id="fTel"></div><div><label>Agence</label><input id="fAg"></div></div>
+      <div><label>Téléphone</label><input id="fTel"></div><div><label>Agence</label><input id="fAg" list="listeAg"><datalist id="listeAg"><option value="Agence 1"><option value="Agence 2"><option value="Agence 3"><option value="Agence 4"></datalist></div></div>
       <label>Adresse</label><input id="fAdr">
       <label>Équipements couverts</label><textarea id="fEq" rows="2" placeholder="Ex : 6 fenêtres PVC, 1 baie coulissante, volets roulants"></textarea>
       <div class="g2"><div><label>Périodicité</label><select id="fPer"><option value="12">Annuelle</option><option value="6">Semestrielle</option><option value="24">Tous les 2 ans</option></select></div>
       <div><label>Montant annuel HT (€)</label><input id="fMt" type="number" min="0" step="1"></div>
       <div><label>Début du contrat *</label><input id="fDeb" type="date" required></div><div><label>Prochaine visite</label><input id="fProch" type="date"></div></div>
-      <div class="actions"><button type="submit">Enregistrer le contrat</button></div><div class="petit" id="fMsg"></div>
-    </form></div>
-  <div id="liste"><div class="carte petit">Chargement…</div></div>
+      <div class="actions"><button class="g p" type="submit">Enregistrer le contrat</button><button class="g" type="button" id="bAnnulerForm">Annuler</button></div><div class="petit" id="fMsg"></div>
+    </form>
+  </div>
+
+  <div id="liste"><div class="vide">Chargement…</div></div>
 </div>
 <script>
 (function(){
   var $=function(i){return document.getElementById(i)};
   var TABLE='/api/airtable/Contrats%20entretien', WEBHOOK='/api/airtable/webhook', ctx={id:null}, contrats=[];
   var esc=function(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})};
-  var iso=function(d){return d.toISOString().slice(0,10)};
+  var iso=function(d){return new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,10)};
   var ajoutMois=function(dateIso,m){var d=new Date(dateIso+'T12:00:00');d.setMonth(d.getMonth()+m);return iso(d)};
   var fr=function(d){return d?new Date(d+'T12:00:00').toLocaleDateString('fr-FR'):'—'};
   var jours=function(d){return Math.round((new Date(d+'T12:00:00')-new Date(iso(new Date())+'T12:00:00'))/86400000)};
+  var statutDe=function(c){return c.fields['Statut contrat']||'Actif'};
+  var lireVisites=function(f){try{var v=JSON.parse(f['Visites (JSON)']||'[]');return Array.isArray(v)?v:[]}catch(e){return[]}};
+  var visitesPlanifiees=function(c){return lireVisites(c.fields).filter(function(v){return v.statut==='Planifiée'}).sort(function(a,b){return a.date.localeCompare(b.date)})};
+  var moisCle=function(d){return d.slice(0,7)};
+  var moisLib=function(m){var p=m.split('-');return new Date(+p[0],+p[1]-1,1).toLocaleDateString('fr-FR',{month:'long',year:'numeric'})};
+  var decaleMois=function(m,n){var p=m.split('-');var d=new Date(+p[0],+p[1]-1+n,1);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')};
+  var plan={id:null,mois:moisCle(iso(new Date())),periode:'',liste:null,jour:null,msg:''};
 
   async function contexte(){
     var r=await fetch('/api/verif-securite?action=session');
@@ -66,36 +140,121 @@ button.n{background:#0D0D0D}button.b{background:#fff;color:#0D0D0D;border:1px so
       if(slug){var rr=await fetch('/api/airtable/Clients?filterByFormula='+encodeURIComponent('{Slug}="'+slug.replace(/"/g,'')+'"')+'&maxRecords=1');var j=await rr.json();if(j.records&&j.records[0])ctx.id=j.records[0].id}
       return true;
     }
-    $('liste').innerHTML='<div class="carte">Accès réservé aux administrateurs.</div>';return false;
+    $('liste').innerHTML='<div class="vide">Accès réservé aux administrateurs.</div>';return false;
   }
   async function charger(){
     var r=await fetch(TABLE+'?maxRecords=200');
-    if(!r.ok){$('liste').innerHTML='<div class="carte">Chargement impossible ('+r.status+').</div>';return}
-    var j=await r.json();
-    contrats=(j.records||[]).filter(function(c){return (c.fields['Statut contrat']||'Actif')!=='Résilié'});
-    contrats.sort(function(a,b){return (a.fields['Prochaine visite']||'9999').localeCompare(b.fields['Prochaine visite']||'9999')});
+    if(!r.ok){$('liste').innerHTML='<div class="vide">Chargement impossible ('+r.status+').</div>';return}
+    contrats=((await r.json()).records||[]).filter(function(c){return statutDe(c)!=='Résilié'});
     afficher();
   }
-  function afficher(){
-    var actifs=contrats.filter(function(c){return (c.fields['Statut contrat']||'Actif')==='Actif'});
-    $('kAct').textContent=actifs.length;
-    $('kProche').textContent=actifs.filter(function(c){var p=c.fields['Prochaine visite'];return p&&jours(p)<=30}).length;
-    var ca=0;actifs.forEach(function(c){ca+=Number(c.fields['Montant annuel HT'])||0});
-    $('kCA').textContent=Math.round(ca).toLocaleString('fr-FR')+' €';
-    if(!contrats.length){$('liste').innerHTML='<div class="carte petit">Aucun contrat pour le moment. Ajoutez votre premier client sous contrat.</div>';return}
-    $('liste').innerHTML=contrats.map(function(c){
-      var f=c.fields,p=f['Prochaine visite'],d=p?jours(p):null,carnet=[];
-      try{carnet=JSON.parse(f['Carnet (JSON)']||'[]')}catch(e){}
-      var badge=!p?'':d<0?'<span class="badge ret">En retard de '+(-d)+' j</span>':d<=30?'<span class="badge pro">Dans '+d+' j</span>':'<span class="badge ok">Dans '+d+' j</span>';
-      var susp=(f['Statut contrat']||'Actif')==='Suspendu'?' <span class="badge ok">Suspendu</span>':'';
-      return '<div class="carte" data-id="'+c.id+'"><div class="ligne"><div><b>'+esc(f.Client)+'</b>'+susp+'<div class="petit">'+esc(f['Adresse']||'')+(f.Agence?' · '+esc(f.Agence):'')+'</div></div><div style="text-align:right">'+badge+'<div class="petit">Visite prévue : '+fr(p)+'</div></div></div>'
-        +(f['Équipements']?'<div class="petit" style="margin-top:6px">'+esc(f['Équipements'])+'</div>':'')
-        +'<div class="petit" style="margin-top:4px">'+(f['Montant annuel HT']?Number(f['Montant annuel HT']).toLocaleString('fr-FR')+' € HT/an · ':'')+'tous les '+(f['Périodicité (mois)']||12)+' mois · dernière visite : '+fr(f['Dernière visite'])+(f['Dernier rappel']?' · rappel envoyé le '+fr(f['Dernier rappel']):'')+'</div>'
-        +'<div class="actions"><button data-a="visite">✅ Visite effectuée</button><button class="n" data-a="rappel">📣 Rappeler le client</button><button class="b" data-a="devis">💶 Devis de maintenance</button><button class="b" data-a="susp">'+(susp?'Réactiver':'Suspendre')+'</button><button class="b" data-a="resilier">Résilier</button></div>'
-        +(carnet.length?'<div class="carnet"><b>📒 Carnet d\'entretien</b>'+carnet.slice().reverse().map(function(v){return '<div>'+fr(v.date)+' — '+esc(v.observations||'Visite réalisée')+(v.technicien?' ('+esc(v.technicien)+')':'')+'</div>'}).join('')+'</div>':'')
-        +'</div>';
-    }).join('');
+
+  // ------------------------------------------------------------ cockpit (compteurs, jauges, graphique)
+  function compteur(el,val,suffixe){
+    var t0=null;function pas(t){if(!t0)t0=t;var p=Math.min(1,(t-t0)/900);el.textContent=Math.round(val*(1-Math.pow(1-p,3)))+(suffixe||'');if(p<1)requestAnimationFrame(pas)}
+    requestAnimationFrame(pas);
   }
+  function jauge(pct,val,suffixe,lib,sous,alerte){
+    var L=Math.PI*55,p=Math.max(0,Math.min(100,pct||0)),id='g'+Math.random().toString(36).slice(2,7);
+    return '<div class="jauge"><svg viewBox="0 0 130 82"><defs><linearGradient id="'+id+'" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="'+(alerte?'#ff5a4d':'#FFC48A')+'"/><stop offset="100%" stop-color="'+(alerte?'#e53935':'#FF6B00')+'"/></linearGradient></defs>'
+      +'<path d="M 10 70 A 55 55 0 0 1 120 70" fill="none" stroke="rgba(255,255,255,.12)" stroke-width="9" stroke-linecap="round"/>'
+      +'<path class="arc" data-p="'+p+'" d="M 10 70 A 55 55 0 0 1 120 70" fill="none" stroke="url(#'+id+')" stroke-width="9" stroke-linecap="round" stroke-dasharray="'+L+'" stroke-dashoffset="'+L+'" style="transition:stroke-dashoffset 1.3s cubic-bezier(.2,.8,.2,1);filter:drop-shadow(0 0 6px rgba(255,107,0,.8))"/>'
+      +'<text x="65" y="62" text-anchor="middle" style="font-size:22px;font-weight:900;fill:#fff;font-family:monospace" data-cnt="'+val+'" data-suf="'+suffixe+'">0</text></svg>'
+      +'<div class="lib">'+lib+'</div><div class="sl">'+sous+'</div></div>';
+  }
+  function cockpit(){
+    var actifs=contrats.filter(function(c){return statutDe(c)==='Actif'});
+    var demandes=contrats.filter(function(c){return statutDe(c)==='Demande'}).length;
+    var proches=actifs.filter(function(c){var p=c.fields['Prochaine visite'];return p&&jours(p)<=30&&jours(p)>=0}).length;
+    var retards=actifs.filter(function(c){var p=c.fields['Prochaine visite'];return p&&jours(p)<0&&!visitesPlanifiees(c).some(function(v){return v.date>=iso(new Date())})}).length;
+    var ca=0;actifs.forEach(function(c){ca+=Number(c.fields['Montant annuel HT'])||0});
+    var planifies=actifs.filter(function(c){return visitesPlanifiees(c).some(function(v){return v.date>=iso(new Date())})}).length;
+    $('kpis').innerHTML='<div class="kpi"><b data-cnt="'+actifs.length+'" data-suf="">0</b><span>Contrats actifs</span></div>'
+      +'<div class="kpi'+(demandes?' alerte':'')+'"><b data-cnt="'+demandes+'" data-suf="">0</b><span>Demandes à traiter</span></div>'
+      +'<div class="kpi"><b data-cnt="'+proches+'" data-suf="">0</b><span>Visites sous 30 jours</span></div>'
+      +'<div class="kpi'+(retards?' alerte':'')+'"><b data-cnt="'+retards+'" data-suf="">0</b><span>En retard</span></div>'
+      +'<div class="kpi"><b data-cnt="'+Math.round(ca)+'" data-suf=" €">0</b><span>Revenu annuel HT</span></div>';
+    var pctPlan=actifs.length?Math.round(planifies/actifs.length*100):0;
+    var pctJour=actifs.length?Math.round((actifs.length-retards)/actifs.length*100):100;
+    var pctTraite=(actifs.length+demandes)?Math.round(actifs.length/(actifs.length+demandes)*100):100;
+    $('jauges').innerHTML=jauge(pctPlan,pctPlan,'%','Visites planifiées',planifies+' contrat'+(planifies>1?'s':'')+' sur '+actifs.length,false)
+      +jauge(pctJour,pctJour,'%','Contrats à jour',retards+' en retard',pctJour<70)
+      +jauge(pctTraite,pctTraite,'%','Demandes traitées',demandes+' en attente',false);
+    // 12 prochains mois : visites planifiées (orange) et prochaine visite prévue sans date choisie (clair)
+    var mois=[];var m0=moisCle(iso(new Date()));for(var i=0;i<12;i++)mois.push(decaleMois(m0,i));
+    var pl={},pr={};mois.forEach(function(m){pl[m]=0;pr[m]=0});
+    actifs.forEach(function(c){var vs=visitesPlanifiees(c);vs.forEach(function(v){if(pl[moisCle(v.date)]!==undefined)pl[moisCle(v.date)]++});
+      if(!vs.length&&c.fields['Prochaine visite']&&pr[moisCle(c.fields['Prochaine visite'])]!==undefined)pr[moisCle(c.fields['Prochaine visite'])]++});
+    var max=Math.max(1,Math.max.apply(null,mois.map(function(m){return pl[m]+pr[m]})));
+    $('barres').innerHTML=mois.map(function(m){var a=pl[m],b=pr[m];
+      return '<div class="col"><div class="n">'+(a+b||'')+'</div><div class="b" data-h="'+Math.round(b/max*100)+'" style="background:#FFC48A"></div><div class="b" data-h="'+Math.round(a/max*100)+'" style="background:linear-gradient(180deg,#FF9A3C,#FF6B00);box-shadow:0 0 8px rgba(255,107,0,.6)"></div><div class="m">'+new Date(m+'-01T12:00:00').toLocaleDateString('fr-FR',{month:'short'})+'</div></div>'}).join('');
+    document.querySelectorAll('#cockpit [data-cnt]').forEach(function(el){compteur(el,Number(el.dataset.cnt),el.dataset.suf)});
+    setTimeout(function(){
+      document.querySelectorAll('#cockpit .arc').forEach(function(a){var L=Math.PI*55;a.style.strokeDashoffset=String(L*(1-Number(a.dataset.p)/100))});
+      document.querySelectorAll('#cockpit .b').forEach(function(b){b.style.height=(Number(b.dataset.h)*0.58)+'px'});
+    },120);
+  }
+
+  // ------------------------------------------------------------ cartes
+  function carteDemande(c){
+    var f=c.fields,per=Number(f['Périodicité (mois)']);
+    return '<div class="carte demande" data-id="'+c.id+'"><div class="ligne"><div><span class="puce or">Nouvelle demande</span><div class="nom" style="margin-top:6px">'+esc(f.Client)+'</div>'
+      +'<div class="petit">'+esc(f['Référence']||'')+' · '+esc(f.Agence||'')+'</div><div class="petit">'+esc(f['Adresse']||'')+'</div></div><div class="petit" style="text-align:right">'+esc(f['Téléphone']||'')+'<br>'+esc(f.Email||'')+'</div></div>'
+      +'<div class="petit" style="margin-top:8px">'+esc(f['Équipements']||'Équipements à préciser')+'</div>'
+      +'<div class="g2"><div><label>Fréquence des visites</label><select data-champ="per"><option value="12"'+(per===12?' selected':'')+'>Une fois par an</option><option value="6"'+(per===6?' selected':'')+'>Deux fois par an</option><option value="24"'+(per===24?' selected':'')+'>Tous les 2 ans</option></select></div>'
+      +'<div><label>Montant annuel HT (€)</label><input data-champ="mt" type="number" min="0" step="1" placeholder="Ex : 180"></div></div>'
+      +'<label>Début du contrat</label><input data-champ="deb" type="date" value="'+iso(new Date())+'">'
+      +'<div class="actions"><button class="g p" data-e="valider">Valider le contrat</button><button class="g" data-e="refuser">Refuser</button></div></div>';
+  }
+  function carteContrat(c){
+    var f=c.fields,p=f['Prochaine visite'],d=p?jours(p):null,st=statutDe(c),vs=visitesPlanifiees(c);
+    var badge='';
+    if(st==='Suspendu')badge='<span class="puce">Suspendu</span>';
+    else if(vs.length){var n=jours(vs[0].date);badge='<span class="puce vert">Visite dans '+n+' j</span>'}
+    else if(p){badge=d<0?'<span class="puce rouge">En retard de '+(-d)+' j</span>':'<span class="puce '+(d<=30?'or':'')+'">À planifier · '+d+' j</span>'}
+    var carnet=[];try{carnet=JSON.parse(f['Carnet (JSON)']||'[]')}catch(e){}
+    var h='<div class="carte'+(st==='Suspendu'?' susp':'')+'" data-id="'+c.id+'"><div class="ligne"><div><div class="nom">'+esc(f.Client)+'</div><div class="petit">'+esc(f['Adresse']||'')+'</div>'
+      +'<div style="margin-top:5px"><span class="puce noir">'+esc(f.Agence||'Agence ?')+'</span> '+badge+'</div></div>'
+      +'<div class="petit" style="text-align:right">'+(f['Montant annuel HT']?'<b>'+Number(f['Montant annuel HT']).toLocaleString('fr-FR')+' € HT</b>/an<br>':'')+'tous les '+(f['Périodicité (mois)']||12)+' mois</div></div>';
+    if(f['Équipements'])h+='<div class="petit" style="margin-top:8px">'+esc(f['Équipements'])+'</div>';
+    h+='<div class="petit" style="margin-top:4px">Dernière visite : '+fr(f['Dernière visite'])+' · Prochaine : '+fr(f['Prochaine visite'])+'</div>';
+    h+='<div class="visites">'+(vs.length?vs.map(function(v){return '<span class="vis">'+fr(v.date)+' · '+esc(String(v.creneau||'').replace(/ \(.*$/,''))+(v.par==='client'?' · client':'')+'<button title="Annuler cette visite" data-e="annulv" data-v="'+v.id+'">×</button></span>'}).join(''):'<span class="petit">Aucune visite planifiée.</span>')+'</div>';
+    h+='<div class="actions">'+(st==='Actif'?'<button class="g p" data-e="planif">'+(plan.id===c.id?'Fermer le planning':'Planifier une visite')+'</button>':'')
+      +'<button class="g s" data-a="visite">Visite effectuée</button><button class="g" data-a="rappel">Rappeler</button><button class="g" data-a="devis">Devis</button><button class="g" data-a="susp">'+(st==='Suspendu'?'Réactiver':'Suspendre')+'</button><button class="g" data-a="resilier">Résilier</button></div>';
+    if(plan.id===c.id&&st==='Actif')h+=blocPlan(c,vs);
+    if(carnet.length)h+='<div class="petit" style="margin-top:10px;border-top:1px solid #EEE;padding-top:6px"><b>Carnet d\'entretien</b>'+carnet.slice().reverse().slice(0,3).map(function(v){return '<div>'+fr(v.date)+' — '+esc(v.observations||'Visite réalisée')+'</div>'}).join('')+'</div>';
+    return h+'</div>';
+  }
+  function blocPlan(c,vs){
+    var h='<div class="plan"><div class="plan-tete"><button class="g" data-e="mois-" style="padding:5px 11px">←</button><b>'+moisLib(plan.mois)+'</b><button class="g" data-e="mois+" style="padding:5px 11px">→</button></div>'
+      +'<div class="chips"><button class="chip'+(plan.periode===''?' on':'')+'" data-e="per" data-p="">Toute la journée</button><button class="chip'+(plan.periode==='matin'?' on':'')+'" data-e="per" data-p="matin">Matin</button><button class="chip'+(plan.periode==='apres_midi'?' on':'')+'" data-e="per" data-p="apres_midi">Après-midi</button></div>';
+    if(plan.msg)h+='<div class="msg">'+esc(plan.msg)+'</div>';
+    if(plan.liste===null)return h+'<div class="petit">Chargement des dates…</div></div>';
+    var parJour={};plan.liste.forEach(function(s){(parJour[s.date]=parJour[s.date]||[]).push(s)});
+    var p=plan.mois.split('-'),premier=new Date(+p[0],+p[1]-1,1),nbj=new Date(+p[0],+p[1],0).getDate(),dec=(premier.getDay()+6)%7;
+    var visJ={};vs.forEach(function(v){visJ[v.date]=1});
+    h+='<div class="cal">'+['L','M','M','J','V','S','D'].map(function(x){return '<div class="j">'+x+'</div>'}).join('');
+    for(var i=0;i<dec;i++)h+='<div></div>';
+    for(var j=1;j<=nbj;j++){var dt=plan.mois+'-'+String(j).padStart(2,'0'),n=(parJour[dt]||[]).length;
+      h+='<div class="d'+(n?' libre':'')+(plan.jour===dt?' sel':'')+(visJ[dt]?' vis-j':'')+'" '+(n?'data-e="jour" data-d="'+dt+'"':'')+'>'+j+(n?'<small>'+n+' cr.</small>':'')+'</div>'}
+    h+='</div>';
+    if(!plan.liste.length)h+='<div class="petit" style="margin-top:8px">Aucune date libre ce mois-ci avec ce filtre.</div>';
+    if(plan.jour&&parJour[plan.jour])h+='<div class="creneaux">'+parJour[plan.jour].map(function(s){return '<button class="g p" data-e="choisir" data-pid="'+s.id+'">'+esc(s.creneau.replace(/ \(.*$/,''))+(/\(/.test(s.creneau)?' '+esc((s.creneau.match(/\((.*)\)/)||[])[1]||''):'')+'</button>'}).join('')+'</div>';
+    else if(plan.liste.length)h+='<div class="petit" style="margin-top:8px">Touchez un jour disponible pour choisir le créneau.</div>';
+    return h+'</div>';
+  }
+  function afficher(){
+    cockpit();
+    var demandes=contrats.filter(function(c){return statutDe(c)==='Demande'});
+    var autres=contrats.filter(function(c){return statutDe(c)!=='Demande'}).sort(function(a,b){return (a.fields['Prochaine visite']||'9999').localeCompare(b.fields['Prochaine visite']||'9999')});
+    var h='';
+    if(demandes.length)h+='<div class="sec">'+demandes.length+' demande'+(demandes.length>1?'s':'')+' à traiter</div><div class="grille">'+demandes.map(carteDemande).join('')+'</div>';
+    h+='<div class="sec">Contrats</div>';
+    h+=autres.length?'<div class="grille">'+autres.map(carteContrat).join('')+'</div>':'<div class="vide">Aucun contrat pour le moment. Ajoutez votre premier client sous contrat.</div>';
+    $('liste').innerHTML=h;
+  }
+
+  // ------------------------------------------------------------ actions
   async function maj(id,fields){
     var r=await fetch(TABLE+'/'+id,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({fields:fields})});
     if(!r.ok){alert('Enregistrement impossible ('+r.status+').');return false}
@@ -104,45 +263,80 @@ button.n{background:#0D0D0D}button.b{background:#fff;color:#0D0D0D;border:1px so
   async function webhook(action,f,extra){
     try{await fetch(WEBHOOK,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(Object.assign({marque:'iko',action:action,nom:f.Client,'e-mail':f.Email||'',tel:f['Téléphone']||'',agence:f.Agence||''},extra||{}))})}catch(e){}
   }
+  async function appelEntretien(corps){
+    var r=await fetch('/api/airtable/entretien',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(corps)});
+    var j=await r.json().catch(function(){return{}});
+    if(!r.ok) throw new Error(j.error||('Erreur '+r.status));
+    return j;
+  }
+  async function chargerCreneaux(){
+    plan.liste=null;plan.msg='';afficher();
+    try{var j=await appelEntretien({action:'creneaux',contratId:plan.id,mois:plan.mois,periode:plan.periode||undefined});plan.liste=j.creneaux||[];if(j.raison)plan.msg=j.raison}catch(e){plan.liste=[];plan.msg=e.message}
+    afficher();
+  }
   $('liste').addEventListener('click',async function(e){
+    var be=e.target.closest('button[data-e],div[data-e]');
+    if(be){
+      var carte=be.closest('[data-id]'),id=carte&&carte.dataset.id,c=contrats.find(function(x){return x.id===id}),a=be.dataset.e;
+      try{
+        if(a==='valider'){
+          var per=Number(carte.querySelector('[data-champ=per]').value)||12,mt=carte.querySelector('[data-champ=mt]').value,deb=carte.querySelector('[data-champ=deb]').value||iso(new Date());
+          var champs={'Statut contrat':'Actif','Périodicité (mois)':per,'Date début':deb,'Prochaine visite':ajoutMois(deb,per)};
+          if(mt)champs['Montant annuel HT']=Number(mt);
+          if(await maj(id,champs)){plan.id=id;plan.mois=moisCle(iso(new Date()));plan.jour=null;plan.periode='';chargerCreneaux()}
+        }else if(a==='refuser'){ if(confirm('Refuser cette demande de contrat ?')){await maj(id,{'Statut contrat':'Résilié'});contrats=contrats.filter(function(x){return x.id!==id});afficher()} }
+        else if(a==='planif'){ if(plan.id===id){plan.id=null;afficher()} else {plan.id=id;plan.mois=moisCle(iso(new Date()));plan.periode='';plan.jour=null;chargerCreneaux()} }
+        else if(a==='mois-'||a==='mois+'){ var m=decaleMois(plan.mois,a==='mois+'?1:-1); if(m<moisCle(iso(new Date())))return; plan.mois=m;plan.jour=null; chargerCreneaux() }
+        else if(a==='per'){ plan.periode=be.dataset.p||'';plan.jour=null; chargerCreneaux() }
+        else if(a==='jour'){ plan.jour=be.dataset.d; afficher() }
+        else if(a==='choisir'){
+          be.disabled=true;
+          try{var j=await appelEntretien({action:'planifier',contratId:plan.id,planningId:be.dataset.pid});c.fields['Visites (JSON)']=JSON.stringify(j.visites);var nx=j.visites.filter(function(v){return v.statut==='Planifiée'}).map(function(v){return v.date}).filter(function(d){return d>=iso(new Date())}).sort()[0];if(nx)c.fields['Prochaine visite']=nx;plan.msg='';plan.jour=null}
+          catch(er){plan.msg=er.message}
+          await chargerCreneaux();
+        }else if(a==='annulv'){ if(confirm('Annuler cette visite et libérer le créneau ?')){ try{var j2=await appelEntretien({action:'annuler_visite',contratId:id,visiteId:be.dataset.v});c.fields['Visites (JSON)']=JSON.stringify(j2.visites)}catch(er2){alert(er2.message)} if(plan.id===id)await chargerCreneaux(); else afficher() } }
+      }catch(err){alert(err.message||'Action impossible')}
+      return;
+    }
     var b=e.target.closest('button[data-a]');if(!b)return;
-    var id=b.closest('[data-id]').dataset.id,c=contrats.find(function(x){return x.id===id}),f=c.fields,a=b.dataset.a;
+    var id2=b.closest('[data-id]').dataset.id,c2=contrats.find(function(x){return x.id===id2}),f=c2.fields,a2=b.dataset.a;
     b.disabled=true;
     try{
-      if(a==='visite'){
+      if(a2==='visite'){
         var obs=prompt('Observations de la visite (facultatif) :','');if(obs===null)return;
         var carnet=[];try{carnet=JSON.parse(f['Carnet (JSON)']||'[]')}catch(x){}
         var aujourdhui=iso(new Date());carnet.push({date:aujourdhui,observations:obs});
-        await maj(id,{'Dernière visite':aujourdhui,'Prochaine visite':ajoutMois(aujourdhui,Number(f['Périodicité (mois)'])||12),'Carnet (JSON)':JSON.stringify(carnet)});
-      }else if(a==='rappel'){
+        await maj(id2,{'Dernière visite':aujourdhui,'Prochaine visite':ajoutMois(aujourdhui,Number(f['Périodicité (mois)'])||12),'Carnet (JSON)':JSON.stringify(carnet)});
+      }else if(a2==='rappel'){
         if(!f.Email&&!f['Téléphone']){alert('Aucun e-mail ni téléphone pour ce client.');return}
         await webhook('entretien_rappel',f,{date_visite:fr(f['Prochaine visite']),equipements:f['Équipements']||''});
-        await maj(id,{'Dernier rappel':iso(new Date())});
-      }else if(a==='devis'){
+        await maj(id2,{'Dernier rappel':iso(new Date())});
+      }else if(a2==='devis'){
         var nom='ENT-'+Date.now().toString(36).toUpperCase();
-        var r=await fetch('/api/airtable/tenant/Tickets%20SAV',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({fields:{Name:nom,Statut:'Devis à faire',Client:f.Client,Email:f.Email||'',Téléphone:f['Téléphone']||'',Adresse:f.Adresse||'',Agence:f.Agence||'',Produit:f['Équipements']||'',Problème:"Contrat d'entretien — visite de maintenance"+(f['Montant annuel HT']?' ('+f['Montant annuel HT']+' € HT/an)':'')}})});
+        var r=await fetch('/api/airtable/tenant/Tickets%20SAV',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({fields:{Name:nom,Statut:'Devis à faire',Client:f.Client,Email:f.Email||'',Téléphone:f['Téléphone']||'',Adresse:f['Adresse']||'',Agence:f.Agence||'',Produit:'Entretien',Problème:'Contrat d\'entretien — visite de maintenance'+(f['Montant annuel HT']?' ('+f['Montant annuel HT']+' € HT/an)':''),'Compte client':ctx.id?[ctx.id]:undefined}})});
         alert(r.ok?'Dossier « '+nom+' » créé : retrouvez-le dans le tableau de bord (Devis à faire) pour établir le devis de maintenance.':'Création impossible ('+r.status+').');
-      }else if(a==='susp'){
-        await maj(id,{'Statut contrat':(f['Statut contrat']||'Actif')==='Suspendu'?'Actif':'Suspendu'});
-      }else if(a==='resilier'){
-        if(confirm('Résilier ce contrat ?'))await maj(id,{'Statut contrat':'Résilié'});
-        contrats=contrats.filter(function(x){return (x.fields['Statut contrat']||'Actif')!=='Résilié'});
+      }else if(a2==='susp'){
+        await maj(id2,{'Statut contrat':statutDe(c2)==='Suspendu'?'Actif':'Suspendu'});
+      }else if(a2==='resilier'){
+        if(confirm('Résilier ce contrat ?'))await maj(id2,{'Statut contrat':'Résilié'});
+        contrats=contrats.filter(function(x){return statutDe(x)!=='Résilié'});
       }
     }finally{b.disabled=false}
     afficher();
   });
-  $('bForm').onclick=function(){$('form').style.display=$('form').style.display==='none'?'block':'none'};
+  $('bForm').onclick=function(){var c=$('carteForm');c.style.display=c.style.display==='none'?'block':'none'};
+  $('bAnnulerForm').onclick=function(){$('carteForm').style.display='none'};
   $('form').onsubmit=async function(ev){
     ev.preventDefault();
     var per=Number($('fPer').value)||12,deb=$('fDeb').value;
     var fields={Client:$('fNom').value.trim(),Email:$('fMail').value.trim()||undefined,'Téléphone':$('fTel').value.trim(),Agence:$('fAg').value.trim(),Adresse:$('fAdr').value.trim(),'Équipements':$('fEq').value.trim(),
-      'Périodicité (mois)':per,'Date début':deb,'Prochaine visite':$('fProch').value||ajoutMois(deb,per),'Statut contrat':'Actif','Carnet (JSON)':'[]'};
+      'Périodicité (mois)':per,'Date début':deb,'Prochaine visite':$('fProch').value||ajoutMois(deb,per),'Statut contrat':'Actif','Carnet (JSON)':'[]','Visites (JSON)':'[]'};
     if($('fMt').value)fields['Montant annuel HT']=Number($('fMt').value);
     if(ctx.id)fields['Compte client']=[ctx.id];
     $('fMsg').textContent='Enregistrement…';
     var r=await fetch(TABLE,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({fields:fields})});
     if(!r.ok){$('fMsg').textContent='Échec ('+r.status+').';return}
-    $('form').reset();$('form').style.display='none';$('fMsg').textContent='';await charger();
+    $('form').reset();$('carteForm').style.display='none';$('fMsg').textContent='';await charger();
   };
   contexte().then(function(ok){if(ok)charger()});
 })();

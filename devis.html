@@ -52,8 +52,8 @@ function CreneauPicker({ agenceVille, clientId, onSelect }) {
   const [loading, setLoading] = React.useState(false);
 
   const CRENEAUX = [
-    { id: "matin", label: "🌅 Matin", heure: "8h30 — 12h00", valeur: "Matin (8h30 — 12h00)" },
-    { id: "apres_midi", label: "🌇 Après-midi", heure: "13h00 — 17h00", valeur: "Après-midi (13h00 — 17h00)" },
+    { id: "matin", label: "Matin", heure: "8h30 — 12h00", valeur: "Matin (8h30 — 12h00)" },
+    { id: "apres_midi", label: "Après-midi", heure: "13h00 — 17h00", valeur: "Après-midi (13h00 — 17h00)" },
   ];
   const DELAI_MIN_JOURS = 7;
 
@@ -327,11 +327,11 @@ function DevisItemiseView({ devisId }) {
             <div>
               <a href={devis.fields["Yousign Signer Link"]} target="_blank" rel="noopener noreferrer"
                 style={{display:"block",textAlign:"center",padding:"13px",background:F.or,color:"#111",borderRadius:"10px",fontSize:"13px",fontWeight:"900",textDecoration:"none",marginBottom:"10px"}}>
-                ✍️ Signer électroniquement mon devis
+                Signer électroniquement mon devis
               </a>
               <button onClick={rafraichir} disabled={refreshing}
                 style={{width:"100%",padding:"10px",background:"#F3F4F6",color:"#374151",border:"1px solid #E2E2E2",borderRadius:"10px",fontSize:"12px",fontWeight:"700",cursor:refreshing?"not-allowed":"pointer",marginBottom:"10px"}}>
-                {refreshing ? "⏳ Vérification..." : "🔄 J'ai signé, actualiser"}
+                {refreshing ? "⏳ Vérification..." : "J'ai signé, actualiser"}
               </button>
               <button onClick={() => setStatutPage("refuser")} style={{width:"100%",padding:"11px",background:"transparent",color:"#94A3B8",border:"none",fontSize:"12px",cursor:"pointer",textDecoration:"underline"}}>
                 Je refuse ce devis
@@ -370,7 +370,7 @@ function DevisItemiseView({ devisId }) {
               )}
               <button onClick={rafraichir} disabled={refreshing}
                 style={{width:"100%",padding:"11px",background:"#F3F4F6",color:"#374151",border:"1px solid #E2E2E2",borderRadius:"10px",fontSize:"12px",fontWeight:"700",cursor:refreshing?"not-allowed":"pointer"}}>
-                {refreshing ? "⏳ Vérification..." : "🔄 Réessayer"}
+                {refreshing ? "⏳ Vérification..." : "Réessayer"}
               </button>
             </div>
           )}
@@ -380,7 +380,7 @@ function DevisItemiseView({ devisId }) {
       {statutPage === "refuser" && devis && (
         <div style={{background:F.blanc,borderRadius:"14px",padding:"24px",border:"1px solid "+F.grisBord}}>
           <button onClick={() => setStatutPage("attente")} style={{background:"none",border:"none",color:"#94A3B8",cursor:"pointer",fontSize:"12px",marginBottom:"14px"}}>← Retour</button>
-          <div style={{fontSize:"15px",fontWeight:"900",color:F.marine,marginBottom:"10px"}}>❌ Refuser ce devis</div>
+          <div style={{fontSize:"15px",fontWeight:"900",color:F.marine,marginBottom:"10px"}}>Refuser ce devis</div>
           <label style={{fontSize:"11px",fontWeight:"700",color:"#64748B",display:"block",marginBottom:"6px"}}>Motif (facultatif)</label>
           <textarea rows={3} placeholder="Ex : Trop cher, je préfère faire appel à quelqu'un d'autre..." value={motifRefus} onChange={e => setMotifRefus(e.target.value)} style={{resize:"none",marginBottom:"14px"}}/>
           <label style={{fontSize:"11px",fontWeight:"700",color:"#64748B",display:"block",marginBottom:"6px"}}>Catégorie du refus</label>
@@ -407,20 +407,20 @@ function DevisItemiseView({ devisId }) {
             </div>
           )}
           {retourPaiement === 'ok' && (
-            <div style={{marginTop:"14px",background:"#ECFDF5",border:"1px solid #A7F3D0",borderRadius:"10px",padding:"12px",color:"#065F46",fontSize:"13px",fontWeight:"700"}}>💳 Merci, votre paiement a bien été reçu. Une confirmation vous sera envoyée.</div>
+            <div style={{marginTop:"14px",background:"#ECFDF5",border:"1px solid #A7F3D0",borderRadius:"10px",padding:"12px",color:"#065F46",fontSize:"13px",fontWeight:"700"}}>Merci, votre paiement a bien été reçu. Une confirmation vous sera envoyée.</div>
           )}
           {devis?.fields?.["Statut paiement"] !== "Payé" && retourPaiement !== 'ok' && (
             <div style={{marginTop:"14px"}}>
               {devis?.fields?.["Statut paiement"] !== "Acompte reçu" && (
                 <button onClick={() => payer('acompte')} disabled={paiementEnCours}
                   style={{width:"100%",padding:"14px",background:F.or,color:"#fff",border:"none",borderRadius:"10px",fontSize:"14px",fontWeight:"900",cursor:paiementEnCours?"wait":"pointer"}}>
-                  {paiementEnCours ? "⏳ Redirection…" : "💳 Payer l'acompte (30 %) en ligne"}
+                  {paiementEnCours ? "⏳ Redirection…" : "Payer l'acompte (30 %) en ligne"}
                 </button>
               )}
               {devis?.fields?.["Statut paiement"] === "Acompte reçu" && (
                 <button onClick={() => payer('solde')} disabled={paiementEnCours}
                   style={{width:"100%",padding:"14px",background:F.or,color:"#fff",border:"none",borderRadius:"10px",fontSize:"14px",fontWeight:"900",cursor:paiementEnCours?"wait":"pointer"}}>
-                  {paiementEnCours ? "⏳ Redirection…" : "💳 Régler le solde en ligne"}
+                  {paiementEnCours ? "⏳ Redirection…" : "Régler le solde en ligne"}
                 </button>
               )}
               {paiementMsg && <div style={{marginTop:"8px",fontSize:"12px",color:"#B45309"}}>{paiementMsg}</div>}
@@ -570,7 +570,7 @@ function App() {
 
             {ticket.fields?.Diagnostic && (
               <div style={{background:"#F3F4F6",borderRadius:"10px",padding:"12px 14px",marginBottom:"14px",fontSize:"12px",color:"#374151"}}>
-                <div style={{fontWeight:"700",color:F.marine,marginBottom:"4px"}}>📋 Diagnostic de notre technicien</div>
+                <div style={{fontWeight:"700",color:F.marine,marginBottom:"4px"}}>Diagnostic de notre technicien</div>
                 {ticket.fields.Diagnostic}
               </div>
             )}
@@ -587,7 +587,7 @@ function App() {
         {statutPage === "refuser" && ticket && (
           <div style={{background:F.blanc,borderRadius:"14px",padding:"24px",border:"1px solid "+F.grisBord}}>
             <button onClick={() => setStatutPage("attente")} style={{background:"none",border:"none",color:"#94A3B8",cursor:"pointer",fontSize:"12px",marginBottom:"14px"}}>← Retour</button>
-            <div style={{fontSize:"15px",fontWeight:"900",color:F.marine,marginBottom:"10px"}}>❌ Refuser ce devis</div>
+            <div style={{fontSize:"15px",fontWeight:"900",color:F.marine,marginBottom:"10px"}}>Refuser ce devis</div>
             <label style={{fontSize:"11px",fontWeight:"700",color:"#64748B",display:"block",marginBottom:"6px"}}>Motif (facultatif)</label>
             <textarea rows={3} placeholder="Ex : Trop cher, je préfère faire appel à quelqu'un d'autre..." value={motifRefus} onChange={e => setMotifRefus(e.target.value)} style={{resize:"none",marginBottom:"14px"}}/>
             <button onClick={refuser} disabled={saving}
@@ -644,11 +644,11 @@ function DecisionZone({ ticket, onAccepterCreneau, onOuvrirRefus, saving, onRefr
       <div>
         <a href={lienSignature} target="_blank" rel="noopener noreferrer"
           style={{display:"block",textAlign:"center",padding:"13px",background:F.or,color:"#111",borderRadius:"10px",fontSize:"13px",fontWeight:"900",textDecoration:"none",marginBottom:"10px"}}>
-          ✍️ Signer électroniquement mon devis
+          Signer électroniquement mon devis
         </a>
         <button onClick={rafraichir} disabled={refreshing}
           style={{width:"100%",padding:"10px",background:"#F3F4F6",color:"#374151",border:"1px solid #E2E2E2",borderRadius:"10px",fontSize:"12px",fontWeight:"700",cursor:refreshing?"not-allowed":"pointer",marginBottom:"10px"}}>
-          {refreshing ? "⏳ Vérification..." : "🔄 J'ai signé, actualiser"}
+          {refreshing ? "⏳ Vérification..." : "J'ai signé, actualiser"}
         </button>
         <button onClick={onOuvrirRefus} style={{width:"100%",padding:"11px",background:"transparent",color:"#94A3B8",border:"none",fontSize:"12px",cursor:"pointer",textDecoration:"underline"}}>
           Je refuse ce devis
@@ -663,8 +663,8 @@ function DecisionZone({ ticket, onAccepterCreneau, onOuvrirRefus, saving, onRefr
 
   return (
     <div style={{display:"flex",gap:"10px"}}>
-      <button onClick={onOuvrirRefus} style={{flex:1,padding:"13px",background:"#F3F4F6",color:"#374151",border:"1px solid #E2E2E2",borderRadius:"10px",fontSize:"13px",fontWeight:"700",cursor:"pointer"}}>❌ Refuser</button>
-      <button onClick={() => setModeAcceptation(true)} style={{flex:2,padding:"13px",background:F.or,color:"#111",border:"none",borderRadius:"10px",fontSize:"13px",fontWeight:"900",cursor:"pointer"}}>✅ Accepter le devis</button>
+      <button onClick={onOuvrirRefus} style={{flex:1,padding:"13px",background:"#F3F4F6",color:"#374151",border:"1px solid #E2E2E2",borderRadius:"10px",fontSize:"13px",fontWeight:"700",cursor:"pointer"}}>Refuser</button>
+      <button onClick={() => setModeAcceptation(true)} style={{flex:2,padding:"13px",background:F.or,color:"#111",border:"none",borderRadius:"10px",fontSize:"13px",fontWeight:"900",cursor:"pointer"}}>Accepter le devis</button>
     </div>
   );
 }

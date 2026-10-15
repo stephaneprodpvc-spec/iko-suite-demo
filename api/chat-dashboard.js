@@ -1,4 +1,6 @@
 import { limiterChat } from "./_securite.js";
+import { blocSystemeIko } from "./_systeme-iko.js";
+import { blocMetierMenuiserie } from "./_metier-menuiserie.js";
 import { normaliserConnaissance, blocPromptConnaissance, affinerPourPrompt } from "./_connaissance.js";
 import { blocPromptAnalyticsSAV, genererRecommandationsSAV, blocPromptRecommandationsSAV } from "../analytics-sav.js";
 
@@ -193,6 +195,15 @@ REGLES
   ticket, identifie-le dans la liste fournie (par numero de ticket ou
   nom de client cite) et utilise son identifiant exact (champ id) dans
   ticket_id, jamais le numero affiche.
+- ouvrir_ecran ouvre un ecran en lecture seule (centrale de direction,
+  facturation, indicateurs commerciaux...). prochain_rdv_disponible
+  lit le planning reel : le dashboard annonce lui-meme les creneaux
+  trouves, n'invente JAMAIS de date ni de disponibilite. Pour deplacer un
+  rendez-vous, utilise deplacer_rdv UNIQUEMENT si l'utilisateur donne
+  une date precise (le dashboard annonce ensuite lui-meme le resultat
+  reel : ne dis jamais que c'est fait toi-meme). Sans date precise
+  (« le plus tot possible », « la semaine prochaine »), utilise
+  prochain_rdv_disponible pour proposer les creneaux libres.
 - Les actions preparer_blocage_dates, ouvrir_nouveau_rdv,
   preparer_annulation_ticket et preparer_suppression_ticket ouvrent
   seulement un formulaire pre-rempli : elles n'ecrivent rien tant que
@@ -243,7 +254,7 @@ function buildSystemPrompt(connaissanceEntrees, analyticsSAVResume) {
   // donnees, uniquement une lecture croisee de ce qui est deja calcule) -
   // voir genererRecommandationsSAV dans analytics-sav.js.
   const recommandationsSAV = genererRecommandationsSAV(analyticsSAVResume, connaissanceEntrees);
-  return SYSTEM_PROMPT_BASE + blocPromptConnaissance(connaissanceEntrees) + blocPromptAnalyticsSAV(analyticsSAVResume) + blocPromptRecommandationsSAV(recommandationsSAV);
+  return SYSTEM_PROMPT_BASE + blocSystemeIko("dashboard") + blocMetierMenuiserie("dashboard") + blocPromptConnaissance(connaissanceEntrees) + blocPromptAnalyticsSAV(analyticsSAVResume) + blocPromptRecommandationsSAV(recommandationsSAV);
 }
 
 const TOOLS = [
@@ -271,7 +282,7 @@ const TOOLS = [
   },
   {
     name: "filtrer_statut",
-    description: "Filtre la liste des tickets sur un statut precis, ou revient a tous les statuts.",
+    description: "Filtre la liste des tickets sur un statut precis, ou revient a tous les statuts. \"En attente\" sans precision = Nouveau (demandes pas encore prises en charge) ; seulement \"attente piece\" ou \"attente fournisseur\" si dit explicitement.",
     input_schema: {
       type: "object",
       properties: {
@@ -393,6 +404,53 @@ const TOOLS = [
       type: "object",
       properties: {},
       required: [],
+    },
+  },
+  {
+    name: "lire_analyse_max",
+    description: "Lit a voix haute l'analyse de Max (constat, piste, proposition) enregistree sur un ticket. A utiliser quand on demande le compte rendu ou l'analyse de Max pour un client ou un ticket (par exemple 'analyse de Max pour monsieur Dupont'). N'ecrit rien : le dashboard lit lui-meme l'analyse reelle, n'en invente jamais. Identifie le ticket dans la liste fournie, par le nom du client ou le numero.",
+    input_schema: {
+      type: "object",
+      properties: {
+        ticket_id: { type: "string", description: "Identifiant exact (champ id) du ticket dans la liste fournie." },
+      },
+      required: ["ticket_id"],
+    },
+  },
+  {
+    name: "ouvrir_ecran",
+    description: "Ouvre un ecran du dashboard (lecture seule, n'ecrit rien) : centrale_direction (centrale de direction / central), facturation (facturation et compta), intelligence_commerciale (indicateurs commerciaux), analytics_sav, devis (devis en attente), equipe, entretien (contrats d'entretien), planning (vue planning des rendez-vous), tickets (liste des tickets SAV).",
+    input_schema: {
+      type: "object",
+      properties: {
+        ecran: { type: "string", enum: ["centrale_direction", "facturation", "intelligence_commerciale", "analytics_sav", "devis", "equipe", "planning", "tickets", "entretien"] },
+      },
+      required: ["ecran"],
+    },
+  },
+  {
+    name: "prochain_rdv_disponible",
+    description: "Cherche dans le planning reel le ou les prochains creneaux de rendez-vous LIBRES (delai minimum applique). N'ecrit rien et ne reserve rien : le dashboard annonce lui-meme les creneaux trouves. A utiliser pour 'trouve le prochain rendez-vous disponible' ou 'propose un nouveau rendez-vous a ce client' (indique alors ticket_id si un ticket precis est designe).",
+    input_schema: {
+      type: "object",
+      properties: {
+        agence: { type: "string", enum: AGENCES_VALIDES },
+        ticket_id: { type: "string", description: "Identifiant exact (champ id) du ticket du client concerne, si designe : l'agence du ticket est alors utilisee." },
+      },
+      required: [],
+    },
+  },
+  {
+    name: "deplacer_rdv",
+    description: "Deplace le rendez-vous d'un ticket a une date PRECISE donnee par l'utilisateur, si le creneau est libre (le serveur verifie, reserve le nouveau creneau, libere l'ancien, previent le technicien, l'agence et le client). N'appelle cet outil que si la date exacte est donnee (ex. 'jeudi 22 octobre') ; sinon utilise prochain_rdv_disponible. Convertis la date en AAAA-MM-JJ.",
+    input_schema: {
+      type: "object",
+      properties: {
+        ticket_id: { type: "string", description: "Identifiant exact (champ id) du ticket dans la liste fournie." },
+        date: { type: "string", description: "Nouvelle date au format AAAA-MM-JJ." },
+        periode: { type: "string", enum: ["matin", "apres_midi"], description: "Matin ou apres-midi, seulement si precise ; sinon omets (la periode actuelle est conservee)." },
+      },
+      required: ["ticket_id", "date"],
     },
   },
   {
@@ -564,6 +622,44 @@ async function traiterSyntheseDirection(req, res, body, cle) {
   }
 }
 
+// Indicateurs en direct (ceux de la Centrale de direction) envoyés par le tableau de bord : valeurs numériques uniquement.
+const INDICATEURS_LIBELLES = {
+  tickets_actifs: ["Tickets actifs", ""], a_traiter: ["Tickets à traiter (urgents ou signalés)", ""], urgents_pct: ["Part des urgents", " %"],
+  dossiers_termines_pct: ["Dossiers terminés", " % des tickets"], satisfaction_note: ["Note de satisfaction client", " sur 5"], nb_avis: ["Nombre d'avis clients", ""],
+  premier_passage_pct: ["Résolution au premier passage (intervention réglée dès la 1re visite)", " %"], rdv_aujourdhui: ["Rendez-vous aujourd'hui", ""],
+  messages_non_lus: ["Messages clients non lus", ""], devis_en_attente: ["Devis en attente", ""], rdv_modifies: ["Rendez-vous modifiés à acquitter", ""],
+};
+function blocIndicateurs(ind) {
+  if (!ind || typeof ind !== "object") return "";
+  const lignes = Object.keys(INDICATEURS_LIBELLES).map((k) => {
+    const v = ind[k];
+    const [lib, suf] = INDICATEURS_LIBELLES[k];
+    return "- " + lib + " : " + (typeof v === "number" && isFinite(v) ? v + suf : "pas encore disponible");
+  });
+  return "\n\nINDICATEURS EN DIRECT (exactement ceux affichés dans la Centrale de direction). Pour toute question chiffrée (pourcentage, nombre de tickets, satisfaction, premier passage, urgents...), reponds avec reponse_vocale a partir de ces valeurs, sans rien inventer ; si une valeur est « pas encore disponible », dis-le simplement :\n" + lignes.join("\n");
+}
+const sansAccent = (t) => String(t || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+// Contrôle serveur d'une demande de déplacement de RDV : ticket cohérent avec le client cité, date dans le futur, période seulement si dite.
+function validerDeplacementRdv(input, tickets, message) {
+  const m = sansAccent(message);
+  const cites = tickets.filter((t) => {
+    const nom = sansAccent(t.client).trim();
+    if (!nom) return false;
+    return m.includes(nom) || nom.split(/\s+/).some((p) => p.length >= 4 && new RegExp("\\b" + p + "\\b").test(m));
+  });
+  let ticketId = input.ticket_id;
+  if (cites.length === 1) ticketId = cites[0].id;
+  else if (cites.length > 1) return { erreur: "Plusieurs clients correspondent, de quel client parlez-vous ?" };
+  else if (!tickets.some((t) => t.id === ticketId)) return { erreur: "Je n'ai pas trouvé ce ticket, de quel client parlez-vous ?" };
+  let date = String(input.date || "");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return { erreur: "Je n'ai pas compris la date, pouvez-vous la répéter ?" };
+  const auj = new Date(); auj.setHours(0, 0, 0, 0);
+  let d = new Date(date + "T12:00:00");
+  if (d < auj) { d = new Date(auj.getFullYear(), d.getMonth(), d.getDate(), 12); if (d < auj) d.setFullYear(d.getFullYear() + 1); date = d.toISOString().slice(0, 10); }
+  const periode = /apres[- ]?midi/.test(m) ? "apres_midi" : (/matin/.test(m) ? "matin" : undefined);
+  return { input: { ticket_id: ticketId, date, ...(periode ? { periode } : {}) } };
+}
+
 export default async function handler(req, res) {
   if (req.method !== "POST") {
     return res.status(405).json({ erreur: "Methode non autorisee" });
@@ -615,6 +711,7 @@ export default async function handler(req, res) {
     const messageUtilisateur = "Agence actuellement affichee : " + agenceActuelle +
       "\n\nTickets actuellement charges dans le dashboard (JSON) :\n" +
       JSON.stringify(ticketsContexte) +
+      blocIndicateurs(body.indicateurs) +
       blocHistorique +
       "\n\nCommande vocale de l'utilisateur : \"" + message + "\"";
 
@@ -688,9 +785,26 @@ precis :
     for (const appel of appelsOutils) {
       if (appel.name === "reponse_vocale") {
         texteReponse = String(appel.input?.message || "").slice(0, 400);
+      } else if (appel.name === "filtrer_statut" && appel.input && ![...STATUTS_VALIDES, "tous"].includes(appel.input.statut)) {
+        // Valeur hors liste (le modele peut inventer un statut) : "en attente" = Nouveau, sinon on n'applique rien.
+        if (/attente/i.test(String(appel.input.statut))) { appel.input.statut = "Nouveau"; actions.push(appel); }
+        else texteReponse = "Je n'ai pas reconnu ce statut de ticket.";
+      } else if (appel.name === "deplacer_rdv") {
+        // Action qui ÉCRIT : on ne fait pas confiance aveuglément au modèle (mauvais ticket, mauvaise année).
+        const v = validerDeplacementRdv(appel.input || {}, ticketsContexte, String(body.message || ""));
+        if (v.erreur) texteReponse = v.erreur; else actions.push({ ...appel, input: v.input });
       } else {
         actions.push(appel);
       }
+    }
+    if (!texteReponse && actions.length) {
+      const NOMS_ECRANS = { centrale_direction: "la centrale de direction", facturation: "la facturation", intelligence_commerciale: "les indicateurs commerciaux", analytics_sav: "les analytics SAV", devis: "les devis en attente", equipe: "l'équipe", entretien: "les contrats d'entretien", planning: "le planning", tickets: "la liste des tickets" };
+      const a0 = actions[0];
+      if (a0.name === "ouvrir_ecran") texteReponse = "J'ouvre " + (NOMS_ECRANS[a0.input?.ecran] || "cet écran") + ".";
+      else if (a0.name === "prochain_rdv_disponible") texteReponse = "Je consulte le planning.";
+      else if (a0.name === "deplacer_rdv") texteReponse = "Je m'en occupe, je vérifie le planning.";
+      else if (a0.name === "lire_analyse_max") texteReponse = "Je consulte l'analyse de Max.";
+      else if (a0.name === "filtrer_statut" && a0.input?.statut) texteReponse = "J'affiche les tickets au statut « " + a0.input.statut + " ».";
     }
     if (!texteReponse) {
       const texteBrut = blocs.filter(b => b.type === "text").map(b => b.text || "").join(" ").trim();

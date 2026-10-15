@@ -7,7 +7,7 @@
 <link rel="stylesheet" href="/assets/tokens.css">
 <link rel="stylesheet" href="/assets/primitives.css">
 <link rel="manifest" href="/manifest.json">
-<meta name="theme-color" content="#22C55E">
+<meta name="theme-color" content="#FF6B00">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Iko Commerce">
@@ -23,7 +23,7 @@ body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; backg
   display: flex; align-items: center; gap: 12px;
 }
 #rdv-widget-btn {
-  height: 58px; padding: 0 28px; background: #22C55E; border-radius: 34px;
+  height: 58px; padding: 0 28px; background: #FF6B00; border-radius: 34px;
   display: flex; align-items: center; justify-content: center; gap: 10px;
   cursor: pointer; box-shadow: 0 6px 28px rgba(0,0,0,0.35); border: none;
   transition: transform 0.2s; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
@@ -47,6 +47,7 @@ body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; backg
   #rdv-widget-panel { bottom: 0; left: 0; width: 100vw; height: 100vh; height: 100dvh; border-radius: 0; }
 }
 </style>
+<script src="/iko-retour.js" defer></script>
 </head>
 <body>
 <div id="auth-gate" style="position:fixed;inset:0;z-index:999999;background:#F5F5F5;display:flex;align-items:center;justify-content:center;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;padding:24px;box-sizing:border-box;">
@@ -70,7 +71,7 @@ body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; backg
   function afficherErreur(){
     contenu.innerHTML = '<div style="text-align:center;">' +
       '<div style="font-size:13px;color:#dc2626;margin-bottom:12px;">Erreur de vérification de session.</div>' +
-      '<button id="auth-gate-reco" style="min-height:44px;padding:0 20px;background:#22C55E;color:#111;border:none;border-radius:10px;font-size:13px;font-weight:900;cursor:pointer;">Se reconnecter</button>' +
+      '<button id="auth-gate-reco" style="min-height:44px;padding:0 20px;background:#FF6B00;color:#111;border:none;border-radius:10px;font-size:13px;font-weight:900;cursor:pointer;">Se reconnecter</button>' +
       '</div>';
     document.getElementById('auth-gate-reco').addEventListener('click', function(){
       window.location.href = "/auth-login.html?retour=" + encodeURIComponent("/commerce.html");
@@ -113,20 +114,20 @@ body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; backg
         </div>
       </div>
       <h1 style="color:#0D0D0D;font-size:40px;font-weight:900;line-height:1.15;margin-bottom:20px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
-        Votre projet<br/><span style="color:#22C55E;">commence ici.</span>
+        Votre projet<br/><span style="color:#FF6B00;">commence ici.</span>
       </h1>
-      <div style="width:90px;height:2.5px;background:#22C55E;border-radius:2px;margin-bottom:24px;"></div>
-      <p style="color:rgba(0,26,66,0.65);font-size:13px;line-height:1.8;margin-bottom:36px;">
+      <div style="width:90px;height:2.5px;background:#FF6B00;border-radius:2px;margin-bottom:24px;"></div>
+      <p style="color:rgba(13,13,13,0.65);font-size:13px;line-height:1.8;margin-bottom:36px;">
         Rendez-vous personnalisé · Devis sur mesure<br/>17 produits · 4 agences
       </p>
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:32px;">
-        <div style="width:8px;height:8px;background:#2ECC71;border-radius:50%;flex-shrink:0;box-shadow:0 0 8px rgba(46,204,113,0.5);"></div>
-        <span style="color:rgba(0,26,66,0.55);font-size:12px;">Un commercial vous recontacte sous 48h</span>
+        <div style="width:8px;height:8px;background:#FF9A3C;border-radius:50%;flex-shrink:0;box-shadow:0 0 8px rgba(46,204,113,0.5);"></div>
+        <span style="color:rgba(13,13,13,0.55);font-size:12px;">Un commercial vous recontacte sous 48h</span>
       </div>
     </div>
   </div>
   <div style="position:absolute;bottom:0;left:0;right:0;z-index:2;padding:12px 60px;border-top:1px solid rgba(34,197,94,0.12);display:flex;justify-content:space-between;">
-    <span style="color:rgba(0,26,66,0.35);font-size:10px;">© 2025 Iko Suite — Solutions IA pour les PME du bâtiment</span>
+    <span style="color:rgba(13,13,13,0.35);font-size:10px;">© 2025 Iko Suite — Solutions IA pour les PME du bâtiment</span>
     <span style="color:rgba(34,197,94,0.4);font-size:10px;">iko-suite-demo.vercel.app</span>
   </div>
 </div>
@@ -184,7 +185,7 @@ function toggleRdvWidget() {
 <script type="text/babel">
 
 const F = {
-  marine: "#0D0D0D", or: "#22C55E", orClair: "#86EFAC",
+  marine: "#0D0D0D", or: "#FF6B00", orClair: "#FFC48A",
   blanc: "#FFFFFF", grisClair: "#F5F5F5", grisBord: "#E5E5E5",
   rouge: "#DC2626", rougeClair: "#FEE2E2", vert: "#15803D", vertClair: "#F0FDF4",
 };
@@ -420,7 +421,7 @@ function RdvApp() {
           </div>
         </div>
         <div style={{marginTop:"6px",display:"flex",alignItems:"center",gap:"6px"}}>
-          <div style={{width:"7px",height:"7px",background:"#2ECC71",borderRadius:"50%"}}></div>
+          <div style={{width:"7px",height:"7px",background:"#FF9A3C",borderRadius:"50%"}}></div>
           <span style={{color:F.orClair,fontSize:"11px",fontWeight:"500"}}>Un commercial vous recontacte</span>
         </div>
       </div>
@@ -449,7 +450,7 @@ function RdvApp() {
 
         {etape === "coordonnees" && (
           <>
-            <div style={{background:"#EFF6FF",border:"1px solid #BFDBFE",borderRadius:"10px",padding:"8px 12px",fontSize:"11px"}}>
+            <div style={{background:"#FFF3EB",border:"1px solid #FFD9BF",borderRadius:"10px",padding:"8px 12px",fontSize:"11px"}}>
               📍 <strong>{agence?.ville}</strong>
             </div>
             <div style={{background:F.blanc,borderRadius:"12px",padding:"12px 14px",border:"1px solid " + F.grisBord}}>
@@ -494,7 +495,7 @@ function RdvApp() {
 
         {etape === "produit" && (
           <>
-            <div style={{background:F.vertClair,border:"1px solid #86EFAC",borderRadius:"10px",padding:"8px 12px",fontSize:"11px"}}>
+            <div style={{background:F.vertClair,border:"1px solid #FFC48A",borderRadius:"10px",padding:"8px 12px",fontSize:"11px"}}>
               <div style={{fontWeight:"700",color:F.marine}}>👤 {client.nom}</div>
               <div style={{color:"#475569",fontSize:"10px"}}>{agence?.ville}</div>
             </div>
@@ -564,7 +565,7 @@ function RdvApp() {
               <div style={{color:F.or,fontSize:"24px",fontWeight:"900",letterSpacing:"2px",fontFamily:"monospace"}}>{rdv}</div>
             </div>
             {envoi === 'ok' && (
-              <div style={{background:F.vertClair,border:"1px solid #86EFAC",borderRadius:"9px",padding:"8px 12px",fontSize:"11px",color:F.vert,fontWeight:"600"}}>
+              <div style={{background:F.vertClair,border:"1px solid #FFC48A",borderRadius:"9px",padding:"8px 12px",fontSize:"11px",color:F.vert,fontWeight:"600"}}>
                 ✅ Demande enregistrée — le commercial de l'agence a été notifié
               </div>
             )}
@@ -573,7 +574,7 @@ function RdvApp() {
                 ⚠️ Demande créée — erreur d'envoi, contactez l'agence directement
               </div>
             )}
-            <div style={{background:F.vertClair,border:"1px solid #86EFAC",borderRadius:"10px",padding:"10px 14px"}}>
+            <div style={{background:F.vertClair,border:"1px solid #FFC48A",borderRadius:"10px",padding:"10px 14px"}}>
               <div style={{fontWeight:"700",fontSize:"12px",color:F.marine}}>🕐 Vous serez recontacté par l'agence</div>
               <div style={{fontSize:"11px",color:"#475569",marginTop:"2px"}}>Créneau : {creneau}</div>
             </div>

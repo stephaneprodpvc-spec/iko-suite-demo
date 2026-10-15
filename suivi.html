@@ -43,7 +43,7 @@ input:focus, textarea:focus { border-color: var(--iko-primary) !important; }
 })();
 </script>
 <script type="text/babel">
-const { useState } = React;
+const { useState, useEffect } = React;
 
 const F = {
   marine: "var(--iko-bg-sombre)", or: "var(--iko-primary)", orClair: "var(--iko-primary-pale)",
@@ -66,6 +66,97 @@ function parseMessageEntries(raw, sender) {
 
 // Carte "choix de date" affichée comme un message de l'agence dans le fil SMS,
 // quand Iko a detecte une demande de changement de date et trouve des dispos.
+// Espace client : contrat d'entretien. Le client choisit lui-même ses dates de visite (jusqu'à 14 mois à l'avance) sur le planning de l'agence.
+function ContratClient({ contrat, onMajVisites }) {
+  const f = contrat.fields || {};
+  const jeton = window.__ikoJeton || "";
+  const preuve = window.__ikoPreuve || null; // numéro de contrat + contact saisis (alternative au lien du mail)
+  const iso = (d)=>new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,10);
+  const [ouvert, setOuvert] = useState(false);
+  const [mois, setMois] = useState(iso(new Date()).slice(0, 7));
+  const [periode, setPeriode] = useState("");
+  const [liste, setListe] = useState(null);
+  const [msg, setMsg] = useState("");
+  const [enCours, setEnCours] = useState(false);
+  let visites = []; try { visites = JSON.parse(f["Visites (JSON)"] || "[]"); } catch (e) {}
+  visites = visites.filter(v => v.statut !== "Annulée").sort((a, b) => a.date.localeCompare(b.date));
+  const statut = f["Statut contrat"] || "Actif";
+  const appel = async (corps) => {
+    const r = await fetch('/api/airtable/entretien', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...(jeton ? { jeton } : (preuve || {})), contratId: contrat.id, ...corps }) });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(j.error || "Erreur " + r.status);
+    return j;
+  };
+  const charger = async (m, p) => {
+    setListe(null); setMsg("");
+    try { const j = await appel({ action: 'creneaux', mois: m, periode: p || undefined }); setListe(j.creneaux || []); if (j.raison) setMsg(j.raison); }
+    catch (e) { setListe([]); setMsg(e.message); }
+  };
+  useEffect(() => { if (ouvert) charger(mois, periode); }, [ouvert, mois, periode]);
+  const decale = (n) => { const [a, m] = mois.split('-').map(Number); const d = new Date(a, m - 1 + n, 1); const nm = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'); if (nm >= iso(new Date()).slice(0, 7)) setMois(nm); };
+  const libMois = new Date(mois + "-01T12:00:00").toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+  const choisir = async (s) => {
+    setEnCours(true);
+    try { const j = await appel({ action: 'planifier', planningId: s.id }); onMajVisites(contrat.id, j.visites); setMsg(""); await charger(mois, periode); }
+    catch (e) { setMsg(e.message); await charger(mois, periode); }
+    setEnCours(false);
+  };
+  const annuler = async (v) => {
+    if (!window.confirm("Annuler la visite du " + new Date(v.date + "T12:00:00").toLocaleDateString('fr-FR') + " ?")) return;
+    try { const j = await appel({ action: 'annuler_visite', visiteId: v.id }); onMajVisites(contrat.id, j.visites); if (ouvert) charger(mois, periode); } catch (e) { setMsg(e.message); }
+  };
+  const puce = (actif) => ({ padding: "7px 12px", borderRadius: "18px", border: "1px solid " + (actif ? F.or : F.grisBord), background: actif ? "#FFF1E6" : F.blanc, color: actif ? "#8a3300" : "#374151", fontWeight: "800", fontSize: "12px", cursor: "pointer" });
+  return (
+    <div style={{marginTop:"16px"}}>
+      <h2 style={{fontSize:"16px",color:F.marine,marginBottom:"8px"}}>Mon contrat d'entretien{f["Référence"] ? " · " + f["Référence"] : ""}</h2>
+      <div style={{background:F.grisClair,border:"1px solid "+F.grisBord,borderRadius:"10px",padding:"12px",fontSize:"12px",color:"#4B5563"}}>
+        {f["Équipements"] && <div style={{marginBottom:"6px"}}>{f["Équipements"]}</div>}
+        {statut === "Demande" && <div style={{fontWeight:"800",color:F.or}}>Demande en cours d'étude : votre agence vous rappelle pour valider le contrat. Vous pourrez ensuite choisir vos dates ici.</div>}
+        {statut === "Suspendu" && <div style={{fontWeight:"800",color:F.rouge}}>Contrat suspendu.</div>}
+        {statut === "Actif" && (
+          <>
+            <div style={{fontWeight:"800",color:F.marine,marginBottom:"4px"}}>Mes visites</div>
+            {visites.length === 0 && <div style={{marginBottom:"6px"}}>Aucune visite planifiée pour le moment.</div>}
+            {visites.map(v => (
+              <div key={v.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:"8px",padding:"5px 0",borderBottom:"1px solid "+F.grisBord}}>
+                <span><strong>{new Date(v.date + "T12:00:00").toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</strong> — {String(v.creneau || "").replace(/ \(.*$/, "")}</span>
+                <button onClick={() => annuler(v)} style={{background:"none",border:"none",color:F.rouge,fontSize:"11px",fontWeight:"800",cursor:"pointer",textDecoration:"underline"}}>Annuler</button>
+              </div>
+            ))}
+            <button onClick={() => setOuvert(o => !o)} style={{...puce(ouvert),marginTop:"10px",width:"100%",padding:"10px"}}>{ouvert ? "Fermer le planning" : "Choisir mes dates de visite"}</button>
+            {ouvert && (
+              <div style={{marginTop:"10px"}}>
+                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"8px"}}>
+                  <button onClick={() => decale(-1)} style={puce(false)}>←</button>
+                  <strong style={{textTransform:"capitalize",color:F.marine,fontSize:"13px"}}>{libMois}</strong>
+                  <button onClick={() => decale(1)} style={puce(false)}>→</button>
+                </div>
+                <div style={{display:"flex",gap:"6px",flexWrap:"wrap",marginBottom:"8px"}}>
+                  <button onClick={() => setPeriode("")} style={puce(periode === "")}>Toute la journée</button>
+                  <button onClick={() => setPeriode("matin")} style={puce(periode === "matin")}>Matin</button>
+                  <button onClick={() => setPeriode("apres_midi")} style={puce(periode === "apres_midi")}>Après-midi</button>
+                </div>
+                {msg && <div style={{color:F.rouge,fontWeight:"700",marginBottom:"6px"}}>{msg}</div>}
+                {liste === null && <div>Chargement des dates…</div>}
+                {liste && liste.length === 0 && !msg && <div>Aucune date libre ce mois-ci : essayez un autre mois.</div>}
+                {liste && liste.length > 0 && (
+                  <div style={{display:"flex",flexWrap:"wrap",gap:"6px"}}>
+                    {liste.map(s => (
+                      <button key={s.id} disabled={enCours} onClick={() => choisir(s)} style={puce(false)}>
+                        {new Date(s.date + "T12:00:00").toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' })} · {String(s.creneau || "").replace(/ \(.*$/, "")}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function PropositionDateBubble({ agenceVille, clientId, creneauId, moisSouhaite, onChoisir, enCours }) {
   const creneau = CRENEAUX.find(c => c.id === creneauId) || CRENEAUX[0];
   const [dates, setDates] = useState([]);
@@ -138,7 +229,7 @@ function PhoneChat({ ticket, message, onChangeMessage, onEnvoyer, envoi, iaRefle
         <div style={{background:"#ECE9E4",borderRadius:"28px",overflow:"hidden",display:"flex",flexDirection:"column",height:"600px"}}>
           <div style={{background:F.marine,padding:"20px 14px 10px",display:"flex",alignItems:"center",gap:"10px",flexShrink:0}}>
             <div style={{width:"30px",height:"30px",borderRadius:"50%",background:F.or,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:"900",color:"var(--iko-dark)",fontSize:"13px"}}>
-              F
+              I
             </div>
             <div style={{flex:1,minWidth:0}}>
               <div style={{color:"#fff",fontSize:"12px",fontWeight:"700"}}>Agence Iko</div>
@@ -268,7 +359,7 @@ function BandeauProgression({ statut, propositionEnAttente, devisId, rdvConfirme
       {devisId && (
         <a href={"devis.html?devisId=" + encodeURIComponent(devisId)}
           style={{display:"block",marginTop:"8px",padding:"12px",background:F.or,color:"var(--iko-dark)",borderRadius:"10px",fontSize:"13px",fontWeight:"900",textAlign:"center",textDecoration:"none"}}>
-          ✍️ Voir et signer mon devis
+          Voir et signer mon devis
         </a>
       )}
     </div>
@@ -276,8 +367,8 @@ function BandeauProgression({ statut, propositionEnAttente, devisId, rdvConfirme
 }
 
 const CRENEAUX = [
-  { id: "matin", label: "🌅 Matin", heure: "8h30 — 12h00", valeur: "Matin (8h30 — 12h00)" },
-  { id: "apres_midi", label: "🌇 Après-midi", heure: "13h00 — 17h00", valeur: "Après-midi (13h00 — 17h00)" },
+  { id: "matin", label: "Matin", heure: "8h30 — 12h00", valeur: "Matin (8h30 — 12h00)" },
+  { id: "apres_midi", label: "Après-midi", heure: "13h00 — 17h00", valeur: "Après-midi (13h00 — 17h00)" },
 ];
 const DELAI_MIN_JOURS = 7;
 
@@ -372,7 +463,7 @@ function ChangerDatePanel({ agenceVille, clientId, onChoisir, onFermer, applique
   return (
     <div style={{background:F.grisClair,borderRadius:"10px",padding:"14px",marginTop:"12px",border:"1px solid "+F.grisBord}}>
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"10px"}}>
-        <span style={{fontSize:"12px",fontWeight:"800",color:F.marine}}>📅 Choisir une nouvelle date</span>
+        <span style={{fontSize:"12px",fontWeight:"800",color:F.marine}}>Choisir une nouvelle date</span>
         <button onClick={onFermer} style={{background:"none",border:"none",color:"#9CA3AF",fontSize:"12px",cursor:"pointer"}}>✕ Fermer</button>
       </div>
 
@@ -540,6 +631,7 @@ function App() {
       } else {
         const tickets = data.tickets || [];
         if (corps.jeton) {
+          window.__ikoJeton = corps.jeton; // utilisé par l'espace contrat d'entretien
           // Lien du mail : liste de toutes les demandes du client.
           const cible = (ouvrirNumero || "").toUpperCase();
           tickets.sort((a, b) => (b.fields?.Name?.toUpperCase() === cible) - (a.fields?.Name?.toUpperCase() === cible));
@@ -551,6 +643,11 @@ function App() {
         } else if (tickets[0]) {
           // Saisie manuelle : ouverture directe du seul ticket correspondant, pas de liste.
           await ouvrirTicket(tickets[0]);
+        } else if ((data.contrats || []).length) {
+          // Numéro de contrat d'entretien (ENT-…) + e-mail/téléphone : on ouvre l'espace contrat, preuve gardée pour réserver les visites.
+          window.__ikoPreuve = { reference: String(corps.numero || "").trim().toUpperCase(), contact: corps.contact };
+          setListe([]);
+          setEspace({ devis: [], contrats: data.contrats });
         }
       }
     } catch (e) {
@@ -697,7 +794,7 @@ function App() {
       const label = d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
       const nouveauCreneau = typeCreneau.label + ' (' + IKO_creneaux.heure(dateInfo, typeCreneau.heure) + ') — ' + label;
       const horodatage = new Date().toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Paris' });
-      const confirmation = 'Parfait, c\'est noté : votre nouvelle date d\'intervention est confirmée — ' + nouveauCreneau + '. Votre technicien en a été informé.';
+      const confirmation = 'C\'est confirmé : votre rendez-vous est déplacé — ' + nouveauCreneau + '. Votre technicien et l\'agence sont prévenus, et le planning est à jour.';
       const reponseExistante = ticket.fields?.["Réponse agence"] || "";
       const nouvelleReponse = reponseExistante ? reponseExistante + '\n\n[' + horodatage + ']\n' + confirmation : '[' + horodatage + ']\n' + confirmation;
       const resp = await fetch('/api/airtable/Tickets%20SAV/' + ticket.id, {
@@ -714,6 +811,11 @@ function App() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'rdv_modifie', ticket: ticket.fields?.Name, agence: ticket.fields?.Agence, ancien_creneau: ancienCreneau, nouveau_creneau: nouveauCreneau, auteur_modification: 'client' })
+      }).catch(() => {});
+      // Notification en direct aux techniciens de l'agence (best-effort)
+      fetch('/api/detecter-demande-client', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rdvChoisi: true, ticketId: ticket.id, agence: ticket.fields?.Agence })
       }).catch(() => {});
     } catch (e) {
       setChangeErr(true);
@@ -741,7 +843,7 @@ function App() {
         {!ticket && liste && (
           <div style={{background:F.blanc,border:"1px solid "+F.grisBord,borderRadius:"14px",padding:"22px",boxShadow:"0 4px 20px rgba(0,0,0,0.05)"}}>
             <h1 style={{fontSize:"18px",color:F.marine,marginBottom:"4px"}}>Mes demandes SAV</h1>
-            <p style={{fontSize:"12px",color:"var(--iko-texte-clair)",marginBottom:"14px"}}>{liste.length} demande{liste.length > 1 ? "s" : ""} — touchez-en une pour ouvrir son suivi.</p>
+            <p style={{fontSize:"12px",color:"var(--iko-texte-clair)",marginBottom:"14px"}}>{liste.length === 0 ? "Aucune demande SAV en cours." : liste.length + " demande" + (liste.length > 1 ? "s" : "") + " — touchez-en une pour ouvrir son suivi."}</p>
             {erreur && <div style={{marginBottom:"10px",fontSize:"12px",color:F.rouge,background:F.rougeClair,borderRadius:"8px",padding:"8px 10px"}}>{erreur}</div>}
             <div style={{display:"flex",flexDirection:"column",gap:"8px"}}>
               {liste.map(t => {
@@ -785,12 +887,13 @@ function App() {
                 );
               })}
             </div>
-            {espace.contrats.map(c => {
+            {espace.contrats.map(c => <ContratClient key={c.id} contrat={c} onMajVisites={(id, vs) => setEspace(e => ({ ...e, contrats: e.contrats.map(x => x.id === id ? { ...x, fields: { ...x.fields, "Visites (JSON)": JSON.stringify(vs) } } : x) }))}/>)}
+            {false && espace.contrats.map(c => {
               const f = c.fields || {};
               let carnet = []; try { carnet = JSON.parse(f["Carnet (JSON)"] || "[]"); } catch (e) {}
               return (
                 <div key={c.id} style={{marginTop:"16px"}}>
-                  <h2 style={{fontSize:"16px",color:F.marine,marginBottom:"8px"}}>🛠️ Mon contrat d'entretien</h2>
+                  <h2 style={{fontSize:"16px",color:F.marine,marginBottom:"8px"}}>Mon contrat d'entretien</h2>
                   <div style={{background:F.grisClair,border:"1px solid "+F.grisBord,borderRadius:"10px",padding:"12px",fontSize:"12px",color:"#4B5563"}}>
                     {f["Équipements"] && <div style={{marginBottom:"4px"}}>{f["Équipements"]}</div>}
                     <div><strong>Prochaine visite :</strong> {f["Prochaine visite"] ? new Date(f["Prochaine visite"] + "T12:00:00").toLocaleDateString("fr-FR") : "à planifier"}</div>
@@ -828,7 +931,7 @@ function App() {
               disabled={loading}
               style={{marginTop:"16px",width:"100%",background:loading?"var(--iko-primary-fonce)":F.or,color:F.marine,border:"none",borderRadius:"10px",padding:"13px",fontWeight:"800",fontSize:"13px",cursor:loading?"default":"pointer"}}
             >
-              {loading ? "Recherche…" : "🔍 Voir ma demande"}
+              {loading ? "Recherche…" : "Voir ma demande"}
             </button>
           </div>
         )}
@@ -878,17 +981,17 @@ function App() {
 
               {ticket.fields?.Diagnostic && (
                 <div style={{marginTop:"14px",background:"rgba(var(--iko-dark-rgb),0.04)",border:"1px solid rgba(var(--iko-dark-rgb),0.15)",borderRadius:"8px",padding:"10px 12px",fontSize:"12px",color:F.marine}}>
-                  📋 <strong>Diagnostic technicien :</strong> {ticket.fields.Diagnostic}
+                  <strong>Diagnostic technicien :</strong> {ticket.fields.Diagnostic}
                 </div>
               )}
               {ticket.fields?.["Montant devis"] && (
-                <div style={{marginTop:"10px",fontSize:"13px",color:F.marine}}>💶 Devis : <strong>{ticket.fields["Montant devis"]}</strong></div>
+                <div style={{marginTop:"10px",fontSize:"13px",color:F.marine}}>Devis : <strong>{ticket.fields["Montant devis"]}</strong></div>
               )}
             </div>
 
             {!isStatutClos(statut) && ticket.fields?.["En route depuis"] && (Date.now() - new Date(ticket.fields["En route depuis"]).getTime()) < 4 * 3600000 && (
               <div style={{background:"linear-gradient(180deg, rgba(255,150,60,0.97), rgba(255,107,0,0.92))",color:"#fff",borderRadius:"14px",padding:"16px 18px",marginBottom:"16px",boxShadow:"0 6px 20px rgba(255,107,0,0.35)"}}>
-                <div style={{fontSize:"15px",fontWeight:"900"}}>🚗 Votre technicien est en route</div>
+                <div style={{fontSize:"15px",fontWeight:"900"}}>Votre technicien est en route</div>
                 {ticket.fields?.["Arrivée estimée"] && <div style={{fontSize:"13px",marginTop:"4px"}}>Arrivée prévue vers <b>{new Date(ticket.fields["Arrivée estimée"]).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Paris" })}</b></div>}
               </div>
             )}
@@ -896,7 +999,7 @@ function App() {
             {statut === "Terminé" && ticket.fields?.["Bon intervention URL"] && (
               <a href={ticket.fields["Bon intervention URL"]} target="_blank" rel="noopener noreferrer"
                 style={{display:"block",textAlign:"center",textDecoration:"none",background:F.blanc,border:"1px solid "+F.grisBord,borderRadius:"12px",padding:"13px",marginBottom:"16px",fontWeight:"800",fontSize:"13px",color:F.marine}}>
-                📄 Télécharger mon bon d'intervention signé
+                Télécharger mon bon d'intervention signé
               </a>
             )}
 
@@ -906,20 +1009,20 @@ function App() {
 
             {!isStatutClos(statut) && (
               <div style={{background:F.blanc,border:"1px solid "+F.grisBord,borderRadius:"14px",padding:"22px",boxShadow:"0 4px 20px rgba(0,0,0,0.05)",marginBottom:"16px"}}>
-                <h2 style={{fontSize:"14px",color:F.marine,marginBottom:"12px"}}>🛠️ Gérer ma demande</h2>
+                <h2 style={{fontSize:"14px",color:F.marine,marginBottom:"12px"}}>Gérer ma demande</h2>
 
                 {changeOk && <div style={{marginBottom:"10px",fontSize:"12px",color:F.vert,background:F.vertClair,borderRadius:"8px",padding:"8px 10px"}}>✓ Nouvelle date d'intervention confirmée.</div>}
-                {changeErr && <div style={{marginBottom:"10px",fontSize:"12px",color:F.rouge,background:F.rougeClair,borderRadius:"8px",padding:"8px 10px"}}>⚠️ Erreur, réessayez.</div>}
+                {changeErr && <div style={{marginBottom:"10px",fontSize:"12px",color:F.rouge,background:F.rougeClair,borderRadius:"8px",padding:"8px 10px"}}>Erreur, réessayez.</div>}
 
                 {!showChanger && !showAnnulerConfirm && (
                   <div style={{display:"flex",flexDirection:"column",gap:"8px"}}>
                     <button onClick={() => { setShowChanger(true); setChangeOk(false); }}
                       style={{width:"100%",background:F.grisClair,color:F.marine,border:"1px solid "+F.grisBord,borderRadius:"10px",padding:"12px",fontWeight:"700",fontSize:"12px",cursor:"pointer"}}>
-                      📅 Changer la date d'intervention
+                      Changer la date d'intervention
                     </button>
                     <button onClick={() => setShowAnnulerConfirm(true)}
                       style={{width:"100%",background:F.rougeClair,color:F.rouge,border:"1px solid rgba(var(--iko-erreur-rgb),0.3)",borderRadius:"10px",padding:"12px",fontWeight:"700",fontSize:"12px",cursor:"pointer"}}>
-                      ❌ Annuler ma demande
+                      Annuler ma demande
                     </button>
                   </div>
                 )}
@@ -944,8 +1047,8 @@ function App() {
                       placeholder="Ex : intervention n'est plus nécessaire, changement de date impossible…"
                       rows={3}
                       style={{width:"100%",border:"1px solid "+(raisonManquante?F.rouge:F.grisBord),borderRadius:"8px",padding:"8px 10px",fontSize:"12px",fontFamily:"inherit",resize:"vertical",marginBottom:"8px"}}/>
-                    {raisonManquante && <div style={{marginBottom:"10px",fontSize:"12px",color:F.rouge}}>⚠️ Merci d'indiquer un motif avant de confirmer.</div>}
-                    {annulErr && <div style={{marginBottom:"10px",fontSize:"12px",color:F.rouge}}>⚠️ Erreur, réessayez.</div>}
+                    {raisonManquante && <div style={{marginBottom:"10px",fontSize:"12px",color:F.rouge}}>Merci d'indiquer un motif avant de confirmer.</div>}
+                    {annulErr && <div style={{marginBottom:"10px",fontSize:"12px",color:F.rouge}}>Erreur, réessayez.</div>}
                     <div style={{display:"flex",gap:"8px"}}>
                       <button onClick={() => { setShowAnnulerConfirm(false); setRaisonManquante(false); }} disabled={annulEnCours}
                         style={{flex:1,background:F.blanc,color:"#374151",border:"1px solid "+F.grisBord,borderRadius:"8px",padding:"10px",fontWeight:"700",fontSize:"12px",cursor:"pointer"}}>
@@ -962,7 +1065,7 @@ function App() {
             )}
 
             <div style={{background:F.blanc,border:"1px solid "+F.grisBord,borderRadius:"14px",padding:"22px",boxShadow:"0 4px 20px rgba(0,0,0,0.05)"}}>
-              <h2 style={{fontSize:"14px",color:F.marine,marginBottom:"4px",textAlign:"center"}}>✉️ Échanger avec votre agence</h2>
+              <h2 style={{fontSize:"14px",color:F.marine,marginBottom:"4px",textAlign:"center"}}>Échanger avec votre agence</h2>
               <p style={{fontSize:"11px",color:"var(--iko-texte-clair)",marginBottom:"16px",textAlign:"center"}}>Vos messages sont transmis directement à l'agence en charge de votre dossier.</p>
 
               <PhoneChat
@@ -979,7 +1082,7 @@ function App() {
               />
 
               {envoi === 'ok' && <div style={{marginTop:"10px",fontSize:"12px",color:F.vert,textAlign:"center"}}>✓ Message envoyé à l'agence.</div>}
-              {envoi === 'err' && <div style={{marginTop:"10px",fontSize:"12px",color:F.rouge,textAlign:"center"}}>⚠️ Erreur d'envoi, réessayez.</div>}
+              {envoi === 'err' && <div style={{marginTop:"10px",fontSize:"12px",color:F.rouge,textAlign:"center"}}>Erreur d'envoi, réessayez.</div>}
             </div>
 
             <button onClick={nouvelleRecherche} style={{marginTop:"16px",width:"100%",background:"transparent",border:"1px solid "+F.grisBord,color:"var(--iko-texte-clair)",borderRadius:"10px",padding:"11px",fontWeight:"700",fontSize:"12px",cursor:"pointer"}}>

@@ -75,6 +75,8 @@ async function readRawBody(req) {
   return Buffer.concat(chunks);
 }
 
+import { alerter } from './_alertes.js';
+
 export default async function handler(req, res) {
   const token = process.env.YOUSIGN_API_KEY;
 
@@ -156,6 +158,7 @@ export default async function handler(req, res) {
 
   try {
     const yousignRes = await fetch(yousignUrl, init);
+    if (yousignRes.status >= 500) await alerter({ cle: 'yousign-echec', client: (session && session.tenantId) || null, titre: "IKO : la signature électronique ne répond plus", message: "Yousign a répondu en erreur (HTTP " + yousignRes.status + ") : les devis ne peuvent plus être envoyés à la signature." });
     const text = await yousignRes.text();
     const contentType = yousignRes.headers.get('content-type') || '';
     res.status(yousignRes.status);

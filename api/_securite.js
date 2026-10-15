@@ -15,6 +15,7 @@
 //    en usage normal.
 
 import jwt from "jsonwebtoken";
+import { signalerAbus, estBloque } from "./_abus.js";
 
 const ORIGINES_AUTORISEES = [
   "iko-suite-demo.vercel.app",
@@ -29,14 +30,18 @@ const MAX_REQUETES_PAR_FENETRE = 12;
 // options.strict : exige un en-tete Origin/Referer (un navigateur en envoie toujours
 // un sur un POST ; son absence = appel direct hors navigateur, ex. curl).
 export function verifierOrigine(req, options = {}) {
+  if (estBloque(req)) return false; // adresse bloquée par la surveillance anti-abus
   const origine = req.headers.origin || req.headers.referer || "";
-  if (!origine) return !options.strict; // mode historique : on laisse passer, le rate-limit prend le relais
+  if (!origine) { const ok0 = !options.strict; if (!ok0) signalerAbus(req, "origine-refusee"); return ok0; } // mode historique : on laisse passer, le rate-limit prend le relais
   if (ORIGINES_AUTORISEES.some(d => origine.includes(d)) || origine.includes("localhost")) return true;
   // Deploiements de test (previews) du MEME projet Vercel : iko-suite-demo-<hash ou branche>-akial.vercel.app
   try {
     const hote = new URL(origine).hostname;
-    return /^iko-suite-demo-[a-z0-9-]+-akial\.vercel\.app$/i.test(hote);
+    const ok1 = /^iko-suite-demo-[a-z0-9-]+-akial\.vercel\.app$/i.test(hote);
+    if (!ok1) signalerAbus(req, "origine-refusee");
+    return ok1;
   } catch (e) {
+    signalerAbus(req, "origine-refusee");
     return false;
   }
 }
@@ -48,6 +53,7 @@ export function verifierOrigine(req, options = {}) {
 // strictement inchangé pour tout appel existant sans options).
 export function verifierDebit(req, options = {}) {
   const { max = MAX_REQUETES_PAR_FENETRE, fenetreMs = FENETRE_MS, cle = "" } = options;
+  if (estBloque(req)) return false;
   const ip = (req.headers["x-forwarded-for"] || req.socket?.remoteAddress || "inconnu").split(",")[0].trim();
   const cleComplete = (cle ? cle + ":" : "") + ip;
   const maintenant = Date.now();
@@ -58,7 +64,7 @@ export function verifierDebit(req, options = {}) {
     return true;
   }
   entree.nb += 1;
-  if (entree.nb > max) return false;
+  if (entree.nb > max) { signalerAbus(req, "debit-depasse"); return false; }
   return true;
 }
 

@@ -15,6 +15,10 @@ import { lienSuivi } from "./_suivi.js";
 import { creneauxLibres, identDepuisClientId } from "./_planning.js";
 import vocabMenuiserie from "./_trades/menuiserie.js";
 import vocabPlomberieChauffage from "./_trades/plomberie_chauffage.js";
+import { blocSystemeIko } from "./_systeme-iko.js";
+import { alerter } from "./_alertes.js";
+import { photosHtml, adressesPhotos, ajouterMailsAuCorps, marqueClient } from "./_mail.js";
+import { blocMetierMenuiserie } from "./_metier-menuiserie.js";
 import { extraireConnaissanceDuRecord, blocPromptConnaissance, affinerPourPrompt } from "./_connaissance.js";
 import { nomAssistant as resoudreNomAssistant, NOMS_PAR_DEFAUT } from "./_assistants.js";
 import { enteteMake } from './_make.js';
@@ -85,14 +89,16 @@ TON ROLE
 Le client peut soit remplir le formulaire de demande SAV lui-meme, soit tout
 faire en discutant avec toi. Si le client veut ouvrir un ticket SAV et/ou
 prendre rendez-vous, tu peux reellement le faire toi-meme via tes outils
-(lister_creneaux, reserver_creneau, creer_ticket) : tu n'es pas qu'une
+(lister_creneaux, creer_ticket) : tu n'es pas qu'une
 conversation, tu agis pour de vrai, exactement comme s'il avait rempli le
 formulaire.
 
 TON STYLE
 - Chaleureuse, directe, sans jargon inutile. Vouvoiement.
 - Reponses courtes : 2 a 4 phrases maximum, sauf recapitulatif final.
-- Une seule question a la fois, jamais un questionnaire.
+- Une seule question a la fois, jamais un questionnaire. Si le client donne
+  plusieurs informations d'un coup, prends-les toutes en compte et ne
+  redemande JAMAIS ce que tu sais deja. Ne repete pas ce que le client vient de dire.
 - N'utilise JAMAIS d'emoji ni de pictogramme dans tes reponses (pas de main,
 pas de coeur, pas de sourire, aucun symbole decoratif) : uniquement du texte
 simple, car tes reponses sont aussi lues a voix haute.
@@ -126,14 +132,18 @@ DEROULE POUR OUVRIR UN TICKET / PRENDRE RDV
                apres-midi), appelle lister_creneaux, propose 2-3 dates parmi celles
                   renvoyees en annoncant aussi l'horaire indique pour chacune (champ
                   horaire). Si un jour a plusieurs horaires_disponibles, propose-les au
-                  client et utilise le planning_id de l'horaire qu'il choisit. Appelle
-                  reserver_creneau une fois que le client a choisi.
-                  Dans creneau_texte, note la date ET l'horaire du creneau choisi.
+                  client. Quand il a choisi, NE RESERVE RIEN a part : la reservation se fait
+                  automatiquement dans creer_ticket (champs rdv_date, rdv_horaire).
                      Si le client prefere etre rappele pour convenir d'un horaire plutot que de
-                        choisir maintenant, c'est possible : n'appelle alors pas reserver_creneau.
-                        6. Une fois toutes les infos reunies, appelle creer_ticket. Donne ensuite au
-                           client le numero de ticket EXACT retourne par l'outil (ne l'invente
-                              jamais toi-meme) et confirme le rendez-vous s'il y en a un.
+                        choisir maintenant, c'est possible : laisse alors rdv_date vide.
+                        6. Quand tu as toutes les infos, fais UN recapitulatif court (produit et
+                           probleme, adresse, agence, rendez-vous choisi, e-mail) et demande
+                           "Je l'enregistre ?". Des que le client dit oui, appelle creer_ticket
+                           IMMEDIATEMENT, sans reposer de questions. Le systeme ecrit lui-meme
+                           le message de confirmation (numero de ticket, rendez-vous, e-mail) :
+                           ne reformule pas et n'ajoute rien apres l'appel de l'outil.
+                           Si l'outil renvoie une erreur (creneau pris), explique-le simplement et
+                           propose d'autres dates.
 
                               REGLES ABSOLUES
                               - Ne donne JAMAIS de prix. Si on te le demande, dis-le simplement et propose
@@ -154,6 +164,8 @@ QUELQUES PISTES DE DIAGNOSTIC DE BASE (a titre indicatif, jamais une garantie)
 ${listeDiagnostics}
 ${blocQuestionnaire}
 ${blocConnaissance}
+${blocSystemeIko("amandine")}
+${vocab.trade_id === "menuiserie" ? blocMetierMenuiserie("amandine") : ""}
 `;
 }
 // Construit la liste d'outils pour UN appel donne, avec l'enum d'agences et
@@ -177,19 +189,8 @@ function buildTools(agencesNoms, vocab) {
     },
   },
   {
-    name: "reserver_creneau",
-    description: "Reserve definitivement un creneau (parmi ceux renvoyes par lister_creneaux) pour empecher qu'un autre client le prenne.",
-    input_schema: {
-      type: "object",
-      properties: {
-        planning_id: { type: "string", description: "Identifiant du creneau, tel que renvoye par lister_creneaux." },
-      },
-      required: ["planning_id"],
-    },
-  },
-  {
     name: "creer_ticket",
-    description: "Cree reellement le ticket SAV dans le systeme Iko Suite (meme mecanisme que le formulaire manuel) et notifie l'agence. A appeler une seule fois, quand toutes les informations necessaires ont ete recueillies.",
+    description: "Cree reellement le ticket SAV dans le systeme Iko Suite (meme mecanisme que le formulaire manuel), RESERVE le creneau choisi s'il y en a un, et notifie l'agence. C'est le SEUL outil qui enregistre une demande et un rendez-vous : sans lui rien n'existe. A appeler une seule fois, quand toutes les informations necessaires ont ete recueillies (et le recapitulatif confirme par le client). Si le creneau n'est plus libre, l'outil renvoie une erreur et ne cree rien : propose alors d'autres dates.",
     input_schema: {
       type: "object",
       properties: {
@@ -203,11 +204,13 @@ function buildTools(agencesNoms, vocab) {
         urgent: { type: "boolean", description: "true si probleme de securite ou degat en cours." },
         garantie: { type: "string", enum: ["oui", "non", "inconnu"] },
         numero_facture: { type: "string", description: "Numero de facture si sous garantie, sinon vide." },
-        creneau_texte: { type: "string", description: "Texte lisible du rendez-vous choisi, ou A convenir si aucun creneau n'a ete reserve." },
-        planning_id: { type: "string", description: "Identifiant du creneau reserve via reserver_creneau, si applicable. Laisser vide sinon." },
+        rdv_date: { type: "string", description: "Date du rendez-vous choisi parmi celles de lister_creneaux (AAAA-MM-JJ ou texte comme 'jeudi 22 octobre'). Laisser vide si le client prefere etre rappele." },
+        rdv_periode: { type: "string", enum: ["matin", "apres_midi"], description: "Periode du rendez-vous choisi (celle demandee a lister_creneaux). OBLIGATOIRE des que rdv_date est renseigne." },
+        rdv_horaire: { type: "string", description: "Horaire choisi si plusieurs horaires etaient proposes ce jour-la (ex. 9h00 — 10h00). Sinon vide." },
+        planning_id: { type: "string", description: "Identifiant du creneau, tel que renvoye par lister_creneaux, si tu l'as encore. Sinon vide (rdv_date + agence suffisent)." },
         reponses_questionnaire: { type: "string", description: "Si un questionnaire personnalise a ete fourni dans tes instructions, objet JSON en texte {\"question\": \"reponse\"} avec les reponses recueillies. Laisser vide sinon." },
       },
-      required: ["agence", "nom", "telephone", "email", "adresse", "produit", "probleme", "urgent", "garantie", "creneau_texte"],
+      required: ["agence", "nom", "telephone", "email", "adresse", "produit", "probleme", "urgent", "garantie"],
     },
   },
   {
@@ -360,7 +363,66 @@ function filtreAvecClientServeur(baseFormula, clientId) {
   return baseFormula ? "AND(" + baseFormula + "," + clause + ")" : clause;
 }
 
-async function executerOutil(nom, input, clientId, tradeId, agencesObjets) {
+// Réserve réellement un créneau du planning (identifiant vérifié, sinon retrouvé par agence + date). Retourne { ok, id, texte } ou { erreur }.
+async function reserverCreneauServeur(input, clientId) {
+  const MOIS_FR = { janvier: 1, "février": 2, fevrier: 2, mars: 3, avril: 4, mai: 5, juin: 6, juillet: 7, "août": 8, aout: 8, septembre: 9, octobre: 10, novembre: 11, "décembre": 12, decembre: 12 };
+  const versIso = function (txt) {
+    const t = String(txt || "").trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(t)) return t;
+    const m = /(\d{1,2})\s+(\p{L}+)(?:\s+(\d{4}))?/u.exec(t);
+    if (!m || !MOIS_FR[m[2].toLowerCase()]) return null;
+    const auj = new Date();
+    let an = m[3] ? parseInt(m[3], 10) : auj.getFullYear();
+    let d = new Date(an, MOIS_FR[m[2].toLowerCase()] - 1, parseInt(m[1], 10), 12);
+    if (!m[3] && d < new Date(auj.getTime() - 86400000)) d = new Date(an + 1, d.getMonth(), d.getDate(), 12);
+    return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+  };
+  const indispo = { erreur: "Ce creneau n'est plus disponible : aucun ticket n'a ete cree. Propose au client d'autres dates avec lister_creneaux." };
+  const dateIso = versIso(input.rdv_date || input.date);
+  const urlPlanning = "https://api.airtable.com/v0/" + AIRTABLE_BASE + "/Planning/";
+  let cible = null;
+  if (input.planning_id && /^rec[A-Za-z0-9]{10,}$/.test(String(input.planning_id))) {
+    const g = await fetch(urlPlanning + encodeURIComponent(input.planning_id), { headers: airtableHeaders() });
+    if (g.ok) {
+      const f = (await g.json()).fields || {};
+      if (f.Statut !== "Pris" && f.Statut !== "Bloqué" && (!dateIso || String(f.Date).slice(0, 10) === dateIso)) cible = input.planning_id;
+    }
+  }
+  if (!cible && input.agence && dateIso) {
+    const ctxPl = { baseId: AIRTABLE_BASE, headers: airtableHeaders(), finAt: Date.now() + 7000 };
+    const ident = await identDepuisClientId(ctxPl, clientId);
+    if (ident && !ident.bloque) {
+      const dispo = await creneauxLibres(ctxPl, ident, { agence: input.agence, date: dateIso });
+      let duJour = (dispo.creneaux || []).filter(function (c) { return c.date === dateIso; });
+      // La période demandée est respectée : on ne bascule JAMAIS un client du matin vers l'après-midi sans qu'il le sache.
+      const estMatin = function (c) { const t = String(c.creneau || ""); return t.indexOf("Matin") === 0 || (/^d{1,2}h/.test(t) && parseInt(t, 10) < 13); };
+      const estAprem = function (c) { const t = String(c.creneau || ""); return t.indexOf("Après-midi") === 0 || (/^d{1,2}h/.test(t) && parseInt(t, 10) >= 13); };
+      if (input.rdv_periode === "matin") duJour = duJour.filter(estMatin);
+      else if (input.rdv_periode === "apres_midi") duJour = duJour.filter(estAprem);
+      else if (duJour.some(estMatin) && duJour.some(estAprem)) {
+        return { erreur: "Precise si le client veut le matin ou l'apres-midi (rdv_periode), puis rappelle creer_ticket : aucun ticket n'a ete cree." };
+      }
+      const h = String(input.rdv_horaire || input.horaire || "").toLowerCase();
+      const choisi = (h && duJour.find(function (c) { return String(c.creneau || "").toLowerCase().indexOf(h) !== -1; })) || duJour[0];
+      if (choisi) cible = choisi.id;
+    }
+  }
+  if (!cible) return indispo;
+  const r = await fetch(urlPlanning + encodeURIComponent(cible), { method: "PATCH", headers: airtableHeaders(), body: JSON.stringify({ fields: { Statut: "Pris" } }) });
+  if (!r.ok) { const detail = await r.text().catch(function () { return ""; }); console.error("Airtable reserver creneau erreur:", r.status, detail); return indispo; }
+  // Texte lisible du créneau réellement réservé (jamais celui que le modèle aurait pu inventer).
+  let texte = "";
+  try {
+    const g2 = await fetch(urlPlanning + encodeURIComponent(cible), { headers: airtableHeaders() });
+    const fp = g2.ok ? ((await g2.json()).fields || {}) : {};
+    const jour = new Date(String(fp.Date || dateIso || "").slice(0, 10) + "T12:00:00");
+    const lisible = isNaN(jour) ? "" : jour.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" });
+    texte = (lisible ? lisible + " — " : "") + (fp["Créneau"] || fp.Creneau || "");
+  } catch (e) { /* texte de repli ci-dessous */ }
+  return { ok: true, id: cible, texte: texte || String(input.rdv_date || input.date || "") };
+}
+
+async function executerOutil(nom, input, clientId, tradeId, agencesObjets, photosJointes, texteClient) {
   const agencesNoms = (agencesObjets && agencesObjets.length > 0) ? agencesObjets.map(function (a) { return a.nom; }) : AGENCES_VALIDES;
   try {
     if (nom === "lister_creneaux") {
@@ -398,19 +460,20 @@ async function executerOutil(nom, input, clientId, tradeId, agencesObjets) {
       return { creneaux: creneaux };
     }
 
-  if (nom === "reserver_creneau") {
-    const r = await fetch("https://api.airtable.com/v0/" + AIRTABLE_BASE + "/Planning/" + encodeURIComponent(input.planning_id), {
-      method: "PATCH",
-      headers: airtableHeaders(),
-      body: JSON.stringify({ fields: { Statut: "Pris" } }),
-    });
-    if (!r.ok) { const detail = await r.text().catch(function() { return ""; }); console.error("Airtable reserver_creneau erreur:", r.status, detail); return { erreur: "Ce creneau n'est plus disponible, merci d'en choisir un autre." }; }
-    return { ok: true };
-  }
-
   if (nom === "creer_ticket") {
     if (!agencesNoms.includes(input.agence)) {
       return { erreur: "Agence invalide." };
+    }
+    // Le client a demandé un rendez-vous mais aucun créneau n'est choisi : on ne crée PAS de ticket sans rendez-vous à sa place.
+    const veutRdv = /(rendez-vous|rdv|cr[ée]neau|matin|apr[eè]s-midi|quelle date|date)/i.test(String(texteClient || "")) && !/(rappel|recontact|appelez|appeler)/i.test(String(texteClient || ""));
+    if (veutRdv && !input.rdv_date && !input.planning_id) {
+      return { erreur: "Le client souhaite un rendez-vous : appelle lister_creneaux (agence + periode), propose les dates et fais-lui choisir une date AVANT creer_ticket. Aucun ticket n'a ete cree." };
+    }
+    // Réservation du créneau AVANT toute création : si le créneau n'est plus libre, aucun ticket n'est créé.
+    let rdvReserve = null;
+    if (input.rdv_date || input.planning_id) {
+      rdvReserve = await reserverCreneauServeur(input, clientId);
+      if (!rdvReserve.ok) return rdvReserve;
     }
     // Numéro tiré au hasard (4 chiffres) : on vérifie qu'il n'existe pas déjà pour éviter deux tickets
     // avec le même numéro (suivi client et recherche se baseraient sur le mauvais dossier).
@@ -437,13 +500,15 @@ async function executerOutil(nom, input, clientId, tradeId, agencesObjets) {
       adresse: input.adresse,
       produit: input.produit,
       probleme: input.probleme,
-      creneau: input.creneau_texte || "",
+      creneau: rdvReserve ? rdvReserve.texte : "A convenir",
       garantie: garantieTexte,
       facture: input.numero_facture || "",
       urgent: input.urgent ? "Oui" : "Non",
-      photos: "",
+      photos: Array.isArray(photosJointes) ? photosJointes.join(",") : "",
+      photos_html: photosHtml(Array.isArray(photosJointes) ? photosJointes.join(",") : ""),
+      nb_photos: adressesPhotos(Array.isArray(photosJointes) ? photosJointes.join(",") : "").length,
       facture_photo: "",
-      planningId: input.planning_id || "",
+      planningId: rdvReserve ? rdvReserve.id : "",
       source: "Amandine (IA)",
       // Lien de suivi personnel (jeton chiffre), a inserer dans le mail Make.
       // Jamais renvoye au navigateur : seul le numero de ticket l'est.
@@ -455,6 +520,7 @@ async function executerOutil(nom, input, clientId, tradeId, agencesObjets) {
       email_technicien: (agenceInfo && agenceInfo.emailTechnicien) || "",
     };
 
+    ajouterMailsAuCorps(payload, undefined, await marqueClient(clientId)); // mail_objet / mail_html déjà prêts pour Make, aux couleurs du client
     const r = await fetch(MAKE_WEBHOOK, {
       method: "POST",
       headers: enteteMake({ "Content-Type": "application/json" }),
@@ -462,13 +528,14 @@ async function executerOutil(nom, input, clientId, tradeId, agencesObjets) {
     });
     if (!r.ok) {
       // Le créneau a été réservé juste avant : sans ticket, il resterait "Pris" pour rien. On le libère.
-      if (input.planning_id) {
+      if (rdvReserve && rdvReserve.id) {
         try {
-          await fetch("https://api.airtable.com/v0/" + AIRTABLE_BASE + "/Planning/" + encodeURIComponent(input.planning_id), {
+          await fetch("https://api.airtable.com/v0/" + AIRTABLE_BASE + "/Planning/" + encodeURIComponent(rdvReserve.id), {
             method: "PATCH", headers: airtableHeaders(), body: JSON.stringify({ fields: { Statut: "Libre" } }),
           });
         } catch (e) { console.error("Libération du créneau après échec de création du ticket", e); }
       }
+      alerter({ cle: "amandine-ticket-echec", client: clientId || null, titre: "IKO : un client n'a pas pu créer sa demande", message: "La création d'un ticket via Amandine a échoué (agence : " + String(input.agence || "?") + ", produit : " + String(input.produit || "?") + "). Vérifiez le scénario Make." });
       return { erreur: "La creation du ticket a echoue, merci de reessayer." };
     }
 
@@ -500,7 +567,12 @@ async function executerOutil(nom, input, clientId, tradeId, agencesObjets) {
       }
     }
 
-    return { ok: true, ticket: numero };
+    // Confirmation rédigée par le serveur d'après les faits réels : le client reçoit toujours la même information, exacte.
+    const confirmation = "Votre demande est enregistrée. Numéro de ticket : " + numero + ". "
+      + (rdvReserve ? "Rendez-vous : " + rdvReserve.texte + ". " : "Aucun rendez-vous n'est fixé pour l'instant : un conseiller de l'agence vous rappellera pour convenir d'une date. ")
+      + (input.email ? "Un e-mail de confirmation vous est envoyé à " + input.email + ", et l'agence est prévenue. " : "L'agence est prévenue. ")
+      + "Vous pouvez suivre votre demande à tout moment avec « Suivre mes demandes ».";
+    return { ok: true, ticket: numero, creneau: rdvReserve ? rdvReserve.texte : "A convenir", confirmation: confirmation };
   }
 
   if (nom === "consulter_historique_ouvertures") {
@@ -591,7 +663,22 @@ try {
   if (!Array.isArray(messages) || messages.length === 0) {
     return res.status(400).json({ error: "Aucun message recu" });
   }
-  const messagesUtiles = messages.length > MAX_MESSAGES ? messages.slice(-MAX_MESSAGES) : messages;
+  let messagesUtiles = messages.length > MAX_MESSAGES ? messages.slice(-MAX_MESSAGES) : messages;
+  // Photos jointes par le client (adresses d'images déjà téléversées par le navigateur). Jamais fournies par le modèle.
+  let ticketCreeActuel = null;
+  let confirmationCreation = null;
+  let propositionsDates = []; // dates annoncées par lister_creneaux dans cette requête (affichées en boutons côté client)
+  let correctionFaite = false;
+  const photosJointesActuelles = (Array.isArray((req.body || {}).photos) ? req.body.photos : [])
+    .filter(function (u) { return typeof u === "string" && u.length < 400 && /^https:\/\/res\.cloudinary\.com\/|^http:\/\/localhost:\d+\/__iko-local\/fichier\//.test(u); })
+    .slice(0, 5);
+  if (photosJointesActuelles.length) {
+    // Le modèle doit savoir que des photos sont déjà jointes (elles partiront avec le ticket) : il n'en redemande pas.
+    messagesUtiles = messagesUtiles.map(function (m, i) {
+      return i === messagesUtiles.length - 1 && m && m.role !== "assistant"
+        ? Object.assign({}, m, { texte: String(m.texte || "") + " [Le client a joint " + photosJointesActuelles.length + " photo(s) : elles seront rattachées automatiquement au ticket, ne les redemande pas.]" }) : m;
+    });
+  }
   // Dernier message du client (deja dans req.body, aucun appel
   // supplementaire) : sert uniquement a prioriser la connaissance la plus
   // pertinente pour SA question dans le budget de contexte transmis.
@@ -680,13 +767,43 @@ sait deja qui tu es, ce n'est pas ta premiere reunion avec eux.
         reponse: "Desole, je n'ai pas pu formuler de reponse. Pouvez-vous reformuler votre question ?",
       });
     }
-    return res.status(200).json({ reponse: texte });
+    // 1) Ticket créé pendant cette requête : la réponse est la confirmation exacte du serveur.
+    if (ticketCreeActuel && confirmationCreation) {
+      return res.status(200).json({ reponse: confirmationCreation, ticket_cree: ticketCreeActuel });
+    }
+    // 2) Garde-fou : l'assistante ne doit jamais confirmer une réservation / un ticket qui n'existe pas.
+    const dejaUnTicket = convertis.some(function (c) { return c.role === "assistant" && typeof c.content === "string" && /SAV-\d{4}-\d{3,}/.test(c.content); });
+    const annonceSucces = /(r[ée]serv[ée]e?|enregistr[ée]e?|confirm[ée]e?|bien not[ée]e?|ticket|num[ée]ro de (dossier|demande)|rendez-vous (est|a [ée]t[ée]|sera))/i.test(texte) && !/(souhaitez-vous|voulez-vous|pouvez-vous|quel|quelle|\?\s*$)/i.test(texte);
+    if (!req.body.reunion && annonceSucces && !dejaUnTicket && !ticketCreeActuel) {
+      if (!correctionFaite && tour < MAX_TOOL_ROUNDS - 1) {
+        correctionFaite = true;
+        convertis.push({ role: "assistant", content: texte });
+        convertis.push({ role: "user", content: "[Consigne interne, ne pas citer au client] Tu viens d'annoncer une confirmation alors qu'AUCUN ticket n'a ete cree : rien n'est enregistre. Si tu as toutes les informations (agence, nom, telephone, e-mail, adresse, produit, probleme, garantie) et que le client a confirme le recapitulatif, appelle creer_ticket maintenant. Sinon, demande simplement l'information manquante, sans rien confirmer." });
+        continue;
+      }
+      return res.status(200).json({ reponse: "Je n'ai pas encore enregistré votre demande. Pouvez-vous me confirmer vos coordonnées (nom, téléphone, e-mail, adresse) pour que je la crée ?" });
+    }
+    // Boutons de réponse rapide : oui/non si l'assistante demande une confirmation, sinon les dates qu'elle vient de citer.
+    let suggestionsReponse = [];
+    const bas = texte.toLowerCase();
+    if (!ticketCreeActuel) {
+      if (/(convient|je l'enregistre|je confirme|c'est bien ça|est-ce correct|d'accord)[^.?!]*?s*$/i.test(texte)) suggestionsReponse = ["Oui, c'est parfait", "Non, je veux modifier"];
+      else {
+        const citees = propositionsDates.filter(function (d) { return bas.indexOf(d.toLowerCase()) !== -1; });
+        if (citees.length >= 2) suggestionsReponse = citees;
+      }
+    }
+    return res.status(200).json({ reponse: texte, ...(suggestionsReponse.length ? { suggestions: suggestionsReponse } : {}), ...(ticketCreeActuel ? { ticket_cree: ticketCreeActuel } : {}) });
   }
 
   convertis.push({ role: "assistant", content: blocs });
     const resultats = [];
     for (const appel of appelsOutils) {
-      const resultat = await executerOutil(appel.name, appel.input || {}, clientIdActuel, tradeIdActuel, agencesObjetsActuels);
+      const resultat = await executerOutil(appel.name, appel.input || {}, clientIdActuel, tradeIdActuel, agencesObjetsActuels, photosJointesActuelles, convertis.filter(function (c) { return c.role === "user" && typeof c.content === "string"; }).map(function (c) { return c.content; }).join(" | "));
+      if (appel.name === "lister_creneaux" && resultat && Array.isArray(resultat.creneaux)) {
+        propositionsDates = resultat.creneaux.filter(function (c) { return !c.horaires_disponibles; }).map(function (c) { return String(c.date_lisible || "").replace(/^./, function (x) { return x.toUpperCase(); }); }).filter(Boolean).slice(0, 5);
+      }
+      if (appel.name === "creer_ticket" && resultat && resultat.ok) { ticketCreeActuel = resultat.ticket; confirmationCreation = resultat.confirmation || null; }
       resultats.push({
         type: "tool_result",
         tool_use_id: appel.id,

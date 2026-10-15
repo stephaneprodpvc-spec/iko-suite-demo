@@ -51,6 +51,10 @@ div[style*="background: rgb(255, 255, 255)"], button[style*="background: rgb(255
 input, select, textarea { background: rgba(255,255,255,0.75) !important; border: 1px solid rgba(255,255,255,0.85) !important; border-radius: 12px !important; }
 button[style*="background: var(--iko-primary)"] { background: linear-gradient(180deg, rgba(255,150,60,0.95), rgba(255,107,0,0.85)) !important; border: 1px solid rgba(255,255,255,0.55) !important; box-shadow: 0 4px 14px rgba(255,107,0,0.35), inset 0 1px 0 rgba(255,255,255,0.5) !important; color: #fff !important; }
 button[style*="background: var(--iko-bg-sombre)"] { background: rgba(20,20,22,0.78) !important; -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); border: 1px solid rgba(255,255,255,0.3) !important; box-shadow: inset 0 1px 0 rgba(255,255,255,0.25) !important; }
+.glass-btn { background: rgba(255,255,255,0.34) !important; -webkit-backdrop-filter: blur(16px) saturate(170%); backdrop-filter: blur(16px) saturate(170%); border: 1px solid rgba(255,255,255,0.65) !important; color: #7a2e00 !important; border-radius: 12px; box-shadow: 0 4px 14px rgba(120,40,0,0.18), inset 0 1px 0 rgba(255,255,255,0.7) !important; font-weight: 800; cursor: pointer; transition: background .18s, transform .12s, box-shadow .18s; }
+.glass-btn:hover { background: rgba(255,255,255,0.5) !important; }
+.glass-btn:active { transform: scale(0.97); }
+.glass-btn.actif { background: rgba(255,255,255,0.88) !important; color: #c24a00 !important; box-shadow: 0 6px 18px rgba(120,40,0,0.25), inset 0 1px 0 #fff !important; }
 </style>
 </head>
 <body>
@@ -965,21 +969,21 @@ function LigneDevisEditeur({ produits, mo, lignes, ticket, onAjouter, onSupprime
       <div style={{textAlign:"right",fontSize:"12px",color:C.muted}}>Total HT : {total.toFixed(2)} € · TVA : {(lignes.reduce((s,l)=>s+((l.totalTTC!=null?l.totalTTC:l.totalHT*1.2)-l.totalHT),0)).toFixed(2)} €</div>
       <div style={{textAlign:"right",fontSize:"14px",fontWeight:"900",color:C.white}}>Total TTC : {(lignes.reduce((s,l)=>s+(l.totalTTC!=null?l.totalTTC:l.totalHT*1.2),0)).toFixed(2)} €</div>
       <div style={{position:"sticky",bottom:0,zIndex:5,margin:"10px 0 0",display:"flex",justifyContent:"space-between",alignItems:"center",gap:"8px",background:"#FEFEFE",border:"1px solid "+C.orBord,borderRadius:"10px",padding:"8px 12px",fontSize:"12px",fontWeight:"800",color:C.white}}>
-        <span>🧾 {lignes.length} ligne{lignes.length>1?"s":""} dans le devis</span>
+        <span>{lignes.length} ligne{lignes.length>1?"s":""} dans le devis</span>
         {dernierAjout ? <span style={{color:"#15803D"}}>{dernierAjout}</span> : <span>Total TTC : {(lignes.reduce((s,l)=>s+(l.totalTTC!=null?l.totalTTC:l.totalHT*1.2),0)).toFixed(2)} €</span>}
       </div>
-      <div style={{fontSize:"11px",fontWeight:"700",color:C.muted,margin:"14px 0 6px"}}>➕ Ajouter une prestation</div>
+      <div style={{fontSize:"11px",fontWeight:"700",color:C.muted,margin:"14px 0 6px"}}>Ajouter une prestation</div>
       <div style={{background:"rgba(0,0,0,0.03)",border:"1px solid "+C.border,borderRadius:"10px",padding:"10px"}}>
       {(produits.length > 0 || mo.length > 0) && (
         <>
           <button type="button" onClick={demanderSuggestionsDevis} disabled={chargementSuggestions}
             style={{width:"100%",padding:"8px",marginBottom:"8px",borderRadius:"8px",background:"rgba(var(--iko-primary-rgb),0.1)",border:"1px solid var(--iko-primary)",color:"var(--iko-primary)",fontSize:"11px",fontWeight:"700",cursor:chargementSuggestions?"not-allowed":"pointer"}}>
-            {chargementSuggestions ? "⏳ IKO prépare la proposition..." : "🧾 Laisser IKO proposer des lignes (selon le problème du ticket)"}
+            {chargementSuggestions ? "⏳ IKO prépare la proposition..." : "Laisser IKO proposer des lignes (selon le problème du ticket)"}
           </button>
-          {erreurSuggestion && <div style={{fontSize:"11px",color:C.rouge,marginBottom:"8px"}}>⚠️ {erreurSuggestion}</div>}
+          {erreurSuggestion && <div style={{fontSize:"11px",color:C.rouge,marginBottom:"8px"}}>{erreurSuggestion}</div>}
           {suggestionsDevis && (
             <div style={{marginBottom:"8px",fontSize:"10px",color:C.muted}}>
-              🔎 Éléments identifiés : {ticket?.fields?.Produit || "produit non précisé"} — {ticket?.fields?.Problème || "problème non précisé"}
+              Éléments identifiés : {ticket?.fields?.Produit || "produit non précisé"} — {ticket?.fields?.Problème || "problème non précisé"}
               {ticket?.fields?.Diagnostic && " — diagnostic déjà enregistré"}
             </div>
           )}
@@ -1015,7 +1019,7 @@ function LigneDevisEditeur({ produits, mo, lignes, ticket, onAjouter, onSupprime
           )}
           {elementsSansCorrespondance.length > 0 && (
             <div style={{marginBottom:"8px",background:"rgba(var(--iko-primary-rgb),0.1)",border:"1px solid var(--iko-primary)",borderRadius:"6px",padding:"6px 8px"}}>
-              <div style={{fontSize:"10px",fontWeight:"700",color:"var(--iko-primary-fonce)",marginBottom:"3px"}}>⚠️ Éléments à confirmer (hors catalogue)</div>
+              <div style={{fontSize:"10px",fontWeight:"700",color:"var(--iko-primary-fonce)",marginBottom:"3px"}}>Éléments à confirmer (hors catalogue)</div>
               {elementsSansCorrespondance.map((e, i) => (
                 <div key={i} style={{fontSize:"10px",color:"var(--iko-primary-fonce)"}}>· {e}</div>
               ))}
@@ -1037,14 +1041,14 @@ function LigneDevisEditeur({ produits, mo, lignes, ticket, onAjouter, onSupprime
         <button type="button" onClick={ajouter} style={{padding:"0 14px",background:"#F3F4F6",border:"1px solid "+C.border,borderRadius:"8px",cursor:"pointer",fontSize:"13px",fontWeight:"700"}}>+</button>
       </div>
       {demo && (
-        <div style={{fontSize:"11px",color:C.muted,marginBottom:"8px"}}>ℹ️ Catalogue de démonstration IKO (menuiserie). Pour un vrai client, le catalogue vient de sa fiche (Poste de pilotage → Devis &amp; Facturation).</div>
+        <div style={{fontSize:"11px",color:C.muted,marginBottom:"8px"}}>ℹCatalogue de démonstration IKO (menuiserie). Pour un vrai client, le catalogue vient de sa fiche (Poste de pilotage → Devis &amp; Facturation).</div>
       )}
       {(produits.length === 0 && mo.length === 0) && (
-        <div style={{fontSize:"11px",color:C.rouge,marginBottom:"8px"}}>⚠️ Aucun catalogue pour ce client : utilise « Ligne libre » ou configure-le dans le Poste de pilotage.</div>
+        <div style={{fontSize:"11px",color:C.rouge,marginBottom:"8px"}}>Aucun catalogue pour ce client : utilise « Ligne libre » ou configure-le dans le Poste de pilotage.</div>
       )}
       <div style={{marginBottom:"10px"}}>
         <button type="button" onClick={() => setLibreOuvert(!libreOuvert)} style={{background:"none",border:"none",color:C.or,fontSize:"12px",fontWeight:"800",cursor:"pointer",padding:0}}>
-          ✏️ Ligne libre {libreOuvert ? "▴" : "▾"}
+          Ligne libre {libreOuvert ? "▴" : "▾"}
         </button>
         {libreOuvert && (
           <div style={{display:"flex",gap:"6px",flexWrap:"wrap",marginTop:"8px",alignItems:"center"}}>
@@ -1222,12 +1226,12 @@ function ModalDevis({ ticket, onClose, onSent }) {
           </div>
           {!debugEnvoi?.yousignOk && (
             <div style={{background:C.rougeDim,border:"1px solid rgba(var(--iko-erreur-rgb),0.3)",borderRadius:"8px",padding:"8px 12px",fontSize:"11px",color:C.rouge,marginBottom:"14px"}}>
-              ⚠️ Yousign a échoué ({debugEnvoi?.yousignErreur}) — le devis est créé mais sans lien de signature.
+              Yousign a échoué ({debugEnvoi?.yousignErreur}) — le devis est créé mais sans lien de signature.
             </div>
           )}
           {debugEnvoi?.webhookStatut && debugEnvoi.webhookStatut >= 300 && (
             <div style={{background:C.rougeDim,border:"1px solid rgba(var(--iko-erreur-rgb),0.3)",borderRadius:"8px",padding:"8px 12px",fontSize:"11px",color:C.rouge,marginBottom:"14px"}}>
-              ⚠️ Le webhook Make a répondu avec le statut {debugEnvoi.webhookStatut} — l'email n'a probablement pas été envoyé.
+              Le webhook Make a répondu avec le statut {debugEnvoi.webhookStatut} — l'email n'a probablement pas été envoyé.
             </div>
           )}
           <button onClick={() => { onSent(); }} style={{width:"100%",padding:"11px",background:"var(--iko-bg-sombre)",color:"#fff",border:"none",borderRadius:"10px",fontSize:"13px",fontWeight:"900",cursor:"pointer"}}>
@@ -1240,12 +1244,12 @@ function ModalDevis({ ticket, onClose, onSent }) {
 
   return (
     <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="modal-box" style={{maxWidth:etape==="apercu"?"820px":"600px",width:"95%"}}>
-        <div style={{fontSize:"16px",fontWeight:"900",color:C.white,marginBottom:"4px"}}>💶 Établir le devis</div>
-        <div style={{fontSize:"12px",color:C.or,fontFamily:"monospace",marginBottom:"14px"}}>{ticket.fields?.Name} — {ticket.fields?.Client}</div>
+      <div className="modal-box" style={{maxWidth:etape==="apercu"?"820px":"600px",width:"95%",maxHeight:"92vh",overflow:"auto"}}>
+        <EntetePro titre="Établir le devis" sous={(ticket.fields?.Name || "") + " — " + (ticket.fields?.Client || "")} onBack={onClose} onClose={onClose}
+          kpis={[{ label: "Lignes", valeur: (lignes || []).length, accent: true }]}/>
         {ticket.fields?.Diagnostic && (
           <div style={{background:"rgba(var(--iko-dark-rgb),0.05)",border:"1px solid rgba(var(--iko-dark-rgb),0.2)",borderRadius:"10px",padding:"10px 14px",marginBottom:"14px",fontSize:"12px",color:"var(--iko-bg-sombre)"}}>
-            📋 Diagnostic technicien : {ticket.fields.Diagnostic}
+            Diagnostic technicien : {ticket.fields.Diagnostic}
           </div>
         )}
 
@@ -1300,23 +1304,23 @@ function ModalDevis({ ticket, onClose, onSent }) {
             </div>
             <button onClick={envoyer} disabled={saving||!lignes.length||!emailValide||(!clientInfo&&!demoCat)}
               style={{width:"100%",padding:"15px",background:(saving||!lignes.length||!emailValide)?"#D1D5DB":"linear-gradient(180deg, rgba(255,150,60,0.97), rgba(255,107,0,0.9))",color:"#fff",border:"none",borderRadius:"12px",fontSize:"15px",fontWeight:"900",cursor:(saving||!lignes.length||!emailValide)?"not-allowed":"pointer"}}>
-              {saving ? "⏳ Envoi en cours..." : "📧 Envoyer le devis au client"}
+              {saving ? "⏳ Envoi en cours..." : "Envoyer le devis au client"}
             </button>
             {(!lignes.length || !emailValide) && <div style={{fontSize:"11px",color:C.muted,textAlign:"center"}}>{!lignes.length ? "Ajoute au moins une ligne" : "Renseigne un e-mail client valide"} pour envoyer.</div>}
             <div style={{display:"flex",gap:"8px"}}>
-              <button onClick={onClose} style={{flex:1,padding:"10px",background:"transparent",color:C.muted,border:"1px solid "+C.border,borderRadius:"10px",fontSize:"12px",cursor:"pointer"}}>Annuler</button>
-              <button onClick={voirApercu} disabled={saving||!lignes.length||!emailValide}
-                style={{flex:1,padding:"10px",background:"transparent",color:C.or,border:"1px solid "+C.orBord,borderRadius:"10px",fontSize:"12px",fontWeight:"700",cursor:"pointer",opacity:(saving||!lignes.length||!emailValide)?0.5:1}}>
-                👁️ Voir le PDF avant
+              <button className="glass-btn" onClick={onClose} style={{flex:1,padding:"10px",fontSize:"12px"}}>Annuler</button>
+              <button className="glass-btn" onClick={voirApercu} disabled={saving||!lignes.length||!emailValide}
+                style={{flex:1,padding:"10px",fontSize:"12px",opacity:(saving||!lignes.length||!emailValide)?0.5:1}}>
+                Voir le PDF avant
               </button>
             </div>
           </div>
         ) : (
           <div style={{display:"flex",gap:"10px"}}>
-            <button onClick={() => setEtape("edition")} style={{flex:1,padding:"11px",background:"transparent",color:C.muted,border:"1px solid "+C.border,borderRadius:"10px",fontSize:"12px",cursor:"pointer"}}>← Modifier</button>
+            <button className="glass-btn" onClick={() => setEtape("edition")} style={{flex:1,padding:"11px",fontSize:"12px"}}>← Modifier</button>
             <button onClick={envoyer} disabled={saving}
               style={{flex:2,padding:"11px",background:saving?"#D1D5DB":C.or,color:"#fff",border:"none",borderRadius:"10px",fontSize:"13px",fontWeight:"900",cursor:saving?"not-allowed":"pointer"}}>
-              {saving ? "⏳ Envoi..." : "📧 Envoyer le devis au client"}
+              {saving ? "⏳ Envoi..." : "Envoyer le devis au client"}
             </button>
           </div>
         )}
@@ -1352,7 +1356,7 @@ function SignaturePad({ onChange }) {
       <div style={{position:"relative",background:"#fff",border:"1.5px dashed rgba(255,107,0,0.6)",borderRadius:"12px",height:"130px",overflow:"hidden"}}>
         <canvas ref={ref} onPointerDown={debut} onPointerMove={trace} onPointerUp={fin} onPointerCancel={fin}
           style={{width:"100%",height:"100%",touchAction:"none",display:"block"}}/>
-        {vide && <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",color:"#9CA3AF",fontSize:"12px",pointerEvents:"none"}}>✍️ Le client signe ici avec le doigt</div>}
+        {vide && <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",color:"#9CA3AF",fontSize:"12px",pointerEvents:"none"}}>Le client signe ici avec le doigt</div>}
       </div>
       {!vide && <button type="button" onClick={effacer} style={{marginTop:"6px",background:"none",border:"none",color:"#6B7280",fontSize:"11px",textDecoration:"underline",cursor:"pointer"}}>Effacer la signature</button>}
     </div>
@@ -1710,7 +1714,7 @@ function DiagnosticMaxCard({ ticket, resultat, setResultat, diagnosticGarde, set
   const [erreur, setErreur] = React.useState("");
   const [enregistrementDiagEnCours, setEnregistrementDiagEnCours] = React.useState(false);
 
-  const photosUrls = (ticket.fields?.Photos || "").split(",").map(s => s.trim()).filter(Boolean);
+  const photosUrls = String(ticket.fields?.Photos || "").split(",").map(s => s.trim()).filter(Boolean);
 
   const lancerDiagnostic = async () => {
     setEnCours(true); setErreur(""); setResultat(null);
@@ -1784,7 +1788,7 @@ function DiagnosticMaxCard({ ticket, resultat, setResultat, diagnosticGarde, set
     <div style={{border:"1px solid rgba(var(--iko-primary-rgb),0.35)",borderRadius:"12px",padding:"12px",marginBottom:"14px",background:"rgba(var(--iko-primary-rgb),0.05)"}}>
       <div onClick={() => setOuvert(!ouvert)} style={{display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer"}}>
         <span style={{fontSize:"12px",fontWeight:"800",color:"var(--iko-primary)"}}>
-          🧠 Diagnostic Max {diagnosticGarde && <span style={{fontSize:"10px",color:C.muted,fontWeight:"400"}}>· déjà enregistré</span>}
+          Diagnostic Max {diagnosticGarde && <span style={{fontSize:"10px",color:C.muted,fontWeight:"400"}}>· déjà enregistré</span>}
         </span>
         <span style={{fontSize:"11px",color:C.muted}}>{ouvert ? "▲" : "▼"}</span>
       </div>
@@ -1821,7 +1825,7 @@ function DiagnosticMaxCard({ ticket, resultat, setResultat, diagnosticGarde, set
               )}
               {Array.isArray(resultat.actions_suggerees) && resultat.actions_suggerees.length > 0 && (
                 <div style={{marginTop:"4px",display:"flex",flexDirection:"column",gap:"6px"}}>
-                  <b style={{color:"var(--iko-bg-sombre)",fontSize:"11px"}}>🎯 Actions suggérées par IKO</b>
+                  <b style={{color:"var(--iko-bg-sombre)",fontSize:"11px"}}>Actions suggérées par IKO</b>
                   {resultat.actions_suggerees.map((a, i) => (
                     <div key={i} style={{background:"#fff",border:"1px solid rgba(0,0,0,0.08)",borderRadius:"8px",padding:"8px",display:"flex",flexDirection:"column",gap:"3px"}}>
                       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:"6px"}}>
@@ -1839,7 +1843,7 @@ function DiagnosticMaxCard({ ticket, resultat, setResultat, diagnosticGarde, set
               )}
               <button type="button" onClick={garderDiagnostic} disabled={enregistrementDiagEnCours}
                 style={{marginTop:"4px",padding:"7px 12px",borderRadius:"8px",background:enregistrementDiagEnCours?"#D1D5DB":"var(--iko-bg-sombre)",color:"#fff",border:"none",fontSize:"11px",fontWeight:"700",cursor:enregistrementDiagEnCours?"not-allowed":"pointer",alignSelf:"flex-start"}}>
-                {enregistrementDiagEnCours ? "⏳..." : diagnosticGarde ? "📌 Mettre à jour le diagnostic gardé" : "📌 Garder ce diagnostic"}
+                {enregistrementDiagEnCours ? "⏳..." : diagnosticGarde ? "Mettre à jour le diagnostic gardé" : "Garder ce diagnostic"}
               </button>
             </div>
           )}
@@ -1872,7 +1876,7 @@ function BlocCompteRenduMax({ commentaire, setCommentaire, placeholder, rows,
           <textarea rows={2} value={texteDicteBrut} onChange={e => setTexteDicteBrut(e.target.value)} style={{resize:"none",fontSize:"11px"}}/>
           <button type="button" onClick={structurerCompteRendu} disabled={structurationEnCours}
             style={{marginTop:"6px",padding:"7px 12px",borderRadius:"8px",background:structurationEnCours?"#D1D5DB":"var(--iko-primary)",color:"var(--iko-dark)",border:"none",fontSize:"11px",fontWeight:"800",cursor:structurationEnCours?"not-allowed":"pointer"}}>
-            {structurationEnCours ? "⏳ Structuration..." : "🧠 Structurer avec Max"}
+            {structurationEnCours ? "⏳ Structuration..." : "Structurer avec Max"}
           </button>
         </div>
       )}
@@ -1947,7 +1951,7 @@ function ModalAction({ ticket, onClose, onDone }) {
   const [photoEnCoursUpload, setPhotoEnCoursUpload] = React.useState(false);
   const [progressionPhotos, setProgressionPhotos] = React.useState(null);
   const [erreurPhoto, setErreurPhoto] = React.useState("");
-  const [photosTicket, setPhotosTicket] = React.useState(ticket.fields?.Photos || "");
+  const [photosTicket, setPhotosTicket] = React.useState(Array.isArray(ticket.fields?.Photos) ? ticket.fields.Photos.join(",") : String(ticket.fields?.Photos || ""));
 
   // ---- Bloc 3 - axe G : analyse automatique de la photo SAV ----
   // Déclenchée juste après un upload réussi (voir ajouterPhotosTerrain plus
@@ -2326,6 +2330,7 @@ function ModalAction({ ticket, onClose, onDone }) {
       } else if (mode === "annuler") {
         fields.Statut = "Annulé";
         fields.Commentaire = "Annulé : " + commentaire;
+        fields["Raison annulation"] = commentaire.trim(); // exigé par le serveur pour toute annulation
         const planningId = ticket.fields?.PlanningID;
         if (planningId) {
           await fetch('/api/airtable/Planning/'+planningId, {
@@ -2517,16 +2522,17 @@ function ModalAction({ ticket, onClose, onDone }) {
   return (
     <div className="modal-overlay" onClick={e => e.target===e.currentTarget && onClose()}>
       <div className="modal-box">
-        <div style={{width:"36px",height:"4px",background:"#D1D5DB",borderRadius:"2px",margin:"0 auto 20px"}}/>
+        <div style={{width:"36px",height:"4px",background:"#D1D5DB",borderRadius:"2px",margin:"0 auto 12px"}}/>
+        <BarreRetour onBack={() => { if (mode === "devis_place") setMode("devis_choix"); else if (mode === "debloquer") onClose(); else if (mode) setMode(null); else onClose(); }}/>
         <div style={{marginBottom:"20px"}}>
           <div style={{fontSize:"11px",color:C.or,fontWeight:"700",fontFamily:"monospace",marginBottom:"4px"}}>{ticket.fields?.Name}</div>
           <div style={{fontSize:"16px",fontWeight:"900",color:C.white}}>{ticket.fields?.Client}</div>
           <div style={{fontSize:"12px",color:C.muted,marginTop:"3px"}}>{ticket.fields?.Produit} · {ticket.fields?.["Problème"]}</div>
-          <div style={{fontSize:"12px",color:C.text,marginTop:"6px"}}>📅 {ticket.fields?.["Créneau"]}</div>
-          {ticket.fields?.Adresse && <div style={{fontSize:"12px",color:C.muted,marginTop:"2px"}}>📍 {ticket.fields?.Adresse}</div>}
+          <div style={{fontSize:"12px",color:C.text,marginTop:"6px"}}>{ticket.fields?.["Créneau"]}</div>
+          {ticket.fields?.Adresse && <div style={{fontSize:"12px",color:C.muted,marginTop:"2px"}}>{ticket.fields?.Adresse}</div>}
           {erreurFermeture && (
             <div style={{marginTop:"8px",padding:"8px 10px",background:"rgba(var(--iko-erreur-rgb),0.1)",border:"1px solid var(--iko-erreur)",borderRadius:"8px",fontSize:"11px",color:"var(--iko-erreur)",fontWeight:"700"}}>
-              ⚠️ {erreurFermeture}
+              {erreurFermeture}
             </div>
           )}
           <div style={{marginTop:"10px"}}>
@@ -2534,9 +2540,9 @@ function ModalAction({ ticket, onClose, onDone }) {
               onChange={e => { const f = Array.from(e.target.files || []); e.target.value = ""; if (f.length) ajouterPhotosTerrain(f); }}/>
             <label htmlFor={"photoTerrain-" + ticket.id}
               style={{display:"flex",alignItems:"center",justifyContent:"center",width:"100%",padding:"14px",borderRadius:"12px",background:photoEnCoursUpload?"#D1D5DB":"rgba(var(--iko-primary-rgb),0.1)",border:"2px solid var(--iko-primary)",color:"var(--iko-primary)",fontSize:"14px",fontWeight:"900",cursor:photoEnCoursUpload?"not-allowed":"pointer"}}>
-              {photoEnCoursUpload ? (progressionPhotos ? "⏳ Envoi " + (progressionPhotos.fait + 1) + "/" + progressionPhotos.total + "..." : "⏳ Envoi...") : "📷 Ajouter des photos"}
+              {photoEnCoursUpload ? (progressionPhotos ? "⏳ Envoi " + (progressionPhotos.fait + 1) + "/" + progressionPhotos.total + "..." : "⏳ Envoi...") : "Ajouter des photos"}
             </label>
-            {photosTicket && <div style={{fontSize:"11px",color:C.muted,marginTop:"6px",textAlign:"center"}}>{photosTicket.split(",").filter(Boolean).length} photo(s) sur ce ticket</div>}
+            {photosTicket && <div style={{fontSize:"11px",color:C.muted,marginTop:"6px",textAlign:"center"}}>{photosTicket.split(",").filter(Boolean).length} photo(s) sur ce ticket{(() => { const urls = String(photosTicket || "").split(",").map(u => u.trim()).filter(Boolean); return urls.length ? (<div style={{display:"flex",gap:"6px",flexWrap:"wrap",marginTop:"6px"}}>{urls.map((u, i) => /\.pdf($|\?)/i.test(u) ? <a key={i} href={u} target="_blank" rel="noopener" style={{width:"56px",height:"56px",borderRadius:"8px",border:"1px solid #ddd",background:"#f4f4f4",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"11px",fontWeight:"700",color:"#444",textDecoration:"none"}}>PDF</a> : <a key={i} href={u} target="_blank" rel="noopener"><img src={u} alt={"Photo " + (i + 1)} loading="lazy" style={{width:"56px",height:"56px",objectFit:"cover",borderRadius:"8px",border:"1px solid #ddd",display:"block"}}/></a>)}</div>) : null; })()}</div>}
           </div>
           {erreurPhoto && <div style={{fontSize:"11px",color:"var(--iko-erreur)",marginTop:"6px"}}>{erreurPhoto}</div>}
           {analysePhotoEnCours && <div style={{fontSize:"11px",color:C.muted,marginTop:"8px",textAlign:"center"}}>⏳ Max regarde la photo...</div>}
@@ -2544,7 +2550,7 @@ function ModalAction({ ticket, onClose, onDone }) {
           {analysePhotoResultat && (
             <div style={{marginTop:"10px",border:"1px solid rgba(var(--iko-primary-rgb),0.3)",borderRadius:"10px",padding:"10px 12px",fontSize:"11px",color:C.text,display:"flex",flexDirection:"column",gap:"5px",background:"rgba(var(--iko-primary-rgb),0.04)"}}>
               <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-                <span style={{fontSize:"11px",fontWeight:"800",color:"var(--iko-primary)"}}>📷 Lecture rapide de la photo</span>
+                <span style={{fontSize:"11px",fontWeight:"800",color:"var(--iko-primary)"}}>Lecture rapide de la photo</span>
                 {analysePhotoResultat.confiance && (
                   <span style={{fontSize:"10px",fontWeight:"700",color:COULEURS_CONFIANCE_MAX[analysePhotoResultat.confiance]||C.muted,border:"1px solid "+(COULEURS_CONFIANCE_MAX[analysePhotoResultat.confiance]||C.muted),borderRadius:"10px",padding:"2px 7px"}}>
                     {LABELS_CONFIANCE_MAX[analysePhotoResultat.confiance] || "Confiance moyenne"}
@@ -2552,14 +2558,14 @@ function ModalAction({ ticket, onClose, onDone }) {
                 )}
               </div>
               {analysePhotoResultat.limites ? (
-                <div style={{color:"var(--iko-primary)"}}>⚠️ {analysePhotoResultat.limites}</div>
+                <div style={{color:"var(--iko-primary)"}}>{analysePhotoResultat.limites}</div>
               ) : (
                 <>
                   {analysePhotoResultat.elements_visibles && <div><b>Éléments visibles</b> · {analysePhotoResultat.elements_visibles}</div>}
                   {analysePhotoResultat.anomalie_dommage && <div><b>Anomalie/dommage</b> · {analysePhotoResultat.anomalie_dommage}</div>}
                   {analysePhotoResultat.zone_concernee && <div><b>Zone concernée</b> · {analysePhotoResultat.zone_concernee}</div>}
                   {analysePhotoResultat.indices_diagnostic && <div><b>Indices diagnostic</b> · {analysePhotoResultat.indices_diagnostic}</div>}
-                  {analysePhotoResultat.recommandation && <div style={{fontStyle:"italic",color:C.muted}}>💡 {analysePhotoResultat.recommandation}</div>}
+                  {analysePhotoResultat.recommandation && <div style={{fontStyle:"italic",color:C.muted}}>{analysePhotoResultat.recommandation}</div>}
                 </>
               )}
             </div>
@@ -2615,8 +2621,7 @@ function ModalAction({ ticket, onClose, onDone }) {
         {mode === "devis_choix" && (
           <>
             <div style={{display:"flex",alignItems:"center",gap:"8px",marginBottom:"16px"}}>
-              <button onClick={() => setMode(null)} style={{background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:"18px"}}>←</button>
-              <span style={{fontSize:"14px",fontWeight:"700",color:C.white}}>💶 Devis</span>
+              <span style={{fontSize:"14px",fontWeight:"700",color:C.white}}>Devis</span>
             </div>
             <div style={{fontSize:"12px",color:C.muted,marginBottom:"14px",textAlign:"center"}}>As-tu le matériel disponible pour le poser aujourd'hui ?</div>
             <button onClick={() => setMode("devis_place")}
@@ -2626,7 +2631,7 @@ function ModalAction({ ticket, onClose, onDone }) {
             </button>
             <button onClick={() => setMode("devis")}
               style={{width:"100%",padding:"16px",background:"rgba(var(--iko-dark-rgb),0.06)",border:"2px solid rgba(var(--iko-dark-rgb),0.3)",borderRadius:"14px",color:"var(--iko-bg-sombre)",cursor:"pointer",textAlign:"center",marginBottom:"10px"}}>
-              <div style={{fontSize:"13px",fontWeight:"900"}}>📋 Non, réparation impossible sur place</div>
+              <div style={{fontSize:"13px",fontWeight:"900"}}>Non, réparation impossible sur place</div>
               <div style={{fontSize:"10px",color:"rgba(var(--iko-dark-rgb),0.7)",marginTop:"3px"}}>Diagnostic transmis, devis établi ensuite</div>
             </button>
           </>
@@ -2634,7 +2639,6 @@ function ModalAction({ ticket, onClose, onDone }) {
         {mode === "terminer" && (
           <>
             <div style={{display:"flex",alignItems:"center",gap:"8px",marginBottom:"16px"}}>
-              <button onClick={() => setMode(null)} style={{background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:"18px"}}>←</button>
               <span style={{fontSize:"14px",fontWeight:"700",color:C.white}}>✓ Valider l'intervention</span>
             </div>
             <div style={{background:C.vertDim,border:"1px solid rgba(var(--iko-primary-rgb),0.3)",borderRadius:"10px",padding:"10px 14px",marginBottom:"14px",fontSize:"12px",color:C.vert}}>
@@ -2656,8 +2660,7 @@ function ModalAction({ ticket, onClose, onDone }) {
         {mode === "devis_place" && (
           <>
             <div style={{display:"flex",alignItems:"center",gap:"8px",marginBottom:"16px"}}>
-              <button onClick={() => setMode(null)} style={{background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:"18px"}}>←</button>
-              <span style={{fontSize:"14px",fontWeight:"700",color:C.white}}>💶 Devis sur place</span>
+              <span style={{fontSize:"14px",fontWeight:"700",color:C.white}}>Devis sur place</span>
             </div>
             <div style={{background:C.vertDim,border:"1px solid rgba(var(--iko-primary-rgb),0.3)",borderRadius:"10px",padding:"10px 14px",marginBottom:"14px",fontSize:"12px",color:C.vert}}>
               Sélectionnez les pièces/actions posées, faites signer le client, encaissez, puis intervenez.
@@ -2698,18 +2701,17 @@ function ModalAction({ ticket, onClose, onDone }) {
             <BlocClotureTerrain cause={causeSav} setCause={setCauseSav} duree={dureeMin} setDuree={setDureeMin} coutPieces={coutPieces} setCoutPieces={setCoutPieces} setSignature={setSignatureClient}/>
             <button onClick={confirmer} disabled={saving||!lignesAuto.length||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailAuto.trim())||!modePaiementPlace}
               style={{width:"100%",padding:"14px",background:(saving||!lignesAuto.length||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailAuto.trim())||!modePaiementPlace)?"#D1D5DB":C.vert,color:(saving||!lignesAuto.length)?C.muted:"#fff",border:"none",borderRadius:"12px",fontSize:"14px",fontWeight:"900",cursor:saving?"not-allowed":"pointer"}}>
-              {saving ? "⏳ Enregistrement..." : "💶 Confirmer devis, encaissement et intervention"}
+              {saving ? "⏳ Enregistrement..." : "Confirmer devis, encaissement et intervention"}
             </button>
           </>
         )}
         {mode === "annuler" && (
           <>
             <div style={{display:"flex",alignItems:"center",gap:"8px",marginBottom:"16px"}}>
-              <button onClick={() => setMode(null)} style={{background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:"18px"}}>←</button>
-              <span style={{fontSize:"14px",fontWeight:"700",color:C.white}}>❌ Annuler le RDV</span>
+              <span style={{fontSize:"14px",fontWeight:"700",color:C.white}}>Annuler le RDV</span>
             </div>
             <div style={{background:C.rougeDim,border:"1px solid rgba(var(--iko-erreur-rgb),0.3)",borderRadius:"10px",padding:"10px 14px",marginBottom:"14px",fontSize:"12px",color:C.rouge}}>
-              ⚠️ Le ticket sera marqué comme annulé.
+              Le ticket sera marqué comme annulé.
             </div>
             <div style={{marginBottom:"14px"}}>
               <label style={{fontSize:"11px",color:C.muted,display:"block",marginBottom:"6px",fontWeight:"700"}}>Motif d'annulation *</label>
@@ -2718,15 +2720,14 @@ function ModalAction({ ticket, onClose, onDone }) {
             </div>
             <button onClick={confirmer} disabled={saving||!commentaire.trim()}
               style={{width:"100%",padding:"14px",background:saving||!commentaire.trim()?"#D1D5DB":C.rouge,color:saving||!commentaire.trim()?C.muted:"#fff",border:"none",borderRadius:"12px",fontSize:"14px",fontWeight:"900",cursor:saving||!commentaire.trim()?"not-allowed":"pointer"}}>
-              {saving ? "⏳ Enregistrement..." : "❌ Confirmer l'annulation"}
+              {saving ? "⏳ Enregistrement..." : "Confirmer l'annulation"}
             </button>
           </>
         )}
         {mode === "piece" && (
           <>
             <div style={{display:"flex",alignItems:"center",gap:"8px",marginBottom:"16px"}}>
-              <button onClick={() => setMode(null)} style={{background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:"18px"}}>←</button>
-              <span style={{fontSize:"14px",fontWeight:"700",color:C.white}}>🔧 Pièce à commander</span>
+              <span style={{fontSize:"14px",fontWeight:"700",color:C.white}}>Pièce à commander</span>
             </div>
             <div style={{background:"rgba(var(--iko-primary-rgb),0.08)",border:"1px solid var(--iko-primary)",borderRadius:"10px",padding:"10px 14px",marginBottom:"14px",fontSize:"12px",color:"var(--iko-bg-sombre)"}}>
               Le créneau est libéré, le client est prévenu qu'une pièce est commandée et reprendra RDV dès sa réception.
@@ -2744,8 +2745,7 @@ function ModalAction({ ticket, onClose, onDone }) {
         {mode === "replanifier" && (
           <>
             <div style={{display:"flex",alignItems:"center",gap:"8px",marginBottom:"16px"}}>
-              <button onClick={() => setMode(null)} style={{background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:"18px"}}>←</button>
-              <span style={{fontSize:"14px",fontWeight:"700",color:C.white}}>🔄 Replanifier l'intervention</span>
+              <span style={{fontSize:"14px",fontWeight:"700",color:C.white}}>Replanifier l'intervention</span>
             </div>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"10px",marginBottom:"12px"}}>
               <div>
@@ -2755,8 +2755,8 @@ function ModalAction({ ticket, onClose, onDone }) {
               <div>
                 <label style={{fontSize:"11px",color:C.muted,display:"block",marginBottom:"6px",fontWeight:"700"}}>Créneau *</label>
                 <select value={newCreneau} onChange={e => setNewCreneau(e.target.value)}>
-                  <option value="Matin (8h30 — 12h00)">🌅 Matin</option>
-                  <option value="Après-midi (13h00 — 17h00)">🌇 Après-midi</option>
+                  <option value="Matin (8h30 — 12h00)">Matin</option>
+                  <option value="Après-midi (13h00 — 17h00)">Après-midi</option>
                 </select>
               </div>
             </div>
@@ -2767,14 +2767,14 @@ function ModalAction({ ticket, onClose, onDone }) {
             </div>
             <button onClick={confirmer} disabled={saving||!newDate}
               style={{width:"100%",padding:"14px",background:saving||!newDate?"#D1D5DB":C.jaune,color:"var(--iko-dark)",border:"none",borderRadius:"12px",fontSize:"14px",fontWeight:"900",cursor:saving||!newDate?"not-allowed":"pointer"}}>
-              {saving ? "⏳ Enregistrement..." : "🔄 Confirmer la replanification"}
+              {saving ? "⏳ Enregistrement..." : "Confirmer la replanification"}
             </button>
           </>
         )}
         {mode === "debloquer" && (
           <>
-            <div style={{marginBottom:"16px"}}>
-              <span style={{fontSize:"14px",fontWeight:"700",color:C.white}}>🔓 Débloquer un créneau plus tôt</span>
+            <div style={{display:"flex",alignItems:"center",gap:"8px",marginBottom:"16px"}}>
+              <span style={{fontSize:"14px",fontWeight:"700",color:C.white}}>Débloquer un créneau plus tôt</span>
             </div>
             <div style={{background:"rgba(var(--iko-dark-rgb),0.05)",border:"1px solid rgba(var(--iko-dark-rgb),0.2)",borderRadius:"10px",padding:"10px 14px",marginBottom:"14px",fontSize:"12px",color:"var(--iko-bg-sombre)"}}>
               Le client attend normalement au moins 7 jours. En confirmant une date plus proche ici, le client, l'agence et le dashboard seront notifiés automatiquement.
@@ -2787,8 +2787,8 @@ function ModalAction({ ticket, onClose, onDone }) {
               <div>
                 <label style={{fontSize:"11px",color:C.muted,display:"block",marginBottom:"6px",fontWeight:"700"}}>Créneau *</label>
                 <select value={newCreneau} onChange={e => setNewCreneau(e.target.value)}>
-                  <option value="Matin (8h30 — 12h00)">🌅 Matin</option>
-                  <option value="Après-midi (13h00 — 17h00)">🌇 Après-midi</option>
+                  <option value="Matin (8h30 — 12h00)">Matin</option>
+                  <option value="Après-midi (13h00 — 17h00)">Après-midi</option>
                 </select>
               </div>
             </div>
@@ -2799,9 +2799,9 @@ function ModalAction({ ticket, onClose, onDone }) {
             </div>
             <button onClick={confirmer} disabled={saving||!newDate}
               style={{width:"100%",padding:"14px",background:saving||!newDate?"#D1D5DB":"var(--iko-bg-sombre)",color:"#fff",border:"none",borderRadius:"12px",fontSize:"14px",fontWeight:"900",cursor:saving||!newDate?"not-allowed":"pointer"}}>
-              {saving ? "⏳ Enregistrement..." : "🔓 Confirmer et prévenir tout le monde"}
+              {saving ? "⏳ Enregistrement..." : "Confirmer et prévenir tout le monde"}
             </button>
-            <button onClick={onClose} style={{width:"100%",marginTop:"10px",padding:"11px",background:"transparent",color:C.muted,border:"1px solid "+C.border,borderRadius:"10px",fontSize:"12px",cursor:"pointer"}}>
+            <button className="glass-btn" onClick={onClose} style={{width:"100%",marginTop:"10px",padding:"11px",fontSize:"12px"}}>
               Fermer
             </button>
           </>
@@ -2809,8 +2809,7 @@ function ModalAction({ ticket, onClose, onDone }) {
         {mode === "devis" && (
           <>
             <div style={{display:"flex",alignItems:"center",gap:"8px",marginBottom:"16px"}}>
-              <button onClick={() => setMode(null)} style={{background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:"18px"}}>←</button>
-              <span style={{fontSize:"14px",fontWeight:"700",color:C.white}}>📋 Demande de devis</span>
+              <span style={{fontSize:"14px",fontWeight:"700",color:C.white}}>Demande de devis</span>
             </div>
             <div style={{background:"rgba(var(--iko-dark-rgb),0.05)",border:"1px solid rgba(var(--iko-dark-rgb),0.2)",borderRadius:"10px",padding:"10px 14px",marginBottom:"14px",fontSize:"12px",color:"var(--iko-bg-sombre)"}}>
               Le ticket passera en "Devis à faire" — le SAV établira le devis et le transmettra au client.
@@ -2830,7 +2829,7 @@ function ModalAction({ ticket, onClose, onDone }) {
                 </div>
                 {fraisDiagnosticApplicable && (
                   <div style={{marginTop:"10px",background:"rgba(var(--iko-primary-rgb),0.08)",border:"1px solid var(--iko-primary)",borderRadius:"10px",padding:"10px 14px",fontSize:"12px",color:"var(--iko-bg-sombre)"}}>
-                    💶 Client non garanti et non existant, sans matériel sur place : <strong>{montantDiagnostic.toFixed(2)} € HT</strong> de frais de déplacement/diagnostic à faire régler au client (CB, chèque ou virement). Ce montant sera automatiquement déduit du devis si le client l'accepte ensuite.
+                    Client non garanti et non existant, sans matériel sur place : <strong>{montantDiagnostic.toFixed(2)} € HT</strong> de frais de déplacement/diagnostic à faire régler au client (CB, chèque ou virement). Ce montant sera automatiquement déduit du devis si le client l'accepte ensuite.
                   </div>
                 )}
                 {!montantDiagnostic && !clientExistantDevis && (
@@ -2858,7 +2857,7 @@ function ModalAction({ ticket, onClose, onDone }) {
             </div>
             <button onClick={confirmer} disabled={saving||!explication.trim()}
               style={{width:"100%",padding:"14px",background:saving||!explication.trim()?"#D1D5DB":"var(--iko-bg-sombre)",color:"#fff",border:"none",borderRadius:"12px",fontSize:"14px",fontWeight:"900",cursor:saving||!explication.trim()?"not-allowed":"pointer"}}>
-              {saving ? "⏳ Enregistrement..." : "📋 Envoyer la demande de devis"}
+              {saving ? "⏳ Enregistrement..." : "Envoyer la demande de devis"}
             </button>
           </>
         )}
@@ -2983,13 +2982,8 @@ function ItineraireModal({ agence, tickets, onClose }) {
   return (
     <div className="modal-overlay" onClick={e => e.target===e.currentTarget && onClose()}>
       <div className="modal-box">
-        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"16px"}}>
-          <div>
-            <div style={{fontSize:"16px",fontWeight:"900",color:C.white}}>🗺️ Itinéraire optimisé</div>
-            <div style={{fontSize:"11px",color:C.muted,marginTop:"2px"}}>{eligibles.length} intervention(s) dans cette liste</div>
-          </div>
-          <button onClick={onClose} style={{background:"#F3F4F6",border:"1px solid "+C.border,color:C.muted,borderRadius:"8px",width:"30px",height:"30px",cursor:"pointer",fontSize:"16px"}}>✕</button>
-        </div>
+        <EntetePro titre="Itinéraire optimisé" sous="Le meilleur ordre pour enchaîner vos interventions" onBack={onClose} onClose={onClose}
+          kpis={[{ label: "Interventions", valeur: eligibles.length, accent: true }]}/>
 
         {step === "form" && (
           <>
@@ -3002,7 +2996,7 @@ function ItineraireModal({ agence, tickets, onClose }) {
             {errorMsg && <div style={{background:C.rougeDim,border:"1px solid rgba(var(--iko-erreur-rgb),0.3)",borderRadius:"8px",padding:"10px 14px",fontSize:"12px",color:C.rouge,marginBottom:"14px"}}>{errorMsg}</div>}
             <button onClick={calculer} disabled={eligibles.length===0}
               style={{width:"100%",padding:"14px",background:eligibles.length===0?"#D1D5DB":C.or,color:"var(--iko-dark)",border:"none",borderRadius:"12px",fontSize:"14px",fontWeight:"900",cursor:eligibles.length===0?"not-allowed":"pointer"}}>
-              🧭 Calculer l'itinéraire
+              Calculer l'itinéraire
             </button>
             <div style={{display:"flex",alignItems:"center",gap:"10px",margin:"14px 0"}}>
               <div style={{flex:1,height:"1px",background:C.border}}/>
@@ -3011,7 +3005,7 @@ function ItineraireModal({ agence, tickets, onClose }) {
             </div>
             <button onClick={calculerDepuisGPS} disabled={eligibles.length===0||gpsLoading}
               style={{width:"100%",padding:"14px",background:"#FFFFFF",color:"var(--iko-bg-sombre)",border:"2px solid var(--iko-bg-sombre)",borderRadius:"12px",fontSize:"14px",fontWeight:"900",cursor:eligibles.length===0?"not-allowed":"pointer"}}>
-              {gpsLoading ? "⏳ Localisation..." : "📍 Utiliser ma position actuelle"}
+              {gpsLoading ? "⏳ Localisation..." : "Utiliser ma position actuelle"}
             </button>
             <div style={{fontSize:"10px",color:C.muted,marginTop:"6px",textAlign:"center"}}>Pratique si tu n'es pas parti de chez toi ou de l'agence.</div>
           </>
@@ -3029,7 +3023,7 @@ function ItineraireModal({ agence, tickets, onClose }) {
           <>
             {nbFailed > 0 && (
               <div style={{background:C.jauneDim,border:"1px solid rgba(var(--iko-statut-attention-rgb),0.3)",borderRadius:"8px",padding:"8px 12px",fontSize:"11px",color:C.jaune,marginBottom:"12px"}}>
-                ⚠️ {nbFailed} adresse(s) n'ont pas pu être localisée(s) et sont exclues de l'itinéraire.
+                {nbFailed} adresse(s) n'ont pas pu être localisée(s) et sont exclues de l'itinéraire.
               </div>
             )}
             <div style={{display:"flex",flexDirection:"column",gap:"8px",marginBottom:"16px",maxHeight:"320px",overflowY:"auto"}}>
@@ -3045,8 +3039,8 @@ function ItineraireModal({ agence, tickets, onClose }) {
               ))}
             </div>
             <div style={{display:"flex",gap:"10px"}}>
-              <button onClick={imprimer} style={{flex:1,padding:"13px",background:"#F3F4F6",color:C.text,border:"1px solid "+C.border,borderRadius:"10px",fontSize:"12px",fontWeight:"700",cursor:"pointer"}}>🖨️ Imprimer</button>
-              <a href={mapsUrl} target="_blank" style={{flex:1,padding:"13px",background:C.or,color:"var(--iko-dark)",border:"none",borderRadius:"10px",fontSize:"12px",fontWeight:"900",cursor:"pointer",textAlign:"center",textDecoration:"none",display:"flex",alignItems:"center",justifyContent:"center"}}>🧭 Ouvrir dans Maps</a>
+              <button className="glass-btn" onClick={imprimer} style={{flex:1,padding:"13px",fontSize:"12px"}}>Imprimer</button>
+              <a href={mapsUrl} target="_blank" style={{flex:1,padding:"13px",background:C.or,color:"var(--iko-dark)",border:"none",borderRadius:"10px",fontSize:"12px",fontWeight:"900",cursor:"pointer",textAlign:"center",textDecoration:"none",display:"flex",alignItems:"center",justifyContent:"center"}}>Ouvrir dans Maps</a>
             </div>
             <button onClick={() => setStep("form")} style={{width:"100%",marginTop:"10px",padding:"10px",background:"transparent",color:C.muted,border:"none",fontSize:"11px",cursor:"pointer",textDecoration:"underline"}}>← Recalculer avec un autre départ</button>
           </>
@@ -3058,6 +3052,7 @@ function ItineraireModal({ agence, tickets, onClose }) {
 
 function TicketCard({ ticket, onAction, onAcquitterRdv, onEtablirDevis, onEnRoute }) {
   const [choixEta, setChoixEta] = React.useState(false);
+  const [ouvert, setOuvert] = React.useState(false);
   const urgent = ticket.fields?.Qualification === "Oui";
   const rdvModifie = ticket.fields?.["RDV modifié - notif technicien"] === true;
   // Extension Bloc 5 : même proxy createdTime que dashboard.html (aucune
@@ -3066,6 +3061,16 @@ function TicketCard({ ticket, onAction, onAcquitterRdv, onEtablirDevis, onEnRout
   const statut = ticket.fields?.Statut || "Nouveau";
   const commentaire = ticket.fields?.Commentaire;
   const diagnostic = ticket.fields?.Diagnostic;
+  // Messages / informations ajoutés par le client : le technicien les voit sur la fiche, avec un repère tant qu'il ne les a pas lus.
+  const messagesClient = String(ticket.fields?.["Message client"] || "").trim();
+  const cleVu = "iko_tech_vu_" + ticket.id;
+  const lireVu = () => { try { return localStorage.getItem(cleVu) || ""; } catch (e) { return ""; } };
+  const [vuClient, setVuClient] = React.useState(lireVu);
+  const messageNonVu = !!messagesClient && vuClient !== String(messagesClient.length) && statut !== "Terminé" && statut !== "Annulé";
+  React.useEffect(() => {
+    if (ouvert && messagesClient) { try { localStorage.setItem(cleVu, String(messagesClient.length)); } catch (e) {} setVuClient(String(messagesClient.length)); }
+  }, [ouvert, messagesClient]);
+  const entreesClient = messagesClient ? messagesClient.split(/\n\n(?=\[\d{2}\/\d{2}\/\d{4} \d{2}:\d{2}\])/).slice(-3) : [];
   const isTermine = statut === "Terminé";
   const isAnnule = statut === "Annulé";
   const isDevisAFaire = statut === "Devis à faire";
@@ -3080,75 +3085,86 @@ function TicketCard({ ticket, onAction, onAcquitterRdv, onEtablirDevis, onEnRout
 
   return (
     <div style={{background:C.card,border:"2px solid "+(urgent?"rgba(var(--iko-erreur-rgb),0.35)":isTermine?"rgba(var(--iko-primary-rgb),0.25)":isAnnule||isDevisRefuse?"rgba(var(--iko-erreur-rgb),0.2)":isEnAttenteDevis?"rgba(var(--iko-dark-rgb),0.3)":C.border),borderRadius:"14px",overflow:"hidden",opacity:(isTermine||isAnnule)?0.6:1}}>
-      <div style={{background:urgent?"rgba(var(--iko-erreur-rgb),0.08)":isTermine?C.vertDim:isAnnule?C.rougeDim:isEnAttenteDevis?"rgba(var(--iko-dark-rgb),0.06)":C.orDim,padding:"12px 16px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+      <div style={{background:urgent?"rgba(var(--iko-erreur-rgb),0.08)":isTermine?C.vertDim:isAnnule?C.rougeDim:isEnAttenteDevis?"rgba(var(--iko-dark-rgb),0.06)":C.orDim,padding:"7px 12px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
         <div style={{display:"flex",alignItems:"center",gap:"8px",flexWrap:"wrap"}}>
           <span style={{fontSize:"11px",fontWeight:"900",color:C.or,fontFamily:"monospace"}}>{ticket.fields?.Name}</span>
           {urgent && <span style={{background:C.rougeDim,color:C.rouge,fontSize:"9px",fontWeight:"700",padding:"2px 7px",borderRadius:"20px",animation:"clignoteUrgent 1.1s ease-in-out infinite"}}>URGENT</span>}
-          {rdvModifie && <span onClick={() => onAcquitterRdv && onAcquitterRdv(ticket)} title="Cliquer pour marquer comme vu" style={{background:C.rougeDim,color:C.rouge,fontSize:"9px",fontWeight:"700",padding:"2px 7px",borderRadius:"20px",animation:"clignoteUrgent 1.1s ease-in-out infinite",cursor:"pointer"}}>📅 RDV MODIFIÉ{ageJoursRdv !== null && ageJoursRdv >= SEUIL_RDV_MODIFIE_JOURS ? " (" + ageJoursRdv + "j)" : ""} — cliquer pour valider</span>}
-          {diagnosticMaxAFinaliser && <span title="Un diagnostic Max existe déjà sur ce ticket" style={{background:"rgba(var(--iko-primary-rgb),0.12)",color:"var(--iko-primary)",fontSize:"9px",fontWeight:"700",padding:"2px 7px",borderRadius:"20px"}}>🧠 DIAGNOSTIC MAX À FINALISER</span>}
+          {messageNonVu && <span onClick={() => setOuvert(true)} title="Le client a ajouté une information : touchez pour la lire" style={{background:"var(--iko-primary)",color:"#fff",fontSize:"9px",fontWeight:"800",padding:"2px 8px",borderRadius:"20px",cursor:"pointer",animation:"clignoteUrgent 1.1s ease-in-out infinite"}}>MESSAGE CLIENT</span>}
+          {rdvModifie && <span onClick={() => onAcquitterRdv && onAcquitterRdv(ticket)} title="Cliquer pour marquer comme vu" style={{background:C.rougeDim,color:C.rouge,fontSize:"9px",fontWeight:"700",padding:"2px 7px",borderRadius:"20px",animation:"clignoteUrgent 1.1s ease-in-out infinite",cursor:"pointer"}}>RDV MODIFIÉ{ageJoursRdv !== null && ageJoursRdv >= SEUIL_RDV_MODIFIE_JOURS ? " (" + ageJoursRdv + "j)" : ""} — cliquer pour valider</span>}
+          {diagnosticMaxAFinaliser && <span title="Un diagnostic Max existe déjà sur ce ticket" style={{background:"rgba(var(--iko-primary-rgb),0.12)",color:"var(--iko-primary)",fontSize:"9px",fontWeight:"700",padding:"2px 7px",borderRadius:"20px"}}>DIAGNOSTIC MAX À FINALISER</span>}
+          {!isTermine && !isAnnule && !isEnAttenteDevis && <span style={{background:"rgba(var(--iko-dark-rgb),0.08)",color:C.text,fontSize:"9px",fontWeight:"700",padding:"2px 7px",borderRadius:"20px"}}>{statut.toUpperCase()}</span>}
           {isTermine && <span style={{background:C.vertDim,color:C.vert,fontSize:"9px",fontWeight:"700",padding:"2px 7px",borderRadius:"20px"}}>✓ TERMINÉ</span>}
-          {isAnnule && <span style={{background:C.rougeDim,color:C.rouge,fontSize:"9px",fontWeight:"700",padding:"2px 7px",borderRadius:"20px"}}>❌ ANNULÉ</span>}
-          {isDevisAFaire && <span style={{background:"rgba(var(--iko-dark-rgb),0.1)",color:"var(--iko-bg-sombre)",fontSize:"9px",fontWeight:"700",padding:"2px 7px",borderRadius:"20px"}}>📋 DEVIS À FAIRE</span>}
-          {isDevisEnvoye && <span style={{background:"rgba(var(--iko-dark-rgb),0.1)",color:"var(--iko-bg-sombre)",fontSize:"9px",fontWeight:"700",padding:"2px 7px",borderRadius:"20px"}}>📤 DEVIS ENVOYÉ AU CLIENT</span>}
-          {isDevisRefuse && <span style={{background:C.rougeDim,color:C.rouge,fontSize:"9px",fontWeight:"700",padding:"2px 7px",borderRadius:"20px"}}>📋 DEVIS REFUSÉ</span>}
-          {isReplanifie && <span style={{background:C.jauneDim,color:C.jaune,fontSize:"9px",fontWeight:"700",padding:"2px 7px",borderRadius:"20px"}}>🔄 REPLANIFIÉ</span>}
+          {isAnnule && <span style={{background:C.rougeDim,color:C.rouge,fontSize:"9px",fontWeight:"700",padding:"2px 7px",borderRadius:"20px"}}>ANNULÉ</span>}
+          {isDevisAFaire && <span style={{background:"rgba(var(--iko-dark-rgb),0.1)",color:"var(--iko-bg-sombre)",fontSize:"9px",fontWeight:"700",padding:"2px 7px",borderRadius:"20px"}}>DEVIS À FAIRE</span>}
+          {isDevisEnvoye && <span style={{background:"rgba(var(--iko-dark-rgb),0.1)",color:"var(--iko-bg-sombre)",fontSize:"9px",fontWeight:"700",padding:"2px 7px",borderRadius:"20px"}}>DEVIS ENVOYÉ AU CLIENT</span>}
+          {isDevisRefuse && <span style={{background:C.rougeDim,color:C.rouge,fontSize:"9px",fontWeight:"700",padding:"2px 7px",borderRadius:"20px"}}>DEVIS REFUSÉ</span>}
+          {isReplanifie && <span style={{background:C.jauneDim,color:C.jaune,fontSize:"9px",fontWeight:"700",padding:"2px 7px",borderRadius:"20px"}}>REPLANIFIÉ</span>}
         </div>
         <span style={{fontSize:"10px",color:C.muted}}>{ticket.fields?.Agence}</span>
       </div>
-      <div style={{padding:"14px 16px"}}>
-        <div style={{fontSize:"16px",fontWeight:"900",color:C.white,marginBottom:"4px"}}>{ticket.fields?.Client}</div>
-        <div style={{display:"flex",gap:"6px",flexWrap:"wrap",marginBottom:"12px"}}>
-          <span style={{fontSize:"11px",background:C.card2,border:"1px solid "+C.border,borderRadius:"6px",padding:"3px 8px",color:C.text}}>{ticket.fields?.Produit}</span>
-          <span style={{fontSize:"11px",background:C.card2,border:"1px solid "+C.border,borderRadius:"6px",padding:"3px 8px",color:C.muted}}>{ticket.fields?.["Problème"]}</span>
+      <div style={{padding:"10px 12px 12px"}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:"10px",flexWrap:"wrap",marginBottom:"4px"}}>
+          <div style={{fontSize:"19px",fontWeight:"900",color:C.white,lineHeight:1.2}}>{ticket.fields?.Client}</div>
+          {ticket.fields?.["Téléphone"] && (
+            <a href={"tel:" + String(ticket.fields["Téléphone"]).replace(/[^\d+]/g, "")} onClick={e => e.stopPropagation()} aria-label={"Appeler " + (ticket.fields?.Client || "le client")}
+              style={{display:"inline-flex",alignItems:"center",gap:"7px",padding:"9px 14px",borderRadius:"24px",background:"var(--iko-bg-sombre)",color:"#FF9A3C",border:"1px solid rgba(255,107,0,0.55)",fontSize:"15px",fontWeight:"900",textDecoration:"none",boxShadow:"0 3px 10px rgba(0,0,0,0.25)",whiteSpace:"nowrap"}}>
+              <svg viewBox="0 0 24 24" width="17" height="17" fill="#FF6B00" aria-hidden="true"><path d="M6.6 10.8a15.1 15.1 0 0 0 6.6 6.6l2.2-2.2a1 1 0 0 1 1-.25 11.4 11.4 0 0 0 3.6.57 1 1 0 0 1 1 1V20a1 1 0 0 1-1 1A17 17 0 0 1 3 4a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1c0 1.25.2 2.45.57 3.6a1 1 0 0 1-.25 1z"/></svg>{ticket.fields["Téléphone"]}
+            </a>
+          )}
         </div>
-        <div style={{display:"flex",flexDirection:"column",gap:"6px",marginBottom:"14px"}}>
+        {ouvert && <div style={{display:"flex",gap:"6px",flexWrap:"wrap",marginBottom:"10px"}}>
+          <span style={{fontSize:"13px",background:C.card2,border:"1px solid "+C.border,borderRadius:"6px",padding:"4px 9px",color:C.text,fontWeight:"700"}}>{ticket.fields?.Produit}</span>
+          <span style={{fontSize:"13px",background:C.card2,border:"1px solid "+C.border,borderRadius:"6px",padding:"4px 9px",color:C.text}}>{ticket.fields?.["Problème"]}</span>
+        </div>}
+        <div style={{display:"flex",flexDirection:"column",gap:"6px",marginBottom:"10px"}}>
           <div style={{display:"flex",gap:"8px",alignItems:"center"}}>
-            <span style={{fontSize:"14px"}}>📅</span>
-            <span style={{fontSize:"12px",color:C.text,fontWeight:"600"}}>{ticket.fields?.["Créneau"]}</span>
+            <span style={{fontSize:"15px"}}>📅</span>
+            <span style={{fontSize:"14px",color:C.text,fontWeight:"700"}}>{ticket.fields?.["Créneau"]}</span>
           </div>
-          {ticket.fields?.Adresse && (
-            <div style={{display:"flex",gap:"8px",alignItems:"center"}}>
-              <span style={{fontSize:"14px"}}>📍</span>
-              <span style={{fontSize:"12px",color:C.muted}}>{ticket.fields?.Adresse}</span>
+          {ouvert && ticket.fields?.Adresse && (
+            <div style={{display:"flex",gap:"8px",alignItems:"center",flexWrap:"wrap"}}>
+              <span style={{fontSize:"15px"}}>📍</span>
+              <span style={{fontSize:"13px",color:C.text,flex:1,minWidth:"140px"}}>{ticket.fields?.Adresse}</span>
+              <a href={"https://www.google.com/maps/dir/?api=1&destination=" + encodeURIComponent(ticket.fields.Adresse)} target="_blank" rel="noopener"
+                style={{padding:"8px 14px",borderRadius:"20px",background:"var(--iko-bg-sombre)",color:"#FF9A3C",fontSize:"13px",fontWeight:"900",textDecoration:"none"}}>Itinéraire</a>
             </div>
           )}
-          {ticket.fields?.["Téléphone"] && (
-            <a href={"tel:"+ticket.fields["Téléphone"]} style={{display:"flex",gap:"8px",alignItems:"center",textDecoration:"none"}}>
-              <span style={{fontSize:"14px"}}>📞</span>
-              <span style={{fontSize:"12px",color:C.or,fontWeight:"700"}}>{ticket.fields?.["Téléphone"]}</span>
-            </a>
-          )}
-          {ticket.fields?.Photos && (
-            <a href={ticket.fields.Photos.split(',')[0].trim()} target="_blank" style={{display:"flex",gap:"8px",alignItems:"center",textDecoration:"none"}}>
-              <span style={{fontSize:"14px"}}>📎</span>
-              <span style={{fontSize:"12px",color:C.or,fontWeight:"700"}}>Voir la/les photo(s)</span>
-            </a>
-          )}
+          {ouvert && ticket.fields?.Photos && (() => { const urls = String(ticket.fields.Photos || "").split(",").map(u => u.trim()).filter(Boolean); return urls.length ? (<div style={{display:"flex",gap:"6px",flexWrap:"wrap",marginTop:"6px"}}>{urls.map((u, i) => /\.pdf($|\?)/i.test(u) ? <a key={i} href={u} target="_blank" rel="noopener" style={{width:"56px",height:"56px",borderRadius:"8px",border:"1px solid #ddd",background:"#f4f4f4",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"11px",fontWeight:"700",color:"#444",textDecoration:"none"}}>PDF</a> : <a key={i} href={u} target="_blank" rel="noopener"><img src={u} alt={"Photo " + (i + 1)} loading="lazy" style={{width:"56px",height:"56px",objectFit:"cover",borderRadius:"8px",border:"1px solid #ddd",display:"block"}}/></a>)}</div>) : null; })()}
         </div>
-        {commentaire && (
+        {ouvert && entreesClient.length > 0 && (
+          <div style={{background:"rgba(var(--iko-primary-rgb),0.10)",border:"1px solid rgba(var(--iko-primary-rgb),0.35)",borderRadius:"8px",padding:"8px 12px",marginBottom:"12px",fontSize:"12px",color:C.text}}>
+            <div style={{fontSize:"10px",fontWeight:"800",color:"var(--iko-primary)",letterSpacing:"0.5px",marginBottom:"4px"}}>MESSAGE DU CLIENT</div>
+            {entreesClient.map((e, i) => <div key={i} style={{whiteSpace:"pre-line",marginTop:i ? "6px" : 0}}>{e}</div>)}
+          </div>
+        )}
+        {ouvert && commentaire && (
           <div style={{background:C.card2,border:"1px solid "+C.border,borderRadius:"8px",padding:"8px 12px",marginBottom:"12px",fontSize:"11px",color:C.muted,fontStyle:"italic"}}>
-            💬 {commentaire}
+            {commentaire}
           </div>
         )}
-        {diagnostic && (
+        {ouvert && diagnostic && (
           <div style={{background:"rgba(var(--iko-dark-rgb),0.04)",border:"1px solid rgba(var(--iko-dark-rgb),0.15)",borderRadius:"8px",padding:"8px 12px",marginBottom:"12px",fontSize:"11px",color:"var(--iko-bg-sombre)"}}>
-            📋 {diagnostic}
+            {diagnostic}
           </div>
         )}
-        {ticket.fields?.["Montant devis"] && (isDevisEnvoye || isDevisRefuse) && (
-          <div style={{fontSize:"12px",color:C.text,marginBottom:"12px"}}>💶 Devis envoyé : <strong>{ticket.fields["Montant devis"]} € TTC</strong></div>
+        {ouvert && ticket.fields?.["Montant devis"] && (isDevisEnvoye || isDevisRefuse) && (
+          <div style={{fontSize:"12px",color:C.text,marginBottom:"12px"}}>Devis envoyé : <strong>{ticket.fields["Montant devis"]} € TTC</strong></div>
         )}
-        {!isTermine && !isAnnule && !isEnAttenteDevis && onEnRoute && (() => {
+        {(ouvert || choixEta || ticket.fields?.["En route depuis"]) && !isTermine && !isAnnule && !isEnAttenteDevis && onEnRoute && (() => {
           const depuis = ticket.fields?.["En route depuis"] ? new Date(ticket.fields["En route depuis"]) : null;
           const enRoute = depuis && (Date.now() - depuis.getTime()) < 4 * 3600000;
           if (enRoute) {
             const arr = ticket.fields?.["Arrivée estimée"] ? new Date(ticket.fields["Arrivée estimée"]).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Paris" }) : "";
-            return <div style={{marginBottom:"10px",padding:"10px 12px",borderRadius:"12px",background:"rgba(255,107,0,0.12)",border:"1px solid rgba(255,107,0,0.4)",fontSize:"12px",fontWeight:"800",color:C.or}}>🚗 Client prévenu — arrivée vers {arr}</div>;
+            const nf = ticket.fields?._notif;
+            const msg = nf === 'echec' ? "Heure enregistrée (arrivée vers " + arr + "), mais l'envoi au client a échoué — appelez-le"
+              : nf === 'sans_contact' ? "Heure enregistrée (arrivée vers " + arr + ") — aucun e-mail ni téléphone sur ce ticket : le client n'est pas prévenu"
+              : "Client prévenu — arrivée vers " + arr;
+            return <div style={{marginBottom:"10px",padding:"10px 12px",borderRadius:"12px",background:"rgba(255,107,0,0.12)",border:"1px solid rgba(255,107,0,0.4)",fontSize:"12px",fontWeight:"800",color:C.or}}>{msg}</div>;
           }
           if (!choixEta) return (
             <button onClick={() => setChoixEta(true)}
               style={{width:"100%",marginBottom:"10px",padding:"12px",background:"rgba(255,107,0,0.10)",border:"1px solid rgba(255,107,0,0.45)",color:C.or,borderRadius:"12px",fontSize:"13px",fontWeight:"900",cursor:"pointer"}}>
-              🚗 Je pars — prévenir le client
+              Je pars — prévenir le client
             </button>);
           return (
             <div style={{marginBottom:"10px",padding:"10px 12px",borderRadius:"12px",background:"rgba(255,107,0,0.08)",border:"1px solid rgba(255,107,0,0.35)"}}>
@@ -3162,24 +3178,27 @@ function TicketCard({ ticket, onAction, onAcquitterRdv, onEtablirDevis, onEnRout
               <button onClick={() => setChoixEta(false)} style={{marginTop:"8px",background:"none",border:"none",color:C.muted,fontSize:"11px",textDecoration:"underline",cursor:"pointer"}}>Annuler</button>
             </div>);
         })()}
-        {!isTermine && !isAnnule && !isEnAttenteDevis && (
-          <button onClick={() => onAction(ticket)}
-            style={{width:"100%",padding:"16px",background:C.or,color:"var(--iko-dark)",border:"none",borderRadius:"12px",fontSize:"15px",fontWeight:"900",cursor:"pointer"}}>
-            Gérer cette intervention →
-          </button>
+        {ouvert && isDevisEnvoye && (
+          <button className="glass-btn actif" onClick={() => onAction(ticket)} style={{width:"100%",marginBottom:"8px",padding:"12px",fontSize:"13px"}}>Débloquer et intervenir plus tôt</button>
         )}
-        {isDevisEnvoye && (
-          <button onClick={() => onAction(ticket)}
-            style={{width:"100%",padding:"11px",background:"var(--iko-bg-sombre)",color:"#fff",border:"none",borderRadius:"10px",fontSize:"12px",fontWeight:"900",cursor:"pointer"}}>
-            🔓 Débloquer et intervenir plus tôt
+        <div style={{display:"flex",gap:"8px",alignItems:"stretch"}}>
+          <button className="glass-btn" aria-expanded={ouvert} onClick={() => setOuvert(o => !o)}
+            style={{flex:(isTermine||isAnnule||isDevisRefuse||isDevisEnvoye)?1:"0 0 auto",padding:"12px 14px",fontSize:"13px"}}>
+            {ouvert ? "Réduire ▴" : "Détails ▾"}
           </button>
-        )}
-        {isDevisAFaire && onEtablirDevis && (
-          <button onClick={() => onEtablirDevis(ticket)}
-            style={{width:"100%",padding:"14px",background:"linear-gradient(180deg, rgba(255,150,60,0.97), rgba(255,107,0,0.9))",border:"1px solid rgba(255,255,255,0.5)",color:"#fff",borderRadius:"12px",fontWeight:"800",fontSize:"14px",cursor:"pointer",boxShadow:"0 6px 18px rgba(255,107,0,0.35)"}}>
-            📋 Établir le devis
-          </button>
-        )}
+          {!isTermine && !isAnnule && !isEnAttenteDevis && (
+            <button onClick={() => onAction(ticket)}
+              style={{flex:1,padding:"14px 10px",background:C.or,color:"var(--iko-dark)",border:"none",borderRadius:"12px",fontSize:"16px",fontWeight:"900",cursor:"pointer"}}>
+              Gérer l'intervention →
+            </button>
+          )}
+          {isDevisAFaire && onEtablirDevis && (
+            <button onClick={() => onEtablirDevis(ticket)}
+              style={{flex:1,padding:"14px 10px",background:"linear-gradient(180deg, rgba(255,150,60,0.97), rgba(255,107,0,0.9))",border:"1px solid rgba(255,255,255,0.5)",color:"#fff",borderRadius:"12px",fontWeight:"900",fontSize:"16px",cursor:"pointer",boxShadow:"0 6px 18px rgba(255,107,0,0.35)"}}>
+              Établir le devis
+            </button>
+          )}
+        </div>
         {isDevisRefuse && (
           <div style={{textAlign:"center",fontSize:"11px",color:C.muted,fontStyle:"italic",padding:"8px 0"}}>Le client a refusé ce devis</div>
         )}
@@ -3215,6 +3234,384 @@ function urlBase64ToUint8Array(base64String) {
   return arr;
 }
 
+// ==================== Interface commune (identique au tableau de bord) : retour, bandeau sombre, compteurs, jauges ====================
+const PALETTE_GRAPH = ["#FF6B00", "#FFC48A", "#FF9A3C", "#C24A00", "#7A2E00", "#E9D5C3"];
+function BarreRetour({ onBack }) {
+  React.useEffect(() => {
+    if (!onBack) return;
+    const h = (e) => { if (e.key === "Escape") onBack(); };
+    window.addEventListener("keydown", h);
+    return () => window.removeEventListener("keydown", h);
+  }, [onBack]);
+  if (!onBack) return null;
+  return (
+    <button className="glass-btn" onClick={onBack} style={{padding:"6px 12px",fontSize:"12px",marginBottom:"12px"}}>← Retour</button>
+  );
+}
+
+
+function useCompteur(valeur, duree = 900) {
+  const [v, setV] = React.useState(0);
+  React.useEffect(() => {
+    if (valeur === null || valeur === undefined || isNaN(valeur)) return;
+    let raf, t0;
+    const pas = (t) => { if (!t0) t0 = t; const p = Math.min(1, (t - t0) / duree); setV(valeur * (1 - Math.pow(1 - p, 3))); if (p < 1) raf = requestAnimationFrame(pas); };
+    raf = requestAnimationFrame(pas);
+    return () => cancelAnimationFrame(raf);
+  }, [valeur]);
+  return v;
+}
+function CompteurAnime({ valeur, suffixe = "", decimales = 0, duree = 900 }) {
+  const v = useCompteur(valeur, duree);
+  if (valeur === null || valeur === undefined || isNaN(valeur)) return <span>—</span>;
+  return <span>{v.toFixed(decimales)}{suffixe}</span>;
+}
+function JaugeDemi({ pourcent, valeur, suffixe, decimales, libelle, sous, couleur = "#FF6B00", alerte }) {
+  const [pret, setPret] = React.useState(false);
+  React.useEffect(() => { const t = setTimeout(() => setPret(true), 120); return () => clearTimeout(t); }, []);
+  const LONG = Math.PI * 55;
+  const p = pourcent === null || pourcent === undefined ? 0 : Math.max(0, Math.min(100, pourcent));
+  const id = "jg" + libelle.replace(/[^a-z]/gi, "");
+  const vAff = useCompteur(valeur);
+  return (
+    <div style={{flex:"1 1 130px",minWidth:"120px",textAlign:"center",position:"relative"}}>
+      <svg viewBox="0 0 130 82" style={{width:"100%",maxWidth:"170px",overflow:"visible"}}>
+        <defs><linearGradient id={id} x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stopColor={alerte ? "#ff5a4d" : "#FFC48A"}/><stop offset="100%" stopColor={alerte ? "#e53935" : couleur}/></linearGradient></defs>
+        <path d="M 10 70 A 55 55 0 0 1 120 70" fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth="9" strokeLinecap="round"/>
+        <path d="M 10 70 A 55 55 0 0 1 120 70" fill="none" stroke={"url(#" + id + ")"} strokeWidth="9" strokeLinecap="round"
+          strokeDasharray={LONG} strokeDashoffset={pret ? LONG * (1 - p / 100) : LONG} style={{transition:"stroke-dashoffset 1.3s cubic-bezier(.2,.8,.2,1)",filter:"drop-shadow(0 0 6px " + (alerte ? "rgba(229,57,53,0.8)" : "rgba(255,107,0,0.8)") + ")"}}/>
+        <text x="65" y="62" textAnchor="middle" style={{fontSize:"22px",fontWeight:900,fill:"#fff",fontFamily:"monospace"}}>{valeur === null || valeur === undefined || isNaN(valeur) ? "—" : vAff.toFixed(decimales || 0) + suffixe}</text>
+      </svg>
+      <div style={{fontSize:"11.5px",fontWeight:"800",color:"#fff",marginTop:"-6px"}}>{libelle}</div>
+      {sous && <div style={{fontSize:"10px",color:"rgba(255,255,255,0.6)",marginTop:"1px"}}>{sous}</div>}
+    </div>
+  );
+}
+
+
+// ---- Interface pro commune à toutes les fenêtres : bandeau sombre (compteurs animés + anneau + barres), même style que Analytics SAV ----
+function DonutPro({ titre, segments }) {
+  const [pret, setPret] = React.useState(false);
+  React.useEffect(() => { const t = setTimeout(() => setPret(true), 150); return () => clearTimeout(t); }, []);
+  const total = segments.reduce((a, x) => a + (x.valeur || 0), 0);
+  const R = 42, CIRC = 2 * Math.PI * R;
+  let cumul = 0;
+  return (
+    <div style={{display:"flex",alignItems:"center",gap:"14px",flex:"1 1 250px"}}>
+      <svg viewBox="0 0 100 100" style={{width:"112px",height:"112px",flexShrink:0,transform:"rotate(-90deg)"}} aria-label={titre}>
+        <circle cx="50" cy="50" r={R} fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth="13"/>
+        {segments.map((sg, i) => {
+          const part = total ? (sg.valeur || 0) / total : 0;
+          const el = <circle key={sg.label} cx="50" cy="50" r={R} fill="none" stroke={sg.couleur || PALETTE_GRAPH[i % PALETTE_GRAPH.length]} strokeWidth="13"
+            strokeDasharray={pret ? (part * CIRC).toFixed(2) + " " + CIRC.toFixed(2) : "0 " + CIRC.toFixed(2)} strokeDashoffset={(-cumul * CIRC).toFixed(2)} style={{transition:"stroke-dasharray 1.2s cubic-bezier(.2,.8,.2,1) " + (i * 120) + "ms"}}/>;
+          cumul += part; return el;
+        })}
+      </svg>
+      <div style={{fontSize:"11.5px",minWidth:0}}>
+        <div style={{fontSize:"10.5px",fontWeight:800,letterSpacing:"1px",color:"#FF9A3C",textTransform:"uppercase",marginBottom:"6px"}}>{titre}</div>
+        {segments.map((sg, i) => <div key={sg.label} style={{display:"flex",alignItems:"center",gap:"7px",marginBottom:"3px"}}><span style={{width:"9px",height:"9px",borderRadius:"3px",background:sg.couleur || PALETTE_GRAPH[i % PALETTE_GRAPH.length]}}/><span>{sg.label}</span><b style={{marginLeft:"auto",paddingLeft:"10px"}}>{sg.texte !== undefined ? sg.texte : sg.valeur}</b></div>)}
+      </div>
+    </div>
+  );
+}
+function BarresPro({ titre, lignes }) {
+  const [pret, setPret] = React.useState(false);
+  React.useEffect(() => { const t = setTimeout(() => setPret(true), 150); return () => clearTimeout(t); }, []);
+  const max = Math.max(1, ...lignes.map(l => l[1]));
+  return (
+    <div style={{flex:"1 1 230px",minWidth:"200px"}}>
+      <div style={{fontSize:"10.5px",fontWeight:800,letterSpacing:"1px",color:"#FF9A3C",textTransform:"uppercase",marginBottom:"8px"}}>{titre}</div>
+      {lignes.map(([nom, n, texte], i) => (
+        <div key={nom} style={{marginBottom:"7px"}}>
+          <div style={{display:"flex",justifyContent:"space-between",fontSize:"11.5px",marginBottom:"3px"}}><span>{nom}</span><b>{texte !== undefined ? texte : n}</b></div>
+          <div style={{height:"8px",borderRadius:"5px",background:"rgba(255,255,255,0.1)",overflow:"hidden"}}>
+            <div style={{height:"100%",borderRadius:"5px",width:pret ? (n / max * 100) + "%" : "0%",background:"linear-gradient(90deg,#FF6B00,#FFC48A)",transition:"width 1.1s cubic-bezier(.2,.8,.2,1) " + (i * 90) + "ms",boxShadow:"0 0 8px rgba(255,107,0,0.6)"}}/>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+// kpis : [{ label, valeur (nombre ou texte), suffixe, decimales, alerte, accent }] ; donut : { titre, segments } ; barres : { titre, lignes } ; jauge : { libelle, pourcent, valeur, suffixe, sous, alerte }
+function EntetePro({ titre, sous, onBack, onClose, kpis = [], donut, barres, jauge, children }) {
+  return (
+    <div>
+      {onBack && <BarreRetour onBack={onBack}/>}
+      <style>{`
+        @keyframes miseAuPoint{0%,100%{transform:scale(1);filter:blur(0)}50%{transform:scale(1.07);filter:blur(1.6px)}}
+        @keyframes balayageCockpit{0%{left:-220px}100%{left:calc(100% + 60px)}}
+        .epro{position:relative;overflow:hidden;border-radius:18px;padding:14px;margin-bottom:14px;color:#fff;border:1px solid rgba(255,107,0,0.4);background:radial-gradient(ellipse at 50% -10%,rgba(255,107,0,0.3),transparent 62%),linear-gradient(180deg,#1a130d,#0b0b0b);box-shadow:0 12px 34px rgba(0,0,0,0.4)}
+        .epro::before{content:"";position:absolute;inset:-6%;pointer-events:none;background-image:linear-gradient(rgba(255,255,255,0.05) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,0.05) 1px,transparent 1px);background-size:30px 30px;-webkit-mask-image:radial-gradient(ellipse at 50% 40%,#000 25%,transparent 78%);mask-image:radial-gradient(ellipse at 50% 40%,#000 25%,transparent 78%);animation:miseAuPoint 11s ease-in-out infinite}
+        .epro .balayage{position:absolute;top:0;bottom:0;width:170px;left:-220px;pointer-events:none;z-index:1;background:linear-gradient(90deg,transparent,rgba(255,154,60,0.10),transparent);-webkit-backdrop-filter:blur(2.6px) brightness(1.12);backdrop-filter:blur(2.6px) brightness(1.12);-webkit-mask-image:linear-gradient(90deg,transparent,#000 35%,#000 65%,transparent);mask-image:linear-gradient(90deg,transparent,#000 35%,#000 65%,transparent);animation:balayageCockpit 19s cubic-bezier(.45,.05,.55,.95) infinite}
+        .epro > *:not(.balayage){position:relative;z-index:2}
+        .epro .kp{flex:1 1 110px;min-width:100px;padding:8px 12px;border-radius:12px;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.14)}
+        .epro .kp.alerte{background:rgba(229,57,53,0.18);border-color:#e53935}.epro .kp.alerte b{color:#ff8a80}
+        .epro .kp.accent b{color:#FFC48A}
+      `}</style>
+      <div className="epro">
+        <div className="balayage"/>
+        <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:"10px",marginBottom:"10px"}}>
+          <div>
+            <div style={{fontSize:"11px",fontWeight:800,letterSpacing:"3px",color:"#FF9A3C",textTransform:"uppercase"}}>{titre}</div>
+            {sous && <div style={{fontSize:"11px",opacity:0.65,marginTop:"2px"}}>{sous}</div>}
+          </div>
+          {onClose && <button onClick={onClose} aria-label="Fermer" style={{width:"32px",height:"32px",borderRadius:"50%",cursor:"pointer",border:"1px solid rgba(255,255,255,0.35)",background:"rgba(255,255,255,0.1)",color:"#fff",fontSize:"14px",flexShrink:0}}>✕</button>}
+        </div>
+        <div style={{display:"flex",gap:"8px",flexWrap:"wrap",marginBottom:(donut || barres || jauge || children) ? "12px" : 0}}>
+          {kpis.map(k => (
+            <div key={k.label} className={"kp" + (k.alerte ? " alerte" : "") + (k.accent ? " accent" : "")}>
+              <b style={{display:"block",fontFamily:"monospace",fontSize:"23px",fontWeight:900,lineHeight:1.1}}>{typeof k.valeur === "number" ? <CompteurAnime valeur={k.valeur} suffixe={k.suffixe || ""} decimales={k.decimales || 0}/> : (k.valeur === null || k.valeur === undefined ? "—" : k.valeur)}</b>
+              <span style={{fontSize:"11px",fontWeight:700,opacity:0.8}}>{k.label}</span>
+            </div>
+          ))}
+        </div>
+        {(donut || barres || jauge) && (
+          <div style={{display:"flex",gap:"18px",flexWrap:"wrap",alignItems:"center"}}>
+            {jauge && <div style={{flex:"1 1 150px",minWidth:"140px"}}><JaugeDemi {...jauge}/></div>}
+            {donut && <DonutPro {...donut}/>}
+            {barres && <BarresPro {...barres}/>}
+          </div>
+        )}
+        {children}
+      </div>
+    </div>
+  );
+}
+
+
+// ==================== Visites d'entretien (contrats) — gérées à part des tickets SAV, sur le même planning ====================
+const ENT_TABLE = '/api/airtable/Contrats%20entretien';
+const entIso = (d)=>new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,10);
+const entVisites = (c) => { try { const v = JSON.parse((c.fields || {})['Visites (JSON)'] || '[]'); return Array.isArray(v) ? v : []; } catch (e) { return []; } };
+async function chargerVisitesEntretien() {
+  try {
+    const r = await fetch(ENT_TABLE + '?maxRecords=200');
+    if (!r.ok) return { ok: false, contrats: [], visites: [] };
+    const contrats = ((await r.json()).records || []).filter(c => (c.fields['Statut contrat'] || 'Actif') === 'Actif');
+    const limite = entIso(new Date(Date.now() - 30 * 86400000));
+    const visites = [];
+    contrats.forEach(c => entVisites(c).forEach(v => { if (v.statut === 'Planifiée' && v.date >= limite) visites.push({ ...v, contrat: c }); }));
+    visites.sort((a, b) => a.date.localeCompare(b.date));
+    return { ok: true, contrats, visites };
+  } catch (e) { return { ok: false, contrats: [], visites: [] }; }
+}
+function ModalEntretienTech({ onClose, onChange }) {
+  const [etat, setEtat] = React.useState(null);
+  const [ouvertId, setOuvertId] = React.useState(null);
+  const [obs, setObs] = React.useState("");
+  const [enCours, setEnCours] = React.useState(false);
+  const [msg, setMsg] = React.useState("");
+  const recharger = async () => { const e = await chargerVisitesEntretien(); setEtat(e); if (onChange) onChange(e); };
+  React.useEffect(() => { recharger(); }, []);
+  const auj = entIso(new Date());
+  const dans7 = entIso(new Date(Date.now() + 7 * 86400000));
+  const groupes = [["En retard", v => v.date < auj], ["Aujourd'hui", v => v.date === auj], ["Cette semaine", v => v.date > auj && v.date <= dans7], ["Plus tard", v => v.date > dans7]];
+  const terminer = async (v) => {
+    setEnCours(true); setMsg("");
+    try {
+      const c = v.contrat, f = c.fields;
+      const vs = entVisites(c).map(x => x.id === v.id ? { ...x, statut: 'Réalisée', faite: auj } : x);
+      let carnet = []; try { carnet = JSON.parse(f['Carnet (JSON)'] || '[]'); } catch (e) {}
+      carnet.push({ date: auj, observations: obs.trim(), visite: v.date });
+      const suivantes = vs.filter(x => x.statut === 'Planifiée' && x.date >= auj).map(x => x.date).sort();
+      const per = Number(f['Périodicité (mois)']) || 12;
+      const d = new Date(auj + 'T12:00:00'); d.setMonth(d.getMonth() + per);
+      const r = await fetch(ENT_TABLE + '/' + c.id, { method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fields: { 'Visites (JSON)': JSON.stringify(vs), 'Carnet (JSON)': JSON.stringify(carnet), 'Dernière visite': auj, 'Prochaine visite': suivantes[0] || entIso(d) } }) });
+      if (!r.ok) throw new Error('Enregistrement impossible (' + r.status + ')');
+      setOuvertId(null); setObs("");
+      await recharger();
+    } catch (e) { setMsg(e.message || "Enregistrement impossible"); }
+    setEnCours(false);
+  };
+  return (
+    <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="modal-box" style={{maxHeight:"88vh",overflow:"auto"}}>
+        <EntetePro titre="Visites d'entretien" sous="Contrats d'entretien : séparés du SAV, sur le même planning (aucun doublon)." onBack={onClose} onClose={onClose}
+          kpis={etat && etat.ok ? [{ label: "En retard", valeur: etat.visites.filter(v => v.date < auj).length, alerte: etat.visites.some(v => v.date < auj) }, { label: "Aujourd'hui", valeur: etat.visites.filter(v => v.date === auj).length, accent: true },
+            { label: "Cette semaine", valeur: etat.visites.filter(v => v.date > auj && v.date <= dans7).length }, { label: "À venir", valeur: etat.visites.length }] : []}/>
+        {etat === null && <div style={{fontSize:"12px",color:C.muted}}>Chargement…</div>}
+        {etat && !etat.ok && <div style={{fontSize:"12px",color:C.rouge,fontWeight:"700"}}>Chargement impossible.</div>}
+        {etat && etat.ok && etat.visites.length === 0 && <div style={{fontSize:"12px",color:C.muted}}>Aucune visite d'entretien planifiée pour le moment.</div>}
+        {msg && <div style={{fontSize:"12px",color:C.rouge,fontWeight:"700",marginBottom:"8px"}}>{msg}</div>}
+        {etat && etat.ok && groupes.map(([titre, test]) => {
+          const liste = etat.visites.filter(test); if (!liste.length) return null;
+          return (
+            <div key={titre} style={{marginBottom:"12px"}}>
+              <div style={{fontSize:"10.5px",fontWeight:"800",color:titre === "En retard" ? C.rouge : C.muted,textTransform:"uppercase",letterSpacing:"0.6px",margin:"0 0 6px"}}>{titre} · {liste.length}</div>
+              {liste.map(v => {
+                const f = v.contrat.fields;
+                const jour = new Date(v.date + 'T12:00:00').toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+                return (
+                  <div key={v.id} style={{background:C.card,border:"1px solid "+(v.date < auj ? "var(--iko-erreur)" : C.border),borderRadius:"12px",padding:"10px 12px",marginBottom:"8px"}}>
+                    <div style={{display:"flex",justifyContent:"space-between",gap:"8px",alignItems:"baseline"}}>
+                      <span style={{fontSize:"13px",fontWeight:"900",color:C.white,textTransform:"capitalize"}}>{jour}</span>
+                      <span style={{fontSize:"11px",fontWeight:"700",color:C.or}}>{String(v.creneau || "").replace(/ \(.*$/, "")}</span>
+                    </div>
+                    <div style={{fontSize:"13px",fontWeight:"800",color:C.white,marginTop:"3px"}}>{f.Client}</div>
+                    {f.Adresse && <div style={{fontSize:"11.5px",color:C.muted}}>{f.Adresse}{f.Agence ? " · " + f.Agence : ""}</div>}
+                    {f['Téléphone'] && <a href={"tel:" + f['Téléphone']} style={{fontSize:"12px",fontWeight:"700",color:C.or,textDecoration:"none"}}>{f['Téléphone']}</a>}
+                    {f['Équipements'] && <div style={{fontSize:"11.5px",color:C.text,marginTop:"4px"}}>Équipements : {f['Équipements']}</div>}
+                    {ouvertId === v.id ? (
+                      <div style={{marginTop:"8px"}}>
+                        <textarea value={obs} onChange={e => setObs(e.target.value)} rows={3} placeholder="Observations de la visite (facultatif) : état des joints, réglages faits, pièces à prévoir…"
+                          style={{width:"100%",boxSizing:"border-box",padding:"8px",borderRadius:"8px",border:"1px solid "+C.border,fontSize:"12px",fontFamily:"inherit"}}/>
+                        <div style={{display:"flex",gap:"8px",marginTop:"6px"}}>
+                          <button className="glass-btn" onClick={() => { setOuvertId(null); setObs(""); }} style={{flex:1,padding:"9px",fontSize:"12px"}}>Annuler</button>
+                          <button className="glass-btn actif" disabled={enCours} onClick={() => terminer(v)} style={{flex:2,padding:"9px",fontSize:"12px",opacity:enCours ? 0.55 : 1}}>{enCours ? "Enregistrement…" : "Confirmer la visite effectuée"}</button>
+                        </div>
+                      </div>
+                    ) : (
+                      <button className="glass-btn" onClick={() => { setOuvertId(v.id); setObs(""); setMsg(""); }} style={{width:"100%",marginTop:"8px",padding:"9px",fontSize:"12px"}}>Visite effectuée</button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function MaxFlottant({ nom = "MAX", cle = "max", ouvert, setOuvert, ecoute, lancerEcoute, arreterEcoute, dernier, erreur, enCours, texte, setTexte, envoyer, historique, debloquer, conv, convEtat, convVu, basculerConv, interrompre }) {
+  const LS = (k, d) => { try { const v = JSON.parse(localStorage.getItem(k)); return v === null || v === undefined ? d : v; } catch (e) { return d; } };
+  const ecrire = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} };
+  const T_SPHERE = 66, L_FEN = 290, H_FEN = 330;
+  const borne = (x, y, l, h) => ({ x: Math.max(4, Math.min(window.innerWidth - l - 4, x)), y: Math.max(4, Math.min(window.innerHeight - h - 4, y)) });
+  const [sph, setSph] = React.useState(() => borne(...Object.values(LS((cle + '_sph_pos'), { x: window.innerWidth - T_SPHERE - 18, y: window.innerHeight - T_SPHERE - 18 })), T_SPHERE, T_SPHERE));
+  const [fen, setFen] = React.useState(() => LS((cle + '_fen_pos'), null));
+  const [lie, setLie] = React.useState(() => LS((cle + '_lie'), true));
+  const posSph = React.useRef(sph); posSph.current = sph;
+  const posFen = React.useRef(fen); posFen.current = fen;
+  const liee = React.useRef(lie); liee.current = lie;
+  const drag = React.useRef(null);
+  const zoneMsg = React.useRef(null);
+  // À l'ouverture, la fenêtre se place près de la sphère si elle n'a encore jamais été positionnée.
+  React.useEffect(() => {
+    if (ouvert && !posFen.current) {
+      const p = borne(sph.x + T_SPHERE - L_FEN, sph.y - H_FEN - 10 < 4 ? sph.y + T_SPHERE + 10 : sph.y - H_FEN - 10, L_FEN, H_FEN);
+      setFen(p); ecrire((cle + '_fen_pos'), p);
+    }
+  }, [ouvert]);
+  React.useEffect(() => { if (zoneMsg.current) zoneMsg.current.scrollTop = zoneMsg.current.scrollHeight; }, [historique, dernier, ouvert, enCours]);
+  React.useEffect(() => {
+    const r = () => { setSph(p => borne(p.x, p.y, T_SPHERE, T_SPHERE)); setFen(p => p ? borne(p.x, p.y, L_FEN, H_FEN) : p); };
+    window.addEventListener('resize', r); return () => window.removeEventListener('resize', r);
+  }, []);
+
+  // Déplacement générique : cible = 'sph' | 'fen' ; si lié, l'autre élément suit du même écart.
+  const debutDrag = (cible, e, surClic) => {
+    e.currentTarget.setPointerCapture && e.currentTarget.setPointerCapture(e.pointerId);
+    drag.current = { cible, x0: e.clientX, y0: e.clientY, s0: { ...posSph.current }, f0: posFen.current ? { ...posFen.current } : null, bouge: false, voix: false, timer: null, surClic };
+    if (cible === 'sph') {
+      drag.current.timer = setTimeout(() => { const d = drag.current; if (d && !d.bouge && !conv) { d.voix = true; debloquer(); setOuvert(true); lancerEcoute(); } }, 300);
+    }
+  };
+  const bougeDrag = (e) => {
+    const d = drag.current; if (!d) return;
+    const dx = e.clientX - d.x0, dy = e.clientY - d.y0;
+    if (!d.bouge && !d.voix && Math.hypot(dx, dy) > 6) { d.bouge = true; if (d.timer) clearTimeout(d.timer); }
+    if (!d.bouge) return;
+    if (liee.current && d.f0) {
+      // Mouvement commun : le même décalage pour les deux, limité pour qu'aucun des deux ne sorte de l'écran (donc ils gardent leur écart).
+      const hf = (fenRef.current && fenRef.current.offsetHeight) || H_FEN;
+      const cx = Math.max(Math.max(4 - d.s0.x, 4 - d.f0.x), Math.min(dx, Math.min(window.innerWidth - T_SPHERE - 4 - d.s0.x, window.innerWidth - L_FEN - 4 - d.f0.x)));
+      const cy = Math.max(Math.max(4 - d.s0.y, 4 - d.f0.y), Math.min(dy, Math.min(window.innerHeight - T_SPHERE - 4 - d.s0.y, window.innerHeight - hf - 4 - d.f0.y)));
+      setSph({ x: d.s0.x + cx, y: d.s0.y + cy }); setFen({ x: d.f0.x + cx, y: d.f0.y + cy });
+    } else if (d.cible === 'sph') {
+      setSph(borne(d.s0.x + dx, d.s0.y + dy, T_SPHERE, T_SPHERE));
+    } else if (d.f0) {
+      setFen(borne(d.f0.x + dx, d.f0.y + dy, L_FEN, H_FEN));
+    }
+  };
+  const finDrag = () => {
+    const d = drag.current; drag.current = null; if (!d) return;
+    if (d.timer) clearTimeout(d.timer);
+    if (d.voix) { arreterEcoute(); return; }
+    if (d.bouge) { ecrire((cle + '_sph_pos'), posSph.current); if (posFen.current) ecrire((cle + '_fen_pos'), posFen.current); return; }
+    if (d.surClic) d.surClic();
+  };
+  const fenRef = React.useRef(null);
+  const [avertirLien, setAvertirLien] = React.useState(false);
+  // La sphère recouvre-t-elle la fenêtre ? (dans ce cas on ne peut pas les lier)
+  const sphereSurFenetre = (() => {
+    if (!fen) return false;
+    const h = (fenRef.current && fenRef.current.offsetHeight) || 230;
+    return !(sph.x + T_SPHERE <= fen.x || sph.x >= fen.x + L_FEN || sph.y + T_SPHERE <= fen.y || sph.y >= fen.y + h);
+  })();
+  // Si, d'une session précédente, ils étaient « liés » mais se recouvrent : on les délie.
+  React.useEffect(() => { if (lie && sphereSurFenetre) { setLie(false); ecrire((cle + '_lie'), false); } }, [lie, sphereSurFenetre]);
+  const basculerLien = () => {
+    if (!lie && sphereSurFenetre) { setAvertirLien(true); setTimeout(() => setAvertirLien(false), 3000); return; }
+    const v = !lie; setLie(v); ecrire((cle + '_lie'), v); setAvertirLien(false);
+  };
+  const envoi = () => { const t = texte.trim(); if (t) { debloquer(); envoyer(t); setTexte(""); } };
+  const fil = (historique || []).slice(-6);
+  const style = {
+    sphere: { position: "fixed", left: sph.x + "px", top: sph.y + "px", zIndex: 5001, width: T_SPHERE + "px", height: T_SPHERE + "px", borderRadius: "50%", border: "none", cursor: "grab", padding: 0, touchAction: "none", userSelect: "none", display: "flex", alignItems: "center", justifyContent: "center",
+      background: (ecoute || (conv && convEtat === 'ecoute')) ? "radial-gradient(circle at 35% 30%, #FFC48A, #FF6B00 55%, #7A2E00 100%)" : (conv && convEtat === 'reflexion') ? "radial-gradient(circle at 35% 30%, #FF9A3C, #C24A00 55%, #4a1c00 100%)" : (conv && convEtat === 'parle') ? "radial-gradient(circle at 35% 30%, #FFE6CC, #FFC48A 55%, #FF9A3C 100%)" : "radial-gradient(circle at 35% 30%, #FFC48A 0%, #FF8A1F 32%, #FF6B00 55%, #7A2E00 82%, #111 112%)",
+      boxShadow: conv ? "0 0 38px " + (convEtat === 'ecoute' ? "rgba(255,107,0,0.8)" : convEtat === 'reflexion' ? "rgba(194,74,0,0.8)" : "rgba(255,196,138,0.8)") : ecoute ? "0 0 34px rgba(229,57,53,0.7)" : "0 0 26px rgba(255,107,0,0.55), 0 4px 14px rgba(0,0,0,0.3)", animation: conv ? "pulseConvIko 1.3s ease-in-out infinite" : ecoute ? "none" : "respireIko 4.2s ease-in-out infinite" },
+    fenetre: { position: "fixed", left: (fen ? fen.x : 0) + "px", top: (fen ? fen.y : 0) + "px", width: L_FEN + "px", maxWidth: "calc(100vw - 8px)", zIndex: 5000, borderRadius: "18px", padding: "0 0 10px", overflow: "hidden",
+      background: "rgba(255,255,255,0.34)", WebkitBackdropFilter: "blur(20px) saturate(170%)", backdropFilter: "blur(20px) saturate(170%)", border: "1px solid rgba(255,255,255,0.65)", boxShadow: "0 14px 44px rgba(60,20,0,0.35), inset 0 1px 0 rgba(255,255,255,0.7)" },
+  };
+  return (
+    <>
+      {ouvert && fen && (
+        <div ref={fenRef} style={style.fenetre}>
+          <div onPointerDown={e => { if (e.target.closest('button')) return; debutDrag('fen', e); }} onPointerMove={bougeDrag} onPointerUp={finDrag} onPointerCancel={finDrag}
+            style={{display:"flex",alignItems:"center",gap:"8px",padding:"9px 10px 7px 14px",cursor:"grab",touchAction:"none",userSelect:"none",background:"rgba(255,255,255,0.35)"}}>
+            <span style={{width:"9px",height:"9px",borderRadius:"50%",background:ecoute?"#FFC48A":"#FF6B00",boxShadow:"0 0 8px "+(ecoute?"#FFC48A":"#FF6B00")}}/>
+            <span data-iko-nom style={{fontSize:"12px",fontWeight:"900",color:"#8a3300",letterSpacing:"1.5px",flex:1}}>{nom}</span>
+            <button onClick={basculerLien} title={lie ? "Fenêtre liée à la sphère : elles bougent ensemble. Touchez pour les séparer." : (sphereSurFenetre ? "Impossible de lier : la sphère est sur la fenêtre. Écartez-la d'abord." : "Fenêtre libre. Touchez pour la lier à la sphère.")}
+              style={{fontSize:"10.5px",fontWeight:"800",padding:"4px 9px",borderRadius:"12px",cursor:(!lie && sphereSurFenetre) ? "not-allowed" : "pointer",opacity:(!lie && sphereSurFenetre) ? 0.5 : 1,color:lie?"#fff":"#8a3300",background:lie?"rgba(255,107,0,0.9)":"rgba(255,255,255,0.7)",border:"1px solid rgba(255,107,0,0.5)"}}>{lie ? "Lié" : "Libre"}</button>
+            <button onClick={() => setOuvert(false)} aria-label="Fermer" style={{width:"24px",height:"24px",borderRadius:"50%",cursor:"pointer",border:"none",background:"rgba(255,255,255,0.7)",color:"#8a3300",fontSize:"13px",fontWeight:"900",lineHeight:1}}>✕</button>
+          </div>
+          {avertirLien && <div style={{padding:"6px 14px",fontSize:"11.5px",fontWeight:"800",color:"#b3261e",background:"rgba(255,255,255,0.6)"}}>Écartez la sphère de la fenêtre pour pouvoir les lier.</div>}
+          <div ref={zoneMsg} style={{maxHeight:"190px",minHeight:"58px",overflowY:"auto",padding:"8px 12px",display:"flex",flexDirection:"column",gap:"6px"}}>
+            {fil.length === 0 && !dernier && <div style={{fontSize:"12px",color:"#5b2a0a",opacity:0.85}}>Écrivez ici, ou maintenez la sphère pour parler.</div>}
+            {fil.map((m, i) => (
+              <div key={i} style={{alignSelf:m.role === 'user' ? "flex-end" : "flex-start",maxWidth:"88%",padding:"6px 10px",borderRadius:"12px",fontSize:"12px",lineHeight:1.35,whiteSpace:"pre-line",
+                background:m.role === 'user' ? "rgba(255,107,0,0.88)" : "rgba(255,255,255,0.78)",color:m.role === 'user' ? "#fff" : "#2b1204"}}>{m.texte}</div>
+            ))}
+            {ecoute && !conv && <div style={{fontSize:"11.5px",color:"#8a3300",fontWeight:"800"}}>Je vous écoute… relâchez la sphère pour terminer.</div>}
+            {conv && convEtat === 'ecoute' && <div style={{fontSize:"11.5px",color:"#8a3300",fontWeight:"800"}}>● Je vous écoute{convVu ? " : « " + convVu + " »" : "…"}</div>}
+            {conv && convEtat === 'parle' && <div style={{fontSize:"11.5px",color:"#8a3300",fontWeight:"800"}}>{nom} vous répond…</div>}
+            {enCours && !ecoute && <div style={{fontSize:"11.5px",color:"#8a3300",fontWeight:"700"}}>{nom} réfléchit…</div>}
+            {erreur && <div style={{fontSize:"11px",color:"#b3261e",fontWeight:"700"}}>{erreur}</div>}
+          </div>
+          <div style={{display:"flex",gap:"6px",padding:"0 10px"}}>
+            <input type="text" value={texte} onChange={e => setTexte(e.target.value)} onKeyDown={e => { if (e.key === "Enter") envoi(); }} placeholder={"Écrire à " + nom + "…"}
+              style={{flex:1,minWidth:0,padding:"8px 11px",borderRadius:"20px",border:"1px solid rgba(255,107,0,0.4)",background:"rgba(255,255,255,0.8)",color:"#1c1c1e",fontSize:"12.5px",outline:"none"}}/>
+            <button onPointerDown={() => { debloquer(); lancerEcoute(); }} onPointerUp={arreterEcoute} onPointerLeave={arreterEcoute} onPointerCancel={arreterEcoute} title="Maintenir pour parler"
+              style={{width:"34px",height:"34px",borderRadius:"50%",border:"none",cursor:"pointer",flexShrink:0,touchAction:"none",background:ecoute?"#FF6B00":"rgba(255,255,255,0.85)",display:"flex",alignItems:"center",justifyContent:"center"}}>
+              <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke={ecoute?"#fff":"#8a3300"} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v4M8 22h8"/></svg>
+            </button>
+            <button onClick={envoi} aria-label="Envoyer" style={{width:"34px",height:"34px",borderRadius:"50%",border:"none",cursor:"pointer",flexShrink:0,background:"#FF6B00",color:"#fff",fontSize:"16px",fontWeight:"900"}}>→</button>
+          </div>
+          <div style={{display:"flex",gap:"6px",padding:"8px 10px 0"}}>
+            <button onClick={basculerConv} title={conv ? "Arrêter la conversation (ou dites « stop »)" : nom+" écoute en permanence, répond à voix haute, puis se remet à l'écoute"}
+              style={{flex:1,padding:"8px 10px",borderRadius:"20px",cursor:"pointer",fontSize:"12px",fontWeight:"900",border:"1px solid rgba(255,107,0,0.55)",
+                color:conv ? "#FF9A3C" : "#8a3300",background:conv ? "var(--iko-bg-sombre)" : "rgba(255,255,255,0.8)"}}>{conv ? "■ Arrêter la conversation" : "🎙 Conversation continue"}</button>
+            {conv && convEtat === 'parle' && <button onClick={interrompre} title={"Couper la parole à "+nom} style={{padding:"8px 12px",borderRadius:"20px",cursor:"pointer",fontSize:"12px",fontWeight:"900",border:"1px solid rgba(255,107,0,0.55)",color:"#8a3300",background:"rgba(255,255,255,0.8)"}}>Couper</button>}
+          </div>
+        </div>
+      )}
+      <button aria-label={nom + " : toucher pour écrire, maintenir pour parler, glisser pour déplacer"} title="Toucher : écrire · Maintenir : parler · Glisser : déplacer"
+        onPointerDown={e => debutDrag('sph', e, () => setOuvert(!ouvert))} onPointerMove={bougeDrag} onPointerUp={finDrag} onPointerCancel={finDrag} style={style.sphere}>
+        <span aria-hidden="true" style={{position:"absolute",inset:0,borderRadius:"50%",overflow:"hidden",pointerEvents:"none"}}>
+          <span style={{position:"absolute",inset:"-30%",background:"radial-gradient(circle at 50% 14%, rgba(255,246,230,0.75) 0%, rgba(255,246,230,0) 22%)",animation:"orbiteIko 7s linear infinite"}}/>
+          <span style={{position:"absolute",inset:0,borderRadius:"50%",background:"radial-gradient(circle at 68% 76%, rgba(0,0,0,0.38), rgba(0,0,0,0) 55%)"}}/>
+        </span>
+        <span style={{display:"block",position:"relative",fontFamily:"'Arial Black',Arial,sans-serif",fontWeight:900,fontSize:(nom.length > 3 ? "16px" : "21px"),letterSpacing:"1.5px",pointerEvents:"none",
+          color:"transparent",backgroundImage:"linear-gradient(180deg,#000 0%,#1c0900 45%,#4a1c00 100%)",WebkitBackgroundClip:"text",backgroundClip:"text",
+          filter:"drop-shadow(0 1.2px 0 rgba(255,228,196,0.85)) drop-shadow(0 -0.6px 0 rgba(0,0,0,0.55))"}}>{nom}</span>
+      </button>
+    </>
+  );
+}
+
 function Technicien({ agence, onClose }) {
   const [tickets, setTickets] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
@@ -3230,6 +3627,10 @@ function Technicien({ agence, onClose }) {
     return () => window.removeEventListener('appinstalled', f);
   }, []);
   const [itineraireOpen, setItineraireOpen] = React.useState(false);
+  const [entretienOpen, setEntretienOpen] = React.useState(false);
+  const [nbEntretien, setNbEntretien] = React.useState(0);
+  const compterEntretien = (e) => { const lim = entIso(new Date(Date.now() + 7 * 86400000)); setNbEntretien((e.visites || []).filter(v => v.date <= lim).length); };
+  React.useEffect(() => { chargerVisitesEntretien().then(compterEntretien); }, []);
   const [noteOpen, setNoteOpen] = React.useState(false);
   const [lastRefresh, setLastRefresh] = React.useState(null);
   const [maxOuvert, setMaxOuvert] = React.useState(false);
@@ -3331,9 +3732,13 @@ function Technicien({ agence, onClose }) {
     const arrivee = new Date(maintenant.getTime() + minutes * 60000);
     const champs = { "En route depuis": maintenant.toISOString(), "Arrivée estimée": arrivee.toISOString() };
     setTickets(prev => prev.map(t => t.id === ticket.id ? { ...t, fields: { ...t.fields, ...champs } } : t));
+    // Le résultat réel de l'envoi est mémorisé (_notif) pour ne pas afficher « Client prévenu » si rien n'est parti.
+    const majNotif = (v) => setTickets(prev => prev.map(t => t.id === ticket.id ? { ...t, fields: { ...t.fields, _notif: v } } : t));
+    const contactClient = !!(ticket.fields?.Email || ticket.fields?.["Téléphone"]);
     try {
-      await fetch('/api/airtable/tenant/Tickets%20SAV/' + ticket.id, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fields: champs }) });
-      await fetch(WEBHOOK, {
+      const rPatch = await fetch('/api/airtable/tenant/Tickets%20SAV/' + ticket.id, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fields: champs }) });
+      if (!rPatch.ok) majNotif('echec');
+      const rHook = await fetch(WEBHOOK, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           marque: 'iko', action: 'technicien_en_route',
@@ -3341,7 +3746,8 @@ function Technicien({ agence, onClose }) {
           agence: ticket.fields?.Agence, minutes, arrivee: arrivee.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Paris' })
         })
       });
-    } catch (e) { console.error(e); }
+      majNotif(!rHook.ok ? 'echec' : (contactClient ? 'ok' : 'sans_contact'));
+    } catch (e) { console.error(e); majNotif('echec'); }
   };
 
   const [lienAgenda, setLienAgenda] = React.useState("");
@@ -3469,16 +3875,19 @@ function Technicien({ agence, onClose }) {
 
   // Repli local si ElevenLabs échoue (quota/crédits épuisés, réseau...) :
   // Max reste audible via la synthèse vocale native du navigateur.
-  const parlerNavigateurNatifMax = (texte) => {
+  const parlerNavigateurNatifMax = (texte) => new Promise(fin => {
     try {
-      if (!('speechSynthesis' in window) || !texte) return;
+      if (!('speechSynthesis' in window) || !texte) { fin(); return; }
       window.speechSynthesis.cancel();
       const u = new SpeechSynthesisUtterance(texte);
       u.lang = 'fr-FR';
+      u.onend = fin; u.onerror = fin;
       window.speechSynthesis.speak(u);
-    } catch (e) {}
-  };
+      setTimeout(fin, 90000);
+    } catch (e) { fin(); }
+  });
 
+  // Renvoie une promesse qui se termine quand Max a fini de parler (conversation continue).
   const parlerMax = async (texte) => {
     try {
       if (!texte) return;
@@ -3486,12 +3895,35 @@ function Technicien({ agence, onClose }) {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ texte, voice_id: VOICE_ID_MAX }),
       });
-      if (!r.ok) { parlerNavigateurNatifMax(texte); return; }
+      if (!r.ok) return parlerNavigateurNatifMax(texte);
       const blob = await r.blob();
       const url = URL.createObjectURL(blob);
       const a = maxAudioRef.current;
-      if (a) { a.volume = 1.0; a.src = url; a.play().catch(() => parlerNavigateurNatifMax(texte)); }
-    } catch (e) { parlerNavigateurNatifMax(texte); }
+      if (!a) return;
+      a.volume = 1.0; a.src = url;
+      const fin = new Promise(res => { a.onended = res; a.onerror = res; setTimeout(res, 90000); });
+      try { await a.play(); } catch (e) { return parlerNavigateurNatifMax(texte); }
+      return fin;
+    } catch (e) { return parlerNavigateurNatifMax(texte); }
+  };
+
+  // « Max, appelle le client Dupont » : traité ici, sur l'appareil (fiable, sans passer par l'IA).
+  const appelerClientParVoix = (phrase) => {
+    const norm = (t) => String(t || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9 ]/g, " ");
+    const p = " " + norm(phrase) + " ";
+    if (!/ (appelle|appeler|telephone|telephoner|joindre|contacte|contacter|rappelle|rappeler) /.test(p)) return null;
+    const vus = {};
+    tickets.forEach(t => {
+      const nom = t.fields?.Client, tel = String(t.fields?.["Téléphone"] || "").replace(/[^\d+]/g, "");
+      if (!nom || !tel) return;
+      const mots = norm(nom).split(" ").filter(m => m.length > 2);
+      if (mots.length && mots.every(m => p.includes(" " + m + " ")) || (mots.length > 1 && p.includes(" " + mots[mots.length - 1] + " "))) vus[nom] = tel;
+    });
+    const noms = Object.keys(vus);
+    if (noms.length === 1) return { texte: "J'appelle " + noms[0] + ".", tel: vus[noms[0]] };
+    if (noms.length > 1) return { texte: "Plusieurs clients correspondent : " + noms.join(", ou ") + ". Lequel dois-je appeler ?" };
+    if (selectedTicket && /client/.test(p)) { const tel = String(selectedTicket.fields?.["Téléphone"] || "").replace(/[^\d+]/g, ""); if (tel) return { texte: "J'appelle " + selectedTicket.fields?.Client + ".", tel }; }
+    return { texte: "Je n'ai pas trouvé ce client dans vos tickets." };
   };
 
   const executerActionsMax = (actions) => {
@@ -3511,8 +3943,18 @@ function Technicien({ agence, onClose }) {
   // (Bloc 1), partagee avec DiagnosticMaxCard — voir plus haut dans le fichier.
 
   const envoyerMax = async (transcript) => {
+    let finParole = null;
     setMaxEnCours(true);
     setMaxErreur("");
+    const direct = appelerClientParVoix(transcript);
+    if (direct) {
+      setMaxDernier(direct.texte);
+      setMaxHistorique(prev => [...prev, { role: 'user', texte: transcript }, { role: 'assistant', texte: direct.texte }].slice(-8));
+      finParole = parlerMax(direct.texte);
+      if (direct.tel) { convRef.current = false; setConvActive(false); setTimeout(() => { window.location.href = "tel:" + direct.tel; }, 1600); }
+      setMaxEnCours(false);
+      return finParole;
+    }
     try {
       const contexteTickets = tickets.slice(0, 100).map(t => ({
         id: t.id,
@@ -3529,17 +3971,99 @@ function Technicien({ agence, onClose }) {
         body: JSON.stringify({ message: transcript, tickets: contexteTickets, ongletActuel: onglet, historique: maxHistorique.slice(-6), historiqueClient, connaissance: connaissanceEntrepriseLocale(), metier: metierEntrepriseLocal(), analyticsSAV: window.AnalyticsSAV.resumerAnalyticsSAV(window.AnalyticsSAV.calculerAnalyticsSAV(tickets), tickets.length, window.AnalyticsSAV.calculerCroisementsSAV(tickets)), nomAssistant: nomMaxLocal() })
       });
       const data = await r.json();
-      if (data.erreur) { setMaxErreur(data.erreur); setMaxEnCours(false); return; }
+      if (data.erreur) { setMaxErreur(data.erreur); setMaxEnCours(false); return null; }
       executerActionsMax(data.actions || []);
       const texte = data.reponse || "C'est fait.";
       setMaxDernier(texte);
       setMaxHistorique(prev => [...prev, { role: 'user', texte: transcript }, { role: 'assistant', texte }].slice(-8));
-      parlerMax(texte);
+      finParole = parlerMax(texte);
     } catch (e) {
       setMaxErreur("Connexion impossible. Réessayez.");
     }
     setMaxEnCours(false);
+    return finParole;
   };
+
+  // ---- Conversation continue (même principe qu'IKO dans le tableau de bord) ----
+  const [convActive, setConvActive] = React.useState(false);
+  const [convEtat, setConvEtat] = React.useState('ecoute'); // 'ecoute' | 'reflexion' | 'parle'
+  const [convVu, setConvVu] = React.useState('');
+  const convRef = React.useRef(false);
+  const convRecoRef = React.useRef(null);
+  const convInterromprRef = React.useRef(null);
+
+  const arreterParoleMax = () => {
+    try { window.speechSynthesis && window.speechSynthesis.cancel(); } catch (e) {}
+    try { const a = maxAudioRef.current; if (a) a.pause(); } catch (e) {}
+    if (convInterromprRef.current) { convInterromprRef.current(); convInterromprRef.current = null; }
+  };
+  const ecouterUnePhraseMax = () => new Promise((resolve, reject) => {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) { reject({ error: 'non-supporte' }); return; }
+    const reco = new SR();
+    convRecoRef.current = reco;
+    reco.lang = 'fr-FR'; reco.continuous = false; reco.interimResults = true; reco.maxAlternatives = 1;
+    let final = '', erreur = null;
+    reco.onresult = (e) => {
+      let interim = '';
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        if (e.results[i].isFinal) final += e.results[i][0].transcript + ' '; else interim += e.results[i][0].transcript;
+      }
+      setConvVu((final + interim).trim());
+    };
+    reco.onerror = (e) => { erreur = e && e.error; };
+    reco.onend = () => {
+      convRecoRef.current = null;
+      if (erreur && erreur !== 'no-speech' && erreur !== 'aborted') reject({ error: erreur }); else resolve(final.trim());
+    };
+    try { reco.start(); } catch (e) { reject({ error: 'demarrage' }); }
+  });
+  const arreterConversationMax = () => {
+    convRef.current = false; setConvActive(false); setConvVu('');
+    try { convRecoRef.current && convRecoRef.current.abort(); } catch (e) {}
+    arreterParoleMax();
+  };
+  const demarrerConversationMax = async () => {
+    if (convRef.current) return;
+    debloquerVoixIOS();
+    setMaxErreur("");
+    convRef.current = true; setConvActive(true); setConvEtat('ecoute');
+    let erreursDeSuite = 0;
+    while (convRef.current) {
+      let phrase = '';
+      try {
+        setConvEtat('ecoute');
+        phrase = await ecouterUnePhraseMax();
+        erreursDeSuite = 0;
+      } catch (e) {
+        const code = e && e.error;
+        if (code === 'not-allowed' || code === 'service-not-allowed') { setMaxErreur("Micro refusé par le navigateur : autorisez-le (icône micro barrée près de l'adresse), puis relancez la conversation."); arreterConversationMax(); return; }
+        if (code === 'non-supporte') { setMaxErreur("Ce navigateur ne gère pas l'écoute continue : utilisez Chrome (Android) ou Safari à jour."); arreterConversationMax(); return; }
+        erreursDeSuite++;
+        if (erreursDeSuite >= 3) { setMaxErreur("Écoute interrompue (" + (code || "erreur micro") + "). Relancez la conversation."); arreterConversationMax(); return; }
+        await new Promise(r => setTimeout(r, 600));
+        continue;
+      }
+      if (!convRef.current) break;
+      if (!phrase) continue;
+      if (/^(max[ ,]*)?(stop|stoppe|arrête|arrete|arrête-toi|termine|terminé|c'est tout|fin de la conversation)( max)?[ .!]*$/i.test(phrase)) { arreterConversationMax(); setMaxDernier("Conversation terminée."); return; }
+      setConvEtat('reflexion');
+      const fin = await envoyerMax(phrase);
+      if (!convRef.current) break;
+      if (fin) {
+        setConvEtat('parle'); setConvVu('');
+        await Promise.race([fin, new Promise(r => { convInterromprRef.current = r; })]);
+        convInterromprRef.current = null;
+        await new Promise(r => setTimeout(r, 350));
+      }
+    }
+    setConvActive(false);
+  };
+  const basculerConversationMax = () => { if (convRef.current) arreterConversationMax(); else demarrerConversationMax(); };
+  React.useEffect(() => () => { convRef.current = false; try { convRecoRef.current && convRecoRef.current.abort(); } catch (e) {} }, []);
+  const coulConv = convActive ? (convEtat === 'ecoute' ? ["#FFC48A", "#FF6B00", "#7A2E00", "255,107,0"] : convEtat === 'reflexion' ? ["#FF9A3C", "#C24A00", "#4a1c00", "194,74,0"] : ["#FFE6CC", "#FFC48A", "#FF9A3C", "255,196,138"]) : null;
+  const fondSphereMax = coulConv ? "radial-gradient(circle at 35% 30%, " + coulConv[0] + ", " + coulConv[1] + " 55%, " + coulConv[2] + " 100%)" : "radial-gradient(circle at 35% 30%, var(--iko-primary-pale), var(--iko-primary) 55%, var(--iko-primary-fonce) 100%)";
+  const texteConv = convActive ? (convEtat === 'ecoute' ? "● Je vous écoute" + (convVu ? " : « " + convVu + " »" : "…") : convEtat === 'reflexion' ? nomMaxLocal() + " réfléchit…" : nomMaxLocal() + " répond…") : "";
 
   // Enregistrement + transcription serveur (Whisper), en remplacement de
   // webkitSpeechRecognition (peu fiable sur WebKit iOS après le 1er usage).
@@ -3550,6 +4074,7 @@ function Technicien({ agence, onClose }) {
   const DUREE_MIN_ENREG_MS = 600;
 
   const lancerEcouteMax = async () => {
+    if (convRef.current) return;
     if (!navigator.mediaDevices || !window.MediaRecorder) {
       const champ = document.getElementById('maxChampTexte');
       if (champ) champ.focus();
@@ -3629,11 +4154,11 @@ function Technicien({ agence, onClose }) {
         onContextMenu={e => e.preventDefault()}>
         <audio ref={maxAudioRef} style={{display:"none"}}/>
         <div style={{width:"220px",height:"220px",borderRadius:"50%",
-          background:"radial-gradient(circle at 35% 30%, var(--iko-primary-pale), var(--iko-primary) 55%, var(--iko-primary-fonce) 100%)",
-          boxShadow:"0 0 90px rgba(var(--iko-primary-rgb),0.35)",
-          animation: maxEcoute ? "pulseMaxEcran 1s ease-in-out infinite" : "respireMax 3.2s ease-in-out infinite"}}/>
+          background:fondSphereMax,
+          boxShadow:"0 0 90px " + (coulConv ? "rgba(" + coulConv[3] + ",0.55)" : "rgba(var(--iko-primary-rgb),0.35)"),
+          animation: convActive ? "pulseMaxEcran 1.3s ease-in-out infinite" : maxEcoute ? "pulseMaxEcran 1s ease-in-out infinite" : "respireMax 3.2s ease-in-out infinite"}}/>
         <div style={{marginTop:"32px",color:"#b8b8b8",fontSize:"14px",maxWidth:"320px",textAlign:"center",minHeight:"40px",lineHeight:"1.5",padding:"0 16px"}}>
-          {maxEcoute ? "Je vous écoute... (relâchez le micro pour terminer)" : maxEnCours ? "..." : maxDernier ? maxDernier : `Dites une commande à ${nomMaxLocal()} : "Montre les urgents", "Ouvre l'itinéraire"...`}
+          {convActive && convEtat !== 'parle' ? texteConv : maxEcoute ? "Je vous écoute... (relâchez le micro pour terminer)" : maxEnCours ? "..." : maxDernier ? maxDernier : `Dites une commande à ${nomMaxLocal()} : "Montre les urgents", "Ouvre l'itinéraire"...`}
         </div>
         {maxErreur && <div style={{color:"var(--iko-erreur)",fontSize:"12px",marginTop:"10px",padding:"0 16px",textAlign:"center"}}>{maxErreur}</div>}
 
@@ -3657,9 +4182,14 @@ function Technicien({ agence, onClose }) {
             →
           </button>
           </div>
+          <button onClick={basculerConversationMax}
+            style={{padding:"14px 22px",width:"100%",borderRadius:"14px",cursor:"pointer",fontSize:"15px",fontWeight:"900",border:"1px solid rgba(255,255,255,0.4)",color:"#fff",background:convActive ? "#FF6B00" : "rgba(255,255,255,0.12)"}}>
+            {convActive ? "■ Arrêter la conversation" : "🎙 Conversation continue"}
+          </button>
+          {convActive && convEtat === 'parle' && <button onClick={arreterParoleMax} style={{padding:"10px 22px",borderRadius:"14px",cursor:"pointer",fontSize:"13px",fontWeight:"900",border:"1px solid rgba(255,255,255,0.4)",color:"#fff",background:"rgba(255,255,255,0.12)"}}>Couper la parole</button>}
           <button onClick={() => setVueMode("liste")}
             style={{padding:"14px 30px",borderRadius:"14px",background:"linear-gradient(180deg, rgba(255,150,60,0.97), rgba(255,107,0,0.9))",border:"1px solid rgba(255,255,255,0.5)",color:"#fff",cursor:"pointer",fontSize:"14px",fontWeight:"800",boxShadow:"0 6px 18px rgba(255,107,0,0.4)"}}>
-            📋 Mes tickets
+            Mes tickets
           </button>
         </div>
         <style>{`
@@ -3678,71 +4208,71 @@ function Technicien({ agence, onClose }) {
       {ticketDevis && (
         <ModalDevis ticket={ticketDevis} onClose={() => setTicketDevis(null)} onSent={() => { setTicketDevis(null); charger(); }}/>
       )}
+      {entretienOpen && <ModalEntretienTech onClose={() => setEntretienOpen(false)} onChange={compterEntretien}/>}
       {itineraireOpen && (
         <ItineraireModal agence={agence} tickets={filtered} onClose={() => setItineraireOpen(false)}/>
+      )}
+      {noteOpen && (
+        <div className="modal-overlay" onClick={e => e.target===e.currentTarget && setNoteOpen(false)}>
+          <div className="modal-box" style={{textAlign:"center"}}>
+            <div style={{textAlign:"left"}}>
+              <EntetePro titre="Note client" sous={agenceShort} onBack={() => setNoteOpen(false)} onClose={() => setNoteOpen(false)}
+                kpis={[{ label: "Note moyenne", valeur: moyenneAgence ? Number(moyenneAgence.toFixed(1)) : null, decimales: 1, suffixe: " / 5", accent: true }, { label: "Avis", valeur: notesAgence.length }]}
+                jauge={moyenneAgence ? { libelle: "Satisfaction", pourcent: Math.round(moyenneAgence / 5 * 100), valeur: Number(moyenneAgence.toFixed(1)), decimales: 1, suffixe: "/5", sous: notesAgence.length + " avis" } : undefined}/>
+            </div>
+            {moyenneAgence ? (
+              <>
+                <div style={{fontSize:"40px",fontWeight:"900",color:"var(--iko-primary)",marginBottom:"6px"}}>{moyenneAgence.toFixed(1)} / 5</div>
+                <div style={{fontSize:"20px",marginBottom:"10px"}}>{"⭐".repeat(Math.round(moyenneAgence))}{"☆".repeat(5-Math.round(moyenneAgence))}</div>
+                <div style={{fontSize:"11px",color:C.muted,marginBottom:"18px"}}>Basé sur {notesAgence.length} avis client{notesAgence.length>1?"s":""}</div>
+                <div style={{display:"flex",flexDirection:"column",gap:"8px",maxHeight:"220px",overflowY:"auto",textAlign:"left"}}>
+                  {notesAgence.filter(t => t.fields?.["Note Commentaire"]).slice(0,5).map(t => (
+                    <div key={t.id} style={{background:C.card2,border:"1px solid "+C.border,borderRadius:"8px",padding:"8px 10px",fontSize:"11px"}}>
+                      <div style={{color:"var(--iko-primary)",marginBottom:"3px"}}>{"⭐".repeat(t.fields.Note)}</div>
+                      <div style={{color:C.muted,fontStyle:"italic"}}>{t.fields["Note Commentaire"]}</div>
+                    </div>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <div style={{fontSize:"12px",color:C.muted,padding:"20px 0"}}>Aucun avis client pour le moment.</div>
+            )}
+            <button className="glass-btn" onClick={() => setNoteOpen(false)} style={{width:"100%",marginTop:"16px",padding:"11px",fontSize:"12px"}}>Fermer</button>
+          </div>
+        </div>
       )}
       <div style={{background:C.card,borderBottom:"1px solid "+C.border,padding:"8px 12px 8px",position:"sticky",top:0,zIndex:100}}>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:"6px",flexWrap:"nowrap"}}>
           <div style={{display:"flex",alignItems:"center",gap:"8px",minWidth:0}}>
-            <div style={{width:"64px",height:"36px",background:"#FFFFFF",borderRadius:"10px",display:"flex",alignItems:"center",justifyContent:"center",padding:"3px",boxSizing:"border-box"}}>
+            <div style={{width:"84px",height:"46px",background:"transparent",display:"flex",alignItems:"center",justifyContent:"center",boxSizing:"border-box"}}>
               <img data-iko-logo src={CONFIG_ENTREPRISE.logoUrl || IKO_LOGO} alt="Iko" style={{width:"100%",height:"100%",objectFit:"contain"}}/>
             </div>
-            <button title="Maintenir pour parler"
-            onPointerDown={() => { debloquerVoixIOS(); setMaxOuvert(true); lancerEcouteMax(); }}
-            onPointerUp={arreterEcouteMax}
-            onPointerLeave={arreterEcouteMax}
-            onPointerCancel={arreterEcouteMax}
-            style={{width:"38px",height:"38px",borderRadius:"50%",flexShrink:0,background:"radial-gradient(circle at 35% 30%, var(--iko-primary-pale), var(--iko-primary) 55%, var(--iko-primary-fonce) 100%)",border:"2px solid var(--iko-primary)",color:"#fff",cursor:"pointer",fontSize:"20px",boxShadow:"0 0 26px rgba(var(--iko-primary-rgb),0.35)",animation:maxEcoute?"pulseMax 1.2s infinite":"none",touchAction:"none",userSelect:"none"}}>
-            🎙️
-          </button>
-            <div>
-              <div style={{fontSize:"12px",fontWeight:"800",color:C.muted,lineHeight:1.1}}>Technicien</div>
-              <div style={{fontSize:"11px",color:C.or,marginTop:"1px",fontWeight:"700",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>📍 {agenceShort}</div>
-            </div>
+            <button className="glass-btn" onClick={() => setNoteOpen(true)} title="Ma note client" aria-label="Ma note client"
+              style={{height:"38px",padding:"0 10px",fontSize:"12px",flexShrink:0,whiteSpace:"nowrap"}}>
+              ⭐ {moyenneAgence ? moyenneAgence.toFixed(1) : "—"}
+            </button>
+            {agenceShort && agenceShort !== "global" && (
+              <div style={{fontSize:"12px",color:C.or,fontWeight:"800",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{agenceShort}</div>
+            )}
           </div>
           <div style={{display:"flex",alignItems:"center",gap:"6px",flexShrink:0}}>
-            {!appInstallee && <button onClick={() => window.ikoInstaller && window.ikoInstaller()} title="Installer l'appli sur cet appareil" style={{background:C.orDim,border:"1px solid "+C.orBord,color:C.or,borderRadius:"10px",width:"38px",height:"38px",fontSize:"16px",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>📲</button>}
-            <button onClick={charger} title="Rafraîchir" style={{background:C.orDim,border:"1px solid "+C.orBord,color:C.or,borderRadius:"10px",width:"38px",height:"38px",fontSize:"16px",fontWeight:"700",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>↺</button>
+            {!appInstallee && <button onClick={() => window.ikoInstaller && window.ikoInstaller()} title="Installer l'appli sur cet appareil" className="glass-btn" style={{width:"38px",height:"38px",fontSize:"16px",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>📲</button>}
+            <button onClick={charger} title="Rafraîchir" className="glass-btn" style={{width:"38px",height:"38px",fontSize:"16px",fontWeight:"700",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>↺</button>
             <button onClick={onClose} title="Fermer la session" style={{background:"rgba(var(--iko-erreur-rgb),0.08)",border:"1px solid rgba(var(--iko-erreur-rgb),0.25)",color:"rgba(var(--iko-erreur-rgb),0.85)",borderRadius:"10px",width:"38px",height:"38px",cursor:"pointer",fontSize:"16px",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>✕</button>
           </div>
         </div>
         <div style={{display:"flex",alignItems:"center",gap:"6px",marginTop:"8px",flexWrap:"nowrap",paddingBottom:"2px"}}>
-          <button onClick={imprimerSemaine} title="Imprimer ma semaine" style={{background:C.orDim,border:"1px solid "+C.orBord,color:C.or,borderRadius:"10px",padding:"0 7px",height:"34px",fontSize:"11px",fontWeight:"700",cursor:"pointer",display:"flex",alignItems:"center",gap:"4px",whiteSpace:"nowrap",flex:"1 1 auto",minWidth:0,justifyContent:"center"}}>🖨️ Ma semaine</button>
-            <button onClick={() => setItineraireOpen(true)} title="Itinéraire optimisé" style={{background:"var(--iko-bg-sombre)",border:"1px solid var(--iko-bg-sombre)",color:"#fff",borderRadius:"10px",padding:"0 7px",height:"34px",fontSize:"11px",fontWeight:"700",cursor:"pointer",display:"flex",alignItems:"center",gap:"4px",whiteSpace:"nowrap",flex:"1 1 auto",minWidth:0,justifyContent:"center"}}>🗺️ Itinéraire</button>
-            <button onClick={() => setOnglet("devis")} title="Devis en attente" style={{background:onglet==="devis"?"var(--iko-primary)":"rgba(var(--iko-primary-rgb),0.12)",border:"1px solid var(--iko-primary)",color:onglet==="devis"?"var(--iko-dark)":"var(--iko-primary-fonce)",borderRadius:"10px",padding:"0 7px",height:"34px",fontSize:"11px",fontWeight:"700",cursor:"pointer",display:"flex",alignItems:"center",gap:"4px",whiteSpace:"nowrap",flex:"1 1 auto",minWidth:0,justifyContent:"center"}}>
-              📋 Devis {nbDevisAttente > 0 && <span style={{background:onglet==="devis"?"var(--iko-bg-sombre)":"var(--iko-primary)",color:"#fff",borderRadius:"10px",padding:"0 5px",fontSize:"10px"}}>{nbDevisAttente}</span>}
-            </button>
-            <button onClick={() => setNoteOpen(true)} title="Ma note client" style={{background:"rgba(var(--iko-statut-attention-rgb),0.12)",border:"1px solid var(--iko-primary)",color:"var(--iko-primary-fonce)",borderRadius:"10px",padding:"0 7px",height:"34px",fontSize:"11px",fontWeight:"700",cursor:"pointer",display:"flex",alignItems:"center",gap:"4px",whiteSpace:"nowrap",flex:"1 1 auto",minWidth:0,justifyContent:"center"}}>
-              ⭐ {moyenneAgence ? moyenneAgence.toFixed(1) : "—"}
-            </button>
-            {noteOpen && (
-              <div className="modal-overlay" onClick={e => e.target===e.currentTarget && setNoteOpen(false)}>
-                <div className="modal-box" style={{textAlign:"center"}}>
-                  <div style={{fontSize:"14px",fontWeight:"900",color:C.white,marginBottom:"14px"}}>⭐ Note client — {agenceShort}</div>
-                  {moyenneAgence ? (
-                    <>
-                      <div style={{fontSize:"40px",fontWeight:"900",color:"var(--iko-primary)",marginBottom:"6px"}}>{moyenneAgence.toFixed(1)} / 5</div>
-                      <div style={{fontSize:"20px",marginBottom:"10px"}}>{"⭐".repeat(Math.round(moyenneAgence))}{"☆".repeat(5-Math.round(moyenneAgence))}</div>
-                      <div style={{fontSize:"11px",color:C.muted,marginBottom:"18px"}}>Basé sur {notesAgence.length} avis client{notesAgence.length>1?"s":""}</div>
-                      <div style={{display:"flex",flexDirection:"column",gap:"8px",maxHeight:"220px",overflowY:"auto",textAlign:"left"}}>
-                        {notesAgence.filter(t => t.fields?.["Note Commentaire"]).slice(0,5).map(t => (
-                          <div key={t.id} style={{background:C.card2,border:"1px solid "+C.border,borderRadius:"8px",padding:"8px 10px",fontSize:"11px"}}>
-                            <div style={{color:"var(--iko-primary)",marginBottom:"3px"}}>{"⭐".repeat(t.fields.Note)}</div>
-                            <div style={{color:C.muted,fontStyle:"italic"}}>{t.fields["Note Commentaire"]}</div>
-                          </div>
-                        ))}
-                      </div>
-                    </>
-                  ) : (
-                    <div style={{fontSize:"12px",color:C.muted,padding:"20px 0"}}>Aucun avis client pour le moment.</div>
-                  )}
-                  <button onClick={() => setNoteOpen(false)} style={{width:"100%",marginTop:"16px",padding:"11px",background:"transparent",color:C.muted,border:"1px solid "+C.border,borderRadius:"10px",fontSize:"12px",cursor:"pointer"}}>Fermer</button>
-                </div>
-              </div>
-            )}
+          <button className="glass-btn" onClick={imprimerSemaine} title="Imprimer ma semaine" style={{padding:"0 7px",height:"36px",fontSize:"12px",whiteSpace:"nowrap",flex:"1 1 0",minWidth:0}}>Ma semaine</button>
+          <button className="glass-btn" onClick={() => setItineraireOpen(true)} title="Itinéraire optimisé" style={{padding:"0 7px",height:"36px",fontSize:"12px",whiteSpace:"nowrap",flex:"1 1 0",minWidth:0}}>Itinéraire</button>
+          <button className="glass-btn" onClick={() => setEntretienOpen(true)} title="Visites d'entretien des contrats" style={{padding:"0 7px",height:"36px",fontSize:"12px",whiteSpace:"nowrap",flex:"1 1 0",minWidth:0,display:"flex",alignItems:"center",justifyContent:"center",gap:"5px"}}>
+            Entretien {nbEntretien > 0 && <span style={{background:"var(--iko-primary)",color:"#fff",borderRadius:"10px",padding:"0 6px",fontSize:"10px"}}>{nbEntretien}</span>}
+          </button>
+          <button className={"glass-btn"+(onglet==="devis"?" actif":"")} onClick={() => setOnglet("devis")} title="Devis en attente" style={{padding:"0 7px",height:"36px",fontSize:"12px",whiteSpace:"nowrap",flex:"1 1 0",minWidth:0,display:"flex",alignItems:"center",justifyContent:"center",gap:"5px"}}>
+            Devis {nbDevisAttente > 0 && <span style={{background:"var(--iko-primary)",color:"#fff",borderRadius:"10px",padding:"0 6px",fontSize:"10px"}}>{nbDevisAttente}</span>}
+          </button>
         </div>
         <div style={{display:"flex",gap:"6px",marginTop:"8px",flexWrap:"nowrap"}}>
-          {[["aujourd_hui","Aujourd'hui",nbAujourdhui],["a_venir","À venir",nbAVenir],["urgent","⚡ Urgent",nbUrgent],["termines","Terminés",nbTermines],["annules","Annulés",nbAnnules]].map(([id,label,count]) => (
+          {[["aujourd_hui","Aujourd'hui",nbAujourdhui],["a_venir","À venir",nbAVenir],["urgent","Urgent",nbUrgent],["termines","Terminés",nbTermines],["annules","Annulés",nbAnnules]].map(([id,label,count]) => (
             <div key={id} onClick={() => setOnglet(id)}
               style={{flex:"1 1 0",minWidth:0,background:onglet===id?C.orDim:"#FFFFFF",border:"2px solid "+(onglet===id?C.or:C.border),borderRadius:"10px",padding:"5px 2px",cursor:"pointer",textAlign:"center",transition:"border-color 0.15s"}}>
               <div style={{fontSize:"16px",fontWeight:"900",color:onglet===id?C.or:C.white,fontFamily:"monospace",lineHeight:1}}>{count}</div>
@@ -3767,7 +4297,7 @@ function Technicien({ agence, onClose }) {
         {agenceShort && agenceShort !== "global" && (
           <div style={{marginTop:"18px",padding:"12px 14px",borderRadius:"12px",background:"rgba(255,255,255,0.55)",border:"1px solid rgba(255,255,255,0.7)"}}>
             {!lienAgenda ? (
-              <button onClick={obtenirLienAgenda} style={{width:"100%",background:"none",border:"none",color:C.or,fontWeight:"800",fontSize:"12px",cursor:"pointer"}}>📅 Ajouter mes interventions à mon agenda (Google / Apple / Outlook)</button>
+              <button onClick={obtenirLienAgenda} style={{width:"100%",background:"none",border:"none",color:C.or,fontWeight:"800",fontSize:"12px",cursor:"pointer"}}>Ajouter mes interventions à mon agenda (Google / Apple / Outlook)</button>
             ) : (
               <div>
                 <div style={{fontSize:"11px",fontWeight:"800",color:C.muted,marginBottom:"6px"}}>Collez ce lien dans « Ajouter un agenda par URL » (il se met à jour tout seul) :</div>
@@ -3784,29 +4314,14 @@ function Technicien({ agence, onClose }) {
 
       {/* Widget vocal Max */}
       <audio ref={maxAudioRef} style={{display:"none"}}/>
-      <div style={{position:"fixed",top:"84px",left:"16px",zIndex:200,display:"flex",flexDirection:"column",alignItems:"flex-start",gap:"10px",WebkitUserSelect:"none",userSelect:"none",WebkitTouchCallout:"none"}}
-        onContextMenu={e => e.preventDefault()}>
-        {maxOuvert && (
-          <div style={{width:"270px",background:C.card,border:"1px solid "+C.border,borderRadius:"14px",padding:"16px",boxShadow:"0 10px 40px rgba(0,0,0,0.35)"}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"8px"}}><div style={{fontSize:"12px",fontWeight:"800",color:C.or,letterSpacing:"1px"}}>{nomMaxLocal().toUpperCase()}</div><button onClick={() => setMaxOuvert(false)} style={{background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:"14px"}}>✕</button></div>
-            <div style={{fontSize:"12px",color:C.muted,minHeight:"36px"}}>
-              {maxEcoute ? "Je vous écoute..." : maxEnCours ? "..." : maxDernier ? maxDernier : "Dites par exemple : \"Montre les urgents\" ou \"Ouvre l'itinéraire\"."}
-            </div>
-            {maxErreur && <div style={{fontSize:"11px",color:C.rouge,marginTop:"6px"}}>{maxErreur}</div>}
-            <div style={{display:"flex",gap:"6px",marginTop:"10px"}}>
-              <input id="maxChampTexte" type="text" value={maxTexte}
-                onChange={e => setMaxTexte(e.target.value)}
-                onKeyDown={e => { if (e.key === "Enter" && maxTexte.trim()) { debloquerVoixIOS(); envoyerMax(maxTexte.trim()); setMaxTexte(""); } }}
-                placeholder="Tapez ou dictez (🎤 clavier)"
-                style={{flex:1,padding:"8px 10px",borderRadius:"8px",border:"1px solid "+C.border,color:"#1c1c1e",fontSize:"12px"}}/>
-              <button onClick={() => { if (maxTexte.trim()) { debloquerVoixIOS(); envoyerMax(maxTexte.trim()); setMaxTexte(""); } }}
-                style={{padding:"8px 12px",borderRadius:"8px",background:"#fff",border:"none",color:"var(--iko-dark)",fontWeight:"800",cursor:"pointer"}}>→</button>
-            </div>
-          </div>
-        )}
-      </div>
+      <MaxFlottant nom={nomMaxLocal().toUpperCase()} ouvert={maxOuvert} setOuvert={setMaxOuvert} ecoute={maxEcoute} lancerEcoute={lancerEcouteMax} arreterEcoute={arreterEcouteMax}
+        dernier={maxDernier} erreur={maxErreur} enCours={maxEnCours} texte={maxTexte} setTexte={setMaxTexte} envoyer={envoyerMax} historique={maxHistorique} debloquer={debloquerVoixIOS}
+        conv={convActive} convEtat={convEtat} convVu={convVu} basculerConv={basculerConversationMax} interrompre={arreterParoleMax}/>
       <style>{`@keyframes pulseMax{0%,100%{transform:scale(1);}50%{transform:scale(1.08);}}
-@keyframes clignoteUrgent{0%,100%{opacity:1;}50%{opacity:0.35;}}`}</style>
+@keyframes clignoteUrgent{0%,100%{opacity:1;}50%{opacity:0.35;}}
+@keyframes respireIko{0%,100%{transform:scale(1);}50%{transform:scale(1.07);}}
+@keyframes orbiteIko{to{transform:rotate(360deg);}}
+@keyframes pulseConvIko{0%,100%{transform:scale(1);}50%{transform:scale(1.12);}}`}</style>
     </div>
   );
 }
@@ -3950,7 +4465,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
         if (off) return;
         off = document.createElement('div');
         style(off, base + 'top:calc(8px + env(safe-area-inset-top));background:#0D0D0D;border:1px solid #FF6B00;justify-content:center;');
-        off.textContent = '📡 Hors ligne : les données déjà chargées restent visibles. Les saisies reprennent dès que le réseau revient.';
+        off.textContent = 'Hors ligne : les données déjà chargées restent visibles. Les saisies reprennent dès que le réseau revient.';
         document.body.appendChild(off);
       } else if (off) { off.parentNode.removeChild(off); off = null; }
     }

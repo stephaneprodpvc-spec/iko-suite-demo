@@ -26,6 +26,7 @@ if (/Android/i.test(navigator.userAgent)) document.documentElement.classList.add
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body { font-family: 'Segoe UI', sans-serif; background: var(--iko-bg-clair); min-height: 100vh; }
+#rsia-widget-actions { display: none !important; }
 #rsia-widget-actions {
   position: fixed; z-index: 10001;
   right: 8%; width: min(400px, 40vw);
@@ -155,9 +156,9 @@ body { font-family: 'Segoe UI', sans-serif; background: var(--iko-bg-clair); min
     <polygon points="290,0 350,0 310,420 250,420" fill="var(--iko-primary)" opacity="0.06"/>
   </svg>
   <div style="position:relative;z-index:2;display:flex;flex-direction:column;justify-content:center;min-height:100vh;padding:60px;">
-   ></iframe> <div style="max-width:360px;">
+   <div style="max-width:360px;">
       <div style="display:flex;justify-content:center;margin-bottom:48px;">
-        <img data-iko-logo src="data:image/png;base64,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" alt="Iko" style="width:110px;height:auto;object-fit:contain;"/>
+        <img data-iko-logo src="data:image/png;base64,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" alt="Iko" style="width:160px;height:auto;object-fit:contain;"/>
       </div>
       <h1 style="color:var(--iko-bg-sombre);font-size:40px;font-weight:900;line-height:1.15;margin-bottom:20px;font-family:'Segoe UI',sans-serif;">
         Le S A V<br/><span style="color:var(--iko-primary);">intelligent.</span>
@@ -526,6 +527,22 @@ function App() {
   const [garantie, setGarantie] = React.useState(null);
   const [facture, setFacture] = React.useState("");
   const [client, setClient] = React.useState({ nom: "", adresse: "", codePostal: "", ville: "", tel: "", email: "" });
+  const [villesCP, setVillesCP] = React.useState([]);
+  React.useEffect(() => {
+    const cp = client.codePostal;
+    if (!/^\d{5}$/.test(cp)) { setVillesCP([]); return; }
+    let annule = false;
+    fetch('https://geo.api.gouv.fr/communes?codePostal=' + cp + '&fields=nom&format=json')
+      .then(r => r.ok ? r.json() : [])
+      .then(l => {
+        if (annule) return;
+        const noms = (Array.isArray(l) ? l : []).map(c => c.nom).sort((a, b) => a.localeCompare(b, 'fr'));
+        setVillesCP(noms);
+        if (noms.length >= 1) setClient(c => (c.codePostal === cp && !noms.includes(c.ville)) ? { ...c, ville: noms.length === 1 ? noms[0] : "" } : c);
+      })
+      .catch(() => { if (!annule) setVillesCP([]); });
+    return () => { annule = true; };
+  }, [client.codePostal]);
   const adresseComplete = client.adresse.trim() + (client.codePostal || client.ville ? ', ' + client.codePostal + ' ' + client.ville : '');
   const [erreurs, setErreurs] = React.useState({});
   const [produit, setProduit] = React.useState(null);
@@ -652,14 +669,7 @@ function App() {
     <div style={{fontFamily:"'Segoe UI',sans-serif",background:F.grisClair,height:"100%",display:"flex",flexDirection:"column",width:"100%"}}>
       <div style={{background:F.marine,padding:"12px 16px 8px",flexShrink:0}}>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-          <div style={{display:"flex",alignItems:"center",gap:"10px"}}>
-            <div style={{width:"65px",height:"34px",background:"#FFFFFF",borderRadius:"8px",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,padding:"3px",boxSizing:"border-box"}}>
-              <img data-iko-logo src={IKO_LOGO} alt="Iko" style={{width:"100%",height:"100%",objectFit:"contain"}}/>
-            </div>
-            <div>
-              <div style={{color:"rgba(255,255,255,0.4)",fontSize:"8px",letterSpacing:"2px",textTransform:"uppercase",marginTop:"2px"}}>Solutions IA · SAV</div>
-            </div>
-          </div>
+          <div/>
           <div style={{display:"flex",alignItems:"center",gap:"8px"}}>
             {etape !== "agence" && etape !== "merci" && !(agences && agences.length === 1 && etape === "identification") && (
               <button onClick={goBack} style={{background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.25)",color:"rgba(255,255,255,0.85)",borderRadius:"8px",padding:"4px 9px",fontSize:"10px",cursor:"pointer"}}>← Retour</button>
@@ -670,10 +680,6 @@ function App() {
             <button onClick={() => window.toggleWidget()} style={{background:"rgba(255,255,255,0.1)",border:"1px solid rgba(255,255,255,0.2)",color:"rgba(255,255,255,0.7)",borderRadius:"8px",width:"28px",height:"28px",cursor:"pointer",fontSize:"14px",display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>
           </div>
         </div>
-        <div style={{marginTop:"6px",display:"flex",alignItems:"center",gap:"6px"}}>
-          <div style={{width:"7px",height:"7px",background:"var(--iko-primary)",borderRadius:"50%"}}></div>
-          <span style={{color:F.orClair,fontSize:"11px",fontWeight:"500"}}>Stef — SAV en ligne</span>
-        </div>
       </div>
       <div style={{height:"3px",background:"linear-gradient(90deg," + F.or + "," + F.orClair + "," + F.or + ")",flexShrink:0}} />
 
@@ -682,7 +688,7 @@ function App() {
         {etape === "agence" && (
           <>
             <div style={{display:"flex",gap:"8px",alignItems:"flex-end"}}>
-              <div style={{width:"30px",height:"30px",background:F.marine,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"12px",fontWeight:"700",color:F.blanc,flexShrink:0,border:"2px solid " + F.or}}>S</div>
+              <div style={{width:"30px",height:"30px",background:F.marine,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"12px",fontWeight:"700",color:F.blanc,flexShrink:0,border:"2px solid " + F.or}}>A</div>
               <div style={{background:F.blanc,borderRadius:"16px 16px 16px 4px",padding:"10px 14px",fontSize:"12px",lineHeight:"1.6",boxShadow:"0 1px 4px rgba(0,0,0,0.08)",border:"1px solid " + F.grisBord}}>
                 Quelle est votre agence ?
               </div>
@@ -701,8 +707,8 @@ function App() {
 
         {etape === "identification" && (
           <>
-            <div style={{background:"#EFF6FF",border:"1px solid #BFDBFE",borderRadius:"10px",padding:"8px 12px",fontSize:"11px"}}>
-              📍 <strong>{agence?.ville}</strong>
+            <div style={{background:"#FFF3EB",border:"1px solid #FFD9BF",borderRadius:"10px",padding:"8px 12px",fontSize:"11px"}}>
+              <strong>{agence?.ville}</strong>
             </div>
             <div style={{background:F.blanc,borderRadius:"12px",padding:"12px 14px",border:"1px solid " + F.grisBord}}>
               <div style={{fontSize:"11px",fontWeight:"700",color:F.marine,marginBottom:"8px",borderLeft:"3px solid " + F.or,paddingLeft:"8px"}}>Êtes-vous déjà client ?</div>
@@ -719,7 +725,7 @@ function App() {
               <div style={{background:F.blanc,borderRadius:"12px",padding:"12px 14px",border:"1px solid " + F.grisBord}}>
                 <div style={{fontSize:"11px",fontWeight:"700",color:F.marine,marginBottom:"8px",borderLeft:"3px solid " + F.or,paddingLeft:"8px"}}>Produit sous garantie ?</div>
                 <div style={{display:"flex",gap:"8px"}}>
-                  {[{val:true,label:"✓ Oui"},{val:false,label:"❌ Non / Je ne sais pas"}].map(opt => (
+                  {[{val:true,label:"✓ Oui"},{val:false,label:"Non / Je ne sais pas"}].map(opt => (
                     <button key={String(opt.val)} onClick={() => { setGarantie(opt.val); setFacture(""); }}
                       style={{flex:1,padding:"9px",border:"2px solid " + (garantie===opt.val?(opt.val?F.vert:F.rouge):F.grisBord),borderRadius:"10px",background:garantie===opt.val?(opt.val?F.vertClair:F.rougeClair):F.blanc,color:garantie===opt.val?(opt.val?F.vert:F.rouge):F.marine,fontSize:"11px",fontWeight:"600",cursor:"pointer"}}>
                       {opt.label}
@@ -728,7 +734,7 @@ function App() {
                 </div>
                 {garantie === false && (
                   <div style={{marginTop:"10px",background:"var(--iko-primary-clair)",border:"1.5px solid var(--iko-primary-pale)",borderRadius:"10px",padding:"10px 12px",fontSize:"11px",color:"#78350F",lineHeight:"1.7"}}>
-                    ⚠️ <strong>Diagnostic 65€</strong> si hors garantie. Avoir déduit à l'acceptation du devis.
+                    <strong>Diagnostic 65€</strong> si hors garantie. Avoir déduit à l'acceptation du devis.
                   </div>
                 )}
                 {garantie === true && (
@@ -747,7 +753,7 @@ function App() {
                         </div>
                       ) : (
                         <>
-                          <div style={{fontSize:"11px",fontWeight:"700",color:F.or}}>📎 Joindre la facture (facultatif)</div>
+                          <div style={{fontSize:"11px",fontWeight:"700",color:F.or}}>Joindre la facture (facultatif)</div>
                           <div style={{fontSize:"10px",color:"#94A3B8",marginTop:"2px"}}>Photo ou PDF</div>
                         </>
                       )}
@@ -776,8 +782,16 @@ function App() {
                   </div>
                   <div>
                     <label style={{fontSize:"10px",fontWeight:"600",color:"#64748B",display:"block",marginBottom:"3px"}}>Ville *</label>
-                    <input type="text" placeholder="Tarbes" value={client.ville} onChange={e => setClient({...client,ville:e.target.value})}
-                      style={{width:"100%",padding:"8px 10px",border:"1.5px solid " + (erreurs.ville?F.rouge:F.grisBord),borderRadius:"8px",fontSize:"12px",boxSizing:"border-box",outline:"none"}} />
+                    {villesCP.length > 1 ? (
+                      <select value={client.ville} onChange={e => setClient({...client,ville:e.target.value})}
+                        style={{width:"100%",padding:"8px 10px",border:"1.5px solid " + (erreurs.ville?F.rouge:F.grisBord),borderRadius:"8px",fontSize:"12px",boxSizing:"border-box",outline:"none",background:"#fff"}}>
+                        <option value="">Choisissez votre ville ({villesCP.length})</option>
+                        {villesCP.map(v => <option key={v} value={v}>{v}</option>)}
+                      </select>
+                    ) : (
+                      <input type="text" placeholder="Tarbes" value={client.ville} onChange={e => setClient({...client,ville:e.target.value})}
+                        style={{width:"100%",padding:"8px 10px",border:"1.5px solid " + (erreurs.ville?F.rouge:F.grisBord),borderRadius:"8px",fontSize:"12px",boxSizing:"border-box",outline:"none"}} />
+                    )}
                     {erreurs.ville && <span style={{fontSize:"10px",color:F.rouge}}>Champ obligatoire</span>}
                   </div>
                 </div>
@@ -801,11 +815,11 @@ function App() {
         {etape === "produit" && (
           <>
             <div style={{background:F.vertClair,border:"1px solid var(--iko-primary)",borderRadius:"10px",padding:"8px 12px",fontSize:"11px"}}>
-              <div style={{fontWeight:"700",color:F.marine}}>👤 {client.nom}</div>
+              <div style={{fontWeight:"700",color:F.marine}}>{client.nom}</div>
               <div style={{color:"#475569",fontSize:"10px"}}>{agence?.ville}</div>
             </div>
             <div style={{display:"flex",gap:"8px",alignItems:"flex-end"}}>
-              <div style={{width:"30px",height:"30px",background:F.marine,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"12px",fontWeight:"700",color:F.blanc,flexShrink:0,border:"2px solid " + F.or}}>S</div>
+              <div style={{width:"30px",height:"30px",background:F.marine,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"12px",fontWeight:"700",color:F.blanc,flexShrink:0,border:"2px solid " + F.or}}>A</div>
               <div style={{background:F.blanc,borderRadius:"16px 16px 16px 4px",padding:"10px 14px",fontSize:"12px",boxShadow:"0 1px 4px rgba(0,0,0,0.08)",border:"1px solid " + F.grisBord}}>
                 Quel produit est concerné ?
               </div>
@@ -822,7 +836,7 @@ function App() {
         {etape === "sous_type" && (
           <>
             <div style={{display:"flex",gap:"8px",alignItems:"flex-end"}}>
-              <div style={{width:"30px",height:"30px",background:F.marine,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"12px",fontWeight:"700",color:F.blanc,flexShrink:0,border:"2px solid " + F.or}}>S</div>
+              <div style={{width:"30px",height:"30px",background:F.marine,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"12px",fontWeight:"700",color:F.blanc,flexShrink:0,border:"2px solid " + F.or}}>A</div>
               <div style={{background:F.blanc,borderRadius:"16px 16px 16px 4px",padding:"10px 14px",fontSize:"12px",boxShadow:"0 1px 4px rgba(0,0,0,0.08)",border:"1px solid " + F.grisBord}}>
                 Quel type de porte de garage ?
               </div>
@@ -841,7 +855,7 @@ function App() {
         {etape === "probleme" && (
           <>
             <div style={{display:"flex",gap:"8px",alignItems:"flex-end"}}>
-              <div style={{width:"30px",height:"30px",background:F.marine,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"12px",fontWeight:"700",color:F.blanc,flexShrink:0,border:"2px solid " + F.or}}>S</div>
+              <div style={{width:"30px",height:"30px",background:F.marine,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"12px",fontWeight:"700",color:F.blanc,flexShrink:0,border:"2px solid " + F.or}}>A</div>
               <div style={{background:F.blanc,borderRadius:"16px 16px 16px 4px",padding:"10px 14px",fontSize:"12px",boxShadow:"0 1px 4px rgba(0,0,0,0.08)",border:"1px solid " + F.grisBord}}>
                 Quel est le problème avec votre <strong style={{color:F.marine}}>{produit?.label.substring(2).trim()}</strong> ?
               </div>
@@ -859,7 +873,7 @@ function App() {
         {etape === "photos" && (
           <div style={{background:F.blanc,borderRadius:"12px",padding:"12px 14px",border:"1px solid " + F.grisBord}}>
             <div style={{fontSize:"11px",fontWeight:"700",color:F.marine,marginBottom:"8px",borderLeft:"3px solid " + F.or,paddingLeft:"8px"}}>
-              📎 Photos ou documents (facultatif)
+              Photos ou documents (facultatif)
             </div>
             <div style={{fontSize:"11px",color:"#64748B",marginBottom:"12px"}}>
               Joignez une photo du problème, votre facture ou tout document utile.
@@ -949,23 +963,23 @@ function App() {
             )}
             {envoi === 'err' && (
               <div style={{background:F.rougeClair,border:"1px solid var(--iko-erreur-bord)",borderRadius:"9px",padding:"8px 12px",fontSize:"11px",color:F.rouge,fontWeight:"600"}}>
-                ⚠️ Ticket créé — erreur d'envoi, contactez l'agence directement
+                Ticket créé — erreur d'envoi, contactez l'agence directement
               </div>
             )}
             <div style={{background:probleme?.urgent?F.rougeClair:F.vertClair,border:"1px solid " + (probleme?.urgent?"var(--iko-erreur-bord)":"var(--iko-primary)"),borderRadius:"10px",padding:"10px 14px"}}>
               <div style={{fontWeight:"700",fontSize:"12px",color:F.marine}}>
-                {probleme?.urgent?"⚡ Intervention sous 24-48h":"🕐 Intervention sous 5-10 jours ouvrés"}
+                {probleme?.urgent?"Intervention sous 24-48h":"Intervention sous 5-10 jours ouvrés"}
               </div>
               <div style={{fontSize:"11px",color:"#475569",marginTop:"2px"}}>Créneau : {creneau}</div>
             </div>
             {envoi === 'ok' && (
               <div style={{background:F.vertClair,border:"1px solid var(--iko-primary)",borderRadius:"9px",padding:"8px 12px",fontSize:"11px",color:F.vert,fontWeight:"600"}}>
-                ✉️ Un e-mail vous est envoyé avec votre numéro et un lien direct vers votre suivi.
+                Un e-mail vous est envoyé avec votre numéro et un lien direct vers votre suivi.
               </div>
             )}
             <a href={"suivi.html?ticket=" + encodeURIComponent(ticket)}
               style={{display:"block",width:"100%",padding:"13px",background:F.marine,color:F.blanc,border:"2px solid " + F.or,borderRadius:"10px",fontSize:"13px",fontWeight:"700",textAlign:"center",textDecoration:"none",boxSizing:"border-box"}}>
-              📋 Suivre ma demande
+              Suivre ma demande
             </a>
             <button onClick={reset}
               style={{width:"100%",padding:"11px",background:F.blanc,color:F.marine,border:"2px solid " + F.grisBord,borderRadius:"10px",fontSize:"12px",fontWeight:"600",cursor:"pointer"}}>
