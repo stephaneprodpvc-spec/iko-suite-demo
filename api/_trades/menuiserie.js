@@ -8,17 +8,31 @@ export default {
 
   // Utilise dans l'intro du SYSTEM_PROMPT ("specialiste de la ___")
   nom_metier:
-    "la menuiserie (fenetres, coulissants, volets roulants, portails, portes de garage, verandas)",
+    "la menuiserie exterieure alu et PVC (fenetres, portes d'entree, coulissants, volets roulants et battants, portails, portes de garage, verandas, pergolas bioclimatiques, carports, stores bannes, moustiquaires, garde-corps, clotures et portillons, brise-soleil, auvents, fenetres de toit, controle d'acces, rideaux metalliques)",
 
   // Exemples de produits, utilises dans la description du champ "produit"
   // de l'outil creer_ticket (simple aide au remplissage, pas un enum strict).
   produits: [
     "Fenetre",
     "Coulissant",
+    "Porte d'entree",
     "Volet roulant",
+    "Volet battant",
     "Portail",
+    "Motorisation",
     "Porte de garage",
     "Veranda",
+    "Pergola",
+    "Carport",
+    "Store banne",
+    "Moustiquaire",
+    "Garde-corps",
+    "Cloture",
+    "Brise-soleil",
+    "Auvent / marquise",
+    "Fenetre de toit",
+    "Controle d'acces",
+    "Rideau metallique",
   ],
 
   // Pistes de diagnostic de base, injectees telles quelles dans le

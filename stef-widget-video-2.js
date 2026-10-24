@@ -43,7 +43,7 @@ function stefDebugBadge(msg) {
 (function () {
   'use strict';
 
-  const NAVY = '#16233F', YELLOW = '#E5B531';
+  const NAVY = '#0D0D0D', YELLOW = '#FF6B00';
   const IS_MOBILE = window.matchMedia('(max-width: 760px)').matches;
 
   const box = document.createElement('div');

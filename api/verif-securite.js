@@ -47,6 +47,7 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
 import { verifierOrigine, verifierDebit, reponseBloquee, verifierSession, MODE_DEMO_OUVERT, SESSION_DEMO } from "./_securite.js";
+import { signalerAbus } from "./_abus.js";
 import { initialiserPlanning, lireReglagesBruts, enregistrerReglages, REGLAGES_DEFAUT } from "./_planning.js";
 
 const AIRTABLE_BASE = "appkI8RKHkYNWY86U";
@@ -208,7 +209,7 @@ async function reponseGeneriqueEchec(res, hashACompare) {
   // compte n'existe pas (contre HASH_FACTICE), pour eviter une attaque par
   // mesure de temps qui reveleraient qu'un identifiant existe ou non.
   await bcrypt.compare("x", hashACompare || HASH_FACTICE);
-  return res.status(401).json({ erreur: MESSAGE_GENERIQUE });
+  { signalerAbus(req, "connexion-echouee"); return res.status(401).json({ erreur: MESSAGE_GENERIQUE }); }
 }
 
 // MOT DE PASSE UNIQUE (demo) : si la variable d'environnement IKO_MDP_UNIQUE
@@ -254,7 +255,7 @@ async function gererLogin(req, res) {
       champs["Bloqué jusqu'à"] = new Date(Date.now() + DUREE_BLOCAGE_MIN * 60000).toISOString();
     }
     await majUtilisateur(user.userId, champs);
-    return res.status(401).json({ erreur: MESSAGE_GENERIQUE });
+    { signalerAbus(req, "connexion-echouee"); return res.status(401).json({ erreur: MESSAGE_GENERIQUE }); }
   }
 
   // Succes : remise a zero des echecs, rotation refresh token.
@@ -301,7 +302,7 @@ async function gererChangementMotDePasse(req, res) {
       champs["Bloqué jusqu'à"] = new Date(Date.now() + DUREE_BLOCAGE_MIN * 60000).toISOString();
     }
     await majUtilisateur(user.userId, champs);
-    return res.status(401).json({ erreur: MESSAGE_GENERIQUE });
+    { signalerAbus(req, "connexion-echouee"); return res.status(401).json({ erreur: MESSAGE_GENERIQUE }); }
   }
   const refus = evaluerMotDePasse(nouveauMotDePasse, user.identifiant);
   if (refus) return res.status(400).json({ erreur: refus });

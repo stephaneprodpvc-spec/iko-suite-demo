@@ -10,42 +10,74 @@
 <style>
 *{box-sizing:border-box}
 body{margin:0;min-height:100vh;font-family:-apple-system,"Segoe UI",Roboto,Arial,sans-serif;color:#0D0D0D;background:linear-gradient(160deg,#FF9A3C 0%,#FF6B00 55%,#C94F00 100%);background-attachment:fixed;padding:16px 12px 60px}
-.w{max-width:900px;margin:0 auto}
-h1{margin:0 0 4px;font-size:22px;color:#fff}.sub{margin:0 0 14px;color:rgba(255,255,255,.92);font-size:13px}
-.carte{background:rgba(255,255,255,.9);border:1px solid rgba(255,255,255,.7);border-radius:16px;padding:14px;margin-bottom:12px;box-shadow:0 8px 24px rgba(0,0,0,.14)}
-.kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px}
-.kpi{background:#0D0D0D;color:#fff;border-radius:14px;padding:12px;text-align:center}.kpi b{display:block;font-size:22px;color:#FF9A3C}.kpi span{font-size:11px;opacity:.85}
-label{display:block;font-size:11px;font-weight:700;color:#374151;margin:8px 0 4px}
+.feuille{max-width:1000px;margin:0 auto;background:rgba(255,255,255,.96);border-radius:22px;padding:18px;box-shadow:0 18px 50px rgba(0,0,0,.28)}
+.retour{display:inline-block;margin:0 0 12px;padding:6px 12px;font:800 12px inherit;font-family:inherit;border-radius:12px;cursor:pointer;color:#8a3300;background:rgba(255,255,255,.45);border:1px solid rgba(255,107,0,.40);box-shadow:0 3px 12px rgba(120,40,0,.14),inset 0 1px 0 rgba(255,255,255,.8)}
+.retour:hover{background:rgba(255,255,255,.7)}
+.titre{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+h1{margin:0;font-size:21px;font-weight:900}.sous{font-size:12px;color:#6B7280;margin-top:2px}
+.cockpit{position:relative;overflow:hidden;border-radius:18px;padding:14px;color:#fff;border:1px solid rgba(255,107,0,.4);margin-bottom:14px;background:radial-gradient(ellipse at 50% -10%,rgba(255,107,0,.32),transparent 62%),linear-gradient(180deg,#1a130d,#0b0b0b);box-shadow:0 12px 34px rgba(0,0,0,.4)}
+.cockpit::before{content:"";position:absolute;inset:-6%;pointer-events:none;background-image:linear-gradient(rgba(255,255,255,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.05) 1px,transparent 1px);background-size:30px 30px;-webkit-mask-image:radial-gradient(ellipse at 50% 40%,#000 25%,transparent 78%);mask-image:radial-gradient(ellipse at 50% 40%,#000 25%,transparent 78%);animation:miseAuPoint 11s ease-in-out infinite}
+@keyframes miseAuPoint{0%,100%{transform:scale(1);filter:blur(0)}50%{transform:scale(1.07);filter:blur(1.6px)}}
+.cockpit .balayage{position:absolute;top:0;bottom:0;width:170px;left:-220px;pointer-events:none;z-index:1;background:linear-gradient(90deg,transparent,rgba(255,154,60,.1),transparent);-webkit-backdrop-filter:blur(2.6px) brightness(1.12);backdrop-filter:blur(2.6px) brightness(1.12);-webkit-mask-image:linear-gradient(90deg,transparent,#000 35%,#000 65%,transparent);mask-image:linear-gradient(90deg,transparent,#000 35%,#000 65%,transparent);animation:balayage 19s cubic-bezier(.45,.05,.55,.95) infinite}
+@keyframes balayage{0%{left:-220px}100%{left:calc(100% + 60px)}}
+.cockpit>*:not(.balayage){position:relative;z-index:2}
+.kpis{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.kpi{flex:1 1 120px;min-width:110px;padding:8px 12px;border-radius:12px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.14)}
+.kpi b{display:block;font-family:monospace;font-size:24px;font-weight:900;line-height:1.1}.kpi span{font-size:11px;font-weight:700;opacity:.8}
+.kpi.alerte{background:rgba(229,57,53,.18);border-color:#e53935}.kpi.alerte b{color:#ff8a80}
+.bas{display:flex;gap:18px;flex-wrap:wrap;align-items:center}
+.jauge{flex:1 1 150px;min-width:140px;text-align:center}.jauge svg{width:100%;max-width:170px;overflow:visible}.jauge .lib{font-size:11.5px;font-weight:800;margin-top:-6px}.jauge .sl{font-size:10px;opacity:.6}
+.barres{flex:2 1 280px;min-width:240px}.titre-sec{font-size:10.5px;font-weight:800;letter-spacing:1px;color:#FF9A3C;text-transform:uppercase;margin-bottom:8px}
+.lb{margin-bottom:7px}.lb .t{display:flex;justify-content:space-between;font-size:11.5px;margin-bottom:3px}.lb .f{height:8px;border-radius:5px;background:rgba(255,255,255,.1);overflow:hidden}.lb .f i{display:block;height:100%;width:0;border-radius:5px;background:linear-gradient(90deg,#FF6B00,#FFC48A);box-shadow:0 0 8px rgba(255,107,0,.6);transition:width 1.1s cubic-bezier(.2,.8,.2,1)}
+.lb.vide .t{color:#ff8a80;font-weight:800}
+.aide{font-size:12px;color:#6B7280;margin-bottom:12px}.aide summary{cursor:pointer;font-weight:800;color:#374151}
+.grille{display:grid;grid-template-columns:repeat(auto-fill,minmax(310px,1fr));gap:12px}
+.carte{background:#fff;border:1px solid #E5E7EB;border-radius:16px;padding:14px;box-shadow:0 4px 14px rgba(0,0,0,.06);border-left:4px solid #FF6B00}
+.carte.inactif{border-left-color:#9CA3AF;opacity:.8}
+.ligne{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
+.av{width:42px;height:42px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:15px;color:#2b1204;background:radial-gradient(circle at 35% 30%,#FFC48A,#FF8A1F 55%,#FF6B00);box-shadow:0 0 14px rgba(255,107,0,.4)}
+.nom{font-size:15px;font-weight:900}.petit{font-size:12px;color:#6B7280}.vide{color:#9CA3AF;font-style:italic}
+.puce{display:inline-block;font-size:10.5px;font-weight:800;padding:3px 9px;border-radius:20px;background:#F3F4F6;color:#374151}.puce.or{background:#FF6B00;color:#fff}.puce.noir{background:#0D0D0D;color:#FF9A3C}.puce.vert{background:#E8F7EC;color:#1a7f37}.puce.rouge{background:#FDECEC;color:#B42318}
+.actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:12px}
+button.g{font:800 12px inherit;font-family:inherit;padding:8px 13px;border-radius:12px;cursor:pointer;color:#8a3300;background:rgba(255,255,255,.55);border:1px solid rgba(255,107,0,.45);box-shadow:0 2px 8px rgba(120,40,0,.1)}
+button.g:hover{background:#fff}button.g.p{background:linear-gradient(180deg,#FF9A3C,#FF6B00);color:#fff;border-color:rgba(255,255,255,.5)}button:disabled{opacity:.55}
+label{display:block;font-size:11px;font-weight:800;color:#374151;margin:10px 0 4px}
 input,select,textarea{width:100%;padding:10px;border-radius:10px;border:1px solid #D1D5DB;font-size:14px;font-family:inherit;background:#fff}
-.g2{display:grid;grid-template-columns:1fr 1fr;gap:8px}@media(max-width:560px){.g2{grid-template-columns:1fr}}
-button{border:0;border-radius:10px;padding:10px 12px;font-size:13px;font-weight:800;cursor:pointer;color:#fff;background:linear-gradient(180deg,rgba(255,150,60,.97),rgba(255,107,0,.9))}
-button.n{background:#0D0D0D}button.b{background:#fff;color:#0D0D0D;border:1px solid #D1D5DB}button:disabled{opacity:.5}
-.ligne{display:flex;justify-content:space-between;gap:8px;align-items:flex-start;flex-wrap:wrap}
-.badge{display:inline-block;border-radius:20px;padding:3px 9px;font-size:11px;font-weight:800}
-.ret{background:#0D0D0D;color:#FF9A3C}.pro{background:#FF6B00;color:#fff}.ok{background:#fff;color:#0D0D0D;border:1px solid #D1D5DB}
-.actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}.petit{font-size:12px;color:#6B7280}
-.carnet{margin-top:8px;border-top:1px solid #E5E7EB;padding-top:6px;font-size:12px}
+input:focus,select:focus{outline:none;border-color:#FF6B00;box-shadow:0 0 0 3px rgba(255,107,0,.16)}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:10px}@media(max-width:560px){.g2{grid-template-columns:1fr}}
+.videbloc{padding:20px;text-align:center;color:#6B7280;font-size:13px}
 </style>
+<script src="/iko-retour.js" defer></script>
 </head>
 <body>
-<div class="w">
-  <h1>👷 Équipe technique</h1>
-  <p class="sub">Zone, compétences et capacité de chaque technicien : le tableau de bord vous propose automatiquement le bon technicien pour chaque SAV.</p>
-  <div class="carte"><div class="ligne"><b>Nouveau technicien</b><button class="b" id="bForm">＋ Ajouter</button></div>
-    <form id="form" style="display:none">
-      <div class="g2"><div><label>Nom *</label><input id="fNom" required></div><div><label>Agence</label><input id="fAg"></div>
-      <div><label>E-mail</label><input id="fMail" type="email"></div><div><label>Téléphone</label><input id="fTel"></div></div>
-      <label>Zone d'intervention (départements ou codes postaux, séparés par des virgules)</label><input id="fZone" placeholder="31, 09, 82100">
-      <label>Compétences (mots-clés séparés par des virgules)</label><input id="fComp" placeholder="alu, pvc, volet, porte, vitrage">
-      <label>Capacité (interventions par jour)</label><input id="fCap" type="number" min="1" value="4">
-      <div class="actions"><button type="submit">Enregistrer</button></div><div class="petit" id="fMsg"></div>
-    </form></div>
-  <div id="liste"><div class="carte petit">Chargement…</div></div>
+<div class="feuille">
+  <button class="retour" data-iko-retour type="button">← Retour</button>
+  <div class="titre">
+    <div><h1>Équipe technique</h1><div class="sous">Le tableau de bord s'en sert pour proposer le bon technicien sur chaque SAV (zone, compétences, charge).</div></div>
+    <button class="g p" id="bForm">Ajouter un technicien</button>
+  </div>
+  <div class="cockpit"><div class="balayage"></div>
+    <div class="kpis" id="kpis"></div>
+    <div class="bas"><div class="jauge" id="jauge"></div><div class="barres" id="barres"></div></div>
+  </div>
+  <details class="aide"><summary>Comment ça marche ?</summary>
+    <div style="margin-top:6px;line-height:1.5">1. Pour chaque technicien, indiquez sa <b>zone</b> (départements ou codes postaux), ses <b>compétences</b> (alu, pvc, volet…) et sa <b>capacité</b> par jour.<br>2. Sur un nouveau SAV, le tableau de bord propose celui dont la zone et les compétences correspondent, de la même agence, le moins chargé.<br>3. Un champ laissé vide = pas de limite : le technicien peut être proposé partout. Vous gardez toujours le dernier mot (bouton « Assigner »).</div>
+  </details>
+  <form id="form" class="carte" style="display:none;margin-bottom:14px">
+    <div class="nom" id="fTitre" style="margin-bottom:4px">Nouveau technicien</div>
+    <div class="g2"><div><label>Nom *</label><input id="fNom" required></div><div><label>Agence de rattachement *</label><select id="fAg" required><option value="">— Choisir l'agence —</option></select></div>
+    <div><label>E-mail</label><input id="fMail" type="email"></div><div><label>Téléphone</label><input id="fTel"></div></div>
+    <label>Zone d'intervention (départements ou codes postaux, séparés par des virgules)</label><input id="fZone" placeholder="31, 09, 82100">
+    <label>Compétences (mots-clés séparés par des virgules)</label><input id="fComp" placeholder="alu, pvc, volet, porte, vitrage">
+    <label>Capacité (interventions par jour)</label><input id="fCap" type="number" min="1" value="4">
+    <div class="actions"><button class="g p" type="submit">Enregistrer</button><button type="button" class="g" id="bAnnul">Annuler</button></div><div class="petit" id="fMsg"></div>
+  </form>
+  <div id="liste"><div class="videbloc">Chargement…</div></div>
 </div>
 <script>
 (function(){
   var $=function(i){return document.getElementById(i)};
-  var TABLE='/api/airtable/Techniciens', ctx={id:null}, items=[];
+  var TABLE='/api/airtable/Techniciens', ctx={id:null}, items=[], edit=null, agencesListe=[];
   var esc=function(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})};
   var ZONE='Zone (départements ou codes postaux)';
   async function contexte(){
@@ -61,21 +93,60 @@ button.n{background:#0D0D0D}button.b{background:#fff;color:#0D0D0D;border:1px so
     }
     $('liste').innerHTML='<div class="carte">Accès réservé aux administrateurs.</div>';return false;
   }
+  async function chargerAgences(){
+    var noms=[];
+    try{
+      var r=await fetch('/api/airtable/Agences?maxRecords=50');
+      if(r.ok){noms=((await r.json()).records||[]).filter(function(a){
+        var f=a.fields;if(!f['Nom agence'])return false;if(f.Actif===false)return false;
+        return !ctx.id||!Array.isArray(f.Client)||f.Client.indexOf(ctx.id)>-1}).map(function(a){return a.fields['Nom agence']})}
+    }catch(e){}
+    noms.sort(function(a,b){return String(a).localeCompare(String(b),'fr',{numeric:true})});
+    agencesListe=noms;
+    $('fAg').innerHTML='<option value="">— Choisir l\'agence —</option>'+noms.map(function(n){return '<option>'+esc(n)+'</option>'}).join('');
+  }
   async function charger(){
     var r=await fetch(TABLE+'?maxRecords=100');
     if(!r.ok){$('liste').innerHTML='<div class="carte">Chargement impossible ('+r.status+').</div>';return}
     items=(await r.json()).records||[];afficher();
   }
+  function compteur(el,val,suf){var t0=null;function pas(t){if(!t0)t0=t;var p=Math.min(1,(t-t0)/900);el.textContent=Math.round(val*(1-Math.pow(1-p,3)))+(suf||'');if(p<1)requestAnimationFrame(pas)}requestAnimationFrame(pas)}
+  function cockpit(){
+    var actifs=items.filter(function(t){return t.fields.Actif!==false});
+    var cap=0;actifs.forEach(function(t){cap+=Number(t.fields['Capacité par jour'])||0});
+    var parAg={};agencesListe.forEach(function(a){parAg[a]=0});
+    actifs.forEach(function(t){var a=t.fields.Agence||'—';parAg[a]=(parAg[a]||0)+1});
+    var noms=Object.keys(parAg);
+    var couvertes=noms.filter(function(a){return parAg[a]>0}).length,sans=noms.length-couvertes;
+    $('kpis').innerHTML='<div class="kpi"><b data-cnt="'+actifs.length+'">0</b><span>Techniciens actifs</span></div><div class="kpi"><b data-cnt="'+cap+'">0</b><span>Interventions / jour</span></div>'
+      +'<div class="kpi"><b data-cnt="'+couvertes+'" data-suf="/'+noms.length+'">0</b><span>Agences couvertes</span></div><div class="kpi'+(sans?' alerte':'')+'"><b data-cnt="'+sans+'">0</b><span>Agence'+(sans>1?'s':'')+' sans technicien</span></div>';
+    var pct=noms.length?Math.round(couvertes/noms.length*100):0,L=Math.PI*55;
+    $('jauge').innerHTML='<svg viewBox="0 0 130 82"><defs><linearGradient id="gq" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="'+(sans?'#ff5a4d':'#FFC48A')+'"/><stop offset="100%" stop-color="'+(sans?'#e53935':'#FF6B00')+'"/></linearGradient></defs><path d="M 10 70 A 55 55 0 0 1 120 70" fill="none" stroke="rgba(255,255,255,.12)" stroke-width="9" stroke-linecap="round"/><path class="arc" data-p="'+pct+'" d="M 10 70 A 55 55 0 0 1 120 70" fill="none" stroke="url(#gq)" stroke-width="9" stroke-linecap="round" stroke-dasharray="'+L+'" stroke-dashoffset="'+L+'" style="transition:stroke-dashoffset 1.3s cubic-bezier(.2,.8,.2,1);filter:drop-shadow(0 0 6px rgba(255,107,0,.8))"/><text x="65" y="62" text-anchor="middle" style="font-size:22px;font-weight:900;fill:#fff;font-family:monospace" data-cnt="'+pct+'" data-suf="%">0</text></svg><div class="lib">Couverture des agences</div><div class="sl">'+couvertes+' agence'+(couvertes>1?'s':'')+' sur '+noms.length+'</div>';
+    var max=Math.max(1,Math.max.apply(null,noms.map(function(a){return parAg[a]})));
+    $('barres').innerHTML='<div class="titre-sec">Techniciens par agence</div>'+(noms.length?noms.sort(function(a,b){return String(a).localeCompare(String(b),'fr',{numeric:true})}).map(function(a){return '<div class="lb'+(parAg[a]?'':' vide')+'"><div class="t"><span>'+esc(a)+'</span><b>'+(parAg[a]||'Aucun technicien')+'</b></div><div class="f"><i data-w="'+Math.round(parAg[a]/max*100)+'"></i></div></div>'}).join(''):'<div class="petit" style="opacity:.7">Aucune agence.</div>');
+    document.querySelectorAll('.cockpit [data-cnt]').forEach(function(el){compteur(el,Number(el.dataset.cnt),el.dataset.suf)});
+    setTimeout(function(){document.querySelectorAll('.cockpit .arc').forEach(function(x){x.style.strokeDashoffset=String(L*(1-Number(x.dataset.p)/100))});document.querySelectorAll('.cockpit .f i').forEach(function(x){x.style.width=x.dataset.w+'%'})},120);
+  }
   function afficher(){
-    if(!items.length){$('liste').innerHTML='<div class="carte petit">Aucun technicien. Ajoutez votre équipe pour activer le rattachement automatique.</div>';return}
-    $('liste').innerHTML=items.map(function(t){var f=t.fields;
-      return '<div class="carte" data-id="'+t.id+'"><div class="ligne"><div><b>'+esc(f.Nom)+'</b> '+(f.Actif?'<span class="badge ok">Actif</span>':'<span class="badge ret">Inactif</span>')+'<div class="petit">'+esc(f.Agence||'')+(f.Email?' · '+esc(f.Email):'')+(f['Téléphone']?' · '+esc(f['Téléphone']):'')+'</div></div><div class="petit" style="text-align:right">'+(f['Capacité par jour']||'—')+' interv./jour</div></div>'
-        +'<div class="petit" style="margin-top:6px">📍 '+esc(f[ZONE]||'toute zone')+'<br>🔧 '+esc(f['Compétences']||'toutes compétences')+'</div>'
-        +'<div class="actions"><button class="b" data-a="act">'+(f.Actif?'Désactiver':'Activer')+'</button><button class="b" data-a="sup">Supprimer</button></div></div>'}).join('');
+    cockpit();
+    if(!items.length){$('liste').innerHTML='<div class="videbloc">Aucun technicien. Ajoutez votre équipe pour activer le rattachement automatique.</div>';return}
+    $('liste').innerHTML='<div class="grille">'+items.map(function(t){var f=t.fields,ini=String(f.Nom||'?').split(/\s+/).map(function(x){return x[0]}).join('').slice(0,2).toUpperCase();
+      return '<div class="carte'+(f.Actif===false?' inactif':'')+'" data-id="'+t.id+'"><div class="ligne"><div style="display:flex;gap:10px"><div class="av">'+esc(ini)+'</div><div><div class="nom">'+esc(f.Nom)+'</div>'
+        +'<div style="margin-top:4px"><span class="puce noir">'+esc(f.Agence||'Agence ?')+'</span> '+(f.Actif===false?'<span class="puce rouge">Inactif</span>':'<span class="puce vert">Actif</span>')+'</div></div></div>'
+        +'<div class="petit" style="text-align:right">'+(f['Capacité par jour']?'<b>'+esc(f['Capacité par jour'])+'</b> interventions / jour':'<span class="vide">capacité non renseignée</span>')+'</div></div>'
+        +'<div class="petit" style="margin-top:8px">'+(f['Téléphone']?esc(f['Téléphone']):'')+(f.Email?(f['Téléphone']?' · ':'')+esc(f.Email):'')+'</div>'
+        +'<div class="petit" style="margin-top:6px"><b>Zone</b> : '+(f[ZONE]?esc(f[ZONE]):'<span class="vide">non définie → proposé partout</span>')+'<br><b>Compétences</b> : '+(f['Compétences']?esc(f['Compétences']):'<span class="vide">non définies → toutes</span>')+'</div>'
+        +'<div class="actions"><button class="g" data-a="mod">Modifier</button><button class="g" data-a="act">'+(f.Actif===false?'Activer':'Désactiver')+'</button><button class="g" data-a="sup">Supprimer</button></div></div>'}).join('')+'</div>';
   }
   $('liste').addEventListener('click',async function(e){
     var b=e.target.closest('button[data-a]');if(!b)return;
     var id=b.closest('[data-id]').dataset.id,t=items.find(function(x){return x.id===id});
+    if(b.dataset.a==='mod'){
+      var f=t.fields;edit=id;
+      $('fNom').value=f.Nom||'';if(f.Agence&&![].some.call($('fAg').options,function(o){return o.value===f.Agence})){var o=document.createElement('option');o.textContent=f.Agence;$('fAg').appendChild(o)}$('fAg').value=f.Agence||'';$('fMail').value=f.Email||'';$('fTel').value=f['Téléphone']||'';
+      $('fZone').value=f[ZONE]||'';$('fComp').value=f['Compétences']||'';$('fCap').value=f['Capacité par jour']||4;
+      $('fTitre').textContent='Modifier : '+(f.Nom||'');$('form').style.display='block';window.scrollTo({top:0,behavior:'smooth'});return;
+    }
     if(b.dataset.a==='act'){
       var r=await fetch(TABLE+'/'+id,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({fields:{Actif:!t.fields.Actif}})});
       if(r.ok)t.fields.Actif=!t.fields.Actif;else alert('Échec ('+r.status+').');
@@ -85,7 +156,9 @@ button.n{background:#0D0D0D}button.b{background:#fff;color:#0D0D0D;border:1px so
     }
     afficher();
   });
-  $('bForm').onclick=function(){$('form').style.display=$('form').style.display==='none'?'block':'none'};
+  function fermerForm(){edit=null;$('form').reset();$('form').style.display='none';$('fMsg').textContent='';$('fTitre').textContent='Nouveau technicien'}
+  $('bForm').onclick=function(){if($('form').style.display==='none'){edit=null;$('form').reset();$('fTitre').textContent='Nouveau technicien';$('form').style.display='block'}else fermerForm()};
+  $('bAnnul').onclick=fermerForm;
   $('form').onsubmit=async function(ev){
     ev.preventDefault();
     var fields={Nom:$('fNom').value.trim(),Agence:$('fAg').value.trim(),'Téléphone':$('fTel').value.trim(),Actif:true,'Capacité par jour':Number($('fCap').value)||4,'Compétences':$('fComp').value.trim()};
@@ -93,11 +166,12 @@ button.n{background:#0D0D0D}button.b{background:#fff;color:#0D0D0D;border:1px so
     if($('fMail').value.trim())fields.Email=$('fMail').value.trim();
     if(ctx.id)fields['Compte client']=[ctx.id];
     $('fMsg').textContent='Enregistrement…';
-    var r=await fetch(TABLE,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({fields:fields})});
+    if(edit){delete fields.Actif;delete fields['Compte client']}
+    var r=await fetch(edit?TABLE+'/'+edit:TABLE,{method:edit?'PATCH':'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({fields:fields})});
     if(!r.ok){$('fMsg').textContent='Échec ('+r.status+').';return}
-    $('form').reset();$('form').style.display='none';$('fMsg').textContent='';await charger();
+    fermerForm();await charger();
   };
-  contexte().then(function(ok){if(ok)charger()});
+  contexte().then(function(ok){if(ok){chargerAgences();charger()}});
 })();
 </script>
 </body>

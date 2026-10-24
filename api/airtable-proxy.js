@@ -24,8 +24,12 @@
 // Appelé via /api/airtable/push (même route réécrite que le reste).
 
 import webpush from 'web-push';
+import { alerter } from './_alertes.js';
+import { photosHtml, adressesPhotos, ajouterMailsAuCorps, marqueClient, enrichirDepuisTicket } from './_mail.js';
 import { verifierSession, verifierDebit, verifierOrigine } from './_securite.js';
 import { lienSuivi, lireJeton, normaliserEmail, normaliserTel } from './_suivi.js';
+import { handlerEntretien } from './_entretien.js';
+import { signalerAbus } from './_abus.js';
 import { creneauxLibres, identDepuisClientId, AGENCES_DEMO } from './_planning.js';
 import { enteteMake } from './_make.js';
 
@@ -77,9 +81,8 @@ async function handlerSuivi(req, res, baseId, headers) {
     if (typeof body.jeton === 'string' && body.jeton) {
       // Lien du mail (adresse prouvee par la reception du mail) : toutes les demandes du client.
       const identite = lireJeton(body.jeton);
-      if (!identite) return res.status(404).json(ECHEC);
-      const records = await airtable(formuleClient(identite), 50);
-      if (!records.length) return res.status(404).json(ECHEC);
+      if (!identite) { signalerAbus(req, 'jeton-invalide'); return res.status(404).json(ECHEC); }
+      const records = await airtable(formuleClient(identite), 50); // peut être vide : un client qui n'a qu'un contrat d'entretien
       // Espace client : devis / factures liés à ses demandes + contrat d'entretien (meme identite prouvee par le lien du mail).
       let devis = [], contrats = [];
       try {
@@ -101,9 +104,11 @@ async function handlerSuivi(req, res, baseId, headers) {
         if (rc.ok) {
           contrats = ((await rc.json()).records || []).map(c => ({ id: c.id, fields: {
             Client: c.fields.Client, 'Prochaine visite': c.fields['Prochaine visite'], 'Dernière visite': c.fields['Dernière visite'],
-            'Périodicité (mois)': c.fields['Périodicité (mois)'], 'Équipements': c.fields['Équipements'], 'Statut contrat': c.fields['Statut contrat'], 'Carnet (JSON)': c.fields['Carnet (JSON)'] } }));
+            'Périodicité (mois)': c.fields['Périodicité (mois)'], 'Équipements': c.fields['Équipements'], 'Statut contrat': c.fields['Statut contrat'], 'Carnet (JSON)': c.fields['Carnet (JSON)'],
+            Agence: c.fields.Agence, Adresse: c.fields.Adresse, 'Référence': c.fields['Référence'], 'Visites (JSON)': c.fields['Visites (JSON)'] } }));
         }
       } catch (e) { console.error('Espace client (devis/contrats):', e); }
+      if (!records.length && !contrats.length) { signalerAbus(req, 'suivi-introuvable'); return res.status(404).json(ECHEC); }
       return res.status(200).json({ tickets: versTickets(records), numero: '', devis, contrats });
     }
     if (typeof body.numero === 'string' && typeof body.contact === 'string') {
@@ -112,11 +117,24 @@ async function handlerSuivi(req, res, baseId, headers) {
       const numero = body.numero.trim().toUpperCase();
       const email = normaliserEmail(body.contact);
       const tel = email ? '' : normaliserTel(body.contact);
+      if (/^ENT-\d{4}-\d{4}$/.test(numero) && (email || tel)) {
+        // Numéro de contrat d'entretien : même preuve que pour un ticket (numéro + e-mail ou téléphone donnés à la demande).
+        const rc = await fetch('https://api.airtable.com/v0/' + baseId + '/Contrats%20entretien?maxRecords=1&filterByFormula=' + encodeURIComponent('AND(UPPER({Référence})="' + numero + '",' + formuleClient({ email, tel }) + ')'), { headers });
+        const lignes = rc.ok ? ((await rc.json()).records || []) : [];
+        if (lignes.length) {
+          const contrats = lignes.map(c => ({ id: c.id, fields: {
+            Client: c.fields.Client, 'Prochaine visite': c.fields['Prochaine visite'], 'Dernière visite': c.fields['Dernière visite'], 'Périodicité (mois)': c.fields['Périodicité (mois)'],
+            'Équipements': c.fields['Équipements'], 'Statut contrat': c.fields['Statut contrat'], 'Carnet (JSON)': c.fields['Carnet (JSON)'], Agence: c.fields.Agence, Adresse: c.fields.Adresse,
+            'Référence': c.fields['Référence'], 'Visites (JSON)': c.fields['Visites (JSON)'] } }));
+          return res.status(200).json({ tickets: [], numero, devis: [], contrats });
+        }
+      }
       if (/^[A-Z0-9-]{4,30}$/.test(numero) && (email || tel)) {
         const trouves = await airtable('AND(UPPER({Name})="' + numero + '",' + formuleClient({ email, tel }) + ')', 1);
         if (trouves.length) return res.status(200).json({ tickets: versTickets(trouves), numero });
       }
     }
+    signalerAbus(req, 'suivi-introuvable');
     return res.status(404).json(ECHEC);
   } catch (err) {
     console.error('Erreur route suivi:', err);
@@ -367,6 +385,9 @@ async function relayerWebhook(req, res, urlCible, actionsAutorisees, ctx) {
   let clientARattacher = null; // slug puis identifiant du client (nouvelle demande d'un client pro)
   if (actionsAutorisees === ACTIONS_WEBHOOK_AUTORISEES && actionDemandee === undefined) {
     delete corpsRelaye.lien_suivi;
+    // Miniatures des photos pour le mail (construites ici, jamais prises telles quelles du navigateur).
+    corpsRelaye.photos_html = photosHtml(corpsRelaye.photos);
+    corpsRelaye.nb_photos = adressesPhotos(corpsRelaye.photos).length;
     // E-mails de l'agence choisie (Make les utilise pour notifier l'agence) :
     // JAMAIS pris du navigateur (un tiers pourrait faire envoyer un mail a une
     // adresse arbitraire) ; resolus ici depuis la table Agences (lecture seule)
@@ -401,6 +422,10 @@ async function relayerWebhook(req, res, urlCible, actionsAutorisees, ctx) {
       if (lien) corpsRelaye.lien_suivi = lien;
     }
   }
+  // Mails aux couleurs du client pro (fiche « Clients » de l'Admin) ; sans client identifié : orange et noir IKO.
+  const clientDuTicket = actionDemandee !== undefined ? await enrichirDepuisTicket(corpsRelaye, ctx) : null; // détails réels du ticket + son client pro
+  const marqueMail = await marqueClient(/^rec/.test(clientARattacher || '') ? clientARattacher : (ctx && ctx.tenantId) || clientDuTicket || null);
+  ajouterMailsAuCorps(corpsRelaye, actionDemandee, marqueMail); // mail_objet / mail_html déjà prêts pour Make
   try {
     const webhookRes = await fetch(urlCible, {
       method: 'POST',
@@ -411,8 +436,10 @@ async function relayerWebhook(req, res, urlCible, actionsAutorisees, ctx) {
     if (webhookRes.ok && ctx && clientARattacher && /^rec[A-Za-z0-9]{14}$/.test(clientARattacher) && corpsRelaye.ticket && actionDemandee === undefined) {
       await rattacherTicketAuClient(ctx.baseId, ctx.headers, corpsRelaye.ticket, clientARattacher);
     }
+    if (!webhookRes.ok) await alerter({ cle: 'make-echec', client: (/^rec/.test(clientARattacher || '') ? clientARattacher : (ctx && ctx.tenantId) || null), titre: "IKO : l'envoi de messages (Make) a échoué", message: "Le scénario Make a répondu en erreur (HTTP " + webhookRes.status + ")" + (actionDemandee ? " pour l'action « " + actionDemandee + " »" : " pour une nouvelle demande") + ". Des mails/SMS clients peuvent ne pas être partis." });
     return res.status(webhookRes.ok ? 200 : 502).json({ ok: webhookRes.ok });
   } catch (err) {
+    await alerter({ cle: 'make-injoignable', client: (/^rec/.test(clientARattacher || '') ? clientARattacher : (ctx && ctx.tenantId) || null), titre: "IKO : Make est injoignable", message: "Impossible de contacter le scénario Make : les mails et SMS clients ne partent pas." });
     // Ne jamais renvoyer le detail brut de l'erreur au client : un message
     // d'erreur reseau (DNS, connexion) peut contenir l'URL/l'hote Make, ce
     // qui romprait exactement la protection visee par ce relais. Logue cote
@@ -738,7 +765,7 @@ export default async function handler(req, res) {
   }
 
   if (subPathRaw === 'webhook') {
-    return relayerWebhook(req, res, MAKE_WEBHOOK_URL, ACTIONS_WEBHOOK_AUTORISEES, { baseId, headers });
+    return relayerWebhook(req, res, MAKE_WEBHOOK_URL, ACTIONS_WEBHOOK_AUTORISEES, { baseId, headers, tenantId: session && session.tenantId });
   }
 
   if (subPathRaw === 'creneaux') {
@@ -747,6 +774,10 @@ export default async function handler(req, res) {
 
   if (subPathRaw === 'suivi') {
     return handlerSuivi(req, res, baseId, headers);
+  }
+
+  if (subPathRaw === 'entretien') {
+    return handlerEntretien(req, res, { baseId, headers });
   }
 
   if (subPathRaw === 'webhook-metreur') {

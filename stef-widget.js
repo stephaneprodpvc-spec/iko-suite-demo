@@ -39,7 +39,7 @@ try {
 (function () {
   'use strict';
 
-  const NAVY = '#16233F', YELLOW = '#E5B531';
+  const NAVY = '#0D0D0D', YELLOW = '#FF6B00';
   const IS_MOBILE = window.matchMedia('(max-width: 760px)').matches;
   // Sur Android (contrairement a iPhone/iPad), le personnage en pleine
   // largeur/hauteur venait recouvrir le titre et le texte de la page

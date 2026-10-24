@@ -1,4 +1,7 @@
 import { limiterChat } from "./_securite.js";
+import { blocSystemeIko } from "./_systeme-iko.js";
+import { blocMetierMenuiserie } from "./_metier-menuiserie.js";
+import { blocSavoir } from "./_savoir-menuiserie.js";
 import { normaliserConnaissance, blocPromptConnaissance, affinerPourPrompt } from "./_connaissance.js";
 import { blocPromptAnalyticsSAV, genererRecommandationsSAV, blocPromptRecommandationsSAV } from "../analytics-sav.js";
 import { nomAssistantDepuisEntree } from "./_assistants.js";
@@ -23,7 +26,7 @@ const MAX_CHARS_TEXTE_DICTE = 2000;
 const MAX_TICKETS_CONTEXTE = 100;
 const MAX_CATALOGUE_CONTEXTE = 60;
 
-const ONGLETS_VALIDES = ["aujourd_hui", "urgent", "devis", "termines", "annules"];
+const ONGLETS_VALIDES = ["aujourd_hui", "a_venir", "en_retard", "urgent", "devis", "termines", "annules"];
 const ACTIONS_SUGGERABLES = ["terminer", "devis", "devis_place", "replanifier", "annuler", "aucune"];
 // Suggestions d'action technicien V1 : priorité des actions suggérées par IKO
 // dans le diagnostic (jamais persistée, jamais une décision à la place du
@@ -56,7 +59,8 @@ souvent les mains prises (outils, echelle), donc tes reponses doivent
 etre tres courtes et utiles tout de suite.
 
 Tu recois la liste des tickets actuellement charges (identifiant,
-numero, client, statut, produit, creneau, urgent) et l'onglet
+numero, client, statut, produit, creneau, quand, date_iso, adresse,
+telephone, urgent) et l'onglet
 actuellement affiche. Utilise uniquement cette liste, n'invente jamais
 un ticket qui n'y figure pas.
 
@@ -68,6 +72,20 @@ REGLES
 - Pour ouvrir la fiche d'un ticket precis cite par le technicien
   (numero ou nom client), utilise ouvrir_ticket avec son identifiant
   exact (champ id, jamais le numero affiche).
+- La date du jour t'est donnee. Chaque ticket a un champ "quand"
+  (aujourd'hui, demain, dans N jours, en retard de N jours). Pour
+  "mon prochain rendez-vous", prends le ticket NON termine et NON annule
+  dont la date est la plus proche a partir d'aujourd'hui (aujourd'hui
+  inclus) ; les tickets en retard passent en dernier. Cite le client,
+  le jour et le creneau.
+- Adresse ou telephone d'un client : lis les champs adresse et telephone
+  du ticket. S'ils sont vides, dis-le simplement.
+- Prevenir un client (retard, "j'arrive dans N minutes") : utilise
+  l'outil prevenir_client avec ticket_id et minutes (duree avant
+  l'arrivee). Si le ticket ou la duree manquent, demande-les avec
+  reponse_vocale. Ne dis JAMAIS que le client est prevenu : l'application
+  l'annonce elle-meme apres l'envoi reel.
+- Appeler un client : utilise appeler_client avec ticket_id.
 - Pour une question factuelle (combien de tickets, lequel est urgent,
   a quelle heure est le prochain rendez-vous...), calcule la reponse
   toi-meme a partir de la liste fournie et utilise reponse_vocale.
@@ -95,7 +113,7 @@ function buildSystemPrompt(connaissanceEntrees, analyticsSAVResume, nomAssistant
   // (natures differentes) - jamais fusionnes. Recommandations = 3e bloc,
   // deduit des deux precedents (voir chat-dashboard.js pour le detail).
   const recommandationsSAV = genererRecommandationsSAV(analyticsSAVResume, connaissanceEntrees);
-  return construireSystemPromptBase(nomAssistant) + blocPromptConnaissance(connaissanceEntrees) + blocPromptAnalyticsSAV(analyticsSAVResume) + blocPromptRecommandationsSAV(recommandationsSAV);
+  return construireSystemPromptBase(nomAssistant) + blocSystemeIko("technicien") + blocMetierMenuiserie("technicien") + blocPromptConnaissance(connaissanceEntrees) + blocPromptAnalyticsSAV(analyticsSAVResume) + blocPromptRecommandationsSAV(recommandationsSAV);
 }
 
 // ==================== Bloc 1 : diagnostic assisté ====================
@@ -423,8 +441,18 @@ function detecterMimeReel(tampon) {
   return null;
 }
 
+function adressePhotoAutorisee(texte) {
+  try {
+    const u = new URL(String(texte || "").trim());
+    if (u.protocol === "https:" && u.hostname === "res.cloudinary.com") return true;
+    // Fichiers de démonstration du mode local uniquement (jamais sur Vercel).
+    if (!process.env.VERCEL && u.protocol === "http:" && (u.hostname === "localhost" || u.hostname === "127.0.0.1") && /^\/__iko-local\/fichier\/[A-Za-z0-9_.-]+$/.test(u.pathname)) return true;
+  } catch (e) { /* adresse invalide */ }
+  return false;
+}
+
 async function recupererPhotoValidee(url) {
-  if (typeof url !== "string" || !/^https?:\/\//i.test(url.trim())) return null;
+  if (typeof url !== "string" || !adressePhotoAutorisee(url)) return null;
   const controleur = new AbortController();
   const minuteur = setTimeout(() => controleur.abort(), TIMEOUT_PHOTO_MS);
   try {
@@ -469,6 +497,29 @@ const TOOLS = [
       type: "object",
       properties: {
         ticket_id: { type: "string", description: "Identifiant exact (champ id) du ticket, pas son numero affiche." },
+      },
+      required: ["ticket_id"],
+    },
+  },
+  {
+    name: "prevenir_client",
+    description: "Previent reellement le client (mail/SMS via l'application) que le technicien arrive dans N minutes. A utiliser pour un retard ou une arrivee annoncee.",
+    input_schema: {
+      type: "object",
+      properties: {
+        ticket_id: { type: "string", description: "Identifiant exact (champ id) du ticket." },
+        minutes: { type: "integer", minimum: 5, maximum: 180, description: "Dans combien de minutes le technicien arrive chez le client." },
+      },
+      required: ["ticket_id", "minutes"],
+    },
+  },
+  {
+    name: "appeler_client",
+    description: "Lance l'appel telephonique vers le client du ticket indique.",
+    input_schema: {
+      type: "object",
+      properties: {
+        ticket_id: { type: "string", description: "Identifiant exact (champ id) du ticket." },
       },
       required: ["ticket_id"],
     },
@@ -545,7 +596,8 @@ export default async function handler(req, res) {
       ? "\n\nHistorique du client concerne (mesures/poses precedentes, si connu) :\n" + JSON.stringify(historiqueClient)
       : "";
 
-    const messageUtilisateur = "Onglet actuellement affiche : " + ongletActuel +
+    const dateDuJour = new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+    const messageUtilisateur = "Nous sommes aujourd'hui le " + dateDuJour + ".\nOnglet actuellement affiche : " + ongletActuel +
       "\n\nTickets actuellement charges (JSON) :\n" +
       JSON.stringify(ticketsContexte) +
       blocHistorique +
@@ -595,7 +647,8 @@ du ticket telle qu'elle est ecrite.
         model: MODELE,
         max_tokens: 400,
         temperature: 0.3,
-        system: [{ type: "text", text: buildSystemPrompt(connaissanceActuelle, analyticsSAVActuelles, nomAssistantActuel) + (body.reunion ? BLOC_REUNION_MAX : ""), cache_control: { type: "ephemeral" } }],
+        system: [{ type: "text", text: buildSystemPrompt(connaissanceActuelle, analyticsSAVActuelles, nomAssistantActuel) + (body.reunion ? BLOC_REUNION_MAX : ""), cache_control: { type: "ephemeral" } },
+          { type: "text", text: blocSavoir("technicien", message + " " + ticketsContexte.filter(function (t) { return t && t.client && message.toLowerCase().indexOf(String(t.client).toLowerCase()) !== -1; }).map(function (t) { return (t.produit || "") + " " + (t.probleme || ""); }).join(" ")) }],
         tools: TOOLS,
         tool_choice: { type: "any" },
         messages: [{ role: "user", content: messageUtilisateur }],
@@ -742,7 +795,8 @@ async function traiterDiagnostic(req, res, body, cle) {
         model: MODELE_SONNET,
         max_tokens: 700,
         temperature: 0.2,
-        system: [{ type: "text", text: SYSTEM_PROMPT_DIAGNOSTIC, cache_control: { type: "ephemeral" } }],
+        system: [{ type: "text", text: SYSTEM_PROMPT_DIAGNOSTIC, cache_control: { type: "ephemeral" } },
+          { type: "text", text: blocSavoir("technicien", contexteTicket.produit + " " + contexteTicket.probleme + " " + message) }],
         tools: [OUTIL_DIAGNOSTIC],
         tool_choice: { type: "tool", name: "diagnostic_assiste" },
         messages: [{ role: "user", content: blocsContenu }],
