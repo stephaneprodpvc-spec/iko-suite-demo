@@ -864,7 +864,7 @@ function App() {
       const resp = await fetch('/api/airtable/Tickets%20SAV/' + ticket.id, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fields: { Créneau: nouveauCreneau, PlanningID: nouvelleId, Statut: 'Nouveau', "Proposition auto en attente": false, "Proposition auto créneau": "", "Proposition auto mois": "", "RDV modifié - notif technicien": true, "Réponse agence": nouvelleReponse } })
+        body: JSON.stringify({ fields: { Créneau: nouveauCreneau, PlanningID: nouvelleId, Statut: 'Nouveau', "Proposition auto en attente": false, "Proposition auto créneau": "", "Proposition auto mois": "", "RDV modifié - notif technicien": true, "En route depuis": null, "Arrivée estimée": null, "Réponse agence": nouvelleReponse } })
       });
       if (!resp.ok) throw new Error('patch failed');
       setTicket(prev => ({ ...prev, fields: { ...prev.fields, Créneau: nouveauCreneau, PlanningID: nouvelleId, Statut: 'Nouveau', "Proposition auto en attente": false, "Proposition auto créneau": "", "Proposition auto mois": "", "Réponse agence": nouvelleReponse } }));

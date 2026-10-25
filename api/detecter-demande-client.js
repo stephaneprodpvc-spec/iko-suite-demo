@@ -205,7 +205,7 @@ async function poserDateAutomatiquement(ticket, identClient, agence, dateIso, pe
     const patch = await fetch("https://api.airtable.com/v0/" + AIRTABLE_BASE + "/Tickets%20SAV/" + encodeURIComponent(ticket.id), {
       method: "PATCH", headers: airtableHeaders(),
       body: JSON.stringify({ fields: { "Créneau": nouveauCreneau, PlanningID: choisi.id, Statut: ["En cours", "Devis à faire", "Devis envoyé", "Devis - Suivi", "Devis - Attente fournisseur", "Attente pièce"].includes(f.Statut) ? f.Statut : "Nouveau", "Proposition auto en attente": false, "Proposition auto créneau": "", "Proposition auto mois": "",
-        "RDV modifié - notif technicien": true, "Réponse agence": reponseExistante ? reponseExistante + "\n\n[" + horodatage + "]\n" + confirmation : "[" + horodatage + "]\n" + confirmation } }),
+        "RDV modifié - notif technicien": true, "En route depuis": null, "Arrivée estimée": null, "Réponse agence": reponseExistante ? reponseExistante + "\n\n[" + horodatage + "]\n" + confirmation : "[" + horodatage + "]\n" + confirmation } }),
     });
     if (!patch.ok) return null;
     // Prévenir : mail à l'agence (Make) et notification en direct aux techniciens.
