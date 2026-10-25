@@ -344,7 +344,7 @@ function DevisItemiseView({ devisId }) {
                 <label style={{fontSize:"11px",fontWeight:"700",color:"#64748B",display:"block",marginBottom:"6px"}}>Nom et prénom *</label>
                 <input value={nomSignature} onChange={e => setNomSignature(e.target.value)} placeholder="Ex : Jean Dupont" style={{width:"100%",padding:"11px",borderRadius:"8px",border:"1px solid #D1D5DB",fontSize:"14px",boxSizing:"border-box",marginBottom:"10px"}}/>
                 <label style={{display:"flex",gap:"8px",alignItems:"flex-start",fontSize:"12px",color:"#374151",cursor:"pointer"}}>
-                  <input type="checkbox" checked={accepteSignature} onChange={e => setAccepteSignature(e.target.checked)} style={{marginTop:"2px",flexShrink:0}}/>
+                  <input type="checkbox" checked={accepteSignature} onChange={e => setAccepteSignature(e.target.checked)} style={{marginTop:"2px",flexShrink:0,width:"18px",minWidth:"18px",height:"18px",padding:0}}/>
                   <span>J'ai pris connaissance du devis et je l'accepte pour un montant de <strong>{(devis.fields["Montant TTC"]||0).toFixed(2)} € TTC</strong>.</span>
                 </label>
                 {erreurSignature && <div style={{marginTop:"8px",fontSize:"12px",color:F.rouge}}>{erreurSignature}</div>}
