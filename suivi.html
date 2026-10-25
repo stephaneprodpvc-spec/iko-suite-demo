@@ -867,7 +867,7 @@ function App() {
         body: JSON.stringify({ fields: { Créneau: nouveauCreneau, PlanningID: nouvelleId, Statut: 'Nouveau', "Proposition auto en attente": false, "Proposition auto créneau": "", "Proposition auto mois": "", "RDV modifié - notif technicien": true, "En route depuis": null, "Arrivée estimée": null, "Réponse agence": nouvelleReponse } })
       });
       if (!resp.ok) throw new Error('patch failed');
-      setTicket(prev => ({ ...prev, fields: { ...prev.fields, Créneau: nouveauCreneau, PlanningID: nouvelleId, Statut: 'Nouveau', "Proposition auto en attente": false, "Proposition auto créneau": "", "Proposition auto mois": "", "Réponse agence": nouvelleReponse } }));
+      setTicket(prev => ({ ...prev, fields: { ...prev.fields, Créneau: nouveauCreneau, PlanningID: nouvelleId, Statut: 'Nouveau', "Proposition auto en attente": false, "Proposition auto créneau": "", "Proposition auto mois": "", "En route depuis": null, "Arrivée estimée": null, "Réponse agence": nouvelleReponse } }));
       setShowChanger(false);
       setChangeOk(true);
       // Notif agence (best-effort, ne bloque pas l'UI si ca echoue)
