@@ -57,6 +57,20 @@ button[style*="background: var(--iko-bg-sombre)"] { background: rgba(20,20,22,0.
 .glass-btn:hover { background: rgba(255,255,255,0.7) !important; }
 .glass-btn:active { transform: scale(0.97); }
 .glass-btn.actif { background: rgba(255,255,255,0.92) !important; color: #c24a00 !important; }
+/* ===== Affichage téléphone (≤ 700 px) : rien ne doit dépasser de l'écran, sinon l'iPhone dézoome toute la page ===== */
+@media (max-width: 700px) {
+  html, body { overflow-x: hidden; max-width: 100vw; }
+  .iko-entete { padding: 8px 12px !important; flex-wrap: wrap; gap: 8px; }
+  .iko-entete-gauche { gap: 8px !important; }
+  .iko-entete-gauche > div { width: 78px !important; height: 40px !important; }
+  .iko-entete-droite { flex-wrap: wrap; gap: 6px !important; justify-content: flex-end; flex: 1 1 auto; min-width: 0; }
+  .iko-entete-droite > * { min-width: 0; }
+  .iko-entete-droite .glass-btn, .iko-entete-droite button { min-height: 40px; }
+  .iko-chip-client { max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .iko-cache-mobile { display: none !important; }
+  .iko-contenu { padding: 12px !important; }
+  .iko-sticky-filtres { position: static !important; box-shadow: none !important; }
+}
 </style>
 </head>
 <body>
@@ -6130,7 +6144,8 @@ function Dashboard({ agenceAccess, onClose }) {
   const [rdvModifieOnly, setRdvModifieOnly] = React.useState(false);
   const [notifOuvert, setNotifOuvert] = React.useState(false);
   // Vue simple (par défaut) : tickets, planning et IKO. La vue complète ajoute indicateurs, notifications, export, centrale de direction.
-  const [vueSimple, setVueSimple] = React.useState(() => { try { const v = localStorage.getItem('iko_vue_simple'); return v === null ? true : v === '1'; } catch (e) { return true; } });
+  // Sur téléphone (≤ 700 px) : toujours la vue simple (le bouton Vue complète y est masqué).
+  const [vueSimple, setVueSimple] = React.useState(() => { try { if (window.matchMedia && window.matchMedia('(max-width: 700px)').matches) return true; const v = localStorage.getItem('iko_vue_simple'); return v === null ? true : v === '1'; } catch (e) { return true; } });
   const basculerVueSimple = () => setVueSimple(v => { const n = !v; try { localStorage.setItem('iko_vue_simple', n ? '1' : '0'); } catch (e) {} return n; });
   const [suiviIKOOuvert, setSuiviIKOOuvert] = React.useState(false); // Bloc 5 : zone "À traiter", ouverte par défaut
   const [openMessageTicketId, setOpenMessageTicketId] = React.useState(null);
@@ -7436,8 +7451,8 @@ function Dashboard({ agenceAccess, onClose }) {
         ))}
       </div>
 
-      <div style={{background:C.card,borderBottom:"1px solid "+C.border,padding:"12px 24px",display:"flex",alignItems:"center",justifyContent:"space-between",position:"sticky",top:0,zIndex:100}}>
-        <div style={{display:"flex",alignItems:"center",gap:"12px"}}>
+      <div className="iko-entete" style={{background:C.card,borderBottom:"1px solid "+C.border,padding:"12px 24px",display:"flex",alignItems:"center",justifyContent:"space-between",position:"sticky",top:0,zIndex:100}}>
+        <div className="iko-entete-gauche" style={{display:"flex",alignItems:"center",gap:"12px"}}>
           <div style={{width:"124px",height:"58px",background:"transparent",display:"flex",alignItems:"center",justifyContent:"center",boxSizing:"border-box"}}>
             <img data-iko-logo src={CONFIG_ENTREPRISE.logoUrl || IKO_LOGO} alt="Iko" style={{width:"100%",height:"100%",objectFit:"contain"}}/>
           </div>
@@ -7450,7 +7465,7 @@ function Dashboard({ agenceAccess, onClose }) {
             🎙️
           </button>
         </div>
-        <div style={{display:"flex",alignItems:"center",gap:"10px"}}>
+        <div className="iko-entete-droite" style={{display:"flex",alignItems:"center",gap:"10px"}}>
           {stats.messagesNonLus > 0 && (
             <button onClick={() => { setMessagesOnly(!messagesOnly); setStatutFilter("tous"); setUrgentOnly(false); setRdvModifieOnly(false); }}
               className={messagesOnly ? "" : "alert-blink"}
@@ -7472,7 +7487,7 @@ function Dashboard({ agenceAccess, onClose }) {
             Devis {stats.devisEnAttente > 0 && <span style={{background:"var(--iko-primary)",color:"#fff",borderRadius:"10px",padding:"1px 6px",fontSize:"10px"}}>{stats.devisEnAttente}</span>}
           </button>
           {window.IKO_ROLE === "SUPER_ADMIN_IKO" && (
-            <span title="Client affiché. Cliquer pour revenir à IKO DEMO (sans client)" onClick={() => { try { localStorage.removeItem('iko_client_slug'); } catch (e) {} const u = new URL(window.location.href); u.searchParams.delete('client'); window.location.href = u.toString(); }}
+            <span className="iko-chip-client" title="Client affiché. Cliquer pour revenir à IKO DEMO (sans client)" onClick={() => { try { localStorage.removeItem('iko_client_slug'); } catch (e) {} const u = new URL(window.location.href); u.searchParams.delete('client'); window.location.href = u.toString(); }}
               style={{background:"#fff",color:"var(--iko-dark)",border:"1px solid var(--iko-primary)",borderRadius:"8px",padding:"8px 12px",fontSize:"12px",fontWeight:"900",cursor:"pointer"}}>
               {window.IKO_CLIENT_INFO?.["Nom client"] ? window.IKO_CLIENT_INFO["Nom client"] + " ✕" : "IKO DEMO"}
             </span>
@@ -7487,15 +7502,15 @@ function Dashboard({ agenceAccess, onClose }) {
           )}
           <button className="glass-btn" onClick={() => setShowModalRdv(true)} style={{padding:"8px 16px",fontSize:"12px",display:"flex",alignItems:"center",gap:"6px"}}>+ Nouveau RDV</button>
           {/* Concepteur / Pilotage / Métreur retirés du bandeau : accès centralisé uniquement via le Module Contrôle (admin.html). */}
-          <button className="glass-btn" onClick={basculerVueSimple} title={vueSimple ? "Afficher tous les outils : indicateurs, notifications, export, entretien, centrale de direction" : "Revenir à l'affichage simple : tickets, planning et IKO"} style={{padding:"8px 14px",fontSize:"12px"}}>{vueSimple ? "Vue complète" : "Vue simple"}</button>
+          <button className="glass-btn iko-cache-mobile" onClick={basculerVueSimple} title={vueSimple ? "Afficher tous les outils : indicateurs, notifications, export, entretien, centrale de direction" : "Revenir à l'affichage simple : tickets, planning et IKO"} style={{padding:"8px 14px",fontSize:"12px"}}>{vueSimple ? "Vue complète" : "Vue simple"}</button>
           <button className="glass-btn" onClick={charger} title="Rafraîchir" style={{padding:"6px 14px",fontSize:"14px"}}>↺</button>
           <div style={{width:"1px",height:"24px",background:C.border,margin:"0 4px"}}/>
           <button onClick={onClose} title="Fermer la session" style={{background:"rgba(var(--iko-erreur-rgb),0.08)",border:"1px solid rgba(var(--iko-erreur-rgb),0.25)",color:"rgba(var(--iko-erreur-rgb),0.85)",borderRadius:"8px",width:"30px",height:"30px",cursor:"pointer",fontSize:"14px",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>✕</button>
         </div>
       </div>
 
-      <div style={{padding:"24px",maxWidth:"1200px",margin:"0 auto"}}>
-        <div style={{position:"sticky",top:"73px",zIndex:60,background:C.bg,paddingBottom:"14px",boxShadow:"0 8px 12px -8px rgba(0,0,0,0.08)"}}>
+      <div className="iko-contenu" style={{padding:"24px",maxWidth:"1200px",margin:"0 auto"}}>
+        <div className="iko-sticky-filtres" style={{position:"sticky",top:"73px",zIndex:60,background:C.bg,paddingBottom:"14px",boxShadow:"0 8px 12px -8px rgba(0,0,0,0.08)"}}>
         {agenceAccess === "global" && (
           <div style={{display:"flex",gap:"8px",marginBottom:"20px",flexWrap:"wrap"}}>
             {(AGENCES.length > 1 ? ["global",...AGENCES] : []).map(a => (
