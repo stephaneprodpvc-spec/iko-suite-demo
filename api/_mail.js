@@ -120,6 +120,7 @@ export function construireMails(action, d, marque) {
           recap([['Produit', esc(d.produit)], ['Problème', esc(d.probleme)], ['Montant TTC', `<b style="font-size:18px;color:${lisible(OR, '#FFFFFF')};">${esc(d.montant)}</b>`]]) +
           (d.message ? encart(esc(d.message)) : '') + bouton('Consulter et signer mon devis', d.lien) +
           p('<span style="font-size:13px;color:#6B6B6B;">Vous pouvez accepter ou refuser le devis en ligne, en quelques clics.</span>') }) };
+    case 'devis_signe':
     case 'devis_accepte':
       return { objet: `${t} : votre devis est signé`, html: cadre({ resume: 'Merci, votre devis est signé.', bandeau: 'Devis', titre: 'Votre devis est signé',
         corps: bonjour(d) + p(`Nous avons bien reçu la signature de votre devis pour la demande <b>${esc(t)}</b>. Merci de votre confiance.`) +

@@ -21,6 +21,7 @@ import { verifierOrigine, verifierDebit } from './_securite.js';
 import { handleAlerte, handleSurveillance, lireConfig, ecrireConfig } from './_alertes.js';
 import { handleReparation } from './_reparation.js';
 import { enteteMake } from './_make.js';
+import { ajouterMailsAuCorps } from './_mail.js';
 
 export const config = {
   api: {
@@ -122,14 +123,15 @@ async function validerDevis(req, baseId, headers, devisRecord, champsSupp) {
               await fetch('https://hook.eu1.make.com/n3lwi92wldkf22jcemmjfem334p4mv6a', {
                 method: 'POST',
                 headers: enteteMake({ 'Content-Type': 'application/json' }),
-                body: JSON.stringify({
+                body: JSON.stringify(ajouterMailsAuCorps({
                   marque: 'iko', action: 'devis_signe',
                   ticket: devisRecord.fields?.["N° devis"] || '',
                   nom: devisRecord.fields?.["Nom client"] || '',
                   "e-mail": emailClient,
                   montant: montantTTC.toFixed(2) + ' €',
-                  lien: origin + '/devis.html?devisId=' + devisRecord.id
-                })
+                  lien: origin + '/devis.html?devisId=' + devisRecord.id,
+                  lien_suivi: origin + '/devis.html?devisId=' + devisRecord.id
+                }, 'devis_signe'))
               });
             }
           } catch (makeErr) {
