@@ -52,7 +52,7 @@ function inscrireAuJournal(c, { cle, titre, message, client }) {
 
 async function envoyer(c, { titre, message }) {
   const a = c.alertes;
-  const res = { envoye: true, push: 0, make: false };
+  const res = { envoye: true, push: 0, make: false, sms: null };
   if (process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
     webpush.setVapidDetails(process.env.VAPID_SUBJECT || 'mailto:stephane.prodpvc@gmail.com', process.env.VAPID_PUBLIC_KEY, process.env.VAPID_PRIVATE_KEY);
     const cibles = c.pushSubscriptions.filter((s) => s.agence === AGENCE_PUSH);
@@ -72,7 +72,18 @@ async function envoyer(c, { titre, message }) {
       res.make = w.ok;
     } catch (e) { res.make = false; }
   }
-  a.dernierEnvoi = { quand: new Date().toISOString(), titre, push: res.push, make: res.make };
+  // SMS GRATUIT via l'option « Notifications par SMS » de Free Mobile : le SMS part vers le numéro du titulaire de la ligne
+  // (le patron), jamais vers un autre numéro. Actif seulement si FREE_SMS_USER et FREE_SMS_PASS sont définis dans Vercel.
+  if (process.env.FREE_SMS_USER && process.env.FREE_SMS_PASS) {
+    try {
+      const sms = await fetch('https://smsapi.free-mobile.fr/sendmsg', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user: process.env.FREE_SMS_USER, pass: process.env.FREE_SMS_PASS, msg: ('IKO - ' + titre + ' : ' + message).slice(0, 300) }),
+      });
+      res.sms = sms.ok;
+    } catch (e) { res.sms = false; }
+  }
+  a.dernierEnvoi = { quand: new Date().toISOString(), titre, push: res.push, make: res.make, sms: res.sms };
   return res;
 }
 

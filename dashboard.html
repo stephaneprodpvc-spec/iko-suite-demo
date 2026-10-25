@@ -4914,7 +4914,11 @@ function ModalIncident({ onClose, onBack }) {
       if (!r.ok) { setAlMsg(j.error || "Échec du test."); return; }
       const parties = [];
       parties.push(j.push > 0 ? "notification envoyée à " + j.push + " appareil(s)" : "aucun appareil enregistré pour les notifications");
-      if (alForm.email || alForm.tel) parties.push(j.make ? "demande de mail/SMS acceptée par Make (le message n'arrive que si la route « alerte_incident » existe dans Make)" : "Make n'a pas accepté la demande de mail/SMS");
+      if (alForm.email || alForm.tel) parties.push(j.make ? "demande de mail acceptée par Make (le mail arrive si la route « alerte_incident » existe dans Make)" : "Make n'a pas accepté la demande de mail");
+      else parties.push("aucune adresse e-mail enregistrée : pas de mail");
+      if (j.sms === true) parties.push("SMS envoyé sur ton téléphone (Free Mobile)");
+      else if (j.sms === false) parties.push("le SMS Free Mobile n'est pas parti (identifiants refusés ?)");
+      else parties.push("SMS non configuré");
       setAlMsg("Test : " + parties.join(" ; ") + ".");
       chargerAlertes();
     } catch (e) { setAlMsg("Échec du test."); }
