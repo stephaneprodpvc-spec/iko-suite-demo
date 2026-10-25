@@ -35,7 +35,9 @@ function prochaine(visites) {
 }
 
 async function airtable(baseId, headers, chemin, options) {
-  const r = await fetch('https://api.airtable.com/v0/' + baseId + '/' + chemin, Object.assign({ headers }, options || {}));
+  // Airtable refuse un corps JSON sans « Content-Type: application/json » (erreur 422 constatée en production).
+  const entetes = options && options.body ? Object.assign({}, headers, { 'Content-Type': 'application/json' }) : headers;
+  const r = await fetch('https://api.airtable.com/v0/' + baseId + '/' + chemin, Object.assign({}, options || {}, { headers: entetes }));
   return r;
 }
 
