@@ -828,6 +828,12 @@ function TicketRow({ t, onStatusChange, onAnnuler, onSupprimer, onSupprimerDefin
         {t.fields?.["Montant devis"] && (statut === "Devis envoyé" || statut === "Devis refusé") && (
           <div style={{marginTop:"8px",fontSize:"12px",color:C.text}}>Devis envoyé : <strong>{t.fields["Montant devis"]} € TTC</strong></div>
         )}
+        {(typeof t.fields?.["Montant encaissé"] === "number" || t.fields?.["Photo chèque"]) && (
+          <div style={{marginTop:"8px",fontSize:"12px",color:C.text}}>
+            {typeof t.fields?.["Montant encaissé"] === "number" && <span>Encaissé sur place : <strong>{t.fields["Montant encaissé"].toFixed(2)} € TTC</strong>{t.fields?.["Mode paiement"] ? " (" + String(t.fields["Mode paiement"]).toLowerCase() + ")" : ""}</span>}
+            {t.fields?.["Photo chèque"] && <span>{typeof t.fields?.["Montant encaissé"] === "number" ? " · " : ""}<a href={t.fields["Photo chèque"]} target="_blank" rel="noopener noreferrer" style={{color:"var(--iko-primary)",fontWeight:"700"}}>Photo du chèque (privé)</a></span>}
+          </div>
+        )}
         {techniciens && techniciens.length > 0 && !["Terminé","Annulé","Supprimé"].includes(statut) && <AssignBloc t={t} techniciens={techniciens} chargeTech={chargeTech || {}} onAssigner={onAssigner}/>}
         {statut === "Attente pièce" && <PieceBloc t={t} onPiece={onPiece}/>}
         {statut === "Devis à faire" && (

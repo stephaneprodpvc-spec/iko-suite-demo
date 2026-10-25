@@ -251,12 +251,12 @@ async function compresserImageTech(file) {
   });
 }
 
-async function uploadCloudinaryTech(file) {
+async function uploadCloudinaryTech(file, dossier) {
   const compressed = await compresserImageTech(file);
   const formData = new FormData();
   formData.append('file', compressed);
   formData.append('upload_preset', CLOUDINARY_PRESET);
-  formData.append('folder', 'iko-suite-sav');
+  formData.append('folder', dossier || 'iko-suite-sav');
   const resp = await fetch('https://api.cloudinary.com/v1_1/' + CLOUDINARY_CLOUD + '/auto/upload', { method: 'POST', body: formData });
   const data = await resp.json();
   return data.secure_url;
@@ -1994,6 +1994,30 @@ function ModalAction({ ticket, onClose, onDone }) {
   const [qteLigneAuto, setQteLigneAuto] = React.useState(1);
   const [emailAuto, setEmailAuto] = React.useState(ticket.fields?.Email || "");
   const [modePaiementPlace, setModePaiementPlace] = React.useState("");
+  // Encaissement sur place : ce que le technicien encaisse vraiment (acompte 30 %, totalité, autre montant ou rien)
+  // et, pour un chèque, la photo du chèque (donnée bancaire : dossier Cloudinary à part, jamais dans les mails ni l'analyse photo).
+  const [choixEncaisse, setChoixEncaisse] = React.useState("");
+  const [montantAutre, setMontantAutre] = React.useState("");
+  const [photoChequeUrl, setPhotoChequeUrl] = React.useState("");
+  const [photoChequeEnCours, setPhotoChequeEnCours] = React.useState(false);
+  const [erreurPhotoCheque, setErreurPhotoCheque] = React.useState("");
+  const totalTTCAuto = lignesAuto.reduce((s, l) => s + (l.totalTTC != null ? l.totalTTC : l.totalHT * 1.2), 0);
+  const montantEncaisse = choixEncaisse === "acompte" ? Math.round(totalTTCAuto * 0.3 * 100) / 100
+    : choixEncaisse === "total" ? Math.round(totalTTCAuto * 100) / 100
+    : choixEncaisse === "autre" ? Math.round((parseFloat(String(montantAutre).replace(",", ".")) || 0) * 100) / 100 : 0;
+  const reglementSurPlace = modePaiementPlace && modePaiementPlace !== "Signature électronique";
+  const encaissementOk = !reglementSurPlace || (choixEncaisse && (choixEncaisse !== "autre" || montantEncaisse > 0));
+  const prendrePhotoCheque = async (fichiers) => {
+    const f = (fichiers || [])[0];
+    if (!f) return;
+    setPhotoChequeEnCours(true); setErreurPhotoCheque("");
+    try {
+      const url = await uploadCloudinaryTech(f, 'iko-suite-cheques');
+      if (!url) throw new Error('pas d\'adresse');
+      setPhotoChequeUrl(url);
+    } catch (e) { setErreurPhotoCheque("Photo non envoyée, réessaie."); }
+    setPhotoChequeEnCours(false);
+  };
   const [causeSav, setCauseSav] = React.useState("");
   const [dureeMin, setDureeMin] = React.useState("");
   const [coutPieces, setCoutPieces] = React.useState("");
@@ -2366,7 +2390,7 @@ function ModalAction({ ticket, onClose, onDone }) {
     if (mode === "annuler" && !commentaire.trim()) return;
     if (mode === "devis" && !explication.trim()) return;
     if (mode === "piece" && !pieceTexte.trim()) return;
-    if (mode === "devis_place" && (!lignesAuto.length || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailAuto.trim()) || !modePaiementPlace)) return;
+    if (mode === "devis_place" && (!lignesAuto.length || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailAuto.trim()) || !modePaiementPlace || !encaissementOk)) return;
     setSaving(true); setErreurFermeture("");
     try {
       const fields = {};
@@ -2380,6 +2404,8 @@ function ModalAction({ ticket, onClose, onDone }) {
       } else if (mode === "devis_place") {
         fields.Statut = "Terminé";
         fields["Mode paiement"] = ({ "CB":"CB", "Chèque":"CHEQUE", "Virement":"VIREMENT", "Signature électronique":"SIGNATURE" })[modePaiementPlace] || modePaiementPlace;
+        if (reglementSurPlace && choixEncaisse && choixEncaisse !== "aucun") fields["Montant encaissé"] = montantEncaisse;
+        if (modePaiementPlace === "Chèque" && photoChequeUrl) fields["Photo chèque"] = photoChequeUrl;
         if (commentaire) fields.Commentaire = commentaire;
         noteToken = Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-6);
         fields["Note Token"] = noteToken;
@@ -2747,6 +2773,42 @@ function ModalAction({ ticket, onClose, onDone }) {
               </div>
             </div>
 
+            {reglementSurPlace && (
+              <div style={{marginBottom:"14px"}}>
+                <label style={{fontSize:"11px",color:C.muted,display:"block",marginBottom:"8px",fontWeight:"700"}}>Montant encaissé sur place *</label>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"8px"}}>
+                  {[["acompte","Acompte 30 % — " + (Math.round(totalTTCAuto * 0.3 * 100) / 100).toFixed(2) + " €"],
+                    ["total","Totalité — " + (Math.round(totalTTCAuto * 100) / 100).toFixed(2) + " €"],
+                    ["autre","Autre montant"],
+                    ["aucun","Rien encaissé"]].map(([k, lib]) => (
+                    <button key={k} type="button" onClick={() => setChoixEncaisse(k)}
+                      style={{padding:"10px 8px",borderRadius:"8px",border:"1px solid "+(choixEncaisse===k?"var(--iko-primary)":C.border),background:choixEncaisse===k?C.vert:"#F3F4F6",color:choixEncaisse===k?"#fff":C.text,fontSize:"11px",fontWeight:"700",cursor:"pointer"}}>
+                      {lib}
+                    </button>
+                  ))}
+                </div>
+                {choixEncaisse === "autre" && (
+                  <input type="text" inputMode="decimal" value={montantAutre} onChange={e => setMontantAutre(e.target.value)} placeholder="Montant encaissé en € (ex : 150)" style={{fontSize:"12px",marginTop:"8px"}}/>
+                )}
+                {choixEncaisse && choixEncaisse !== "aucun" && montantEncaisse > 0 && (
+                  <div style={{fontSize:"11px",color:C.muted,marginTop:"6px"}}>Encaissé : <strong>{montantEncaisse.toFixed(2)} € TTC</strong> sur {(Math.round(totalTTCAuto * 100) / 100).toFixed(2)} € TTC.</div>
+                )}
+              </div>
+            )}
+
+            {modePaiementPlace === "Chèque" && (
+              <div style={{marginBottom:"14px"}}>
+                <label style={{fontSize:"11px",color:C.muted,display:"block",marginBottom:"6px",fontWeight:"700"}}>Photo du chèque (facultatif, privé)</label>
+                <input type="file" accept="image/*" capture="environment" disabled={photoChequeEnCours}
+                  onChange={e => { const f = Array.from(e.target.files || []); e.target.value = ""; if (f.length) prendrePhotoCheque(f); }}
+                  style={{fontSize:"12px"}}/>
+                <div style={{fontSize:"10px",color:C.muted,marginTop:"4px"}}>Réservée à l'agence : elle n'est jamais envoyée au client, ni dans les mails, ni à l'analyse photo.</div>
+                {photoChequeEnCours && <div style={{fontSize:"11px",color:C.muted,marginTop:"4px"}}>⏳ Envoi de la photo...</div>}
+                {photoChequeUrl && !photoChequeEnCours && <div style={{fontSize:"11px",color:"#15803D",marginTop:"4px"}}>✓ Photo du chèque enregistrée <button type="button" onClick={() => setPhotoChequeUrl("")} style={{marginLeft:"8px",fontSize:"10px",background:"none",border:"none",color:C.muted,textDecoration:"underline",cursor:"pointer"}}>retirer</button></div>}
+                {erreurPhotoCheque && <div style={{fontSize:"11px",color:C.rouge,marginTop:"4px"}}>{erreurPhotoCheque}</div>}
+              </div>
+            )}
+
             <BlocCompteRenduMax commentaire={commentaire} setCommentaire={setCommentaire}
               placeholder="Ex : Vitrage remplacé, réglage gâche." rows={2}
               enregistrementCREnCours={enregistrementCREnCours} dicterCompteRendu={dicterCompteRendu} arreterDicteeCompteRendu={arreterDicteeCompteRendu}
@@ -2755,8 +2817,8 @@ function ModalAction({ ticket, onClose, onDone }) {
               compteRenduStructure={compteRenduStructure} utiliserCompteRenduStructure={utiliserCompteRenduStructure}/>
 
             <BlocClotureTerrain cause={causeSav} setCause={setCauseSav} duree={dureeMin} setDuree={setDureeMin} coutPieces={coutPieces} setCoutPieces={setCoutPieces} setSignature={setSignatureClient}/>
-            <button onClick={confirmer} disabled={saving||!lignesAuto.length||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailAuto.trim())||!modePaiementPlace}
-              style={{width:"100%",padding:"14px",background:(saving||!lignesAuto.length||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailAuto.trim())||!modePaiementPlace)?"#D1D5DB":C.vert,color:(saving||!lignesAuto.length)?C.muted:"#fff",border:"none",borderRadius:"12px",fontSize:"14px",fontWeight:"900",cursor:saving?"not-allowed":"pointer"}}>
+            <button onClick={confirmer} disabled={saving||!lignesAuto.length||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailAuto.trim())||!modePaiementPlace||!encaissementOk||photoChequeEnCours}
+              style={{width:"100%",padding:"14px",background:(saving||!lignesAuto.length||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailAuto.trim())||!modePaiementPlace||!encaissementOk||photoChequeEnCours)?"#D1D5DB":C.vert,color:(saving||!lignesAuto.length)?C.muted:"#fff",border:"none",borderRadius:"12px",fontSize:"14px",fontWeight:"900",cursor:saving?"not-allowed":"pointer"}}>
               {saving ? "⏳ Enregistrement..." : "Confirmer devis, encaissement et intervention"}
             </button>
           </>
