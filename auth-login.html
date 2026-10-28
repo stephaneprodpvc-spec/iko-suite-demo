@@ -45,6 +45,7 @@
     <input id="identifiant" type="email" placeholder="Identifiant (facultatif)" autocomplete="username" />
     <input id="motDePasse" type="password" placeholder="Mot de passe" autocomplete="current-password" />
     <button id="btnLogin" class="btn-primary">Se connecter</button>
+    <button id="btnCle" class="btn-secondary" style="display:none;">Entrer avec Face ID / empreinte</button>
     <button id="btnSession" class="btn-secondary">Vérifier la session</button>
     <button id="btnLogout" class="btn-danger">Se déconnecter</button>
     <div id="blocChangement" style="display:none;">
@@ -119,6 +120,30 @@
       afficherEtat(res.json);
     }
     else { afficherMsg(res.json.erreur || 'Erreur.'); }
+  });
+
+  // --- Connexion par Face ID / empreinte (clé d'accès) : proposée seulement si l'appareil sait le faire ---
+  function enBuf(t) { t = String(t).replace(/-/g, '+').replace(/_/g, '/'); while (t.length % 4) t += '='; var s = atob(t), b = new Uint8Array(s.length); for (var i = 0; i < s.length; i++) b[i] = s.charCodeAt(i); return b.buffer; }
+  function enB64u(buf) { var b = new Uint8Array(buf), s = ''; for (var i = 0; i < b.length; i++) s += String.fromCharCode(b[i]); return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); }
+  if (window.PublicKeyCredential && PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable) {
+    PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable().then(function (ok) { if (ok) $('btnCle').style.display = 'block'; }).catch(function () {});
+  }
+  $('btnCle').addEventListener('click', async function () {
+    afficherMsg(''); afficherEtat(null);
+    try {
+      var o = await fetch('/api/verif-securite', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'cle_options_connexion' }) });
+      var oj = await o.json();
+      if (!o.ok) { afficherMsg(oj.erreur || 'Erreur.'); return; }
+      var cred = await navigator.credentials.get({ publicKey: { challenge: enBuf(oj.options.challenge), rpId: oj.options.rpId, userVerification: 'required', timeout: oj.options.timeout, allowCredentials: [] } });
+      var r = await fetch('/api/verif-securite', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
+        action: 'cle_connexion', jeton: oj.jeton, id: enB64u(cred.rawId), clientDataJSON: enB64u(cred.response.clientDataJSON),
+        authenticatorData: enB64u(cred.response.authenticatorData), signature: enB64u(cred.response.signature) }) });
+      var json = await r.json().catch(function () { return {}; });
+      if (!r.ok) { afficherMsg(json.erreur || 'Erreur.'); return; }
+      var retour = retourDemande();
+      if (retour) { window.location.href = retour; return; }
+      afficherEtat(json);
+    } catch (e) { afficherMsg(e && e.name === 'NotAllowedError' ? 'Annulé sur l\'appareil.' : 'Face ID / empreinte indisponible ici : utilise ton mot de passe.'); }
   });
 
   $('btnChanger').addEventListener('click', async function () {

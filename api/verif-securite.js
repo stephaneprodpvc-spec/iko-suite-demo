@@ -49,6 +49,8 @@ import crypto from "crypto";
 import { verifierOrigine, verifierDebit, reponseBloquee, verifierSession, MODE_DEMO_OUVERT, SESSION_DEMO } from "./_securite.js";
 import { signalerAbus } from "./_abus.js";
 import { initialiserPlanning, lireReglagesBruts, enregistrerReglages, REGLAGES_DEFAUT } from "./_planning.js";
+import { gererCreerComptes, gererRegenererMotDePasse } from "./_comptes.js";
+import { optionsEnregistrement, enregistrerCle, etatCle, supprimerCle, optionsConnexion, connexionCle } from "./_cles-acces.js";
 
 const AIRTABLE_BASE = "appkI8RKHkYNWY86U";
 const CONFIG_RECORD_ID = "rec45X231n9dXnyaU";
@@ -204,7 +206,7 @@ async function majUtilisateur(recordId, champs) {
   );
 }
 
-async function reponseGeneriqueEchec(res, hashACompare) {
+async function reponseGeneriqueEchec(req, res, hashACompare) {
   // Delai constant : on execute toujours un bcrypt.compare, meme si le
   // compte n'existe pas (contre HASH_FACTICE), pour eviter une attaque par
   // mesure de temps qui reveleraient qu'un identifiant existe ou non.
@@ -241,10 +243,10 @@ async function gererLogin(req, res) {
 
   const user = await lireUtilisateurParIdentifiant(identifiant);
 
-  if (!user) return reponseGeneriqueEchec(res, null);
+  if (!user) return reponseGeneriqueEchec(req, res,null);
 
   if (user.bloqueJusqua && new Date(user.bloqueJusqua) > new Date()) {
-    return reponseGeneriqueEchec(res, user.hash);
+    return reponseGeneriqueEchec(req, res,user.hash);
   }
 
   const motDePasseValide = await bcrypt.compare(motDePasse, user.hash || HASH_FACTICE);
@@ -291,8 +293,8 @@ async function gererChangementMotDePasse(req, res) {
     return res.status(400).json({ erreur: "Identifiant, ancien et nouveau mot de passe requis." });
   }
   const user = await lireUtilisateurParIdentifiant(String(identifiant));
-  if (!user) return reponseGeneriqueEchec(res, null);
-  if (user.bloqueJusqua && new Date(user.bloqueJusqua) > new Date()) return reponseGeneriqueEchec(res, user.hash);
+  if (!user) return reponseGeneriqueEchec(req, res,null);
+  if (user.bloqueJusqua && new Date(user.bloqueJusqua) > new Date()) return reponseGeneriqueEchec(req, res,user.hash);
 
   const ancienValide = await bcrypt.compare(String(motDePasse), user.hash || HASH_FACTICE);
   if (!ancienValide || user.statut !== "Actif") {
@@ -905,10 +907,40 @@ async function executerVerifications() {
   return { resultats, texte, aDesEchecs: echecs.length > 0 };
 }
 
+// Outils passes aux modules api/_comptes.js et api/_cles-acces.js (evite les imports circulaires).
+function contexteComptes() {
+  return {
+    AIRTABLE_BASE, UTILISATEURS_TABLE, bcrypt, airtableHeaders, evaluerMotDePasse, exigerSuperAdmin, lireUtilisateurParIdentifiant,
+    majUtilisateur, genererMotDePasseTemporaire, motDePasseUniqueValide, verifierDebit, signalerAbus, verifierSession,
+    cookiesSession: (user, tokenId) => [
+      cookie("iko_access", signAccessToken(user), ACCESS_TOKEN_DUREE_S, "/"),
+      cookie("iko_refresh", signRefreshToken(user, tokenId), REFRESH_TOKEN_DUREE_S, "/api/verif-securite"),
+    ],
+  };
+}
+
 export default async function handler(req, res) {
   try {
     if (req.method === "POST") {
       const action = req.body && req.body.action;
+
+      // --- Comptes par agence, mot de passe temporaire, empreinte / visage ---
+      if (action === "creer_comptes" || action === "regenerer_mot_de_passe") {
+        if (!verifierOrigine(req)) return reponseBloquee(res, "origine");
+        if (!verifierDebit(req)) return reponseBloquee(res, "debit");
+        return action === "creer_comptes" ? gererCreerComptes(req, res, contexteComptes()) : gererRegenererMotDePasse(req, res, contexteComptes());
+      }
+      if (action && action.startsWith("cle_")) {
+        if (!verifierOrigine(req)) return reponseBloquee(res, "origine");
+        if (!verifierDebit(req, { max: 30, fenetreMs: 10 * 60_000, cle: "cle-acces" })) return reponseBloquee(res, "debit");
+        const ctx = contexteComptes();
+        if (action === "cle_options_enregistrement") return optionsEnregistrement(req, res, ctx);
+        if (action === "cle_enregistrer") return enregistrerCle(req, res, ctx);
+        if (action === "cle_etat") return etatCle(req, res, ctx);
+        if (action === "cle_supprimer") return supprimerCle(req, res, ctx);
+        if (action === "cle_options_connexion") return optionsConnexion(req, res);
+        if (action === "cle_connexion") return connexionCle(req, res, ctx);
+      }
 
       // --- Authentification (ajout, n'existait pas avant) ---
       if (action === "login") {

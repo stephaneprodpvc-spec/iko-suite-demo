@@ -677,11 +677,14 @@ export default async function handler(req, res) {
     const recordIdAU = segmentsAU[1];
 
     if (req.method === 'GET' && !recordIdAU) {
-      const qs = new URLSearchParams(rest);
-      CHAMPS_UTILISATEURS_SURS.forEach(c => qs.append('fields[]', c));
+      const fabriquerQs = (extras) => { const q = new URLSearchParams(rest); CHAMPS_UTILISATEURS_SURS.concat(extras).forEach(c => q.append('fields[]', c)); return q.toString(); };
       try {
-        const rAU = await fetch('https://api.airtable.com/v0/' + baseId + '/Utilisateurs?' + qs.toString(), { headers });
+        // « Agence », « Nom » et « Clé d'accès ID » sont facultatifs (champs Airtable ajoutes plus tard) : repli si absents.
+        // « Clé d'accès ID » n'est PAS renvoye tel quel (il sert seulement a savoir si Face ID / empreinte est active).
+        let rAU = await fetch('https://api.airtable.com/v0/' + baseId + '/Utilisateurs?' + fabriquerQs(['Agence', 'Nom', "Clé d'accès ID"]), { headers });
+        if (rAU.status === 422) rAU = await fetch('https://api.airtable.com/v0/' + baseId + '/Utilisateurs?' + fabriquerQs([]), { headers });
         const dataAU = await rAU.json();
+        if (dataAU && Array.isArray(dataAU.records)) dataAU.records.forEach(rec => { if (rec.fields && rec.fields["Clé d'accès ID"]) { rec.fields["Clé d'accès active"] = true; } if (rec.fields) delete rec.fields["Clé d'accès ID"]; });
         return res.status(rAU.status).json(dataAU);
       } catch (err) {
         return res.status(502).json({ error: 'Erreur en contactant Airtable', details: String(err) });

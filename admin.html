@@ -2,7 +2,12 @@
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="IKO Pilotage">
+<link rel="apple-touch-icon" href="/icon-192.png">
 <title>Iko — Poste de pilotage</title>
 <meta name="theme-color" content="#0A0A0A">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -506,7 +511,7 @@
   .ide-nav-item[data-cible="sec-bareme"]{--accent:#B34A00;}
   .ide-nav-item[data-cible="sec-securite"]{--accent:#EDEDEF;}
   .ide-nav-item[data-cible="sec-alertes"]{--accent:#FF453A;}
-  .ide-nav-item[data-cible="sec-audience"]{--accent:#FF6B00;}
+  .ide-nav-item[data-cible="sec-audience"]{--accent:#FFC38A;}
   #sec-alertes{--accent:#FF453A;}
   .al-badge{margin-left:auto;min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:#FF453A;color:#fff;font-size:10.5px;font-weight:700;display:none;align-items:center;justify-content:center;}
   .al-ligne{border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:10px;background:rgba(255,255,255,0.03);}
@@ -565,6 +570,26 @@
   .au-table th{text-align:left;font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--texte-faint);padding:6px 8px;border-bottom:1px solid var(--border);}
   .au-table td{padding:7px 8px;border-bottom:1px solid var(--border);}
   .au-table td.num,.au-table th.num{text-align:right;font-variant-numeric:tabular-nums;}
+  /* ===== iPhone / iPad : pilotage au doigt (zones tactiles 44 px, pas de zoom automatique, pas de débordement) ===== */
+  html{-webkit-text-size-adjust:100%;}
+  @media (max-width:1024px){
+    header{padding:12px 18px;padding-top:max(12px,env(safe-area-inset-top));}
+    main{padding:18px;}
+    button,.secondary,.primary,select,input[type=text],input[type=password],input[type=email],input[type=number],textarea{min-height:44px;}
+    input,select,textarea{font-size:16px !important;}
+  }
+  @media (max-width:700px){
+    header{padding:10px 12px;padding-top:max(10px,env(safe-area-inset-top));gap:8px;flex-wrap:wrap;}
+    main{padding:10px 10px calc(10px + env(safe-area-inset-bottom));}
+    .card{padding:14px !important;border-radius:16px;}
+    .actions{flex-wrap:wrap;}
+    .actions > button{flex:1 1 140px;}
+    table{display:block;overflow-x:auto;-webkit-overflow-scrolling:touch;}
+    .verif-config{flex-wrap:wrap;}
+    .verif-config select{flex:1 1 140px;}
+    #fiche-client-modal .devis-modal-box{padding:14px;}
+    h1,h2{overflow-wrap:anywhere;}
+  }
 </style>
 </head>
 <body>
@@ -823,6 +848,16 @@
       <div class="verif-hint">Le déclenchement manuel est instantané. L'automatique dépend du cron Vercel (une fois par jour vers 6h UTC sur le plan gratuit — l'heure exacte n'est pas garantie ; passe sur Vercel Pro pour un horaire précis).</div>
       <div class="verif-rapport" id="verifRapport">Aucun rapport pour l'instant.</div>
       <div class="msg" id="verifMsg"></div>
+      <div id="cleAcces" style="margin-top:18px;padding-top:14px;border-top:1px solid var(--border);">
+        <h2 style="font-size:15px;">Accès par empreinte ou visage</h2>
+        <div class="verif-hint" id="cleEtat">Vérification…</div>
+        <div class="actions" style="margin-top:8px;">
+          <button type="button" class="primary" id="cleActiver" style="flex:1;">Activer Face ID / empreinte sur cet appareil</button>
+          <button type="button" class="secondary" id="cleRetirer" style="flex:1;display:none;">Retirer</button>
+        </div>
+        <div class="verif-hint">À faire une fois sur chaque appareil (iPhone, iPad). Il faut d'abord t'être connecté avec ton compte personnel (identifiant + mot de passe), pas avec le mot de passe unique. Ensuite, la page de connexion propose « Entrer avec Face ID / empreinte ».</div>
+        <div class="msg" id="cleMsg"></div>
+      </div>
     </div>
 
     <div class="devis-modal-overlay" id="fiche-client-modal" style="display:none;">
@@ -938,7 +973,23 @@
               <button type="button" class="secondary" id="creerUtilisateurBtn" style="width:100%;">+ Créer le compte</button>
               <div id="utilisateurMsg" style="font-size:11px;"></div>
             </div>
-            <div class="hint" style="font-size:11px;color:var(--texte-faint);margin-top:5px;">Authentification isolée (JWT), pas encore branchée sur les écrans de connexion des modules — voir dépendances documentées dans api/verif-securite.js.</div>
+            <div style="display:flex;flex-direction:column;gap:6px;margin-top:8px;padding:10px;border:1px dashed var(--border);border-radius:12px;">
+              <div style="font-weight:700;font-size:12px;">Créer un compte par agence</div>
+              <input type="text" id="serieIdent" placeholder="Identifiant avec {n} : agence{n}@exemple.fr" style="width:100%;padding:8px 10px;border-radius:8px;border:1px solid var(--border);background:rgba(255,255,255,0.04);color:var(--texte);font-size:12px;outline:none;">
+              <select id="serieMode" style="width:100%;padding:8px 10px;border-radius:8px;border:1px solid var(--border);background:rgba(255,255,255,0.04);color:var(--texte);font-size:12px;outline:none;">
+                <option value="serie">Mot de passe = ma base + numéro d'agence (1, 2, 3…)</option>
+                <option value="aleatoire">Un mot de passe aléatoire temporaire par compte</option>
+              </select>
+              <input type="password" id="serieBase" placeholder="Ma base de mot de passe (11 caractères min., sans « admin », « iko »…)" autocomplete="new-password" style="width:100%;padding:8px 10px;border-radius:8px;border:1px solid var(--border);background:rgba(255,255,255,0.04);color:var(--texte);font-size:12px;outline:none;">
+              <select id="serieRole" style="width:100%;padding:8px 10px;border-radius:8px;border:1px solid var(--border);background:rgba(255,255,255,0.04);color:var(--texte);font-size:12px;outline:none;">
+                <option value="TENANT_ADMIN">Admin client (une agence)</option>
+                <option value="TECHNICIEN">Technicien (une agence)</option>
+                <option value="COMMERCIAL">Commercial</option>
+              </select>
+              <button type="button" class="secondary" id="serieBtn" style="width:100%;">Créer les comptes de toutes les agences</button>
+              <div id="serieResultat" style="font-size:11px;"></div>
+              <div class="hint" style="font-size:11px;color:var(--texte-faint);">Un compte est créé pour chaque agence de ce client. Les comptes déjà existants sont ignorés. Le champ « Agence » ne limite pas encore l'accès aux données : il sert au classement et au coffre.</div>
+            </div>
           </div>
         </div>
 
@@ -2101,15 +2152,19 @@ function afficherUtilisateurs(records){
   el.innerHTML = records.map(function(rec){
     var f = rec.fields || {};
     var actif = f["Statut"] !== "Bloqué" ? "checked" : "";
-    return "<div style='border:1px solid var(--border);border-radius:12px;padding:10px;display:flex;align-items:center;gap:10px;'>" +
-      "<div style='flex:1;min-width:0;'>" +
+    return "<div style='border:1px solid var(--border);border-radius:12px;padding:10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;'>" +
+      "<div style='flex:1;min-width:150px;'>" +
         "<div style='font-size:13px;color:var(--texte);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;'>" + escHtml(f["Identifiant"]) + "</div>" +
-        "<div style='font-size:11px;color:var(--texte-faint);'>" + escHtml(f["Rôle"]) + (f["Dernière connexion"] ? " · dernière connexion " + new Date(f["Dernière connexion"]).toLocaleDateString("fr-FR") : " · jamais connecté") + "</div>" +
+        "<div style='font-size:11px;color:var(--texte-faint);'>" + (f["Agence"] ? escHtml(f["Agence"]) + " · " : "") + escHtml(f["Rôle"]) + (f["Clé d'accès active"] ? " · Face ID / empreinte activé" : "") + (f["Dernière connexion"] ? " · dernière connexion " + new Date(f["Dernière connexion"]).toLocaleDateString("fr-FR") : " · jamais connecté") + "</div>" +
       "</div>" +
+      (f["Rôle"] !== "SUPER_ADMIN_IKO" ? "<button type='button' class='secondary ut-regen' data-ident='" + escHtml(f["Identifiant"]) + "' data-role='" + escHtml(f["Rôle"] || "") + "' data-agence='" + escHtml(f["Agence"] || "") + "' style='padding:6px 10px;font-size:11px;flex-shrink:0;'>Nouveau mot de passe</button>" : "") +
       "<label style='font-size:11px;color:var(--texte-dim);display:flex;align-items:center;gap:4px;flex-shrink:0;'><input type='checkbox' data-id='" + rec.id + "' class='ut-actif' " + actif + "> Actif</label>" +
     "</div>";
   }).join("");
 
+  Array.prototype.forEach.call(el.querySelectorAll(".ut-regen"), function(b){
+    b.addEventListener("click", function(){ regenererMotDePasseUtilisateur(this.getAttribute("data-ident"), this.getAttribute("data-role"), this.getAttribute("data-agence")); });
+  });
   Array.prototype.forEach.call(el.querySelectorAll(".ut-actif"), function(champ){
     champ.addEventListener("change", function(){
       var id = this.getAttribute("data-id");
@@ -2146,6 +2201,141 @@ document.getElementById("creerUtilisateurBtn").addEventListener("click", functio
     })
     .catch(function(){ msg.style.color = "#FF453A"; msg.textContent = "Erreur de création."; });
 });
+
+// ---- Comptes par agence, nouveau mot de passe, fiches pour le coffre ----
+function appelSecurite(corps){
+  return fetch("/api/verif-securite", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify(corps) })
+    .then(function(r){ return r.json().catch(function(){ return {}; }).then(function(d){ return { ok: r.ok, status: r.status, data: d }; }); });
+}
+function numeroAgence(nom, index){ var m = /(\d+)\s*$/.exec(nom || ""); return m ? m[1] : String(index + 1); }
+function nomClientCourant(){ var c = clients.find(function(x){ return x.id === editingId; }); return (c && c.fields && c.fields["Nom client"]) || ""; }
+function slugClientCourant(){ var c = clients.find(function(x){ return x.id === editingId; }); return (c && c.fields && c.fields["Slug"]) || ""; }
+var modulesParRole = { SUPER_ADMIN_IKO: ["Centre de pilotage", "IKO", "Max"], TENANT_ADMIN: ["IKO", "Max"], TECHNICIEN: ["Max"], COMMERCIAL: ["IKO"] };
+function fichesCoffre(liste){ // liste de { identifiant, motDePasse, agence, role }
+  var nom = nomClientCourant(), slug = slugClientCourant();
+  return liste.map(function(c){
+    return { identifiant: c.identifiant, motDePasse: c.motDePasse, client: nom, agence: c.agence || "Toutes", role: c.role,
+      modules: modulesParRole[c.role] || ["IKO"], utilisateur: (c.agence ? c.agence + " — " : "") + (c.role === "TECHNICIEN" ? "technicien" : "admin"),
+      lien: location.origin + (c.role === "TECHNICIEN" ? "/technicien.html" : "/dashboard.html") + "?client=" + slug, note: c.note || "" };
+  });
+}
+
+document.getElementById("serieBtn").addEventListener("click", function(){
+  if (!editingId) return;
+  var zone = document.getElementById("serieResultat");
+  var motif = document.getElementById("serieIdent").value.trim();
+  var mode = document.getElementById("serieMode").value;
+  var base = document.getElementById("serieBase").value;
+  var role = document.getElementById("serieRole").value;
+  var agences = (agencesActuelles || []).map(function(a){ return (a.fields && a.fields["Nom agence"]) || ""; }).filter(Boolean);
+  if (!agences.length) { zone.style.color = "#FF453A"; zone.textContent = "Ce client n'a pas encore d'agence."; return; }
+  if (motif.indexOf("{n}") < 0 && agences.length > 1) { zone.style.color = "#FF453A"; zone.textContent = "Mets {n} dans l'identifiant (ex. agence{n}@exemple.fr) : un identifiant par agence."; return; }
+  if (mode === "serie" && !base) { zone.style.color = "#FF453A"; zone.textContent = "Saisis ta base de mot de passe."; return; }
+  if (!motif) { zone.style.color = "#FF453A"; zone.textContent = "Saisis l'identifiant."; return; }
+  var demandes = agences.map(function(nomA, i){
+    var n = numeroAgence(nomA, i);
+    var d = { identifiant: motif.replace(/\{n\}/g, n), nom: nomA, agence: nomA, role: role };
+    if (mode === "serie") d.motDePasse = base + n; else d.aleatoire = true;
+    return d;
+  });
+  var btn = this; btn.disabled = true; zone.style.color = "var(--texte-faint)"; zone.textContent = "Création en cours…";
+  var crees = [], ignores = [], champsAgence = true;
+  var lots = []; for (var k = 0; k < demandes.length; k += 8) lots.push(demandes.slice(k, k + 8));
+  (function suite(i){
+    if (i >= lots.length) {
+      btn.disabled = false; document.getElementById("serieBase").value = "";
+      var motsConnus = {}; demandes.forEach(function(d){ if (d.motDePasse) motsConnus[d.identifiant] = d.motDePasse; });
+      var fiches = fichesCoffre(crees.map(function(c){ return { identifiant: c.identifiant, role: c.role, agence: c.agence, motDePasse: c.motDePasseTemporaire || motsConnus[c.identifiant] || "", note: c.motDePasseTemporaire ? "Temporaire : à changer à la 1re connexion." : "" }; }));
+      zone.style.color = "var(--texte)";
+      zone.innerHTML = "<div style='color:#FF6B00;font-weight:700;'>" + crees.length + " compte(s) créé(s)" + (ignores.length ? ", " + ignores.length + " ignoré(s)" : "") + ".</div>" +
+        ignores.map(function(x){ return "<div style='color:#FF9F0A;'>" + escHtml(x.identifiant) + " : " + escHtml(x.raison) + "</div>"; }).join("") +
+        (champsAgence ? "" : "<div style='color:#FF9F0A;'>Le champ « Agence » n'existe pas encore dans Airtable : l'agence n'est pas enregistrée dans le compte.</div>") +
+        (crees.length ? "<button type='button' class='secondary' id='serieCoffre' style='margin-top:6px;'>Copier les " + crees.length + " fiches pour le coffre</button>" : "") +
+        (mode === "aleatoire" && crees.length ? "<div style='margin-top:6px;'>Mots de passe temporaires (affichés UNE seule fois) :</div>" + crees.map(function(c){ return "<div><code></code></div>"; }).join("") : "");
+      if (mode === "aleatoire") Array.prototype.forEach.call(zone.querySelectorAll("code"), function(code, idx){ code.textContent = crees[idx].identifiant + "  →  " + crees[idx].motDePasseTemporaire; });
+      var bc = document.getElementById("serieCoffre"); if (bc) bc.addEventListener("click", function(){ ikoCopier(JSON.stringify(fiches), this); });
+      chargerUtilisateursClient(editingId);
+      return;
+    }
+    appelSecurite({ action: "creer_comptes", clientId: editingId, comptes: lots[i] }).then(function(res){
+      if (!res.ok) { btn.disabled = false; zone.style.color = "#FF453A"; zone.textContent = (res.data.erreur || "Erreur de création.") + (crees.length ? " (" + crees.length + " déjà créé(s))" : ""); chargerUtilisateursClient(editingId); return; }
+      crees = crees.concat(res.data.crees || []); ignores = ignores.concat(res.data.ignores || []); if (res.data.champsAgence === false) champsAgence = false;
+      suite(i + 1);
+    }).catch(function(){ btn.disabled = false; zone.style.color = "#FF453A"; zone.textContent = "Erreur réseau."; });
+  })(0);
+});
+
+function regenererMotDePasseUtilisateur(identifiant, roleCompte, agenceCompte){
+  var vieux = document.getElementById("regenModal"); if (vieux) vieux.remove();
+  var m = document.createElement("div"); m.id = "regenModal";
+  m.style.cssText = "position:fixed;inset:0;z-index:9500;background:rgba(0,0,0,0.65);display:flex;align-items:center;justify-content:center;padding:16px;";
+  m.innerHTML = "<div style='background:var(--bg-card,#1c1c1e);color:var(--texte,#fff);border:1px solid var(--border);border-radius:16px;max-width:440px;width:100%;padding:18px;'>" +
+    "<h2 style='margin:0 0 6px;font-size:16px;'>Nouveau mot de passe</h2><div style='font-size:12px;color:var(--texte-dim,#aaa);margin-bottom:10px;'>Compte : <b id='regenIdent'></b>. L'ancien mot de passe cesse de marcher. Saisis TON mot de passe de super administrateur pour continuer.</div>" +
+    "<input type='password' id='regenAdmin' autocomplete='current-password' placeholder='Ton mot de passe super administrateur' style='width:100%;padding:10px;border-radius:8px;border:1px solid var(--border);background:rgba(255,255,255,0.04);color:var(--texte,#fff);font-size:14px;'>" +
+    "<div id='regenMsg' style='font-size:12px;min-height:18px;margin-top:8px;'></div><div id='regenRes'></div>" +
+    "<div style='display:flex;gap:8px;margin-top:10px;justify-content:flex-end;'><button type='button' class='secondary' id='regenFermer'>Fermer</button><button type='button' class='primary' id='regenOk'>Générer</button></div></div>";
+  document.body.appendChild(m);
+  document.getElementById("regenIdent").textContent = identifiant;
+  document.getElementById("regenFermer").addEventListener("click", function(){ m.remove(); });
+  document.getElementById("regenAdmin").focus();
+  document.getElementById("regenOk").addEventListener("click", function(){
+    var saisi = document.getElementById("regenAdmin").value, msg = document.getElementById("regenMsg");
+    if (!saisi) { msg.style.color = "#FF453A"; msg.textContent = "Saisis ton mot de passe."; return; }
+    msg.style.color = "var(--texte-faint)"; msg.textContent = "Création…";
+    appelSecurite({ action: "regenerer_mot_de_passe", identifiant: identifiant, motDePasseAdmin: saisi }).then(function(res){
+      document.getElementById("regenAdmin").value = "";
+      if (!res.ok) { msg.style.color = "#FF453A"; msg.textContent = res.data.erreur || "Erreur."; return; }
+      msg.style.color = "#FF6B00"; msg.textContent = "Nouveau mot de passe temporaire (affiché UNE seule fois) :";
+      var mdp = res.data.motDePasseTemporaire;
+      document.getElementById("regenRes").innerHTML = "<div style='border:1px solid #FF9F0A;border-radius:10px;padding:10px;margin-top:6px;'><code id='regenMdp' style='font-size:16px;user-select:all;'></code><div style='display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;'><button type='button' class='secondary' id='regenCopier'>Copier</button><button type='button' class='secondary' id='regenCoffre'>Copier pour le coffre</button></div></div>";
+      document.getElementById("regenMdp").textContent = mdp;
+      document.getElementById("regenOk").style.display = "none";
+      document.getElementById("regenCopier").addEventListener("click", function(){ ikoCopier(mdp, this); });
+      document.getElementById("regenCoffre").addEventListener("click", function(){
+        var f = fichesCoffre([{ identifiant: identifiant, motDePasse: mdp, role: roleCompte || "TENANT_ADMIN", agence: agenceCompte || "", note: "Temporaire : à changer à la 1re connexion." }])[0];
+        ikoCopier(JSON.stringify(f), this);
+      });
+    }).catch(function(){ msg.style.color = "#FF453A"; msg.textContent = "Erreur réseau."; });
+  });
+}
+
+// ---- Face ID / empreinte (clés d'accès) : activation sur cet appareil ----
+function bufVersB64u(buf){ var s = ""; var b = new Uint8Array(buf); for (var i = 0; i < b.length; i++) s += String.fromCharCode(b[i]); return btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, ""); }
+function b64uVersBuf(t){ t = String(t).replace(/-/g, "+").replace(/_/g, "/"); while (t.length % 4) t += "="; var s = atob(t), b = new Uint8Array(s.length); for (var i = 0; i < s.length; i++) b[i] = s.charCodeAt(i); return b.buffer; }
+function majEtatCle(){
+  var etat = document.getElementById("cleEtat"), act = document.getElementById("cleActiver"), ret = document.getElementById("cleRetirer");
+  if (!etat) return;
+  if (!window.PublicKeyCredential) { etat.textContent = "Cet appareil ou ce navigateur ne gère pas Face ID / empreinte pour les sites."; act.disabled = true; return; }
+  appelSecurite({ action: "cle_etat" }).then(function(res){
+    if (!res.data.possible) { etat.textContent = "Pas disponible avec le mot de passe unique : connecte-toi avec ton compte personnel."; act.disabled = true; ret.style.display = "none"; return; }
+    act.disabled = false;
+    etat.textContent = res.data.active ? "Activé" + (res.data.appareil ? " (" + res.data.appareil + ")" : "") + "." : "Pas encore activé.";
+    ret.style.display = res.data.active ? "" : "none";
+    act.textContent = res.data.active ? "Réactiver sur cet appareil" : "Activer Face ID / empreinte sur cet appareil";
+  });
+}
+document.getElementById("cleActiver").addEventListener("click", function(){
+  var msg = document.getElementById("cleMsg"); msg.className = "msg"; msg.textContent = "";
+  appelSecurite({ action: "cle_options_enregistrement" }).then(function(res){
+    if (!res.ok) throw new Error(res.data.erreur || "Impossible.");
+    var o = res.data.options, jeton = res.data.jeton;
+    return navigator.credentials.create({ publicKey: {
+      challenge: b64uVersBuf(o.challenge), rp: o.rp, user: { id: b64uVersBuf(o.user.id), name: o.user.name, displayName: o.user.displayName },
+      pubKeyCredParams: o.pubKeyCredParams, authenticatorSelection: o.authenticatorSelection, attestation: "none", timeout: o.timeout
+    } }).then(function(cred){
+      var nomAppareil = /iPad/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1) ? "iPad" : /iPhone/.test(navigator.userAgent) ? "iPhone" : "Cet appareil";
+      return appelSecurite({ action: "cle_enregistrer", jeton: jeton, appareil: nomAppareil, clientDataJSON: bufVersB64u(cred.response.clientDataJSON), attestationObject: bufVersB64u(cred.response.attestationObject) });
+    });
+  }).then(function(res){
+    if (!res.ok) throw new Error(res.data.erreur || "Enregistrement refusé.");
+    msg.className = "msg ok"; msg.textContent = "Face ID / empreinte activé sur cet appareil."; majEtatCle();
+  }).catch(function(e){ msg.className = "msg err"; msg.textContent = (e && e.name === "NotAllowedError") ? "Annulé ou refusé sur l'appareil." : (e.message || "Erreur."); });
+});
+document.getElementById("cleRetirer").addEventListener("click", function(){
+  if (!confirm("Retirer Face ID / empreinte de ce compte (tous appareils) ?")) return;
+  appelSecurite({ action: "cle_supprimer" }).then(function(){ majEtatCle(); });
+});
+setTimeout(majEtatCle, 1500);
 
 // --- "Créer son IKO" : provisioning guidé d'un client pro (super admin) ----
 // Controle (lecture seule) -> recapitulatif -> creation manuelle validee.
@@ -2308,9 +2498,14 @@ function ikoAfficherResultat(bilan, data, base, identifiant){
       "<div style='font-weight:700;color:#FF9F0A;margin-bottom:4px;'>Mot de passe temporaire — affiché UNE seule fois</div>" +
       "<code id='ikoMdpValeur' style='font-size:16px;user-select:all;'></code> " +
       "<button type='button' class='secondary' id='ikoCopierMdp' style='margin-left:6px;'>Copier</button>" +
+      "<button type='button' class='secondary' id='ikoCopierCoffre' style='margin-left:6px;' title='Copie une fiche à coller dans le Coffre du Lanceur (sur ton PC)'>Copier pour le coffre</button>" +
       "<div style='font-size:11px;color:var(--texte-dim,#aaa);margin-top:6px;'>À transmettre séparément du message (SMS, téléphone…). Le client devra le changer à sa première connexion.</div></div>";
     document.getElementById("ikoMdpValeur").textContent = mdp; // textContent : jamais interprete comme HTML
     document.getElementById("ikoCopierMdp").addEventListener("click", function(){ ikoCopier(mdp, this); });
+    // Fiche pour le Coffre des mots de passe du Lanceur (local) : le mot de passe n'est ecrit nulle part ailleurs.
+    document.getElementById("ikoCopierCoffre").addEventListener("click", function(){
+      ikoCopier(JSON.stringify({ identifiant: data.compte.identifiant || identifiant, motDePasse: mdp, client: nom, agence: "Toutes", role: "TENANT_ADMIN", utilisateur: "Admin " + nom, lien: base + "/dashboard.html?client=" + slug }), this);
+    });
   } else {
     zoneMdp.innerHTML = "<div style='color:var(--texte-dim,#aaa);'>Le compte existait déjà : aucun mot de passe affiché. Utilisez « Régénérer le mot de passe » si besoin.</div>";
   }
