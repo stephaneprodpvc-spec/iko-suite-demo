@@ -506,6 +506,7 @@
   .ide-nav-item[data-cible="sec-bareme"]{--accent:#B34A00;}
   .ide-nav-item[data-cible="sec-securite"]{--accent:#EDEDEF;}
   .ide-nav-item[data-cible="sec-alertes"]{--accent:#FF453A;}
+  .ide-nav-item[data-cible="sec-audience"]{--accent:#FF6B00;}
   #sec-alertes{--accent:#FF453A;}
   .al-badge{margin-left:auto;min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:#FF453A;color:#fff;font-size:10.5px;font-weight:700;display:none;align-items:center;justify-content:center;}
   .al-ligne{border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:10px;background:rgba(255,255,255,0.03);}
@@ -549,6 +550,21 @@
   .card{background:rgba(255,255,255,0.96);box-shadow:0 18px 50px rgba(0,0,0,0.22);}
   .hero{--texte:#F5F5F7;--texte-dim:#98989D;--texte-faint:#8E8E93;--border:rgba(255,255,255,0.12);color:#F5F5F7;border:1px solid rgba(255,107,0,0.4);
     background:radial-gradient(ellipse at 50% -10%,rgba(255,107,0,0.32),transparent 62%),linear-gradient(180deg,#1a130d,#0b0b0b);box-shadow:0 12px 34px rgba(0,0,0,0.4);}
+  /* Audience du site */
+  .au-barre{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;}
+  .au-periode.actif{background:var(--vert);color:#0D0D0D;border-color:var(--vert);}
+  .au-tuiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:18px;}
+  .au-tuile{border:1px solid var(--border);border-radius:12px;padding:12px 14px;background:rgba(255,255,255,.03);}
+  .au-tuile b{display:block;font-size:26px;font-weight:800;color:var(--vert);line-height:1.1;}
+  .au-tuile span{font-size:11.5px;color:var(--texte-dim);}
+  .au-graphe{display:flex;align-items:flex-end;gap:2px;height:130px;padding:6px 0 0;margin-bottom:6px;border-bottom:1px solid var(--border);}
+  .au-barre-j{flex:1;min-width:3px;background:linear-gradient(180deg,#FF9A3C,#FF6B00);border-radius:3px 3px 0 0;min-height:2px;}
+  .au-barre-j.vide{background:rgba(255,255,255,.08);}
+  .au-axe{display:flex;justify-content:space-between;font-size:10.5px;color:var(--texte-faint);margin-bottom:18px;}
+  .au-table{width:100%;border-collapse:collapse;font-size:12.5px;}
+  .au-table th{text-align:left;font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--texte-faint);padding:6px 8px;border-bottom:1px solid var(--border);}
+  .au-table td{padding:7px 8px;border-bottom:1px solid var(--border);}
+  .au-table td.num,.au-table th.num{text-align:right;font-variant-numeric:tabular-nums;}
 </style>
 </head>
 <body>
@@ -572,6 +588,7 @@
   <div class="ide-nav-item" data-cible="sec-abonnements"><span class="ico">◈</span><span class="lbl">Abonnements</span></div>
   <div class="ide-nav-item" data-cible="sec-bareme"><span class="ico">💶</span><span class="lbl">Barème RSIA</span></div>
   <div class="ide-nav-item" data-cible="sec-alertes"><span class="ico">⚠</span><span class="lbl">Alertes clients</span><span class="al-badge" id="alBadge"></span></div>
+  <div class="ide-nav-item" data-cible="sec-audience"><span class="ico">📈</span><span class="lbl">Audience du site</span></div>
   <div class="ide-nav-item" data-cible="sec-securite"><span class="ico">◇</span><span class="lbl">Sécurité</span></div>
   <div class="ide-nav-item" id="canularBtn" style="-webkit-touch-callout:none;-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent;touch-action:manipulation;"><span class="ico" style="pointer-events:none;">●</span><span class="lbl" style="pointer-events:none;">&nbsp;</span></div>
 </aside>
@@ -766,6 +783,21 @@
       </div>
       <div id="alListe"><div class="chat-hint">Chargement…</div></div>
       <div class="chat-hint">Un incident qui touche un client remonte ici : échec de création d'une demande, messages (Make) ou signature (Yousign) en panne, ticket urgent sans technicien, message client sans réponse. Vous recevez aussi l'alerte sur votre téléphone, par mail ou par SMS selon les réglages du tableau de bord (Centrale &gt; Gestion d'incident &gt; Alertes).</div>
+    </div>
+
+    <div class="card" id="sec-audience">
+      <h2>Audience du site</h2>
+      <div class="au-barre">
+        <button type="button" class="secondary au-periode" data-j="7" style="flex:none;padding:8px 14px;">7 jours</button>
+        <button type="button" class="secondary au-periode actif" data-j="30" style="flex:none;padding:8px 14px;">30 jours</button>
+        <button type="button" class="secondary au-periode" data-j="90" style="flex:none;padding:8px 14px;">90 jours</button>
+        <button type="button" class="secondary" id="auActualiser" style="flex:none;padding:8px 14px;">Actualiser</button>
+      </div>
+      <div class="au-tuiles" id="auTuiles"></div>
+      <div class="au-graphe" id="auGraphe"></div>
+      <div class="au-axe" id="auAxe"></div>
+      <div id="auTableau"><div class="chat-hint">Chargement…</div></div>
+      <div class="chat-hint">Comptage anonyme du site vitrine : aucun cookie, aucun identifiant de visiteur, aucune adresse IP conservée. Les navigateurs qui demandent « ne pas me suivre » ne sont pas comptés. Une « visite » = une page ouverte. Les chiffres apparaissent une fois le site publié et relié à ce Poste de pilotage.</div>
     </div>
 
     <div class="card" id="sec-securite">
@@ -4485,6 +4517,70 @@ if (baremeAjouterBtnEl) baremeAjouterBtnEl.addEventListener("click", ajouterModu
   window.IKO_alertesActualiser = charger;
   // les noms de clients arrivent après le journal : on réaffiche une fois la liste des clients chargée
   setTimeout(afficher, 2500);
+})();
+
+// --- Audience du site vitrine (compteurs anonymes) ---
+(function(){
+  var racine = document.getElementById("sec-audience");
+  if (!racine) return;
+  var periode = 30, donnees = null;
+  var LIBELLES = [
+    ["visite", "Visites (pages ouvertes)"], ["demos_vue", "Démonstrations vues"], ["orbite_vue", "Assistants (sphère) vus"], ["orbite_utilisee", "Assistants manipulés"],
+    ["assistant_ecoute", "Voix d'un assistant écoutée"], ["film_interaction", "Film lancé ou son activé"], ["film_fini", "Film vu jusqu'au bout"],
+    ["onglet_direct", "Onglet « En direct »"], ["onglet_amandine", "Onglet « Essayer Amandine »"], ["onglet_parcours", "Onglet « Suivre une demande »"], ["onglet_suivi", "Onglet « Suivi avec Amandine »"],
+    ["demo_clic", "Clics « Demander une démo »"], ["formulaire_ouvert", "Formulaires ouverts"], ["formulaire_valide", "Formulaires remplis correctement"]
+  ];
+  function esc(t){ return String(t == null ? "" : t).replace(/[&<>"]/g, function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]; }); }
+  function jourIso(dec){ var d = new Date(Date.now() - dec * 86400000); return d.toLocaleDateString("sv-SE", { timeZone: "Europe/Paris" }); }
+  function liste(nb){ var out = []; for (var i = nb - 1; i >= 0; i--) out.push(jourIso(i)); return out; }
+  function parJour(){ var m = {}; (donnees || []).forEach(function(j){ m[j.jour] = j.donnees || {}; }); return m; }
+  function total(m, jours, ev, appareil){
+    var t = 0;
+    jours.forEach(function(j){ var e = (m[j] || {})[ev] || {}; t += appareil ? (Number(e[appareil]) || 0) : (Number(e.ordinateur) || 0) + (Number(e.mobile) || 0); });
+    return t;
+  }
+  function afficher(){
+    var tuiles = document.getElementById("auTuiles"), graphe = document.getElementById("auGraphe"), axe = document.getElementById("auAxe"), tab = document.getElementById("auTableau");
+    if (!donnees) return;
+    var m = parJour(), jours = liste(periode);
+    var visites = total(m, jours, "visite"), mobile = total(m, jours, "visite", "mobile"), demos = total(m, jours, "demo_clic");
+    var aujourdhui = total(m, [jourIso(0)], "visite");
+    function tuile(v, l){ return "<div class='au-tuile'><b>" + v + "</b><span>" + l + "</span></div>"; }
+    tuiles.innerHTML = tuile(aujourdhui, "Visites aujourd'hui") + tuile(visites, "Visites (" + periode + " jours)") +
+      tuile(total(m, jours, "film_interaction"), "Film lancé / son activé") + tuile(demos, "Clics « Demander une démo »") +
+      tuile(visites ? Math.round(demos * 100 / visites) + " %" : "—", "Visites qui cliquent sur « démo »") +
+      tuile(visites ? Math.round(mobile * 100 / visites) + " %" : "—", "Visites sur mobile");
+    var serie = jours.map(function(j){ return total(m, [j], "visite"); }), max = Math.max.apply(null, serie.concat([1]));
+    graphe.innerHTML = serie.map(function(v, i){
+      return "<div class='au-barre-j" + (v ? "" : " vide") + "' style='height:" + (v ? Math.max(4, Math.round(v * 100 / max)) : 2) + "%' title='" + esc(jours[i]) + " : " + v + " visite(s)'></div>";
+    }).join("");
+    axe.innerHTML = "<span>" + esc(jours[0]) + "</span><span>" + esc(jours[jours.length - 1]) + "</span>";
+    if (!visites && !total(m, jours, "demo_clic")) {
+      tab.innerHTML = "<div class='chat-hint'>Aucune visite enregistrée sur cette période.</div>"; return;
+    }
+    tab.innerHTML = "<table class='au-table'><thead><tr><th>Ce que font les visiteurs</th><th class='num'>Ordinateur</th><th class='num'>Mobile</th><th class='num'>Total</th></tr></thead><tbody>" +
+      LIBELLES.map(function(l){
+        var o = total(m, jours, l[0], "ordinateur"), mo = total(m, jours, l[0], "mobile");
+        return "<tr><td>" + esc(l[1]) + "</td><td class='num'>" + o + "</td><td class='num'>" + mo + "</td><td class='num'><b>" + (o + mo) + "</b></td></tr>";
+      }).join("") + "</tbody></table>";
+  }
+  function charger(){
+    fetch("/api/audience?jours=90").then(function(r){ if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); }).then(function(j){
+      donnees = j.jours || []; afficher();
+    }).catch(function(){
+      document.getElementById("auTableau").innerHTML = "<div class='chat-hint' style='color:#FF453A;'>Audience indisponible : connexion super-administrateur requise, ou table Airtable « Audience » pas encore créée.</div>";
+    });
+  }
+  racine.addEventListener("click", function(e){
+    var b = e.target.closest(".au-periode");
+    if (!b) return;
+    periode = parseInt(b.getAttribute("data-j"), 10) || 30;
+    racine.querySelectorAll(".au-periode").forEach(function(x){ x.classList.toggle("actif", x === b); });
+    afficher();
+  });
+  document.getElementById("auActualiser").addEventListener("click", charger);
+  charger();
+  window.IKO_audienceActualiser = charger;
 })();
 
 // --- Navigation sidebar (rail IDE) ---

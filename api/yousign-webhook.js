@@ -22,6 +22,7 @@ import { handleAlerte, handleSurveillance, lireConfig, ecrireConfig } from './_a
 import { handleReparation } from './_reparation.js';
 import { enteteMake } from './_make.js';
 import { ajouterMailsAuCorps } from './_mail.js';
+import { handleAudience } from './_audience.js';
 
 export const config = {
   api: {
@@ -226,6 +227,7 @@ export default async function handler(req, res) {
   if (service === 'alerte') return handleAlerte(req, res);
   if (service === 'surveillance') return handleSurveillance(req, res);
   if (service === 'reparer') return handleReparation(req, res, { lireConfig, ecrireConfig });
+  if (service === 'audience') return handleAudience(req, res);
   if (req.method === 'GET') {
     return handleDownload(req, res);
   }
