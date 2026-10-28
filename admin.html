@@ -549,7 +549,7 @@
   select option,select optgroup{background:#1c1c1e;color:#f5f5f7;}
 
   /* ===== Thème unifié IKO : page orange, feuilles blanches, bandeaux sombres (comme le tableau de bord et l'espace technicien) ===== */
-  :root{--texte:#0D0D0D;--texte-dim:#6B7280;--texte-faint:#9CA3AF;--g2:#FFFFFF;--g3:#F3F4F6;--panel:#F3F4F6;--panel-hover:#E5E7EB;--border:#E5E7EB;--border-strong:#D1D5DB;--shadow:0 18px 50px rgba(0,0,0,0.25);}
+  :root{--bg-card:#FFFFFF;--texte:#0D0D0D;--texte-dim:#6B7280;--texte-faint:#9CA3AF;--g2:#FFFFFF;--g3:#F3F4F6;--panel:#F3F4F6;--panel-hover:#E5E7EB;--border:#E5E7EB;--border-strong:#D1D5DB;--shadow:0 18px 50px rgba(0,0,0,0.25);}
   body{background:linear-gradient(160deg,#E65C00 0%,#FF6B00 55%,#C94F00 100%) fixed;color:#0D0D0D;}
   header{background:rgba(255,255,255,0.55);border-bottom:1px solid rgba(255,255,255,0.6);}
   .card{background:rgba(255,255,255,0.96);box-shadow:0 18px 50px rgba(0,0,0,0.22);}
@@ -570,6 +570,16 @@
   .au-table th{text-align:left;font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--texte-faint);padding:6px 8px;border-bottom:1px solid var(--border);}
   .au-table td{padding:7px 8px;border-bottom:1px solid var(--border);}
   .au-table td.num,.au-table th.num{text-align:right;font-variant-numeric:tabular-nums;}
+  /* ===== Lisibilité (28/10) : textes assez foncés sur fond clair, menu de gauche clair sur fond noir, panneau Réglages en blanc ===== */
+  :root{--texte-dim:#4B5563;--texte-faint:#6B7280;}
+  .ide-sidebar{--texte:#F5F5F7;--texte-dim:#B8B8BD;--texte-faint:#9A9AA0;}
+  .ide-nav-item{color:#B8B8BD;}
+  .ide-nav-item:hover,.ide-nav-item.actif{color:#FFFFFF;}
+  #moduleParamPanel{background:rgba(255,255,255,0.98);box-shadow:-24px 0 70px rgba(0,0,0,0.35);}
+  .stats-pill[style*="7A3300"]{color:#FFFFFF;}
+  .rsia-logo span{color:#FF6B00 !important;}
+  [style*="color:#FF9F0A"]{color:#B45309 !important;}
+  .jauge-grand-legende .puce{filter:brightness(0.62);}
   /* ===== iPhone / iPad : pilotage au doigt (zones tactiles 44 px, pas de zoom automatique, pas de débordement) ===== */
   html{-webkit-text-size-adjust:100%;}
   @media (max-width:1024px){
@@ -1147,7 +1157,7 @@
 </div>
 
 <div class="devis-modal-overlay" id="devisApercuOverlay" style="display:none;z-index:2100;">
-  <div class="devis-modal-box" style="max-width:900px;background:#1a1a1a;">
+  <div class="devis-modal-box" style="max-width:900px;background:#FFFFFF;">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
       <h2 style="margin:0;">Aperçu du devis — format A4 portrait</h2>
       <button type="button" id="devisApercuFermerBtn" style="background:none;border:none;color:var(--texte-faint);font-size:22px;cursor:pointer;line-height:1;padding:4px 8px;">✕</button>
