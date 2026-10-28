@@ -2477,6 +2477,8 @@ function ikoCreer(bilan, regenerer){
       return;
     }
     ikoAfficherResultat(bilan, res.data, base, identifiant);
+    // Les boutons restent utilisables apres un succes (avant : ils restaient grises et « Actualiser » ne faisait rien).
+    ["ikoCreer", "ikoRegenerer", "ikoRecontroler"].forEach(function(id){ var b = document.getElementById(id); if (b) b.disabled = false; });
     chargerAgencesClient(editingId);
   }).catch(function(){
     zone.innerHTML = "<div style='color:#FF453A;'>Erreur réseau. Relance possible : rien n'est dupliqué.</div>";
