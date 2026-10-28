@@ -764,6 +764,30 @@ export default async function handler(req, res) {
     }
   }
 
+  // CORRECTION SECURITE 28/10/2026 — plus de lecture anonyme des LISTES de données.
+  // Avant : n'importe qui, sans connexion, pouvait lire la liste complète des tickets (téléphone, e-mail, adresse), des devis,
+  // des clients, etc. (le contrôle d'origine ne vérifie qu'un en-tête imitable). Maintenant, SANS session :
+  //   - tables internes (contrats d'entretien, techniciens, métrés, catalogue, grille main d'œuvre, mise en page devis) : refusées ;
+  //   - Tickets SAV : seule la recherche par jeton secret (lien de devis ou d'avis reçu par le client) reste permise ;
+  //   - Devis : seule la recherche d'UN ticket précis (page de suivi), avec limite de débit stricte ;
+  //   - Clients : seule la recherche par identifiant public (slug), jamais la liste.
+  // Les pages publiques n'utilisent que ces formes (vérifié) ; les lectures par identifiant d'enregistrement (suivi, devis, avis) restent permises.
+  if (req.method === 'GET' && !session) {
+    const segs = subPathRaw.split('/').filter(Boolean);
+    const table = String(segs[0] || '').toLowerCase();
+    const estListe = segs.length === 1;
+    const formule = typeof rest.filterByFormula === 'string' ? rest.filterByFormula : '';
+    const refuser = () => res.status(401).json({ error: 'Connexion requise.' });
+    const INTERNES = ['contrats entretien', 'techniciens', 'métrés', 'catalogue produits', "grille main d'œuvre", 'mise en page devis'];
+    if (INTERNES.includes(table)) return refuser();
+    if (estListe && table === 'tickets sav' && !/^\{(Devis Token|Note Token)\}="[A-Za-z0-9_-]{12,}"$/.test(formule)) return refuser();
+    if (estListe && table === 'devis') {
+      if (!/^FIND\("SAV-\d{4}-\d{3,6}",ARRAYJOIN\(\{Ticket lié\}\)\)$/.test(formule)) return refuser();
+      if (!verifierDebit(req, { max: 8, fenetreMs: 10 * 60 * 1000, cle: 'recherche-devis' })) return res.status(429).json({ error: 'Trop de tentatives. Réessayez dans quelques minutes.' });
+    }
+    if (estListe && table === 'clients' && !/^\{Slug\}="[A-Za-z0-9_-]{1,80}"$/.test(formule)) return refuser();
+  }
+
   if (subPathRaw === 'webhook') {
     return relayerWebhook(req, res, MAKE_WEBHOOK_URL, ACTIONS_WEBHOOK_AUTORISEES, { baseId, headers, tenantId: session && session.tenantId });
   }
