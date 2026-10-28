@@ -167,6 +167,7 @@ window.IKO_CLIENT_READY = (async function () {
       var recTenant = await rTenant.json();
       window.IKO_CLIENT_ID = recTenant.id;
       window.IKO_CLIENT_INFO = recTenant.fields || {};
+      try { if (window.IKO_appliquerFiche) window.IKO_appliquerFiche(recTenant.fields); } catch (e) {} // couleur / logo / nom du client
       return recTenant.id;
     }
 
@@ -183,6 +184,7 @@ window.IKO_CLIENT_READY = (async function () {
     if (!rec) return null;
     window.IKO_CLIENT_ID = rec.id;
     window.IKO_CLIENT_INFO = rec.fields || {};
+    try { if (window.IKO_appliquerFiche) window.IKO_appliquerFiche(rec.fields); } catch (e) {} // couleur / logo / nom du client
     return rec.id;
   } catch (e) { return null; }
 })();
