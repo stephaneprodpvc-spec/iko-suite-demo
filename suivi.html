@@ -64,6 +64,18 @@ function parseMessageEntries(raw, sender) {
   });
 }
 
+// Fil de messages façon téléphone : ordre chronologique, et dans une même minute (l'horodatage n'a pas les secondes)
+// on alterne message du client puis réponse, pour que chaque réponse suive sa question.
+function fusionnerMessages(clients, agences) {
+  const cles = Array.from(new Set([...clients, ...agences].map(e => e.sortKey))).sort((a, b) => a - b);
+  const sortie = [];
+  cles.forEach(k => {
+    const c = clients.filter(e => e.sortKey === k), a = agences.filter(e => e.sortKey === k);
+    for (let i = 0; i < Math.max(c.length, a.length); i++) { if (c[i]) sortie.push(c[i]); if (a[i]) sortie.push(a[i]); }
+  });
+  return sortie;
+}
+
 // Carte "choix de date" affichée comme un message de l'agence dans le fil SMS,
 // quand Iko a detecte une demande de changement de date et trouve des dispos.
 // Espace client : contrat d'entretien. Le client choisit lui-même ses dates de visite (jusqu'à 14 mois à l'avance) sur le planning de l'agence.
@@ -179,6 +191,7 @@ function PropositionDateBubble({ agenceVille, clientId, creneauId, moisSouhaite,
       <div style={{fontSize:"11px",fontWeight:"800",color:F.marine,marginBottom:"7px"}}>{creneau.label} ({creneau.heure}) — choisissez une date :</div>
       {loading && <div style={{fontSize:"11px",color:"#64748B"}}>⏳ Chargement des disponibilités…</div>}
       {!loading && dates.length === 0 && <div style={{fontSize:"11px",color:F.rouge}}>Plus de disponibilité pour l'instant, un conseiller va revenir vers vous.</div>}
+      {!loading && <div style={{fontSize:"10px",color:"#64748B",marginTop:"7px"}}>Aucune date ne convient ? Écrivez-moi la période souhaitée (par exemple « en décembre, l'après-midi ») et je cherche à nouveau.</div>}
       {!loading && dates.length > 0 && (
         <div style={{display:"flex",flexDirection:"column",gap:"5px"}}>
           {dates.map((d, i) => {
@@ -216,13 +229,20 @@ function PhoneChat({ ticket, message, onChangeMessage, onEnvoyer, envoi, iaRefle
   const scrollRef = React.useRef(null);
   const champFichier = React.useRef(null);
   const photosTicket = String(ticket.fields?.Photos || "").split(",").map(u => u.trim()).filter(Boolean);
-  const entries = [
-    ...parseMessageEntries(ticket.fields?.["Message client"], 'client'),
-    ...parseMessageEntries(ticket.fields?.["Réponse agence"], 'agence'),
-  ].sort((a, b) => a.sortKey - b.sortKey);
+  const entries = fusionnerMessages(
+    parseMessageEntries(ticket.fields?.["Message client"], 'client'),
+    parseMessageEntries(ticket.fields?.["Réponse agence"], 'agence')
+  );
   React.useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   }, [entries.length, propositionEnAttente, iaReflechit]);
+  // Comme sur un vrai téléphone : la carte des dates proposées se place juste après la réponse qui l'annonce,
+  // et les messages écrits ensuite apparaissent en dessous d'elle.
+  let idxCarte = -1;
+  entries.forEach((e, i) => { if (e.sender === 'agence' && /ci-dessous|choisissez une (nouvelle )?date/i.test(e.text)) idxCarte = i; });
+  const carte = propositionEnAttente ? (
+    <PropositionDateBubble agenceVille={ticket.fields?.Agence} clientId={(ticket.fields?.["Compte client"] || [])[0]} creneauId={propositionCreneau} moisSouhaite={propositionMois} onChoisir={onChoisirProposition} enCours={changeEnCours}/>
+  ) : null;
 
   return (
     <div style={{background:"#0B0B0F",borderRadius:"36px",padding:"10px",boxShadow:"0 20px 50px rgba(0,0,0,0.25)",maxWidth:"340px",margin:"0 auto"}}>
@@ -231,10 +251,10 @@ function PhoneChat({ ticket, message, onChangeMessage, onEnvoyer, envoi, iaRefle
         <div style={{background:"#ECE9E4",borderRadius:"28px",overflow:"hidden",display:"flex",flexDirection:"column",height:"600px"}}>
           <div style={{background:F.marine,padding:"20px 14px 10px",display:"flex",alignItems:"center",gap:"10px",flexShrink:0}}>
             <div style={{width:"30px",height:"30px",borderRadius:"50%",background:F.or,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:"900",color:"var(--iko-dark)",fontSize:"13px"}}>
-              I
+              A
             </div>
             <div style={{flex:1,minWidth:0}}>
-              <div style={{color:"#fff",fontSize:"12px",fontWeight:"700"}}>Agence Iko</div>
+              <div style={{color:"#fff",fontSize:"12px",fontWeight:"700"}}>Amandine</div>
               <div style={{color:"rgba(255,255,255,0.5)",fontSize:"9px"}}>SMS · Suivi SAV</div>
             </div>
           </div>
@@ -243,7 +263,8 @@ function PhoneChat({ ticket, message, onChangeMessage, onEnvoyer, envoi, iaRefle
               <div style={{textAlign:"center",color:"#9CA3AF",fontSize:"11px",marginTop:"24px"}}>Aucun message pour l'instant.<br/>Écrivez à votre agence ci-dessous.</div>
             )}
             {entries.map((e, i) => (
-              <div key={i} style={{display:"flex",flexDirection:"column",alignItems:e.sender==='agence'?"flex-start":"flex-end"}}>
+              <React.Fragment key={i}>
+              <div style={{display:"flex",flexDirection:"column",alignItems:e.sender==='agence'?"flex-start":"flex-end"}}>
                 <div style={{
                   maxWidth:"78%",
                   background:e.sender==='agence'?"#FFFFFF":"linear-gradient(135deg,var(--iko-primary),var(--iko-primary-fonce))",
@@ -256,14 +277,14 @@ function PhoneChat({ ticket, message, onChangeMessage, onEnvoyer, envoi, iaRefle
                 </div>
                 <span style={{fontSize:"8px",color:"#9CA3AF",marginTop:"2px",padding:"0 4px"}}>{e.dateLabel}</span>
               </div>
+              {i === idxCarte && carte}
+              </React.Fragment>
             ))}
+            {idxCarte < 0 && carte}
             {iaReflechit && (
               <div style={{alignSelf:"flex-start",background:"#fff",borderRadius:"18px 18px 18px 4px",padding:"8px 14px",fontSize:"12px",color:"#6B7280",boxShadow:"0 1px 2px rgba(0,0,0,0.08)"}}>
-                Iko rédige sa réponse<span className="iko-points">…</span>
+                Amandine rédige sa réponse<span className="iko-points">…</span>
               </div>
-            )}
-            {propositionEnAttente && (
-              <PropositionDateBubble agenceVille={ticket.fields?.Agence} clientId={(ticket.fields?.["Compte client"] || [])[0]} creneauId={propositionCreneau} moisSouhaite={propositionMois} onChoisir={onChoisirProposition} enCours={changeEnCours}/>
             )}
           </div>
           {(photosTicket.length > 0 || pjEtat) && (
@@ -714,6 +735,8 @@ function App() {
   const envoyerMessage = async () => {
     if (!message.trim() || !ticket) return;
     setEnvoi('sending');
+    // Comme sur un vrai téléphone : le message apparaît tout de suite dans la conversation et le champ se vide à l'envoi.
+    const ticketAvant = ticket, texteAvant = message.trim();
     try {
       const texteMessage = message.trim();
       const horodatage = new Date().toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Paris' });
@@ -721,6 +744,8 @@ function App() {
       const nouveauTexte = existant
         ? existant + '\n\n[' + horodatage + ']\n' + texteMessage
         : '[' + horodatage + ']\n' + texteMessage;
+      setTicket(prev => prev ? { ...prev, fields: { ...prev.fields, "Message client": nouveauTexte } } : prev);
+      setMessage("");
       const resp = await fetch('/api/airtable/Tickets%20SAV/' + ticket.id, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -756,6 +781,7 @@ function App() {
         setIaReflechit(false);
       });
     } catch (e) {
+      setTicket(ticketAvant); setMessage(texteAvant);
       setEnvoi('err');
     }
   };

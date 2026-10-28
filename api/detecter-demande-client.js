@@ -89,10 +89,42 @@ function dateExplicite(t) {
   if (!annee) { annee = maintenant.getFullYear(); if (new Date(annee, mois, jour, 12) < new Date(maintenant.getTime() - 86400000)) annee += 1; }
   return annee + "-" + pad2(mois + 1) + "-" + pad2(jour);
 }
+// Distance entre deux mots (nombre de lettres à changer) : sert à reconnaître « bonour » comme « bonjour ».
+function distanceMots(a, b) {
+  const m = a.length, n = b.length; if (!m) return n; if (!n) return m;
+  let prec = Array.from({ length: n + 1 }, (_, j) => j);
+  for (let i = 1; i <= m; i++) {
+    const cour = [i];
+    for (let j = 1; j <= n; j++) cour[j] = Math.min(prec[j] + 1, cour[j - 1] + 1, prec[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    prec = cour;
+  }
+  return prec[n];
+}
+function estUnSalut(t) {
+  const mot = String(t || "").trim().replace(/[^a-z]/g, "");
+  if (!mot || mot.length > 12 || /\s/.test(String(t).trim())) return false;
+  return ["bonjour", "bonsoir", "salut", "coucou", "hello", "allo", "bjr", "bsr"].some(function (x) { return distanceMots(mot, x) <= (x.length > 5 ? 2 : 1); });
+}
 // Réponses sûres tirées des faits du ticket (utilisées sans IA, ou quand l'IA n'a rien d'exploitable).
 function repondreDepuisTicket(texte, ticket) {
   const f = (ticket && ticket.fields) || {};
   const t = String(texte || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  if (f["Proposition auto en attente"] && /^(non|aucune|pas (ca|celle)|ca ne (me )?convient|ca ne va pas)/.test(t.trim()))
+    return "D'accord, ces dates ne conviennent pas. Dites-moi la période qui vous arrange (par exemple « en décembre » ou « plutôt l'après-midi ») et je cherche à nouveau.";
+  if ((/^(bonjour|bonsoir|salut|bjr|bsr|coucou|hello|allo)\b/.test(t.trim()) && t.trim().length <= 25) || estUnSalut(t))
+    return "Bonjour, c'est Amandine. Je suis là pour votre demande" + (f["Créneau"] ? " : votre rendez-vous est prévu " + f["Créneau"] + "." : ".") + " Comment puis-je vous aider ?";
+  if (/(en route|arrive|arrivee|heure d'arrivee|il est ou|retard|bientot la)/.test(t)) {
+    if (f["En route depuis"]) return "Votre technicien est en route" + (f["Arrivée estimée"] ? ", arrivée estimée : " + f["Arrivée estimée"] : "") + ".";
+    return "Votre technicien n'est pas encore parti" + (f["Créneau"] ? " : votre rendez-vous est prévu " + f["Créneau"] : "") + ". Dès qu'il part, vous voyez son heure d'arrivée sur cette page.";
+  }
+  if (/(qui vient|qui passe|quel technicien|nom du technicien)/.test(t) && f["Technicien assigné"])
+    return "Votre technicien est " + f["Technicien assigné"] + (f["Créneau"] ? ", rendez-vous prévu " + f["Créneau"] : "") + ".";
+  if (/(piece|commande)/.test(t) && (f["Pièce à commander"] || f["Commande pièce"]))
+    return "Une pièce est à commander pour votre dossier" + (f["Commande pièce"] ? " (suivi : " + f["Commande pièce"] + ")" : "") + ". L'agence vous prévient dès qu'elle est disponible.";
+  if (/(photo|image|document|joindre|piece jointe)/.test(t))
+    return "Vous pouvez ajouter des photos avec le trombone, en bas de la conversation : elles sont transmises au technicien et à l'agence.";
+  if (/(urgent|urgence|au plus vite|des que possible|tres vite)/.test(t))
+    return "J'ai bien noté l'urgence : je la signale tout de suite à l'agence et au technicien.";
   if (/(ou en est|avancement|statut|etat de|suivi de ma demande)/.test(t))
     return "Votre demande " + (f.Name || "") + " est actuellement au statut « " + (f.Statut || "Nouveau") + " »" + (f["Créneau"] ? ", avec un rendez-vous prévu : " + f["Créneau"] : "") + ".";
   if (/(quand|quelle heure|a quelle heure|jour de passage|rendez-vous|rdv)/.test(t) && f["Créneau"])
@@ -103,9 +135,11 @@ function repondreDepuisTicket(texte, ticket) {
 }
 function classifierSansIA(texte, ticket) {
   const t = String(texte || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-  const verbe = /(chang|deplac|decal|report|avanc|recul|modifi)/;
+  const verbe = /(\bchang\w*|\bdeplac\w*|\bdecal\w*|\breport\w*|\bavancer\b|\breculer\b|\bmodifi\w*)/;
   const objet = /(date|rdv|rendez|intervention|passage)/;
-  if (!(verbe.test(t) && objet.test(t))) return { intention: "autre", reponse: repondreDepuisTicket(texte, ticket) };
+  const propositionEnCours = !!(ticket && ticket.fields && ticket.fields["Proposition auto en attente"]);
+  const precision = propositionEnCours && /(janvier|fevrier|mars|avril|\bmai\b|juin|juillet|aout|septembre|octobre|novembre|decembre|\bmatin\b|apres[- ]?midi|\d{1,2}\/\d{1,2}|autre|plus tard|plus tot|semaine|prochain)/.test(t);
+  if (!((verbe.test(t) && objet.test(t)) || precision)) return { intention: "autre", reponse: repondreDepuisTicket(texte, ticket) };
   let mois = null;
   const idx = MOIS_FR.findIndex(function (m) { return t.indexOf(m) !== -1; });
   if (idx >= 0) {
@@ -115,11 +149,12 @@ function classifierSansIA(texte, ticket) {
     mois = annee + "-" + String(idx + 1).padStart(2, "0");
   }
   const periode = /apres[- ]?midi/.test(t) ? "apres_midi" : (/matin/.test(t) ? "matin" : null);
-  return { intention: "changement_date", periode_souhaitee: periode, mois_souhaite: mois, date_souhaitee: dateExplicite(t), reponse: "Bonjour, nous avons bien reçu votre demande de changement de date." };
+  return { intention: "changement_date", periode_souhaitee: periode, mois_souhaite: mois, date_souhaitee: dateExplicite(t), reponse: "J'ai bien reçu votre demande de changement de date." };
 }
 
 async function classifierMessage(texte, creneauActuelLabel, ticket) {
-  const reponse = await fetch("https://api.anthropic.com/v1/messages", {
+  let reponse;
+  try { reponse = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
       "content-type": "application/json",
@@ -131,7 +166,7 @@ async function classifierMessage(texte, creneauActuelLabel, ticket) {
       max_tokens: 200,
       temperature: 0,
       system:
-        "Tu es IKO, l'assistant SAV intelligent d'Iko Suite (menuiserie). Tu parles au client dans son espace de suivi. Nous sommes le " + new Date().toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "numeric", timeZone: "Europe/Paris" }) + ". " +
+        "Tu es Amandine, l'assistante SAV d'Iko Suite (menuiserie). Tu parles au client dans son espace de suivi ; le client s'adresse toujours a toi, jamais a IKO. Nous sommes le " + new Date().toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "numeric", timeZone: "Europe/Paris" }) + ". " +
         "Un client vient d'ecrire un message dans son espace de suivi SAV. Le RDV actuel du client est : " + (creneauActuelLabel || "non defini") + ". " +
         "Reponds UNIQUEMENT avec un objet JSON, sans aucun texte autour, de la forme : " +
         '{"intention":"changement_date"|"autre","periode_souhaitee":"matin"|"apres_midi"|null,"mois_souhaite":"AAAA-MM"|null,"date_souhaitee":"AAAA-MM-JJ"|null,"reponse":"..."}. ' +
@@ -155,7 +190,7 @@ async function classifierMessage(texte, creneauActuelLabel, ticket) {
         blocSystemeIko("suivi") + blocMetierMenuiserie("amandine"),
       messages: [{ role: "user", content: texte.slice(0, MAX_CHARS_MESSAGE) }],
     }),
-  });
+  }); } catch (e) { return classifierSansIA(texte, ticket); }
   if (!reponse.ok) return classifierSansIA(texte, ticket);
   const data = await reponse.json();
   const bloc = (data.content || []).find(function (b) { return b.type === "text"; });
@@ -164,6 +199,11 @@ async function classifierMessage(texte, creneauActuelLabel, ticket) {
     const nettoye = bloc.text.replace(/```json|```/g, "").trim();
     const parsed = JSON.parse(nettoye);
     if (parsed.intention !== "changement_date") parsed.intention = "autre";
+    // Filet de sécurité : une demande claire de déplacement de rendez-vous n'est jamais ignorée, même si l'IA la classe « autre ».
+    if (parsed.intention === "autre") {
+      const secours = classifierSansIA(texte, ticket);
+      if (secours.intention === "changement_date") return Object.assign({}, secours, { reponse: (typeof parsed.reponse === "string" && parsed.reponse.trim()) ? parsed.reponse : secours.reponse });
+    }
     return parsed;
   } catch (e) {
     return classifierSansIA(texte, ticket);
@@ -224,7 +264,7 @@ async function poserDateAutomatiquement(ticket, identClient, agence, dateIso, pe
   }
 }
 
-const REPONSE_REPLI = "Bonjour, nous avons bien recu votre message. Un conseiller de l'agence revient vers vous rapidement.";
+const REPONSE_REPLI = "Je n'ai pas bien compris votre message. Pouvez-vous me dire en quelques mots ce qui se passe, par exemple « ma fenêtre ne ferme plus » ou « je veux changer la date » ? Si c'est urgent, dites-le-moi : je préviens l'agence tout de suite.";
 
 async function ajouterReponseAgence(ticketId, texteMessage, champsSupplementaires) {
   const horodatage = new Date().toLocaleString("fr-FR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", timeZone: "Europe/Paris" });
@@ -362,12 +402,13 @@ export default async function handler(req, res) {
 
     const accuseReception = (typeof classification.reponse === "string" && classification.reponse.trim())
       ? classification.reponse.trim().slice(0, 300)
-      : "Bonjour, nous avons bien recu votre demande de changement de date.";
+      : "J'ai bien reçu votre demande de changement de date.";
     let texteMessage;
     if (nbDispos > 0 && moisTrouve) {
       texteMessage = accuseReception + " Choisissez une nouvelle date directement ci-dessous, dans la conversation.";
     } else if (nbDispos > 0) {
-      texteMessage = accuseReception + (moisSouhaite ? " Nous n'avons pas de disponibilite sur la periode visee, mais voici les prochaines dates disponibles ci-dessous." : " Choisissez une nouvelle date directement ci-dessous, dans la conversation.");
+      const nomMois = moisSouhaite ? new Date(moisSouhaite + "-15T12:00:00").toLocaleDateString("fr-FR", { month: "long", year: "numeric" }) : "";
+      texteMessage = accuseReception + (moisSouhaite ? " Je n'ai pas encore de créneau libre en " + nomMois + " : voici les dates les plus proches ci-dessous. Si aucune ne convient, écrivez-moi une autre période." : " Choisissez une nouvelle date directement ci-dessous, dans la conversation.");
     } else {
       texteMessage = accuseReception + " Nous n'avons pas de disponibilite dans l'immediat, un conseiller va revenir vers vous pour convenir d'une nouvelle date.";
     }
