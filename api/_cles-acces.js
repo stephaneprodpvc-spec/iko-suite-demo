@@ -7,6 +7,7 @@
 //   « Clé d'accès ID », « Clé d'accès publique » (texte long), « Clé d'accès compteur » (nombre), « Clé d'accès appareil ».
 import crypto from "crypto";
 import jwt from "jsonwebtoken";
+import { agenceRestreinte } from "./_agences.js";
 
 const CHAMP_ID = "Clé d'accès ID", CHAMP_CLE = "Clé d'accès publique", CHAMP_COMPTEUR = "Clé d'accès compteur", CHAMP_APPAREIL = "Clé d'accès appareil";
 const B64U = /^[A-Za-z0-9_-]{16,1400}$/;
@@ -182,7 +183,7 @@ export async function connexionCle(req, res, ctx) {
     if ((ad.compteur || ancien) && ad.compteur <= ancien) return echec(); // compteur qui ne monte pas : cle clonee
     const tokenId = crypto.randomUUID();
     await ctx.majUtilisateur(rec.id, { [CHAMP_COMPTEUR]: ad.compteur, "Échecs de connexion": 0, "Bloqué jusqu'à": null, "Dernier tokenId refresh valide": tokenId, "Dernière connexion": new Date().toISOString() });
-    const user = { userId: rec.id, tenantId: (f["tenantId"] || [])[0] || null, role: f["Rôle"] || null };
+    const user = { userId: rec.id, tenantId: (f["tenantId"] || [])[0] || null, role: f["Rôle"] || null, agence: agenceRestreinte(f["Agence"]) };
     res.setHeader("Set-Cookie", ctx.cookiesSession(user, tokenId));
     return res.status(200).json({ role: user.role });
   } catch (e) { return echec(); }

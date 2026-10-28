@@ -85,7 +85,9 @@ export async function handlerEntretien(req, res, { baseId, headers }) {
   if (!verifierOrigine(req)) return res.status(403).json({ error: 'Origine non autorisée.' });
   const body = req.body || {};
   const action = String(body.action || '');
-  const session = verifierSession(req);
+  let session = verifierSession(req);
+  // Compte rattache a une agence : les contrats d'entretien sont geres par le patron (pas d'acces ici, comme sans session).
+  if (session && session.agence && session.role !== 'SUPER_ADMIN_IKO') session = null;
 
   try {
     // ------------------------------------------------------------------ demande publique

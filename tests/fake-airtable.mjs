@@ -43,6 +43,18 @@ export function creerFaux(db, options = {}) {
 
   function evaluer(rec, clause) {
     let m;
+    // Formules imbriquees : OR(...) / AND(...) (utilisees par l'isolation par agence).
+    if ((m = clause.match(/^(OR|AND)\((.*)\)$/s))) {
+      const parts = decouperClauses(m[2]);
+      return m[1] === "OR" ? parts.some((p) => evaluer(rec, p)) : parts.every((p) => evaluer(rec, p));
+    }
+    // FIND(", Agence 1,", ", "&ARRAYJOIN({Agence}, ", ")&",") : noms des agences liees (table Agences) joints par « , ».
+    if ((m = clause.match(/^FIND\("((?:[^"\\]|\\.)*)",\s*", "&ARRAYJOIN\(\{([^}]+)\}, ", "\)&","\)$/))) {
+      const ids = Array.isArray(valeur(rec, m[2])) ? valeur(rec, m[2]) : [];
+      const noms = ids.map((i) => ((db.Agences || []).find((a) => a.id === i) || { fields: {} }).fields["Nom agence"] || "");
+      return (", " + noms.join(", ") + ",").includes(dechapper(m[1]));
+    }
+    if ((m = clause.match(/^RECORD_ID\(\)="([^"]*)"$/))) return rec.id === m[1];
     if ((m = clause.match(/^FIND\("((?:[^"\\]|\\.)*)",\s*ARRAYJOIN\(\{([^}]+)\}\)\)$/))) return joint(rec, m[2]).includes(dechapper(m[1]));
     if ((m = clause.match(/^ARRAYJOIN\(\{([^}]+)\}\)=""$/))) return joint(rec, m[1]) === "";
     if ((m = clause.match(/^RECORD_ID\(\)!="([^"]*)"$/))) return rec.id !== m[1];
@@ -96,6 +108,11 @@ export function creerFaux(db, options = {}) {
     }
     if (methode === "POST") {
       const corps = JSON.parse(init.body);
+      if (!corps.records && corps.fields) { // creation d'UN enregistrement (forme { fields } de l'API Airtable)
+        const rec = { id: "rec" + String(++compteur).padStart(14, "0"), fields: { ...corps.fields } };
+        db[table].push(rec);
+        return reponse(rec);
+      }
       if (corps.records.length > 10) return reponse({ error: "10 enregistrements maximum" }, false, 422);
       const crees = corps.records.map((r) => {
         const rec = { id: "rec" + String(++compteur).padStart(14, "0"), fields: { ...r.fields } };

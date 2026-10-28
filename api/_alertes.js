@@ -122,6 +122,7 @@ export async function handleAlerte(req, res) {
   if (!verifierOrigine(req, { strict: true })) return reponseBloquee(res, 'origine');
   const session = verifierSession(req);
   if (!session || session.mdpAChanger || !['SUPER_ADMIN_IKO', 'TENANT_ADMIN'].includes(session.role)) return res.status(403).json({ error: 'Accès refusé.' });
+  if (session.agence && session.role !== 'SUPER_ADMIN_IKO') return res.status(403).json({ error: 'Réservé au responsable de l\'entreprise.' });
   const superAdmin = session.role === 'SUPER_ADMIN_IKO';
   try {
     if (req.method === 'GET') {

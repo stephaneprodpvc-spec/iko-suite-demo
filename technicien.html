@@ -152,6 +152,7 @@ window.IKO_CLIENT_READY = (async function () {
     // interventions crees dans ce cas n'auront pas de technicien lie,
     // gere plus bas (creerInterventionAuto).
     window.IKO_USER_ID = session.userId || null;
+    window.IKO_AGENCE = session.role === "SUPER_ADMIN_IKO" ? null : (session.agence || null); // compte rattaché à une agence : verrouillé sur elle
     if (session.role !== "SUPER_ADMIN_IKO" && session.role !== "TECHNICIEN" && session.role !== "TENANT_ADMIN") {
       window.IKO_ACCES_REFUSE = true;
       return null;
@@ -4583,6 +4584,7 @@ function Login({ onLogin }) {
     window.IKO_CLIENT_READY.then(() => {
       if (window.IKO_ACCES_REFUSE) { setEtat("refuse"); return; }
       if (window.IKO_ROLE === "SUPER_ADMIN_IKO") { onLogin("global"); return; }
+      if (window.IKO_AGENCE) { onLogin(window.IKO_AGENCE); return; } // compte d'agence : pas de choix d'agence
       // Agences du client (1 a 10). Une seule : pas de choix, selection automatique.
       chargerAgencesTech().then(liste => {
         if (liste.length === 1) { onLogin(liste[0]); return; }

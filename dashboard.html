@@ -137,6 +137,9 @@ window.IKO_CLIENT_READY = (async function () {
     }
     var session = await resSession.json();
     window.IKO_ROLE = session.role;
+    // Compte rattaché à UNE agence (responsable d'agence) : le serveur ne lui donne que les données de cette agence ;
+    // l'écran la verrouille aussi sur cette agence et cache la Centrale de direction.
+    window.IKO_AGENCE = session.role === "SUPER_ADMIN_IKO" ? null : (session.agence || null);
     if (session.role !== "SUPER_ADMIN_IKO" && session.role !== "TENANT_ADMIN") {
       window.IKO_ACCES_REFUSE = true;
       return null;
@@ -7507,7 +7510,8 @@ function Dashboard({ agenceAccess, onClose }) {
               {window.IKO_CLIENT_INFO?.["Nom client"] ? window.IKO_CLIENT_INFO["Nom client"] + " ✕" : "IKO DEMO"}
             </span>
           )}
-          {!vueSimple && <a href="/entretien.html" onClick={() => { try { sessionStorage.removeItem("iko_retour_centrale"); } catch (e) {} }} className="glass-btn" style={{padding:"8px 14px",fontSize:"12px",display:"flex",alignItems:"center",gap:"6px"}}>Entretien</a>}
+          {window.IKO_ROLE === "TENANT_ADMIN" && !window.IKO_AGENCE && <a href="/acces.html" className="glass-btn" style={{padding:"8px 14px",fontSize:"12px",display:"flex",alignItems:"center",gap:"6px"}} title="Créer les accès de tes techniciens et de tes agences">Mes accès</a>}
+          {!vueSimple && !window.IKO_AGENCE && <a href="/entretien.html" onClick={() => { try { sessionStorage.removeItem("iko_retour_centrale"); } catch (e) {} }} className="glass-btn" style={{padding:"8px 14px",fontSize:"12px",display:"flex",alignItems:"center",gap:"6px"}}>Entretien</a>}
           {/* TODO (plus tard, décision du patron) : mot de passe propre au bouton Central. */}
           {!vueSimple && agenceAccess === "global" && (
           <button className="glass-btn" onClick={() => setShowModalDirigeant(true)} title="Réservé à la direction : analytics, équipe, intelligence commerciale, vue toutes agences"
@@ -7725,7 +7729,7 @@ function Login({ onLogin }) {
   React.useEffect(() => {
     window.IKO_CLIENT_READY.then(() => {
       if (window.IKO_ACCES_REFUSE) { setEtat("refuse"); return; }
-      onLogin("global"); // SUPER_ADMIN_IKO et TENANT_ADMIN voient toutes les agences de leur perimetre
+      onLogin(window.IKO_AGENCE || "global"); // SUPER_ADMIN_IKO et patron : toutes les agences de leur perimetre ; responsable d'agence : la sienne seulement
     });
   }, []);
 

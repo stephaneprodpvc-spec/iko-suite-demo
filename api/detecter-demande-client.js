@@ -308,6 +308,7 @@ export default async function handler(req, res) {
       const f = t.fields || {};
       const clientId = (f["Compte client"] || [])[0] || null;
       if (session.tenantId && clientId && clientId !== session.tenantId) return res.status(403).json({ ok: false, raison: "Ticket d'un autre client." });
+      if (session.agence && session.role !== "SUPER_ADMIN_IKO" && String(f.Agence || "").trim().toLowerCase() !== String(session.agence).trim().toLowerCase()) return res.status(403).json({ ok: false, raison: "Ticket d'une autre agence." });
       if (["Terminé", "Annulé", "Supprimé"].includes(f.Statut)) return res.status(200).json({ ok: false, raison: "Ce ticket est " + String(f.Statut).toLowerCase() + " : on ne déplace pas son rendez-vous." });
       const ident = await identDepuisTicket(t);
       const periodeVoulue = per === "apres_midi" ? "apres_midi" : per === "matin" ? "matin" : (periodeDepuisCreneauTexte(f["Créneau"]) || "matin");

@@ -90,6 +90,7 @@ export async function reparer({ appliquer = true, lireConfig, ecrireConfig } = {
 export async function handleReparation(req, res, outils) {
   const session = verifierSession(req);
   if (!session) return res.status(401).json({ error: 'Session requise.' });
+  if (session.agence && session.role !== 'SUPER_ADMIN_IKO') return res.status(403).json({ error: 'Réservé au responsable de l\'entreprise.' });
   const rapport = await reparer({ appliquer: req.method === 'POST', ...(outils || {}) });
   return res.status(200).json(rapport);
 }

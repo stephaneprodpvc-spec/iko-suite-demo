@@ -30,7 +30,8 @@ export async function handleAgenda(req, res) {
   if (req.query.lien !== undefined) {
     if (!verifierOrigine(req, { strict: true })) return reponseBloquee(res, 'origine');
     const session = verifierSession(req);
-    const agence = typeof req.query.agence === 'string' ? req.query.agence : '';
+    // Compte rattache a une agence : on ignore l'agence demandee, c'est TOUJOURS la sienne.
+    const agence = session && session.agence && session.role !== 'SUPER_ADMIN_IKO' ? session.agence : (typeof req.query.agence === 'string' ? req.query.agence : '');
     if (!session || !session.tenantId || !agence) return res.status(403).json({ error: 'Session requise.' });
     const hote = req.headers['x-forwarded-host'] || req.headers.host;
     const url = 'https://' + hote + '/api/agenda.ics?t=' + encodeURIComponent(session.tenantId) + '&a=' + encodeURIComponent(agence) + '&k=' + jeton(session.tenantId, agence);

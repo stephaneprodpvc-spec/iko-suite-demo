@@ -49,7 +49,8 @@ import crypto from "crypto";
 import { verifierOrigine, verifierDebit, reponseBloquee, verifierSession, MODE_DEMO_OUVERT, SESSION_DEMO } from "./_securite.js";
 import { signalerAbus } from "./_abus.js";
 import { initialiserPlanning, lireReglagesBruts, enregistrerReglages, REGLAGES_DEFAUT } from "./_planning.js";
-import { gererCreerComptes, gererRegenererMotDePasse } from "./_comptes.js";
+import { gererCreerComptes, gererRegenererMotDePasse, gererCreerComptesEquipe, gererListerEquipe, gererStatutCompte } from "./_comptes.js";
+import { agenceRestreinte } from "./_agences.js";
 import { optionsEnregistrement, enregistrerCle, etatCle, supprimerCle, optionsConnexion, connexionCle } from "./_cles-acces.js";
 
 const AIRTABLE_BASE = "appkI8RKHkYNWY86U";
@@ -162,7 +163,7 @@ function lireCookie(req, nom) {
 
 function signAccessToken(user) {
   return jwt.sign(
-    Object.assign({ userId: user.userId, tenantId: user.tenantId, role: user.role }, user.mdpAChanger ? { mdpAChanger: true } : {}),
+    Object.assign({ userId: user.userId, tenantId: user.tenantId, role: user.role }, user.agence ? { agence: user.agence } : {}, user.mdpAChanger ? { mdpAChanger: true } : {}),
     process.env.JWT_ACCESS_SECRET,
     { expiresIn: ACCESS_TOKEN_DUREE_S }
   );
@@ -192,6 +193,7 @@ async function lireUtilisateurParIdentifiant(identifiant) {
     hash: f["Hash mot de passe"] || "",
     tenantId: (f["tenantId"] || [])[0] || null,
     role: f["Rôle"] || null,
+    agence: agenceRestreinte(f["Agence"]),
     statut: f["Statut"] || "Actif",
     echecs: f["Échecs de connexion"] || 0,
     bloqueJusqua: f["Bloqué jusqu'à"] || null,
@@ -769,7 +771,7 @@ async function gererSession(req, res) {
     try {
       const payload = jwt.verify(accessBrut, process.env.JWT_ACCESS_SECRET);
       if (payload.mdpAChanger) return res.status(401).json({ erreur: "Changement de mot de passe obligatoire.", mdpAChanger: true });
-      return res.status(200).json({ userId: payload.userId, tenantId: payload.tenantId, role: payload.role });
+      return res.status(200).json({ userId: payload.userId, tenantId: payload.tenantId, role: payload.role, agence: payload.agence || null });
     } catch (e) {
       // Access token absent/expire : on tente le refresh ci-dessous.
     }
@@ -807,7 +809,7 @@ async function gererSession(req, res) {
   const nouveauTokenId = crypto.randomUUID();
   await majUtilisateur(payload.userId, { "Dernier tokenId refresh valide": nouveauTokenId });
 
-  const userPourSignature = { userId: payload.userId, tenantId: f["tenantId"] ? f["tenantId"][0] : null, role: f["Rôle"] || null };
+  const userPourSignature = { userId: payload.userId, tenantId: f["tenantId"] ? f["tenantId"][0] : null, role: f["Rôle"] || null, agence: agenceRestreinte(f["Agence"]) };
   const nouvelAccess = signAccessToken(userPourSignature);
   const nouveauRefresh = signRefreshToken(userPourSignature, nouveauTokenId);
 
@@ -815,7 +817,7 @@ async function gererSession(req, res) {
     cookie("iko_access", nouvelAccess, ACCESS_TOKEN_DUREE_S, "/"),
     cookie("iko_refresh", nouveauRefresh, REFRESH_TOKEN_DUREE_S, "/api/verif-securite"),
   ]);
-  return res.status(200).json({ userId: userPourSignature.userId, tenantId: userPourSignature.tenantId, role: userPourSignature.role });
+  return res.status(200).json({ userId: userPourSignature.userId, tenantId: userPourSignature.tenantId, role: userPourSignature.role, agence: userPourSignature.agence || null });
 }
 
 // Determine si le cron doit executer une verification maintenant.
@@ -925,10 +927,11 @@ export default async function handler(req, res) {
       const action = req.body && req.body.action;
 
       // --- Comptes par agence, mot de passe temporaire, empreinte / visage ---
-      if (action === "creer_comptes" || action === "regenerer_mot_de_passe") {
+      const ACTIONS_COMPTES = { creer_comptes: gererCreerComptes, regenerer_mot_de_passe: gererRegenererMotDePasse, creer_comptes_equipe: gererCreerComptesEquipe, lister_equipe: gererListerEquipe, statut_compte: gererStatutCompte };
+      if (ACTIONS_COMPTES[action]) {
         if (!verifierOrigine(req)) return reponseBloquee(res, "origine");
         if (!verifierDebit(req)) return reponseBloquee(res, "debit");
-        return action === "creer_comptes" ? gererCreerComptes(req, res, contexteComptes()) : gererRegenererMotDePasse(req, res, contexteComptes());
+        return ACTIONS_COMPTES[action](req, res, contexteComptes());
       }
       if (action && action.startsWith("cle_")) {
         if (!verifierOrigine(req)) return reponseBloquee(res, "origine");

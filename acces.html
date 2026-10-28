@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<link rel="stylesheet" href="/theme.css">
+<script src="/theme.js"></script>
+<title>Iko — Mes accès</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;font-family:-apple-system,"Segoe UI",Roboto,Arial,sans-serif;color:#0D0D0D;background:linear-gradient(160deg,#FF9A3C 0%,#FF6B00 55%,#C94F00 100%);background-attachment:fixed;padding:16px 12px 60px}
+.feuille{max-width:980px;margin:0 auto;background:rgba(255,255,255,.96);border-radius:22px;padding:18px;box-shadow:0 18px 50px rgba(0,0,0,.28)}
+.retour{display:inline-block;margin:0 0 12px;padding:8px 14px;font:800 12px inherit;font-family:inherit;border-radius:12px;cursor:pointer;color:#8a3300;background:rgba(255,255,255,.45);border:1px solid rgba(255,107,0,.40)}
+h1{margin:0;font-size:21px;font-weight:900}h2{margin:18px 0 8px;font-size:15px;font-weight:900}
+.sous{font-size:12.5px;color:#4B5563;margin:2px 0 12px;line-height:1.5}
+.carte{background:#fff;border:1px solid #E5E7EB;border-radius:16px;padding:14px;margin-bottom:10px;border-left:4px solid #FF6B00}
+.carte.coupe{border-left-color:#9CA3AF;opacity:.85}
+.ligne{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.nom{font-size:15px;font-weight:900}.petit{font-size:12px;color:#4B5563}
+.puce{display:inline-block;font-size:11px;font-weight:800;padding:3px 9px;border-radius:20px;background:#F3F4F6;color:#374151;margin-right:4px}
+.puce.or{background:#FF6B00;color:#fff}.puce.noir{background:#0D0D0D;color:#FFB27A}.puce.rouge{background:#FDECEC;color:#B42318}
+button.g{font:800 13px inherit;font-family:inherit;min-height:44px;padding:8px 14px;border-radius:12px;cursor:pointer;color:#8a3300;background:#fff;border:1px solid rgba(255,107,0,.5)}
+button.g.p{background:linear-gradient(180deg,#FF9A3C,#FF6B00);color:#fff;border-color:rgba(255,255,255,.5)}
+button:disabled{opacity:.55}
+label{display:block;font-size:12px;font-weight:800;color:#374151;margin:10px 0 4px}
+input,select{width:100%;min-height:44px;padding:10px;border-radius:10px;border:1px solid #D1D5DB;font-size:16px;font-family:inherit;background:#fff;color:#0D0D0D}
+input:focus,select:focus{outline:none;border-color:#FF6B00;box-shadow:0 0 0 3px rgba(255,107,0,.16)}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:10px}@media(max-width:600px){.g2{grid-template-columns:1fr}}
+.msg{min-height:18px;font-size:13px;margin-top:8px}.msg.err{color:#B42318}.msg.ok{color:#9A3F00;font-weight:700}
+.secret{border:2px solid #FF6B00;border-radius:12px;padding:12px;margin-top:10px;background:#FFF7F0}
+.secret code{font-size:17px;user-select:all;word-break:break-all}
+.cache{display:none !important}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;padding:16px;z-index:50}
+.modal>div{background:#fff;color:#0D0D0D;border-radius:16px;max-width:440px;width:100%;padding:18px}
+</style>
+<script src="/iko-retour.js" defer></script>
+</head>
+<body>
+<div class="feuille">
+  <button class="retour" data-iko-retour type="button">← Retour</button>
+  <h1>Mes accès</h1>
+  <div class="sous">Crée ici les accès de ton équipe : un technicien, ou un responsable d'agence. Chaque agence ne voit que ses propres données. Toi seul vois toutes les agences et la Centrale de direction. Ce sont des identifiants de connexion (une adresse e-mail que la personne a déjà), pas de nouvelles boîtes mail.</div>
+
+  <div id="refus" class="carte cache"></div>
+
+  <div id="corps" class="cache">
+    <h2>Ajouter un accès</h2>
+    <form id="form" class="carte" autocomplete="off">
+      <div class="g2">
+        <div><label for="fRole">Type d'accès</label><select id="fRole"><option value="TECHNICIEN">Technicien (une agence)</option><option value="TENANT_ADMIN">Responsable d'agence (une agence)</option></select></div>
+        <div><label for="fAgence">Agence</label><select id="fAgence"></select></div>
+      </div>
+      <div class="g2">
+        <div><label for="fNom">Nom de la personne</label><input id="fNom" placeholder="ex. Marc Dupont" maxlength="80"></div>
+        <div><label for="fIdent">Identifiant (son adresse e-mail)</label><input id="fIdent" type="email" placeholder="marc@entreprise.fr" maxlength="120" required></div>
+      </div>
+      <button class="g p" id="bCreer" type="submit" style="margin-top:12px;width:100%">Créer l'accès</button>
+      <div class="msg" id="msgCreer"></div>
+      <div id="secret"></div>
+    </form>
+
+    <h2>Mon équipe <span id="compte" class="petit"></span></h2>
+    <div id="liste"></div>
+  </div>
+</div>
+
+<div class="modal cache" id="modal"><div>
+  <h2 style="margin-top:0">Nouveau mot de passe</h2>
+  <div class="petit">Compte : <b id="mCible"></b>. L'ancien mot de passe cesse de marcher. Saisis TON mot de passe pour continuer.</div>
+  <label for="mMdp">Ton mot de passe</label><input id="mMdp" type="password" autocomplete="current-password">
+  <div class="msg" id="mMsg"></div><div id="mRes"></div>
+  <div class="ligne" style="margin-top:12px;justify-content:flex-end"><button class="g" id="mFermer" type="button">Fermer</button><button class="g p" id="mOk" type="button">Générer</button></div>
+</div></div>
+
+<script>
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  function esc(t) { return String(t == null ? '' : t).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  function api(corps) {
+    return fetch('/api/verif-securite', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(corps) })
+      .then(function (r) { return r.json().catch(function () { return {}; }).then(function (d) { return { ok: r.ok, status: r.status, data: d }; }); });
+  }
+  function copier(texte, bouton) {
+    navigator.clipboard.writeText(texte).then(function () { var t = bouton.textContent; bouton.textContent = 'Copié ✓'; setTimeout(function () { bouton.textContent = t; }, 1800); }).catch(function () { window.prompt('Copie ce texte :', texte); });
+  }
+  var agences = [];
+
+  function etiquette(m) { return m.role === 'TECHNICIEN' ? 'Technicien' : (m.agence ? "Responsable d'agence" : 'Patron'); }
+  function message(identifiant, role) {
+    var o = location.origin, l = ['Bonjour,', '', 'Votre accès IKO est prêt.', ''];
+    if (role === 'TECHNICIEN') l.push('Espace technicien : ' + o + '/technicien.html'); else l.push('Tableau de bord : ' + o + '/dashboard.html', 'Espace technicien : ' + o + '/technicien.html');
+    l.push('', 'Identifiant : ' + identifiant, 'Le mot de passe provisoire vous est transmis séparément. Vous devrez le changer à votre première connexion.', '', 'Cordialement');
+    return l.join('\n');
+  }
+
+  function charger() {
+    api({ action: 'lister_equipe' }).then(function (res) {
+      if (!res.ok) { $('liste').innerHTML = '<div class="petit">Liste indisponible.</div>'; return; }
+      var eq = res.data.equipe || [];
+      $('compte').textContent = '(' + eq.length + ')';
+      $('liste').innerHTML = eq.map(function (m, i) {
+        return '<div class="carte' + (m.actif ? '' : ' coupe') + '"><div class="ligne"><div><div class="nom">' + esc(m.nom || m.identifiant) + '</div><div class="petit">' + esc(m.identifiant) + '</div>' +
+          '<div style="margin-top:6px"><span class="puce ' + (m.agence ? 'noir' : 'or') + '">' + esc(etiquette(m)) + '</span>' + (m.agence ? '<span class="puce">' + esc(m.agence) + '</span>' : '<span class="puce">Toutes les agences</span>') + (m.actif ? '' : '<span class="puce rouge">Accès coupé</span>') + '</div>' +
+          '<div class="petit">' + (m.derniereConnexion ? 'Dernière connexion : ' + esc(new Date(m.derniereConnexion).toLocaleDateString('fr-FR')) : 'Jamais connecté') + '</div></div>' +
+          (m.moi || (!m.agence && m.role === 'TENANT_ADMIN') ? '<div class="petit">C\'est toi</div>' : '<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="g" data-a="mdp" data-i="' + i + '" type="button">Nouveau mot de passe</button><button class="g" data-a="statut" data-i="' + i + '" type="button">' + (m.actif ? 'Couper l\'accès' : 'Rouvrir l\'accès') + '</button></div>') +
+          '</div></div>';
+      }).join('') || '<div class="petit">Aucun accès pour l\'instant.</div>';
+      $('liste').onclick = function (ev) {
+        var b = ev.target.closest('button[data-a]'); if (!b) return;
+        var m = eq[Number(b.getAttribute('data-i'))];
+        if (b.getAttribute('data-a') === 'mdp') ouvrirModal(m.identifiant);
+        else api({ action: 'statut_compte', identifiant: m.identifiant, actif: !m.actif }).then(charger);
+      };
+    });
+  }
+
+  $('form').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var msg = $('msgCreer'), role = $('fRole').value, ident = $('fIdent').value.trim();
+    msg.className = 'msg'; msg.textContent = 'Création…'; $('secret').innerHTML = ''; $('bCreer').disabled = true;
+    api({ action: 'creer_comptes_equipe', comptes: [{ identifiant: ident, role: role, agence: $('fAgence').value, nom: $('fNom').value.trim() }] }).then(function (res) {
+      $('bCreer').disabled = false;
+      if (!res.ok) { msg.className = 'msg err'; msg.textContent = res.data.erreur || 'Erreur.'; return; }
+      var c = (res.data.crees || [])[0], ig = (res.data.ignores || [])[0];
+      if (!c) { msg.className = 'msg err'; msg.textContent = ig ? ig.raison : 'Aucun accès créé.'; return; }
+      msg.className = 'msg ok'; msg.textContent = 'Accès créé.';
+      $('secret').innerHTML = '<div class="secret"><b>Mot de passe temporaire (affiché UNE seule fois)</b><div style="margin:6px 0"><code id="sMdp"></code></div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="g" id="sCopMdp" type="button">Copier le mot de passe</button><button class="g" id="sCopMsg" type="button">Copier le message d\'accès</button></div><div class="petit" style="margin-top:6px">Transmets le message et le mot de passe séparément (SMS, téléphone…). La personne devra le changer à sa première connexion.</div></div>';
+      $('sMdp').textContent = c.motDePasseTemporaire;
+      $('sCopMdp').onclick = function () { copier(c.motDePasseTemporaire, this); };
+      $('sCopMsg').onclick = function () { copier(message(c.identifiant, c.role), this); };
+      $('fIdent').value = ''; $('fNom').value = '';
+      charger();
+    }).catch(function () { $('bCreer').disabled = false; msg.className = 'msg err'; msg.textContent = 'Erreur réseau.'; });
+  });
+
+  function ouvrirModal(identifiant) {
+    $('mCible').textContent = identifiant; $('mMdp').value = ''; $('mMsg').textContent = ''; $('mRes').innerHTML = ''; $('mOk').style.display = ''; $('modal').classList.remove('cache'); $('mMdp').focus();
+    $('mOk').onclick = function () {
+      var saisi = $('mMdp').value; if (!saisi) { $('mMsg').className = 'msg err'; $('mMsg').textContent = 'Saisis ton mot de passe.'; return; }
+      $('mMsg').className = 'msg'; $('mMsg').textContent = 'Création…';
+      api({ action: 'regenerer_mot_de_passe', identifiant: identifiant, motDePasseAdmin: saisi }).then(function (res) {
+        $('mMdp').value = '';
+        if (!res.ok) { $('mMsg').className = 'msg err'; $('mMsg').textContent = res.data.erreur || 'Erreur.'; return; }
+        $('mMsg').className = 'msg ok'; $('mMsg').textContent = 'Nouveau mot de passe temporaire (affiché UNE seule fois) :';
+        $('mRes').innerHTML = '<div class="secret"><code id="mMdpVal"></code><div style="margin-top:8px"><button class="g" id="mCop" type="button">Copier</button></div></div>';
+        $('mMdpVal').textContent = res.data.motDePasseTemporaire; $('mOk').style.display = 'none';
+        $('mCop').onclick = function () { copier(res.data.motDePasseTemporaire, this); };
+      });
+    };
+  }
+  $('mFermer').onclick = function () { $('modal').classList.add('cache'); };
+
+  fetch('/api/verif-securite?action=session').then(function (r) {
+    if (r.status === 401) { location.href = '/auth-login.html?retour=' + encodeURIComponent('/acces.html'); return null; }
+    return r.json();
+  }).then(function (s) {
+    if (!s) return;
+    if (s.role !== 'TENANT_ADMIN' || s.agence) {
+      $('refus').classList.remove('cache');
+      $('refus').textContent = s.role === 'SUPER_ADMIN_IKO' ? "Cette page est celle du responsable d'une entreprise. Toi, tu gères les accès de chaque client depuis le centre de pilotage (fiche du client)." : "Cette page est réservée au responsable de l'entreprise.";
+      return;
+    }
+    $('corps').classList.remove('cache');
+    fetch('/api/airtable/Agences?maxRecords=50').then(function (r) { return r.json(); }).then(function (j) {
+      agences = (j.records || []).map(function (a) { return (a.fields || {})['Nom agence']; }).filter(Boolean).sort(function (a, b) { return String(a).localeCompare(String(b), 'fr', { numeric: true }); });
+      $('fAgence').innerHTML = agences.map(function (n) { return '<option>' + esc(n) + '</option>'; }).join('') || '<option value="">Aucune agence</option>';
+    });
+    charger();
+  }).catch(function () { $('refus').classList.remove('cache'); $('refus').textContent = 'Erreur de vérification de session.'; });
+})();
+</script>
+</body>
+</html>

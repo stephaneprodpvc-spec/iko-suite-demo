@@ -32,6 +32,7 @@ import { handlerEntretien } from './_entretien.js';
 import { signalerAbus } from './_abus.js';
 import { creneauxLibres, identDepuisClientId, AGENCES_DEMO } from './_planning.js';
 import { enteteMake } from './_make.js';
+import { gardeAgence } from './_agences.js';
 
 // Champs d'un ticket renvoyes au client par la route publique "suivi"
 // (liste blanche : ni e-mail, ni telephone, ni adresse, ni notes internes).
@@ -1613,6 +1614,16 @@ export default async function handler(req, res) {
     // SUPER_ADMIN_IKO : accès global conservé, aucune restriction supplémentaire.
   }
 
+  // ISOLATION PAR AGENCE (28/10/2026) : un compte « responsable d'agence » ou « technicien » rattaché à une agence
+  // (revendication `agence` du jeton) ne voit et ne modifie QUE les données de son agence. Le contrôle par client
+  // ci-dessus reste appliqué ; celui-ci s'y AJOUTE (voir api/_agences.js). Le patron (sans agence) et le super admin sont inchangés.
+  let postFiltreAgence = null;
+  if (session && session.role !== 'SUPER_ADMIN_IKO' && session.agence) {
+    const gardeA = await gardeAgence({ method: req.method, premierSegment, segments: subPathRaw.split('/').filter(Boolean), rest, req, baseId, headers, agence: session.agence });
+    if (gardeA && gardeA.status) return res.status(gardeA.status).json(gardeA.json);
+    if (gardeA && gardeA.postFiltre) postFiltreAgence = gardeA.postFiltre;
+  }
+
   // Garde-fou métier : une annulation de ticket SAV doit toujours être
   // accompagnée d'un motif, même si l'appel contourne suivi.html (validation
   // front seule insuffisante).
@@ -1657,6 +1668,7 @@ export default async function handler(req, res) {
   try {
     const airtableRes = await fetch(airtableUrl, init);
     const data = await airtableRes.json().catch(() => ({}));
+    if (postFiltreAgence && Array.isArray(data.records)) data.records = await postFiltreAgence(data.records);
     // Enrichissement serveur (AUTH #008 suite) : pour une LISTE
     // d'Interventions SAV, on resout le nom affichable ("Identifiant") de
     // chaque technicien lie, uniquement pour cette reponse JSON (jamais

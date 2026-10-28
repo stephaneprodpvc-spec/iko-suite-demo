@@ -123,7 +123,8 @@ export function verifierSession(req) {
     // mdpAChanger : mot de passe faible a la connexion, changement impose
     // (les routes protegees refusent la session tant qu'il n'est pas fait).
     if (payload.mdpAChanger === true && MODE_DEMO_OUVERT) return SESSION_DEMO;
-    return { userId: payload.userId, tenantId: payload.tenantId, role: payload.role, mdpAChanger: payload.mdpAChanger === true };
+    // agence : compte rattache a UNE agence (responsable d'agence / technicien) -> acces limite a cette agence (voir api/_agences.js).
+    return { userId: payload.userId, tenantId: payload.tenantId, role: payload.role, agence: typeof payload.agence === "string" && payload.agence ? payload.agence : null, mdpAChanger: payload.mdpAChanger === true };
   } catch (e) {
     return MODE_DEMO_OUVERT ? SESSION_DEMO : null;
   }
