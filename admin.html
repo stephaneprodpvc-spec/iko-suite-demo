@@ -4720,7 +4720,8 @@ if (baremeAjouterBtnEl) baremeAjouterBtnEl.addEventListener("click", ajouterModu
   document.getElementById("alRafraichir").addEventListener("click", charger);
   document.getElementById("alToutTraiter").addEventListener("click", function(){ if (confirm("Marquer toutes les alertes comme traitées ?")) agir({ action:"tout_traiter" }); });
   charger();
-  setInterval(charger, 60000);
+  // Toutes les 5 min, et seulement si l'onglet est visible (economie du quota Airtable).
+  setInterval(function(){ if (!document.hidden) charger(); }, 300000);
   window.IKO_alertesActualiser = charger;
   // les noms de clients arrivent après le journal : on réaffiche une fois la liste des clients chargée
   setTimeout(afficher, 2500);

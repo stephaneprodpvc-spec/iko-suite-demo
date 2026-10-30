@@ -589,6 +589,8 @@ function App() {
     let timeoutId;
     const tick = async () => {
       try {
+        // Onglet masque : pas de rafraichissement (economie du quota Airtable).
+        if (document.hidden) { timeoutId = setTimeout(tick, 90000 + Math.random() * 10000); return; }
         const resp = await fetch('/api/airtable/Tickets%20SAV/' + ticket.id);
         const data = await resp.json();
         if (data && data.fields) {

@@ -410,9 +410,11 @@ export async function assurerCreneaux(ctx, ident, agence, reglages, du, au, { ma
   }
 }
 
-// Supprime des creneaux LIBRES PASSES du client (jamais Pris ni Bloques, jamais la demo).
-export async function purgerPasses(ctx, ident, aujourdhui, { max = 20 } = {}) {
-  if (ident.demo) return 0;
+// Supprime des creneaux LIBRES PASSES (jamais Pris ni Bloques, jamais les lignes CONFIG) : un
+// creneau libre dont la date est passee ne peut plus etre reserve ; le garder consomme
+// inutilement les 1000 entrees par base du forfait Airtable gratuit. La demo est incluse
+// (ses lignes sont celles sans "Compte client").
+export async function purgerPasses(ctx, ident, aujourdhui, { max = 100 } = {}) {
   const formule = 'AND({Statut}="Libre",{Date}<"' + aujourdhui + '",{Date}>="2000-01-01",' + clauseClient(ident) + ")";
   const anciens = (await lister(ctx, formule, { max })).filter((r) => appartient(ident, r) && r.fields["Statut"] === "Libre" && r.fields["Date"] < aujourdhui);
   let supprimes = 0;
@@ -428,7 +430,7 @@ export async function purgerPasses(ctx, ident, aujourdhui, { max = 20 } = {}) {
 }
 
 // Fenetre a couvrir selon la demande (mois / date / horizon par defaut).
-function fenetre(reglages, aujourdhui, { mois, date, du, au, admin }) {
+function fenetre(reglages, aujourdhui, { mois, date, du, au, admin }, ident) {
   if (date && dateValide(date)) return { du: date, au: date };
   if (admin && du && au && dateValide(du) && dateValide(au) && du <= au) return { du, au: au > ajouterJours(aujourdhui, 366) ? ajouterJours(aujourdhui, 366) : au };
   const debutMin = admin ? aujourdhui : ajouterJours(aujourdhui, reglages.delaiMinJours);
@@ -438,7 +440,9 @@ function fenetre(reglages, aujourdhui, { mois, date, du, au, admin }) {
     const limite = ajouterJours(aujourdhui, 366);
     return { du: debutMois > debutMin ? debutMois : debutMin, au: finMois > limite ? limite : finMois };
   }
-  return { du: debutMin, au: ajouterJours(aujourdhui, reglages.horizonSemaines * 7) };
+  // La demo (4 agences, creneaux a l'heure) est plafonnee a 3 semaines : au-dela, elle remplit la base.
+  const semaines = ident && ident.demo ? Math.min(reglages.horizonSemaines, 3) : reglages.horizonSemaines;
+  return { du: debutMin, au: ajouterJours(aujourdhui, semaines * 7) };
 }
 
 // Point d'entree des lecteurs : genere si besoin, puis renvoie les creneaux LIBRES
@@ -449,7 +453,7 @@ export async function creneauxLibres(ctx, ident, options) {
   if (!agence) return { creneaux: [], partiel: false };
   const reglages = await reglagesPour(ctx, ident, agence);
   const aujourdhui = aujourdhuiParis(maintenant(ctx));
-  const f = fenetre(reglages, aujourdhui, options);
+  const f = fenetre(reglages, aujourdhui, options, ident);
   // Delai minimum du client : jamais contourne par un parametre (date, mois...), sauf mode admin
   // (tableau de bord) qui n'est jamais anterieur a aujourd'hui.
   const minimum = options.admin ? aujourdhui : ajouterJours(aujourdhui, reglages.delaiMinJours);
@@ -467,7 +471,7 @@ export async function creneauxLibres(ctx, ident, options) {
   const recent = !ctx.sansCache && couvertures.get(cleCouv) && Date.now() - couvertures.get(cleCouv) < DUREE_COUVERTURE_MS;
   if (!recent && f.du <= f.au) {
     try {
-      if (!ident.demo) await purgerPasses(ctx, ident, aujourdhui);
+      await purgerPasses(ctx, ident, aujourdhui);
       const g = await assurerCreneaux(ctx, ident, agence, reglages, f.du, f.au);
       partiel = g.partiel || g.occupe;
       if (!partiel) couvertures.set(cleCouv, Date.now());

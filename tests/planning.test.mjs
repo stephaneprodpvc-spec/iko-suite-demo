@@ -176,16 +176,21 @@ test("renouvellement : creneaux LIBRES passes du client supprimes, jamais Pris/B
   assert.equal(db.Planning.filter((l) => l.fields.Date === "2026-08-17").length, 1);
 });
 
-test("demo (sans client) : reglages propres, lignes sans Compte client, les 360 existantes ne sont ni modifiees ni supprimees", async () => {
+test("demo (sans client) : reglages propres, lignes sans Compte client, creneaux pris jamais touches, creneaux libres passes purges", async () => {
   const existantes = [];
   for (const [i, d] of ["2026-08-17", "2026-10-15", "2026-10-16", "2026-10-19"].entries()) {
     existantes.push({ id: "recD" + String(i).padStart(11, "0"), fields: { Date: d, "Créneau": "Matin (8h30 — 12h00)", Agence: "Agence 1", Statut: i === 1 ? "Pris" : "Libre" } });
   }
   db.Planning.push(...existantes);
-  const avant = JSON.stringify(existantes);
+  const avantPris = JSON.stringify(existantes[1]);
+  const futur = existantes[3];
   await P.creneauxLibres(ctx(), { demo: true }, { agence: "Agence 1", periode: "matin" });
   await P.creneauxLibres(ctx(), A, { agence: "Agence 1", periode: "matin" });
-  assert.equal(JSON.stringify(existantes.map((e) => db.Planning.find((l) => l.id === e.id))), avant); // y compris la ligne libre passee
+  // Le creneau PRIS n'est jamais modifie ni supprime ; les creneaux LIBRES dont la date est passee sont purges
+  // (ils ne peuvent plus etre reserves et consomment le quota d'entrees Airtable).
+  assert.equal(JSON.stringify(db.Planning.find((l) => l.id === existantes[1].id)), avantPris);
+  assert.equal(db.Planning.some((l) => l.id === existantes[0].id), false, "libre passe : purge");
+  assert.ok(db.Planning.some((l) => l.id === futur.id || l.fields.Date >= "2026-10-15"));
   const demo = db.Planning.filter((l) => !(l.fields["Compte client"] || []).length && l.fields.Date !== P.CLE_CONFIG);
   const parCle = {};
   demo.forEach((l) => { const k = l.fields.Date + l.fields["Créneau"] + l.fields.Agence; parCle[k] = (parCle[k] || 0) + 1; });
