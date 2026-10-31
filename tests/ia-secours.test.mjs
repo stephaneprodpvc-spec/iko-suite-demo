@@ -97,3 +97,25 @@ test("corps Gemini : systeme, schema d'outil nettoye, images remplacees", () => 
   assert.match(JSON.stringify(g.contents), /Photo jointe/);
   assert.equal(g.generationConfig.maxOutputTokens, 800);
 });
+
+test("Gemini sature (503) : une nouvelle tentative, puis un autre modele, sans jamais exposer la cle", async () => {
+  process.env.GEMINI_API_KEY = "cle-factice";
+  process.env.GEMINI_MODELE = "modele-a,modele-b";
+  const vus = [];
+  let n = 0;
+  globalThis.fetch = async (url) => {
+    const u = String(url);
+    if (u.includes("anthropic")) return { ok: false, status: 400, text: async () => "credit balance is too low", json: async () => ({}) };
+    vus.push(u);
+    n++;
+    if (n <= 2) return { ok: false, status: 503, text: async () => "high demand", json: async () => ({}) }; // modele-a : 2 refus
+    return { ok: true, status: 200, text: async () => "", json: async () => ({ candidates: [{ content: { parts: [{ text: "salut" }] } }] }) }; // modele-b : ok
+  };
+  const r = await messagesAvecSecours({ cle: "k", corps, demo: true });
+  delete process.env.GEMINI_MODELE;
+  assert.equal(r.ok, true);
+  assert.equal((await r.json()).content[0].text, "salut");
+  assert.equal(vus.length, 3);
+  assert.ok(vus[0].includes("modele-a") && vus[1].includes("modele-a") && vus[2].includes("modele-b"));
+  assert.ok(vus.every((u) => !u.includes("cle-factice")));
+});

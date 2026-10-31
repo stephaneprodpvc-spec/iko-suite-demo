@@ -10,6 +10,7 @@
 // Google retire regulierement d'anciens modeles (gemini-2.5-flash : 404 le 31/10/2026) ; le modele se
 // change sans toucher au code avec la variable Vercel GEMINI_MODELE.
 const MODELE_PAR_DEFAUT = "gemini-3.8-flash";
+const MODELE_REPLI = "gemini-3.8-flash-lite"; // nom suppose : s'il n'existe pas (404), il est simplement saute
 const URL_BASE = "https://generativelanguage.googleapis.com/v1beta/models/";
 
 // Un refus de Claude justifie le secours : credit epuise, cle refusee, quota, panne.
@@ -99,19 +100,32 @@ export function corpsGemini(corps) {
   return out;
 }
 
+const pause = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// Modeles essayes dans l'ordre (GEMINI_MODELE = liste separee par des virgules). Un modele sature (503,
+// 429) est retente une fois, puis on passe au suivant ; un modele inconnu (404) est saute.
+function modelesGemini() {
+  const liste = String(process.env.GEMINI_MODELE || "").split(",").map((s) => s.trim()).filter(Boolean);
+  return liste.length ? liste : [MODELE_PAR_DEFAUT, MODELE_REPLI];
+}
+
 async function appelGemini(corps, cleGemini) {
-  const modele = process.env.GEMINI_MODELE || MODELE_PAR_DEFAUT;
-  const r = await fetch(URL_BASE + encodeURIComponent(modele) + ":generateContent", {
-    method: "POST",
-    headers: { "content-type": "application/json", "x-goog-api-key": cleGemini },
-    body: JSON.stringify(corpsGemini(corps)),
-  });
-  if (!r.ok) {
-    const detail = await r.text();
-    console.error("Secours Gemini : erreur", r.status, String(detail).slice(0, 300));
-    return null;
+  const requete = JSON.stringify(corpsGemini(corps));
+  for (const modele of modelesGemini()) {
+    for (let essai = 0; essai < 2; essai++) {
+      const r = await fetch(URL_BASE + encodeURIComponent(modele) + ":generateContent", {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-goog-api-key": cleGemini },
+        body: requete,
+      });
+      if (r.ok) return versReponseAnthropic(await r.json());
+      const detail = await r.text();
+      console.error("Secours Gemini (" + modele + ") : erreur", r.status, String(detail).slice(0, 200));
+      if ((r.status === 503 || r.status === 429) && essai === 0) { await pause(1500); continue; }
+      break;
+    }
   }
-  return versReponseAnthropic(await r.json());
+  return null;
 }
 
 function faireReponse(status, data) {
