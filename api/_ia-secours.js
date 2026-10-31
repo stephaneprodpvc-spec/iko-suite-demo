@@ -7,7 +7,9 @@
 // Sortie : un objet type Response dont json() renvoie la forme Anthropic ({ content, stop_reason }),
 // pour que le code appelant n'ait rien a changer.
 
-const MODELE_PAR_DEFAUT = "gemini-2.5-flash";
+// Google retire regulierement d'anciens modeles (gemini-2.5-flash : 404 le 31/10/2026) ; le modele se
+// change sans toucher au code avec la variable Vercel GEMINI_MODELE.
+const MODELE_PAR_DEFAUT = "gemini-3.8-flash";
 const URL_BASE = "https://generativelanguage.googleapis.com/v1beta/models/";
 
 // Un refus de Claude justifie le secours : credit epuise, cle refusee, quota, panne.
