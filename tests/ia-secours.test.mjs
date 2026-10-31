@@ -139,3 +139,9 @@ test("reglage de reflexion refuse (400 thinking) : nouvel essai sans ce reglage 
   assert.equal("thinkingConfig" in corpsVus[1].c.generationConfig, false);
   assert.ok(corpsVus[2].u.includes("m2:"));
 });
+
+test("tool_choice Anthropic -> mode ANY de Gemini (outil obligatoire, ou un outil precis)", () => {
+  assert.deepEqual(corpsGemini({ ...corps, tool_choice: { type: "any" } }).toolConfig, { functionCallingConfig: { mode: "ANY" } });
+  assert.deepEqual(corpsGemini({ ...corps, tool_choice: { type: "tool", name: "lister_creneaux" } }).toolConfig, { functionCallingConfig: { mode: "ANY", allowedFunctionNames: ["lister_creneaux"] } });
+  assert.equal("toolConfig" in corpsGemini(corps), false);
+});

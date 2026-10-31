@@ -98,8 +98,28 @@ export function corpsGemini(corps) {
   const sys = texteSysteme(corps.system);
   if (sys) out.systemInstruction = { parts: [{ text: sys }] };
   const outils = (corps.tools || []).filter((t) => t && t.name);
-  if (outils.length) out.tools = [{ functionDeclarations: outils.map((t) => ({ name: t.name, description: t.description || "", parameters: nettoyerSchema(t.input_schema || { type: "object", properties: {} }) })) }];
+  if (outils.length) {
+    out.tools = [{ functionDeclarations: outils.map((t) => ({ name: t.name, description: t.description || "", parameters: nettoyerSchema(t.input_schema || { type: "object", properties: {} }) })) }];
+    // tool_choice Anthropic : "any" = un outil est obligatoire ; { type: "tool", name } = cet outil precis.
+    const choix = corps.tool_choice;
+    if (choix && (choix.type === "any" || choix.type === "tool")) {
+      out.toolConfig = { functionCallingConfig: choix.type === "tool" && choix.name ? { mode: "ANY", allowedFunctionNames: [choix.name] } : { mode: "ANY" } };
+    }
+  }
   return out;
+}
+
+// Demo / interne ou client reel ? Les endpoints de Max et d'IKO recoivent les tickets depuis l'ecran et ne
+// connaissent pas le client : on se fie a la SESSION. Un compte rattache a un client (tenantId) = vrai client :
+// jamais de secours gratuit. Pas de session ou super administrateur (sans client) = demo / usage interne.
+export async function estDemoSession(req) {
+  try {
+    const { verifierSession } = await import("./_securite.js");
+    const s = verifierSession(req);
+    return !s || !s.tenantId;
+  } catch {
+    return false; // dans le doute : pas de secours
+  }
 }
 
 const pause = (ms) => new Promise((r) => setTimeout(r, ms));

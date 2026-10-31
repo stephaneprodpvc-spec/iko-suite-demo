@@ -1,4 +1,5 @@
 import { limiterChat } from "./_securite.js";
+import { messagesAvecSecours, estDemoSession } from "./_ia-secours.js";
 import { blocSystemeIko } from "./_systeme-iko.js";
 import { blocMetierMenuiserie } from "./_metier-menuiserie.js";
 import { blocSavoir } from "./_savoir-menuiserie.js";
@@ -636,14 +637,11 @@ du ticket telle qu'elle est ecrite.
   probable, retards recurrents. Sois honnete et precis, pas alarmiste.
 - Reponses orales, sans markdown ni emoji.`;
 
-    const reponse = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        "x-api-key": cle,
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify({
+    // Demo / usage interne seulement : si Claude est indisponible, relais sur Gemini gratuit (voir _ia-secours.js).
+    const reponse = await messagesAvecSecours({
+      cle,
+      demo: await estDemoSession(req),
+      corps: {
         model: MODELE,
         max_tokens: 400,
         temperature: 0.3,
@@ -652,7 +650,7 @@ du ticket telle qu'elle est ecrite.
         tools: TOOLS,
         tool_choice: { type: "any" },
         messages: [{ role: "user", content: messageUtilisateur }],
-      }),
+      },
     });
 
     if (!reponse.ok) {
