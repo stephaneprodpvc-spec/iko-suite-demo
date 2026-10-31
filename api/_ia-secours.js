@@ -111,19 +111,33 @@ function modelesGemini() {
   return liste.length ? liste : [MODELE_PAR_DEFAUT, MODELE_REPLI];
 }
 
+// Delai maximum d'un appel Gemini : au-dela, on abandonne ce modele (la fonction serveur a son propre delai).
+const DELAI_APPEL_MS = 18000;
+
 async function appelGemini(corps, cleGemini) {
-  const requete = JSON.stringify(corpsGemini(corps));
+  const base = corpsGemini(corps);
   for (const modele of modelesGemini()) {
-    for (let essai = 0; essai < 2; essai++) {
-      const r = await fetch(URL_BASE + encodeURIComponent(modele) + ":generateContent", {
-        method: "POST",
-        headers: { "content-type": "application/json", "x-goog-api-key": cleGemini },
-        body: requete,
-      });
+    // Reflexion reduite (sinon le modele "reflechit" longtemps) ; si le modele refuse ce reglage (400), on le retire.
+    let avecReflexion = true;
+    for (let essai = 0; essai < 3; essai++) {
+      const requete = JSON.stringify(avecReflexion ? { ...base, generationConfig: { ...base.generationConfig, thinkingConfig: { thinkingLevel: "low" } } } : base);
+      let r;
+      try {
+        r = await fetch(URL_BASE + encodeURIComponent(modele) + ":generateContent", {
+          method: "POST",
+          headers: { "content-type": "application/json", "x-goog-api-key": cleGemini },
+          body: requete,
+          signal: AbortSignal.timeout(DELAI_APPEL_MS),
+        });
+      } catch (e) {
+        console.error("Secours Gemini (" + modele + ") : sans reponse apres " + DELAI_APPEL_MS / 1000 + " s");
+        break; // modele suivant
+      }
       if (r.ok) return versReponseAnthropic(await r.json());
       const detail = await r.text();
       console.error("Secours Gemini (" + modele + ") : erreur", r.status, String(detail).slice(0, 200));
-      if ((r.status === 503 || r.status === 429) && essai === 0) { await pause(1500); continue; }
+      if (r.status === 400 && avecReflexion && /thinking/i.test(detail)) { avecReflexion = false; continue; }
+      if ((r.status === 503 || r.status === 429) && essai < 1) { await pause(1500); continue; }
       break;
     }
   }

@@ -119,3 +119,23 @@ test("Gemini sature (503) : une nouvelle tentative, puis un autre modele, sans j
   assert.ok(vus[0].includes("modele-a") && vus[1].includes("modele-a") && vus[2].includes("modele-b"));
   assert.ok(vus.every((u) => !u.includes("cle-factice")));
 });
+
+test("reglage de reflexion refuse (400 thinking) : nouvel essai sans ce reglage ; appel qui ne repond pas : modele suivant", async () => {
+  process.env.GEMINI_API_KEY = "cle-factice";
+  process.env.GEMINI_MODELE = "m1,m2";
+  const corpsVus = [];
+  globalThis.fetch = async (url, init) => {
+    const u = String(url);
+    if (u.includes("anthropic")) return { ok: false, status: 400, text: async () => "credit balance is too low", json: async () => ({}) };
+    corpsVus.push({ u, c: JSON.parse(init.body) });
+    if (u.includes("m1:") && corpsVus.filter((x) => x.u.includes("m1:")).length === 1) return { ok: false, status: 400, text: async () => "Unknown name thinkingLevel", json: async () => ({}) };
+    if (u.includes("m1:")) { const e = new Error("timeout"); e.name = "TimeoutError"; throw e; }
+    return { ok: true, status: 200, text: async () => "", json: async () => ({ candidates: [{ content: { parts: [{ text: "ok m2" }] } }] }) };
+  };
+  const r = await messagesAvecSecours({ cle: "k", corps, demo: true });
+  delete process.env.GEMINI_MODELE;
+  assert.equal((await r.json()).content[0].text, "ok m2");
+  assert.equal(corpsVus[0].c.generationConfig.thinkingConfig.thinkingLevel, "low");
+  assert.equal("thinkingConfig" in corpsVus[1].c.generationConfig, false);
+  assert.ok(corpsVus[2].u.includes("m2:"));
+});
