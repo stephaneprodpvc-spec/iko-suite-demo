@@ -10,7 +10,7 @@
 // Google retire regulierement d'anciens modeles (gemini-2.5-flash : 404 le 31/10/2026) ; le modele se
 // change sans toucher au code avec la variable Vercel GEMINI_MODELE.
 const MODELE_PAR_DEFAUT = "gemini-3.8-flash";
-const MODELE_REPLI = "gemini-3.8-flash-lite"; // nom suppose : s'il n'existe pas (404), il est simplement saute
+const MODELE_REPLI = "gemini-3.5-flash-lite"; // le plus leger de la serie 3.5, moins souvent sature
 const URL_BASE = "https://generativelanguage.googleapis.com/v1beta/models/";
 
 // Un refus de Claude justifie le secours : credit epuise, cle refusee, quota, panne.
@@ -91,7 +91,9 @@ export function versReponseAnthropic(data) {
 export function corpsGemini(corps) {
   const out = {
     contents: versContenusGemini(corps.messages),
-    generationConfig: { maxOutputTokens: corps.max_tokens || 800, temperature: corps.temperature == null ? 0.6 : corps.temperature },
+    // Les modeles Gemini recents "reflechissent" avant de repondre et ces jetons comptent dans la limite :
+    // on laisse de la marge pour que la reponse ne soit pas tronquee.
+    generationConfig: { maxOutputTokens: Math.max((corps.max_tokens || 800) * 3, 2048), temperature: corps.temperature == null ? 0.6 : corps.temperature },
   };
   const sys = texteSysteme(corps.system);
   if (sys) out.systemInstruction = { parts: [{ text: sys }] };

@@ -95,7 +95,7 @@ test("corps Gemini : systeme, schema d'outil nettoye, images remplacees", () => 
   assert.equal(g.tools[0].functionDeclarations[0].name, "lister_creneaux");
   assert.equal("additionalProperties" in g.tools[0].functionDeclarations[0].parameters, false);
   assert.match(JSON.stringify(g.contents), /Photo jointe/);
-  assert.equal(g.generationConfig.maxOutputTokens, 800);
+  assert.equal(g.generationConfig.maxOutputTokens, 2400);
 });
 
 test("Gemini sature (503) : une nouvelle tentative, puis un autre modele, sans jamais exposer la cle", async () => {
