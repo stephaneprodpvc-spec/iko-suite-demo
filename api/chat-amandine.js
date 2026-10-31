@@ -13,6 +13,7 @@
 import { limiterChat } from "./_securite.js";
 import { lienSuivi } from "./_suivi.js";
 import { creneauxLibres, identDepuisClientId } from "./_planning.js";
+import { messagesAvecSecours } from "./_ia-secours.js";
 import vocabMenuiserie from "./_trades/menuiserie.js";
 import vocabPlomberieChauffage from "./_trades/plomberie_chauffage.js";
 import { blocSystemeIko } from "./_systeme-iko.js";
@@ -765,14 +766,11 @@ sait deja qui tu es, ce n'est pas ta premiere reunion avec eux.
 - Reponses orales, sans markdown ni emoji (lues a voix haute).`;
 
   for (let tour = 0; tour < MAX_TOOL_ROUNDS; tour++) {
-    const reponse = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        "x-api-key": cle,
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify({
+    // Demo (aucun client reel) : si Claude est indisponible, relais sur Gemini gratuit (voir _ia-secours.js).
+    const reponse = await messagesAvecSecours({
+      cle,
+      demo: !clientIdActuel,
+      corps: {
         model: MODELE,
         max_tokens: 800,
         temperature: 0.6,
@@ -781,7 +779,7 @@ sait deja qui tu es, ce n'est pas ta premiere reunion avec eux.
           .concat(vocabActuel.trade_id === "menuiserie" ? [{ type: "text", text: blocSavoir("amandine", convertis.filter(function (c) { return c.role === "user" && typeof c.content === "string"; }).slice(-4).map(function (c) { return c.content; }).join(" "), { photos: photosJointesActuelles.length > 0 }) }] : []),
         tools: toolsActuels,
         messages: avecPhotosVisibles(convertis, photosJointesActuelles),
-      }),
+      },
     });
 
   if (!reponse.ok) {
