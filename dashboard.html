@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="stylesheet" href="/theme.css">
+<script>/* Échappement HTML des données affichées dans les fenêtres d'impression/export (audit n°2, 02/11/2026) */window.ikoEsc=function(v){return String(v==null?"":v).replace(/[&<>"']/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c];});};</script>
 <script src="/theme.js"></script>
 <script src="/creneaux.js"></script>
 <script src="/iko-sauvegarde.js"></script>
@@ -5400,12 +5401,12 @@ function ModalNotes({ tickets, onClose }) {
     const periode = (exportDebutNotes||exportFinNotes) ? "Du "+(exportDebutNotes||"...")+" au "+(exportFinNotes||"...") : "Toutes dates";
     const lignes = notes.map(t => `
       <tr>
-        <td>${t.fields?.Name||""}</td>
-        <td>${t.fields?.Agence||""}</td>
-        <td>${t.fields?.Client||""}</td>
-        <td>${t.fields?.Produit||""} — ${t.fields?.Problème||""}</td>
+        <td>${window.ikoEsc(t.fields?.Name||"")}</td>
+        <td>${window.ikoEsc(t.fields?.Agence||"")}</td>
+        <td>${window.ikoEsc(t.fields?.Client||"")}</td>
+        <td>${window.ikoEsc(t.fields?.Produit||"")} — ${window.ikoEsc(t.fields?.Problème||"")}</td>
         <td>${"★".repeat(t.fields.Note)}${"☆".repeat(5-t.fields.Note)}</td>
-        <td>${t.fields?.["Note Commentaire"]||""}</td>
+        <td>${window.ikoEsc(t.fields?.["Note Commentaire"]||"")}</td>
       </tr>`).join("");
     const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Avis clients Iko Suite</title>
       <style>
@@ -6617,15 +6618,15 @@ function Dashboard({ agenceAccess, onClose }) {
     const periode = (exportDebut||exportFin) ? "Du "+(exportDebut||"...")+" au "+(exportFin||"...") : "Toutes dates";
     const lignes = data.map(t => `
       <tr>
-        <td>${t.fields?.Name||""}</td>
+        <td>${window.ikoEsc(t.fields?.Name||"")}</td>
         <td>${t.createdTime ? new Date(t.createdTime).toLocaleDateString('fr-FR') : ""}</td>
-        <td>${t.fields?.Créneau||""}</td>
-        <td>${t.fields?.Statut||"Nouveau"}</td>
-        <td>${t.fields?.Agence||""}</td>
-        <td>${t.fields?.Client||""}</td>
-        <td>${t.fields?.Téléphone||""}</td>
-        <td>${t.fields?.Produit||""}</td>
-        <td>${t.fields?.Problème||""}</td>
+        <td>${window.ikoEsc(t.fields?.Créneau||"")}</td>
+        <td>${window.ikoEsc(t.fields?.Statut||"Nouveau")}</td>
+        <td>${window.ikoEsc(t.fields?.Agence||"")}</td>
+        <td>${window.ikoEsc(t.fields?.Client||"")}</td>
+        <td>${window.ikoEsc(t.fields?.Téléphone||"")}</td>
+        <td>${window.ikoEsc(t.fields?.Produit||"")}</td>
+        <td>${window.ikoEsc(t.fields?.Problème||"")}</td>
         <td>${typeof t.fields?.Note === "number" ? "★".repeat(t.fields.Note) + "☆".repeat(5-t.fields.Note) : ""}</td>
       </tr>`).join("");
     const mailBody = encodeURIComponent(

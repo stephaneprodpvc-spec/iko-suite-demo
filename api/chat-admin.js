@@ -1,4 +1,4 @@
-import { limiterChat } from "./_securite.js";
+import { limiterChat, verifierSession } from "./_securite.js";
 
 // api/chat-admin.js
 // Claude, integre au poste de pilotage (admin.html) comme partenaire de
@@ -335,6 +335,13 @@ async function appellerClaude(cle, messagesHistorique, contexte){
 export default async function handler(req, res) {
   if (req.method !== "POST") {
     return res.status(405).json({ erreur: "Methode non autorisee" });
+  }
+
+  // Assistant du poste de pilotage : réservé au super-administrateur IKO (audit n°2, 02/11/2026). Son prompt décrit
+  // l'architecture interne et il tourne aux frais de la clé IA.
+  const sessionAdmin = verifierSession(req);
+  if (!sessionAdmin || sessionAdmin.role !== "SUPER_ADMIN_IKO" || sessionAdmin.mdpAChanger) {
+    return res.status(403).json({ erreur: "Acces reserve au super-administrateur." });
   }
 
   if (limiterChat(req, res)) return;

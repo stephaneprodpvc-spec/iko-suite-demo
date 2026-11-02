@@ -19,6 +19,11 @@ import vocabPlomberieChauffage from "./_trades/plomberie_chauffage.js";
 import { blocSystemeIko } from "./_systeme-iko.js";
 import { alerter } from "./_alertes.js";
 import { photosHtml, adressesPhotos, ajouterMailsAuCorps, marqueClient } from "./_mail.js";
+
+// Retire « < » et « > » d'un texte libre (noms, adresses, descriptions saisis par un visiteur anonyme).
+function sansBalises(v) {
+  return typeof v === "string" ? v.replace(/[<>]/g, "") : v;
+}
 import { blocMetierMenuiserie } from "./_metier-menuiserie.js";
 import { blocSavoir, phraseSecurite } from "./_savoir-menuiserie.js";
 import { extraireConnaissanceDuRecord, blocPromptConnaissance, affinerPourPrompt } from "./_connaissance.js";
@@ -506,12 +511,14 @@ async function executerOutil(nom, input, clientId, tradeId, agencesObjets, photo
       marque: "iko",
       ticket: numero,
       agence: input.agence,
-      nom: input.nom,
+      // Texte libre saisi par un visiteur anonyme : on retire « < » et « > » avant de l'enregistrer (défense en profondeur contre
+      // l'injection de balises dans les écrans et exports ; audit n°2, 02/11/2026).
+      nom: sansBalises(input.nom),
       tel: input.telephone,
       "e-mail": input.email,
-      adresse: input.adresse,
-      produit: input.produit,
-      probleme: input.probleme,
+      adresse: sansBalises(input.adresse),
+      produit: sansBalises(input.produit),
+      probleme: sansBalises(input.probleme),
       creneau: rdvReserve ? rdvReserve.texte : "A convenir",
       garantie: garantieTexte,
       facture: input.numero_facture || "",

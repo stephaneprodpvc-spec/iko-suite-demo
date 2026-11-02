@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="stylesheet" href="/theme.css">
+<script>/* Échappement HTML des données affichées dans les fenêtres d'impression/export (audit n°2, 02/11/2026) */window.ikoEsc=function(v){return String(v==null?"":v).replace(/[&<>"']/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c];});};</script>
 <script src="/theme.js"></script>
 <script src="/creneaux.js"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -3096,11 +3097,11 @@ function ItineraireModal({ agence, tickets, onClose }) {
     const lignes = route.map((s, i) => `
       <tr>
         <td>${i+1}</td>
-        <td>${s.ticket.fields?.["Créneau"]||""}</td>
-        <td>${s.ticket.fields?.Name||""}</td>
-        <td>${s.ticket.fields?.Client||""}</td>
-        <td>${s.ticket.fields?.Adresse||""}</td>
-        <td>${s.ticket.fields?.["Téléphone"]||""}</td>
+        <td>${window.ikoEsc(s.ticket.fields?.["Créneau"]||"")}</td>
+        <td>${window.ikoEsc(s.ticket.fields?.Name||"")}</td>
+        <td>${window.ikoEsc(s.ticket.fields?.Client||"")}</td>
+        <td>${window.ikoEsc(s.ticket.fields?.Adresse||"")}</td>
+        <td>${window.ikoEsc(s.ticket.fields?.["Téléphone"]||"")}</td>
       </tr>`).join("");
     const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Itinéraire — ${agence}</title>
       <style>
@@ -4035,12 +4036,12 @@ function Technicien({ agence, onClose }) {
     const fmtJour = (d) => d.toLocaleDateString('fr-FR', { weekday:'long', day:'numeric', month:'long' });
     const lignes = semaine.map(({t}) => `
       <tr>
-        <td>${t.fields?.["Créneau"]||""}</td>
-        <td>${t.fields?.Name||""}</td>
-        <td>${t.fields?.Client||""}</td>
-        <td>${t.fields?.Adresse||""}</td>
-        <td>${t.fields?.["Téléphone"]||""}</td>
-        <td>${t.fields?.Produit||""} — ${t.fields?.["Problème"]||""}</td>
+        <td>${window.ikoEsc(t.fields?.["Créneau"]||"")}</td>
+        <td>${window.ikoEsc(t.fields?.Name||"")}</td>
+        <td>${window.ikoEsc(t.fields?.Client||"")}</td>
+        <td>${window.ikoEsc(t.fields?.Adresse||"")}</td>
+        <td>${window.ikoEsc(t.fields?.["Téléphone"]||"")}</td>
+        <td>${window.ikoEsc(t.fields?.Produit||"")} — ${window.ikoEsc(t.fields?.["Problème"]||"")}</td>
       </tr>`).join("");
     const mailBody = encodeURIComponent(
       `Planning technicien — ${agenceShort}\nSemaine du ${fmtJour(lundi)} au ${fmtJour(dimanche)}\n\n` +

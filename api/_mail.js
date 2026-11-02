@@ -26,7 +26,20 @@ function appliquerMarque(m) {
 const URL_SURE = /^(https:\/\/[^\s"'<>]+|http:\/\/localhost:\d+\/[^\s"'<>]*)$/;
 
 const esc = (t) => String(t == null ? '' : t).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-const lien = (u) => (URL_SURE.test(String(u || '').trim()) ? String(u).trim() : '');
+// Hôtes autorisés pour les liens des mails (audit n°2) : sans cette liste, quiconque appelait le relais pouvait faire envoyer
+// un mail aux couleurs d'IKO avec un lien vers un site de son choix (hameçonnage).
+function hoteAutorise(h) {
+  h = String(h || '').toLowerCase();
+  if (h === 'localhost' || h === 'iko-suite-demo.vercel.app' || h === 'res.cloudinary.com' || h === 'checkout.stripe.com') return true;
+  if (h === 'yousign.app' || h.endsWith('.yousign.app') || h === 'yousign.com' || h.endsWith('.yousign.com')) return true;
+  try { if (h === new URL(process.env.SUIVI_BASE_URL || 'https://iko-suite-demo.vercel.app').hostname.toLowerCase()) return true; } catch (e) { /* ignore */ }
+  return false;
+}
+const lien = (u) => {
+  const v = String(u || '').trim();
+  if (!URL_SURE.test(v)) return '';
+  try { return hoteAutorise(new URL(v).hostname) ? v : ''; } catch (e) { return ''; }
+};
 
 export function adressesPhotos(photos) {
   return String(photos || '').split(',').map((u) => u.trim()).filter((u) => (ADRESSE_AUTORISEE.test(u) || ADRESSE_LOCALE.test(u)) && u.length < 400).slice(0, 5);
@@ -216,7 +229,9 @@ export async function enrichirDepuisTicket(corps, ctx) {
     const f = rec.fields || {};
     const mettre = (k, v) => { if ((corps[k] === undefined || corps[k] === '') && v) corps[k] = String(v); };
     mettre('nom', f.Client); mettre('produit', f.Produit); mettre('probleme', f['Problème']); mettre('creneau', f['Créneau']);
-    mettre('adresse', f.Adresse); mettre('tel', f['Téléphone']); mettre('e-mail', f.Email); mettre('agence', f.Agence);
+    mettre('adresse', f.Adresse); mettre('tel', f['Téléphone']); mettre('agence', f.Agence);
+    // Le destinataire est TOUJOURS l'e-mail du ticket quand il existe : un appelant ne peut pas rediriger le mail vers son adresse (audit n°2).
+    if (f.Email) corps['e-mail'] = String(f.Email);
     mettre('montant', f['Montant devis'] ? f['Montant devis'] + ' €' : '');
     return Array.isArray(f['Compte client']) && f['Compte client'][0] ? f['Compte client'][0] : null;
   } catch (e) { return null; }

@@ -397,6 +397,8 @@ async function relayerWebhook(req, res, urlCible, actionsAutorisees, ctx) {
   // ecrase (une valeur envoyee par le navigateur n'est jamais relayee) et
   // JAMAIS renvoye au navigateur : il part uniquement par e-mail via Make.
   const corpsRelaye = Object.assign({}, req.body || {});
+  // Destinataires et mise en page des mails : TOUJOURS recalcules par le serveur, jamais pris du navigateur (audit n°2).
+  ['email_agence', 'email_technicien', 'mail_a_agence', 'mail_objet', 'mail_html', 'mail_objet_agence', 'mail_html_agence'].forEach((k) => { delete corpsRelaye[k]; });
   let clientARattacher = null; // slug puis identifiant du client (nouvelle demande d'un client pro)
   if (actionsAutorisees === ACTIONS_WEBHOOK_AUTORISEES && actionDemandee === undefined) {
     delete corpsRelaye.lien_suivi;

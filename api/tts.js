@@ -10,7 +10,7 @@
 // Les deux cles API (ELEVENLABS_API_KEY, OPENAI_API_KEY) restent cote
 // serveur, jamais exposees au navigateur.
 
-import { verifierOrigine, verifierDebit, reponseBloquee } from "./_securite.js";
+import { verifierOrigine, verifierDebit, reponseBloquee, verifierSession } from "./_securite.js";
 
 const MAX_CHARS = 500;
 
@@ -45,8 +45,13 @@ async function synthetiserVoix(req, res) {
   if (!texte || !voiceId) {
     return res.status(400).json({ erreur: "texte et voice_id requis" });
   }
+  // Identifiant de voix ElevenLabs : alphanumérique seulement (audit n°2) ; sinon « ../ », « ? » ou « # » permettraient de viser
+  // un autre chemin de l'API avec la clé du propriétaire.
+  if (!/^[A-Za-z0-9]{10,40}$/.test(voiceId)) {
+    return res.status(400).json({ erreur: "voice_id invalide" });
+  }
 
-  const reponse = await fetch("https://api.elevenlabs.io/v1/text-to-speech/" + voiceId, {
+  const reponse = await fetch("https://api.elevenlabs.io/v1/text-to-speech/" + encodeURIComponent(voiceId), {
     method: "POST",
     headers: {
       "xi-api-key": cle,
@@ -137,6 +142,9 @@ async function recupererUsageElevenLabs(req, res) {
 export default async function handler(req, res) {
   if (req.method === "GET") {
     if (!verifierOrigine(req)) return reponseBloquee(res, "origine");
+    // Quota du compte ElevenLabs : réservé au super-administrateur (utilisé seulement par admin.html).
+    const s = verifierSession(req);
+    if (!s || s.role !== "SUPER_ADMIN_IKO") return res.status(403).json({ erreur: "Acces refuse." });
     return await recupererUsageElevenLabs(req, res);
   }
   if (req.method !== "POST") {

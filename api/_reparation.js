@@ -90,7 +90,9 @@ export async function reparer({ appliquer = true, lireConfig, ecrireConfig } = {
 export async function handleReparation(req, res, outils) {
   const session = verifierSession(req);
   if (!session) return res.status(401).json({ error: 'Session requise.' });
-  if (session.agence && session.role !== 'SUPER_ADMIN_IKO') return res.status(403).json({ error: 'Réservé au responsable de l\'entreprise.' });
+  // Réservé au super-administrateur IKO (audit n°2, 02/11/2026) : le contrôle lit et répare TOUTE la base (tickets, créneaux,
+  // contrats de tous les clients) ; un patron de client ne doit pas le déclencher ni en lire le rapport.
+  if (session.role !== 'SUPER_ADMIN_IKO' || session.mdpAChanger) return res.status(403).json({ error: 'Réservé au super-administrateur IKO.' });
   const rapport = await reparer({ appliquer: req.method === 'POST', ...(outils || {}) });
   return res.status(200).json(rapport);
 }
