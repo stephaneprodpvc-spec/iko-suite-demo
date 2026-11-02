@@ -12,6 +12,8 @@ import { creerFaux } from "./fake-airtable.mjs";
 process.env.JWT_ACCESS_SECRET = "test-access-secret";
 process.env.JWT_REFRESH_SECRET = "test-refresh-secret";
 process.env.AIRTABLE_TOKEN = "test-token";
+process.env.IKO_DEMO_OUVERT = "0"; // sans cela, une requete sans session est traitee comme super admin (mode demo ouvert)
+delete process.env.IKO_MDP_UNIQUE;
 
 const { default: handler } = await import("../api/verif-securite.js");
 

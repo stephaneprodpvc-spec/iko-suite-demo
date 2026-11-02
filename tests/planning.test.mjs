@@ -49,7 +49,7 @@ test("jours feries francais (dont Paques, Ascension, Pentecote)", () => {
   assert.ok(P.joursFeriesFR(2027).has("2027-03-29")); // lundi de Paques 2027
 });
 
-test("validation des reglages : bornes, heures precises refusees pour l'instant", () => {
+test("validation des reglages : bornes et decoupage horaire", () => {
   assert.equal(P.validerReglages({ capacite: 0 }).ok, false);
   assert.equal(P.validerReglages({ capacite: 21 }).ok, false);
   assert.equal(P.validerReglages({ joursTravailles: [] }).ok, false);
@@ -58,9 +58,11 @@ test("validation des reglages : bornes, heures precises refusees pour l'instant"
   assert.equal(P.validerReglages({ decoupage: { mode: "demi-journees", periodes: [] } }).ok, false);
   assert.equal(P.validerReglages({ fermetures: [{ du: "2026-12-31", au: "2026-12-24" }] }).ok, false);
   assert.equal(P.validerReglages({ fermetures: [{ du: "2026-02-30", au: "2026-03-01" }] }).ok, false);
+  // Les heures precises sont activees (HEURES_ACTIVEES) : un decoupage valide est accepte, un decoupage invalide refuse.
   const h = P.validerReglages({ decoupage: { mode: "heures", plages: [{ debut: "09:00", fin: "12:00" }], dureeMinutes: 60 } });
-  assert.equal(h.ok, false);
-  assert.match(h.erreur, /heures précises/);
+  assert.equal(h.ok, true);
+  assert.equal(P.validerReglages({ decoupage: { mode: "heures", plages: [], dureeMinutes: 60 } }).ok, false);
+  assert.match(P.validerReglages({ decoupage: { mode: "heures", plages: [{ debut: "09:00", fin: "12:00" }], dureeMinutes: 5 } }).erreur, /Durée/);
   const ok = P.validerReglages({ capacite: 2, joursTravailles: [3, 1, 1], fermetures: [{ du: "2026-12-24", au: "2026-12-31", motif: "Conges" }] });
   assert.equal(ok.ok, true);
   assert.deepEqual(ok.reglages.joursTravailles, [1, 3]);
