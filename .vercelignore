@@ -1,7 +1,8 @@
 # Fichiers de developpement : jamais publies (audit securite n°2, 02/11/2026)
-server-local.mjs
-iko-local
-tests
-LANCER-IKO.bat
-CHANTIER-A-REPRENDRE.md
-chat-admin.js
+# Le « / » initial limite chaque regle a la RACINE du projet (sans lui, api/chat-admin.js serait retire aussi).
+/server-local.mjs
+/iko-local
+/tests
+/LANCER-IKO.bat
+/CHANTIER-A-REPRENDRE.md
+/chat-admin.js
