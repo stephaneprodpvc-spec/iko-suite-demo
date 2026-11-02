@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex">
+<title>Ne plus recevoir d'e-mails</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: Arial, 'Segoe UI', sans-serif; background: #F4F1EE; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 16px; color: #0D0D0D; }
+.carte { background: #fff; border-radius: 16px; max-width: 460px; width: 100%; overflow: hidden; }
+.haut { background: #0D0D0D; color: #fff; padding: 18px 22px; font-weight: 700; border-bottom: 5px solid #FF6B00; }
+.corps { padding: 24px 22px 26px; }
+h1 { font-size: 21px; margin-bottom: 12px; }
+p { font-size: 15px; line-height: 1.55; color: #2B2B2B; margin-bottom: 14px; }
+button { width: 100%; min-height: 56px; border: none; border-radius: 12px; background: #FF6B00; color: #0D0D0D; font-size: 17px; font-weight: 700; cursor: pointer; }
+button[disabled] { opacity: .55; cursor: default; }
+.petit { font-size: 12px; color: #6B6B6B; margin-top: 14px; }
+.ok { background: #F4F1EE; border-left: 4px solid #FF6B00; border-radius: 8px; padding: 14px 16px; }
+.err { background: #FDECEC; border-left: 4px solid #D92D20; border-radius: 8px; padding: 14px 16px; color: #B42318; }
+a { color: #6B6B6B; }
+</style>
+</head>
+<body>
+<div class="carte">
+  <div class="haut">Service après-vente</div>
+  <div class="corps" id="zone">
+    <h1>Ne plus recevoir d'e-mails</h1>
+    <p>Si vous confirmez, vous ne recevrez plus aucun e-mail pour vos demandes et contrats de service après-vente (rappels, rendez-vous, devis, avis).</p>
+    <p>Votre ou vos demandes en cours restent traitées : vous pouvez toujours nous appeler.</p>
+    <button id="bouton" type="button">Je ne veux plus recevoir d'e-mails</button>
+    <p class="petit">Vos droits sur vos données personnelles : <a href="/confidentialite.html">confidentialité et mentions légales</a>.</p>
+  </div>
+</div>
+<script>
+(function () {
+  var jeton = new URLSearchParams(location.search).get('t') || '';
+  var zone = document.getElementById('zone');
+  var bouton = document.getElementById('bouton');
+  function message(classe, titre, texte) {
+    zone.innerHTML = '';
+    var h = document.createElement('h1'); h.textContent = titre; zone.appendChild(h);
+    var d = document.createElement('div'); d.className = classe; d.textContent = texte; zone.appendChild(d);
+  }
+  if (!jeton) { message('err', 'Lien incomplet', "Ce lien n'est pas valide. Utilisez le lien « Ne plus recevoir d'e-mails » de l'un de nos messages, ou répondez STOP à ce message."); return; }
+  // Meme secret partage que les autres pages publiques (il est deja visible dans leur code : ce n'est pas un secret fort).
+  var APP_SECRET = "97960bb3f41d75c71ba3e831a7acb90ab324549734e27d6a";
+  bouton.addEventListener('click', function () {
+    bouton.disabled = true; bouton.textContent = 'Un instant…';
+    fetch('/api/airtable/suivi', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-App-Secret': APP_SECRET }, body: JSON.stringify({ jeton: jeton, stop: true }) })
+      .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+      .then(function (x) {
+        if (x.ok && x.j && x.j.ok) message('ok', 'C’est fait', "Vous ne recevrez plus d'e-mails de notre part. Cela peut prendre quelques minutes pour être pris en compte.");
+        else message('err', 'Impossible de valider', "Le lien est invalide ou expiré. Répondez STOP à l'un de nos e-mails : nous le ferons pour vous.");
+      })
+      .catch(function () { message('err', 'Erreur de connexion', 'Réessayez dans un instant, ou répondez STOP à l’un de nos e-mails.'); });
+  });
+})();
+</script>
+</body>
+</html>

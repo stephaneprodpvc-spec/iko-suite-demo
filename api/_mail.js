@@ -4,10 +4,12 @@
 // Toute valeur affichée est échappée ; les liens ne sont acceptés que s'ils sont en https (ou localhost en mode local).
 // Fonctions pures, sans réseau.
 
-const ADRESSE_AUTORISEE = /^https:\/\/res\.cloudinary\.com\/[A-Za-z0-9_\-./%]+$/;
+import { lienStop, normaliserEmail } from './_suivi.js';
+
+const ADRESSE_AUTORISEE =/^https:\/\/res\.cloudinary\.com\/[A-Za-z0-9_\-./%]+$/;
 const ADRESSE_LOCALE = /^http:\/\/localhost:\d+\/__iko-local\/fichier\/[A-Za-z0-9_\-.]+$/; // mode local uniquement
 const OR_IKO = '#FF6B00', NOIR_IKO = '#0D0D0D';
-let OR = OR_IKO, NOIR = NOIR_IKO, NOM_MARQUE = 'Iko Suite', SIGLE = 'IKO', MARQUE_CLIENT = false;
+let OR = OR_IKO, NOIR = NOIR_IKO, NOM_MARQUE = 'Iko Suite', SIGLE = 'IKO', MARQUE_CLIENT = false, STOP_URL = '';
 const HEX = /^#[0-9a-fA-F]{6}$/;
 const luminance = (hex) => { const c = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255).map((v) => (v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4))); return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]; };
 const ratio = (a, b) => { const x = luminance(a), y = luminance(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); };
@@ -63,6 +65,18 @@ const encart = (html, fond = null, bord = OR) => `<div style="background:${fond 
 const p = (html) => `<p style="margin:0 0 14px;font:15px/1.6 Arial,sans-serif;color:#2B2B2B;">${html}</p>`;
 const ticketBloc = (t) => `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${NOIR};border-radius:12px;margin:6px 0 18px;"><tr><td style="padding:18px;text-align:center;"><div style="font:700 11px Arial,sans-serif;letter-spacing:2px;color:${contraste(NOIR) === '#FFFFFF' ? '#BDBDBD' : '#555555'};text-transform:uppercase;">Votre numéro de ticket</div><div style="font:900 28px 'Courier New',monospace;letter-spacing:2px;color:${lisible(OR, NOIR)};margin-top:6px;">${esc(t)}</div></td></tr></table>`;
 
+// Mentions légales des mails envoyés au client final (RGPD, art. 13 : identité, finalité, durée, droits, réclamation) + désinscription.
+// Les notifications internes (agence, alertes) ont leur propre pied de page et n'en portent pas.
+function mentionsLegales() {
+  const styleP = 'margin:10px 0 0;font:11px/1.5 Arial,sans-serif;color:#8A8A8A;text-align:left;';
+  const arret = STOP_URL
+    ? `<a href="${esc(STOP_URL)}" style="color:#6B6B6B;text-decoration:underline;">Ne plus recevoir d'e-mails</a> (ou répondez <b>STOP</b> à ce message).`
+    : 'Pour ne plus recevoir d\'e-mails, répondez <b>STOP</b> à ce message.';
+  return `<p style="${styleP}"><b>Vos données personnelles.</b> Cet e-mail est envoyé par ${esc(NOM_MARQUE)} (responsable du traitement) à la suite de votre demande de service après-vente. Nous utilisons vos coordonnées, la description du problème et vos photos uniquement pour traiter votre demande, organiser l'intervention et vous tenir informé ; elles ne sont ni vendues ni cédées. Elles sont conservées le temps du traitement du dossier, puis pendant la durée légale applicable (garanties, comptabilité). Le logiciel Iko Suite, éditeur de la solution, les héberge pour notre compte. Vous pouvez exercer vos droits d'accès, de rectification, d'effacement, d'opposition et de limitation en répondant à ce message, et introduire une réclamation auprès de la CNIL (cnil.fr).</p>` +
+    `<p style="${styleP}">${arret} Informations légales, confidentialité et médiation de la consommation : <a href="${esc(SITE_LEGAL)}" style="color:#6B6B6B;text-decoration:underline;">${esc(SITE_LEGAL.replace('https://', ''))}</a></p>`;
+}
+const SITE_LEGAL = 'https://iko-suite-demo.vercel.app/confidentialite.html';
+
 function cadre({ resume, bandeau, titre, corps, pied }) {
   const basPage = pied || 'Cet e-mail est envoyé automatiquement par Iko Suite. Pour toute question, répondez simplement à ce message.';
   return `<!doctype html>
@@ -76,7 +90,7 @@ function cadre({ resume, bandeau, titre, corps, pied }) {
 <td style="padding-left:14px;font:700 15px Arial,sans-serif;color:${contraste(NOIR)};">${esc(NOM_MARQUE)}<br><span style="font:400 12px Arial,sans-serif;color:${contraste(NOIR) === '#FFFFFF' ? '#BDBDBD' : '#555555'};">${esc(bandeau)}</span></td></tr></table></td></tr>
 <tr><td style="background:${OR};height:5px;line-height:5px;font-size:0;">&nbsp;</td></tr>
 <tr><td style="padding:30px 28px 10px;"><h1 style="margin:0 0 16px;font:800 22px/1.3 Arial,sans-serif;color:#0D0D0D;">${esc(titre)}</h1>${corps}</td></tr>
-<tr><td style="padding:18px 28px 26px;border-top:1px solid #EEE;font:12px/1.5 Arial,sans-serif;color:#8A8A8A;text-align:center;">${esc(basPage)}<br>${MARQUE_CLIENT ? `<span style="color:${lisible(OR, '#FFFFFF')};font-weight:700;">${esc(NOM_MARQUE)}</span> — SAV propulsé par Iko Suite` : `<span style="color:${OR};font-weight:700;">Iko Suite</span> — le SAV intelligent`}</td></tr>
+<tr><td style="padding:18px 28px 26px;border-top:1px solid #EEE;font:12px/1.5 Arial,sans-serif;color:#8A8A8A;text-align:center;">${esc(basPage)}<br>${MARQUE_CLIENT ? `<span style="color:${lisible(OR, '#FFFFFF')};font-weight:700;">${esc(NOM_MARQUE)}</span> — SAV propulsé par Iko Suite` : `<span style="color:${OR};font-weight:700;">Iko Suite</span> — le SAV intelligent`}${pied ? '' : mentionsLegales()}</td></tr>
 </table></td></tr></table></body></html>`;
 }
 
@@ -87,6 +101,7 @@ const SITE = 'https://iko-suite-demo.vercel.app';
 export function construireMails(action, d, marque) {
   d = d || {};
   appliquerMarque(marque);
+  STOP_URL = lien(d.lien_stop) || '';
   const t = d.ticket || '';
   const photos = photosHtml(d.photos);
   switch (action || 'nouvelle_demande') {
@@ -185,6 +200,10 @@ export function construireMails(action, d, marque) {
 // ces champs sont toujours recalculés ici.
 export function ajouterMailsAuCorps(corps, action, marque) {
   try {
+    // Lien « Ne plus recevoir d'e-mails » : calculé ici (jamais pris du navigateur), uniquement si le client a une adresse.
+    delete corps.lien_stop;
+    const adr = normaliserEmail(corps['e-mail']);
+    if (adr) { const ls = lienStop(adr); if (ls) corps.lien_stop = ls; }
     const m = construireMails(action, corps, marque);
     if (!m) return corps;
     corps.mail_objet = m.objet; corps.mail_html = m.html;
@@ -197,6 +216,31 @@ export function ajouterMailsAuCorps(corps, action, marque) {
     }
   } catch (e) { /* un souci de mise en page ne doit jamais empêcher l'envoi */ }
   return corps;
+}
+
+// ---------- STOP : le client a demandé à ne plus recevoir d'e-mails ----------
+// Le choix est mémorisé dans la case « Mails désactivés » de ses tickets et contrats (Airtable), posée par stop.html.
+export const estDesinscrit = (fields) => !!(fields && fields['Mails désactivés'] === true);
+
+// Vérifie par adresse e-mail (un seul appel Airtable). Utilisé pour une NOUVELLE demande, dont le ticket n'existe pas encore.
+export async function emailDesinscrit(email, baseId, headers) {
+  try {
+    const e = normaliserEmail(email);
+    if (!e || !baseId || !headers) return false;
+    const formule = 'AND(LOWER(TRIM({Email}))="' + e + '",{Mails désactivés})';
+    const r = await fetch('https://api.airtable.com/v0/' + baseId + '/Tickets%20SAV?filterByFormula=' + encodeURIComponent(formule) + '&maxRecords=1&fields%5B%5D=Name', { headers });
+    if (!r.ok) return false; // champ absent ou erreur : on n'empêche pas l'envoi, mais on ne bloque pas non plus la demande
+    return ((await r.json()).records || []).length > 0;
+  } catch (err) { return false; }
+}
+
+// Retire la partie « client » du mail. Retourne true s'il reste quelque chose à envoyer (la notification de l'agence).
+export function retirerMailClient(corps) {
+  corps.desinscrit = true;
+  corps['e-mail'] = '';
+  corps.mail_objet = ''; corps.mail_html = '';
+  delete corps.lien_suivi; delete corps.lien_stop;
+  return !!corps.mail_html_agence;
 }
 
 const cacheMarque = new Map();
@@ -232,6 +276,7 @@ export async function enrichirDepuisTicket(corps, ctx) {
     mettre('adresse', f.Adresse); mettre('tel', f['Téléphone']); mettre('agence', f.Agence);
     // Le destinataire est TOUJOURS l'e-mail du ticket quand il existe : un appelant ne peut pas rediriger le mail vers son adresse (audit n°2).
     if (f.Email) corps['e-mail'] = String(f.Email);
+    if (estDesinscrit(f)) corps.desinscrit = true;
     mettre('montant', f['Montant devis'] ? f['Montant devis'] + ' €' : '');
     return Array.isArray(f['Compte client']) && f['Compte client'][0] ? f['Compte client'][0] : null;
   } catch (e) { return null; }

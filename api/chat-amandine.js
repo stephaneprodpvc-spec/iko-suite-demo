@@ -20,7 +20,7 @@ import vocabElectricite from "./_trades/electricite.js";
 import vocabGeneraliste from "./_trades/generaliste.js";
 import { blocSystemeIko } from "./_systeme-iko.js";
 import { alerter } from "./_alertes.js";
-import { photosHtml, adressesPhotos, ajouterMailsAuCorps, marqueClient } from "./_mail.js";
+import { photosHtml, adressesPhotos, ajouterMailsAuCorps, marqueClient, emailDesinscrit, retirerMailClient } from "./_mail.js";
 
 // Retire « < » et « > » d'un texte libre (noms, adresses, descriptions saisis par un visiteur anonyme).
 function sansBalises(v) {
@@ -558,6 +558,8 @@ async function executerOutil(nom, input, clientId, tradeId, agencesObjets, photo
     };
 
     ajouterMailsAuCorps(payload, undefined, await marqueClient(clientId)); // mail_objet / mail_html déjà prêts pour Make, aux couleurs du client
+    // Le client avait déjà dit STOP : pas de mail pour lui (la demande, elle, est bien créée et l'agence est prévenue).
+    if (input.email && await emailDesinscrit(input.email, AIRTABLE_BASE, airtableHeaders())) retirerMailClient(payload);
     const r = await fetch(MAKE_WEBHOOK, {
       method: "POST",
       headers: enteteMake({ "Content-Type": "application/json" }),

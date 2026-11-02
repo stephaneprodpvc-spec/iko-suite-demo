@@ -14,7 +14,7 @@ import { creneauxLibres, identDepuisClientId } from './_planning.js';
 import { verifierOrigine, verifierDebit, verifierSession } from './_securite.js';
 import { signalerAbus } from './_abus.js';
 import { enteteMake } from './_make.js';
-import { ajouterMailsAuCorps, marqueClient } from './_mail.js';
+import { ajouterMailsAuCorps, marqueClient, retirerMailClient, estDesinscrit } from './_mail.js';
 import { pousserAgence } from './_alertes.js';
 
 const MAKE_WEBHOOK = 'https://hook.eu1.make.com/n3lwi92wldkf22jcemmjfem334p4mv6a';
@@ -76,6 +76,7 @@ async function chargerContratAutorise(baseId, headers, body, session) {
 async function notifierMake(corps, clientId) {
   try {
     ajouterMailsAuCorps(corps, corps.action, await marqueClient(clientId));
+    if (corps.desinscrit && !retirerMailClient(corps)) return; // le client a dit STOP : rien pour lui
     await fetch(MAKE_WEBHOOK, { method: 'POST', headers: enteteMake({ 'Content-Type': 'application/json' }), body: JSON.stringify(corps) });
   } catch (e) { console.error('Entretien : notification Make impossible', e && e.message); }
 }
@@ -164,7 +165,7 @@ export async function handlerEntretien(req, res, { baseId, headers }) {
       if (!maj.ok) { await airtable(baseId, headers, 'Planning/' + pid, { method: 'PATCH', body: JSON.stringify({ fields: { Statut: 'Libre' } }) }); return res.status(502).json({ error: 'Enregistrement impossible, réessayez.' }); }
       const lisible = new Date(date + 'T12:00:00').toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
       await pousserAgence({ agence, titre: 'Visite d\'entretien planifiée', message: (f.Client || 'Client') + ' — ' + lisible + ' (' + visite.creneau + ')' });
-      await notifierMake({ marque: 'iko', action: 'entretien_visite', marqueur_entretien_visite: '1', ticket: f['Référence'] || '', nom: f.Client, 'e-mail': f.Email || '', tel: f['Téléphone'] || '', agence, adresse: f.Adresse || '',
+      await notifierMake({ marque: 'iko', desinscrit: estDesinscrit(f), action: 'entretien_visite', marqueur_entretien_visite: '1', ticket: f['Référence'] || '', nom: f.Client, 'e-mail': f.Email || '', tel: f['Téléphone'] || '', agence, adresse: f.Adresse || '',
         date_visite: lisible, creneau: visite.creneau, equipements: f['Équipements'] || '', lien_suivi: f.Email ? lienSuivi(null, { email: f.Email, tel: f['Téléphone'], ticket: f['Référence'] || '' }) : '', email_agence: '' }, clientId);
       return res.status(200).json({ ok: true, visites: nouvelles, visite });
     }

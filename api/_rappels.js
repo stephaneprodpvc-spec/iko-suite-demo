@@ -27,6 +27,7 @@ export async function handleRappelVeille(req, res) {
     for (const t of (j.records || [])) {
       const f = t.fields || {};
       if (!f.Email && !f['Téléphone']) { ignores++; continue; }
+      if (f['Mails désactivés'] === true) { ignores++; continue; } // le client a dit STOP
       let lien = '';
       try { lien = lienSuivi(null, { email: f.Email, tel: f['Téléphone'], ticket: f.Name }) || ''; } catch (e) { /* lien facultatif */ }
       try {
@@ -51,6 +52,7 @@ export async function handleRappelVeille(req, res) {
       for (const c of (je.records || [])) {
         const f = c.fields || {};
         if (!f.Email && !f['Téléphone']) continue;
+        if (f['Mails désactivés'] === true) continue; // le client a dit STOP
         try {
           const w = await fetch(MAKE_WEBHOOK, {
             method: 'POST', headers: enteteMake({ 'Content-Type': 'application/json' }),

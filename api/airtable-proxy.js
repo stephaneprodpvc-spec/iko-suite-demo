@@ -25,7 +25,7 @@
 
 import webpush from 'web-push';
 import { alerter } from './_alertes.js';
-import { photosHtml, adressesPhotos, ajouterMailsAuCorps, marqueClient, enrichirDepuisTicket } from './_mail.js';
+import { photosHtml, adressesPhotos, ajouterMailsAuCorps, marqueClient, enrichirDepuisTicket, emailDesinscrit, retirerMailClient } from './_mail.js';
 import { verifierSession, verifierDebit, verifierOrigine } from './_securite.js';
 import { lienSuivi, lireJeton, normaliserEmail, normaliserTel } from './_suivi.js';
 import { handlerEntretien } from './_entretien.js';
@@ -79,6 +79,24 @@ async function handlerSuivi(req, res, baseId, headers) {
       CHAMPS_SUIVI.forEach(c => { if (r.fields && c in r.fields) fields[c] = r.fields[c]; });
       return { id: r.id, createdTime: r.createdTime, fields };
     });
+    if (body.stop === true && typeof body.jeton === 'string' && body.jeton) {
+      // « Ne plus recevoir d'e-mails » (stop.html) : l'adresse est prouvee par le lien du mail ; on coche « Mails désactivés » sur tous
+      // ses tickets et contrats. Les envois suivants (relais Make, rappels, entretien) l'ignorent ensuite.
+      const identite = lireJeton(body.jeton);
+      if (!identite || !identite.email) { signalerAbus(req, 'jeton-invalide'); return res.status(404).json(ECHEC); }
+      let nb = 0;
+      for (const table of ['Tickets%20SAV', 'Contrats%20entretien']) {
+        const rl = await fetch('https://api.airtable.com/v0/' + baseId + '/' + table + '?filterByFormula=' + encodeURIComponent('LOWER(TRIM({Email}))="' + identite.email + '"') + '&maxRecords=100&fields%5B%5D=Email', { headers });
+        if (!rl.ok) throw new Error('airtable ' + rl.status);
+        const lignes = ((await rl.json()).records || []).map(x => ({ id: x.id, fields: { 'Mails désactivés': true } }));
+        for (let i = 0; i < lignes.length; i += 10) {
+          const rp = await fetch('https://api.airtable.com/v0/' + baseId + '/' + table, { method: 'PATCH', headers: { ...headers, 'Content-Type': 'application/json' }, body: JSON.stringify({ records: lignes.slice(i, i + 10) }) });
+          if (!rp.ok) throw new Error('airtable ' + rp.status);
+        }
+        nb += lignes.length;
+      }
+      return res.status(200).json({ ok: true, nb });
+    }
     if (typeof body.jeton === 'string' && body.jeton) {
       // Lien du mail (adresse prouvee par la reception du mail) : toutes les demandes du client.
       const identite = lireJeton(body.jeton);
@@ -440,9 +458,13 @@ async function relayerWebhook(req, res, urlCible, actionsAutorisees, ctx) {
     }
   }
   // Mails aux couleurs du client pro (fiche « Clients » de l'Admin) ; sans client identifié : orange et noir IKO.
+  delete corpsRelaye.desinscrit; // posé uniquement par le serveur
   const clientDuTicket = actionDemandee !== undefined ? await enrichirDepuisTicket(corpsRelaye, ctx) : null; // détails réels du ticket + son client pro
   const marqueMail = await marqueClient(/^rec/.test(clientARattacher || '') ? clientARattacher : (ctx && ctx.tenantId) || clientDuTicket || null);
+  if (actionDemandee === undefined && ctx && await emailDesinscrit(corpsRelaye['e-mail'], ctx.baseId, ctx.headers)) corpsRelaye.desinscrit = true; // nouvelle demande d'un client qui a dit STOP
   ajouterMailsAuCorps(corpsRelaye, actionDemandee, marqueMail); // mail_objet / mail_html déjà prêts pour Make
+  // Le client a dit STOP : plus aucun e-mail pour lui. On n'envoie que la notification de l'agence, s'il y en a une.
+  if (corpsRelaye.desinscrit && !retirerMailClient(corpsRelaye)) return res.status(200).json({ ok: true, desinscrit: true });
   try {
     const webhookRes = await fetch(urlCible, {
       method: 'POST',

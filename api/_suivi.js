@@ -69,6 +69,13 @@ function baseLien(req) {
   return process.env.SUIVI_BASE_URL || BASE_PROD;
 }
 
+// Lien « Ne plus recevoir d'e-mails » (page stop.html) : meme jeton chiffre que le suivi, limite a l'adresse e-mail.
+export function lienStop(email) {
+  const j = creerJeton({ email });
+  if (!j) return "";
+  return (process.env.SUIVI_BASE_URL || BASE_PROD) + "/stop.html?t=" + j;
+}
+
 // Lien direct vers le suivi (a envoyer UNIQUEMENT par e-mail au client, jamais
 // renvoye au navigateur de l'auteur de la demande : sinon n'importe qui
 // saisissant l'e-mail d'un tiers obtiendrait l'acces a son suivi).

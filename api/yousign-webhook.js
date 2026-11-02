@@ -141,7 +141,7 @@ async function validerDevis(req, baseId, headers, devisRecord, champsSupp) {
           // devis déjà actée dans Airtable.
           try {
             const emailClient = ticketJson.fields?.Email;
-            if (emailClient) {
+            if (emailClient && ticketJson.fields?.["Mails désactivés"] !== true) {
               const origin = 'https://' + (req.headers.host || 'iko-suite-demo.vercel.app');
               const montantTTC = Number(devisRecord.fields?.["Montant TTC"]) || 0;
               await fetch('https://hook.eu1.make.com/n3lwi92wldkf22jcemmjfem334p4mv6a', {
