@@ -111,6 +111,18 @@ export async function alerter({ cle, titre, message, client = null, force = fals
   }
 }
 
+// Inscrit plusieurs lignes au journal en une seule lecture/écriture de la configuration. Ne lève jamais d'exception.
+export async function journaliserLot(lignes) {
+  try {
+    if (!lignes.length) return;
+    const c = await lireConfig();
+    lignes.forEach((l) => inscrireAuJournal(c, { cle: l.cle || l.titre, titre: l.titre, message: l.message, client: l.client || null }));
+    await ecrireConfig(c);
+  } catch (e) {
+    console.error('journaliserLot() :', e);
+  }
+}
+
 async function lireCorpsJson(req) {
   const morceaux = [];
   for await (const m of req) morceaux.push(m);
@@ -218,7 +230,8 @@ export async function handleSurveillance(req, res) {
   let alerte = null;
   if (problemes.length) {
     // Journal : une ligne par client concerné ; envoi : un seul message récapitulatif (pas de rafale de notifications).
-    for (const p of problemes) await alerter({ cle: p.cle, titre: 'IKO : ' + p.texte.split(' : ')[0].replace(/^\d+ /, ''), message: p.texte, client: p.client, journalSeulement: true });
+    // Un seul passage lecture/écriture de la configuration pour tout le journal (avant : 2 appels Airtable par problème).
+    await journaliserLot(problemes.map((p) => ({ cle: p.cle, titre: 'IKO : ' + p.texte.split(' : ')[0].replace(/^\d+ /, ''), message: p.texte, client: p.client })));
     alerte = await alerter({ cle: 'surveillance:' + [...new Set(problemes.map((p) => p.cle))].sort().join('+'), titre: 'IKO : ' + problemes.length + ' point(s) à traiter', message: problemes.map((p) => p.texte).join(' — '), sansJournal: true });
   }
   return res.status(200).json({ controle: new Date().toISOString(), problemes, alerte, reparation });
