@@ -71,3 +71,12 @@ test("page du guide et moteur d'aide : pas de HTML injecte sans echappement", ()
   assert.ok(!/innerHTML\s*=\s*[^;]*\bs\.(titre|resume|astuce)\b(?![^;]*esc\()/.test(g.replace(/esc\(s\.(titre|resume|astuce)\)/g, "")), "contenu non echappe dans guide.html");
   assert.ok(g.includes('name="robots" content="noindex"'));
 });
+
+test("compatibilite Vercel : aucun fichier de l'API n'utilise import.meta (convertis en CommonJS, ils planteraient tous les assistants)", () => {
+  const dossier = new URL("../api/", import.meta.url);
+  const fautifs = fs.readdirSync(dossier).filter((f) => f.endsWith(".js")).filter((f) => {
+    const code = fs.readFileSync(new URL(f, dossier), "utf8").replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+    return /\bimport\.meta\b/.test(code);
+  });
+  assert.deepEqual(fautifs, []);
+});

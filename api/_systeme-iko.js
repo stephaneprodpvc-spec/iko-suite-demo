@@ -4,6 +4,7 @@
 // plus ce qu'il a le droit de dire / faire à son niveau. À mettre à jour quand un module apparaît.
 // Règle : on ne décrit ici que ce qui existe réellement dans le produit.
 import { readFileSync } from "node:fs";
+import { join } from "node:path";
 
 const MODULES = `
 LES MODULES DU SYSTEME IKO (tu fais partie de ce système, tu dois le connaitre)
@@ -46,8 +47,17 @@ CE QUE TU FAIS A TON NIVEAU (assistant du tableau de bord, direction et agences)
 
 // ---- Guide d'utilisation (source unique : guide-contenu.json, aussi lu par guide.html et par le bouton « ? » des écrans) ----
 // Lecture protégée : si le fichier est absent ou illisible, les assistants continuent sans le guide (jamais de panne).
+// ATTENTION : pas de « import.meta » ici (Vercel convertit ces fichiers en CommonJS : « Cannot use import.meta outside a module »
+// plantait les trois assistants le 02/11/2026). On cherche le fichier depuis le dossier de travail (racine du projet, y compris
+// sur Vercel grâce à « includeFiles » de vercel.json) puis depuis __dirname quand il existe.
 let GUIDE = null;
-try { GUIDE = JSON.parse(readFileSync(new URL("../guide-contenu.json", import.meta.url), "utf8")); } catch (e) { GUIDE = null; }
+{
+  const candidats = [join(process.cwd(), "guide-contenu.json")];
+  if (typeof __dirname !== "undefined") candidats.push(join(__dirname, "..", "guide-contenu.json"));
+  for (const chemin of candidats) {
+    try { GUIDE = JSON.parse(readFileSync(chemin, "utf8")); break; } catch (e) { GUIDE = null; }
+  }
+}
 
 // Rôles du guide utiles à chaque assistant (Amandine fait déjà la déclaration elle-même : « c-declarer » exclu).
 const GUIDE_PAR_ASSISTANT = {
