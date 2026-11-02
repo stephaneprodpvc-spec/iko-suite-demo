@@ -3,6 +3,7 @@
 // Texte pur, aucun accès réseau. Chaque assistant reçoit la même description des modules,
 // plus ce qu'il a le droit de dire / faire à son niveau. À mettre à jour quand un module apparaît.
 // Règle : on ne décrit ici que ce qui existe réellement dans le produit.
+import { readFileSync } from "node:fs";
 
 const MODULES = `
 LES MODULES DU SYSTEME IKO (tu fais partie de ce système, tu dois le connaitre)
@@ -43,6 +44,35 @@ CE QUE TU FAIS A TON NIVEAU (assistant du tableau de bord, direction et agences)
 `,
 };
 
+// ---- Guide d'utilisation (source unique : guide-contenu.json, aussi lu par guide.html et par le bouton « ? » des écrans) ----
+// Lecture protégée : si le fichier est absent ou illisible, les assistants continuent sans le guide (jamais de panne).
+let GUIDE = null;
+try { GUIDE = JSON.parse(readFileSync(new URL("../guide-contenu.json", import.meta.url), "utf8")); } catch (e) { GUIDE = null; }
+
+// Rôles du guide utiles à chaque assistant (Amandine fait déjà la déclaration elle-même : « c-declarer » exclu).
+const GUIDE_PAR_ASSISTANT = {
+  dashboard: { roles: ["patron", "agence", "technicien"], max: 9000 },
+  technicien: { roles: ["technicien"], max: 4500 },
+  amandine: { roles: ["client"], max: 3600, sauf: ["c-declarer"] },
+  suivi: { roles: ["client"], max: 3600, sauf: ["c-declarer"] },
+};
+
+export function resumeGuide(assistant, guide = GUIDE) {
+  const cfg = GUIDE_PAR_ASSISTANT[assistant];
+  if (!cfg || !guide || !Array.isArray(guide.sections)) return "";
+  const lignes = [];
+  let total = 0;
+  for (const s of guide.sections) {
+    if (!(s.roles || []).some((r) => cfg.roles.includes(r))) continue;
+    if ((cfg.sauf || []).includes(s.id)) continue;
+    const l = "- " + s.titre + " : " + (s.resume || "") + (s.etapes && s.etapes.length ? " Etapes : " + s.etapes.join(" > ") : "");
+    if (total + l.length > cfg.max) break;
+    lignes.push(l); total += l.length;
+  }
+  if (!lignes.length) return "";
+  return "\nGUIDE D'UTILISATION (a utiliser quand on te demande « comment je fais pour... », « ou se trouve... » : reponds en 2 ou 3 phrases courtes, avec le nom EXACT des boutons ; si la reponse n'est pas dans ce guide, dis-le et propose de contacter l'agence ; n'invente jamais un bouton)\n" + lignes.join("\n") + "\n";
+}
+
 export function blocSystemeIko(assistant) {
-  return "\n" + MODULES + (PAR_ASSISTANT[assistant] || "");
+  return "\n" + MODULES + (PAR_ASSISTANT[assistant] || "") + resumeGuide(assistant);
 }

@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Guide IKO</title>
+<style>
+  :root { --or:#FF7A00; --noir:#111; --fond:#FFF3E6; --texte:#1a1a1a; --doux:#555; --trait:#e5d5c3; }
+  * { box-sizing: border-box; }
+  body { margin:0; font:16px/1.55 -apple-system,Segoe UI,Arial,sans-serif; color:var(--texte); background:var(--fond); }
+  header { background:var(--noir); color:#fff; padding:18px 16px; }
+  header .in { max-width:980px; margin:0 auto; }
+  header h1 { margin:0 0 4px; font-size:22px; }
+  header h1 span { color:var(--or); }
+  header p { margin:0; color:#ddd; font-size:14px; }
+  main { max-width:980px; margin:0 auto; padding:16px; }
+  .outils { position:sticky; top:0; z-index:5; background:var(--fond); padding:10px 0; border-bottom:1px solid var(--trait); }
+  .outils input[type=search] { width:100%; padding:11px 12px; border:2px solid var(--noir); border-radius:12px; font:inherit; background:#fff; }
+  .roles { display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; }
+  .roles button { padding:8px 12px; border:2px solid var(--noir); border-radius:999px; background:#fff; font:700 14px inherit; cursor:pointer; color:var(--noir); }
+  .roles button[aria-pressed=true] { background:var(--or); }
+  .roles button:focus-visible, a:focus-visible, summary:focus-visible { outline:3px solid var(--noir); outline-offset:2px; }
+  nav.sommaire { margin:16px 0; padding:12px 14px; background:#fff; border:1px solid var(--trait); border-radius:12px; }
+  nav.sommaire h2 { margin:0 0 6px; font-size:14px; text-transform:uppercase; letter-spacing:.04em; color:#8a3300; }
+  nav.sommaire ul { margin:0; padding-left:18px; columns:2 240px; }
+  nav.sommaire a { color:var(--noir); }
+  section.fiche { background:#fff; border:1px solid var(--trait); border-radius:14px; padding:14px 16px; margin:14px 0; scroll-margin-top:110px; }
+  section.fiche h2 { margin:0 0 4px; font-size:19px; }
+  .pastilles { display:flex; flex-wrap:wrap; gap:6px; margin:0 0 8px; }
+  .pastilles span { font-size:12px; background:var(--fond); border:1px solid var(--trait); border-radius:999px; padding:2px 9px; color:#8a3300; font-weight:700; }
+  .astuce { background:#FFF3E6; border-left:5px solid var(--or); padding:8px 10px; border-radius:6px; margin:10px 0 0; }
+  h3.groupe { margin:26px 0 0; font-size:17px; color:#8a3300; }
+  details.faq { background:#fff; border:1px solid var(--trait); border-radius:10px; padding:8px 12px; margin:8px 0; }
+  details.faq summary { cursor:pointer; font-weight:700; }
+  .vide { padding:18px; text-align:center; color:var(--doux); }
+  a.haut { display:inline-block; margin-top:8px; font-size:13px; color:#8a3300; }
+  footer { max-width:980px; margin:0 auto; padding:0 16px 40px; color:var(--doux); font-size:13px; }
+  @media print { .outils, a.haut, nav.sommaire { display:none; } body { background:#fff; } section.fiche { break-inside:avoid; } }
+</style>
+</head>
+<body>
+<header><div class="in">
+  <h1><span>IKO</span> — Guide d'utilisation</h1>
+  <p>Le mode d'emploi, écran par écran. Choisissez votre rôle, ou cherchez un mot.</p>
+</div></header>
+<main>
+  <div class="outils">
+    <input id="q" type="search" placeholder="Chercher : « créer un technicien », « devis », « Face ID »…" aria-label="Chercher dans le guide" autocomplete="off">
+    <div class="roles" id="roles" role="group" aria-label="Filtrer par rôle"></div>
+  </div>
+  <nav class="sommaire" id="sommaire" aria-label="Sommaire"></nav>
+  <div id="liste" aria-live="polite"></div>
+  <h3 class="groupe" id="faq-titre">Questions fréquentes</h3>
+  <div id="faq"></div>
+</main>
+<footer id="pied"></footer>
+<script>
+(function () {
+  var NOMS = { tous: 'Tout le guide', client: 'Client final', patron: 'Patron / direction', agence: "Responsable d'agence", technicien: 'Technicien', editeur: 'Éditeur IKO' };
+  var c = { sections: [], faq: [] }, role = 'tous', mots = [];
+  function esc(t) { return String(t == null ? '' : t).replace(/[&<>"']/g, function (x) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[x]; }); }
+  function sa(t) { return String(t || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, ''); }
+  function visible(s) {
+    if (role !== 'tous' && (s.roles || []).indexOf(role) === -1) return false;
+    if (!mots.length) return true;
+    var t = sa([s.titre, s.resume, (s.etapes || []).join(' '), s.astuce, (s.mots || []).join(' ')].join(' '));
+    return mots.every(function (m) { return t.indexOf(m) !== -1; });
+  }
+  function dessiner() {
+    var secs = (c.sections || []).filter(visible);
+    var faq = (c.faq || []).filter(function (f) {
+      if (role !== 'tous' && f.roles && f.roles.indexOf(role) === -1) return false;
+      if (!mots.length) return true;
+      var t = sa(f.q + ' ' + f.r); return mots.every(function (m) { return t.indexOf(m) !== -1; });
+    });
+    document.getElementById('sommaire').innerHTML = secs.length ? '<h2>Sommaire</h2><ul>' + secs.map(function (s) { return '<li><a href="#' + esc(s.id) + '">' + esc(s.titre) + '</a></li>'; }).join('') + '</ul>' : '';
+    document.getElementById('liste').innerHTML = secs.length ? secs.map(function (s) {
+      return '<section class="fiche" id="' + esc(s.id) + '"><h2>' + esc(s.titre) + '</h2>' +
+        '<div class="pastilles">' + (s.roles || []).map(function (r) { return '<span>' + esc(NOMS[r] || r) + '</span>'; }).join('') + '</div>' +
+        (s.resume ? '<p>' + esc(s.resume) + '</p>' : '') +
+        ((s.etapes && s.etapes.length) ? '<ol>' + s.etapes.map(function (e) { return '<li>' + esc(e) + '</li>'; }).join('') + '</ol>' : '') +
+        (s.astuce ? '<div class="astuce"><b>Bon à savoir :</b> ' + esc(s.astuce) + '</div>' : '') +
+        '<a class="haut" href="#">↑ Haut de page</a></section>';
+    }).join('') : '<div class="vide">Aucune fiche ne correspond. Essayez un autre mot ou un autre rôle.</div>';
+    document.getElementById('faq-titre').style.display = faq.length ? '' : 'none';
+    document.getElementById('faq').innerHTML = faq.map(function (f) { return '<details class="faq"><summary>' + esc(f.q) + '</summary><p>' + esc(f.r) + '</p></details>'; }).join('');
+  }
+  function boutons() {
+    var r = document.getElementById('roles');
+    r.innerHTML = Object.keys(NOMS).map(function (k) { return '<button type="button" data-r="' + k + '" aria-pressed="' + (k === role) + '">' + esc(NOMS[k]) + '</button>'; }).join('');
+    Array.prototype.forEach.call(r.querySelectorAll('button'), function (b) {
+      b.addEventListener('click', function () { role = b.getAttribute('data-r'); boutons(); dessiner(); });
+    });
+  }
+  document.getElementById('q').addEventListener('input', function () {
+    mots = sa(this.value).split(/\s+/).filter(function (m) { return m.length > 1; });
+    dessiner();
+  });
+  fetch('/guide-contenu.json').then(function (r) { return r.json(); }).then(function (j) {
+    c = j; boutons(); dessiner();
+    document.getElementById('pied').textContent = 'Guide mis à jour le ' + (c.version || '') + '. Une question qui n\'est pas ici ? Demandez-la à IKO, l\'assistant du tableau de bord.';
+    if (location.hash) { var el = document.getElementById(decodeURIComponent(location.hash.slice(1))); if (el) el.scrollIntoView(); }
+  }).catch(function () {
+    document.getElementById('liste').innerHTML = '<div class="vide">Le guide n\'a pas pu être chargé. Réessayez dans un instant.</div>';
+  });
+})();
+</script>
+</body>
+</html>
