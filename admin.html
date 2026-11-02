@@ -1021,6 +1021,17 @@
           <div id="connaissanceBody" style="display:none;margin-top:10px;">
             <div id="connaissanceListe" style="display:flex;flex-direction:column;gap:10px;"></div>
             <button type="button" class="secondary" id="ajouterConnaissanceBtn" style="margin-top:8px;width:100%;">+ Ajouter une entrée</button>
+            <select id="modeleConnaissance" style="margin-top:8px;width:100%;padding:8px 10px;border-radius:8px;border:1px solid var(--border);background:rgba(255,255,255,0.04);color:var(--texte);font-size:12px;">
+              <option value="">+ Ajouter à partir d'un modèle (exceptions courantes)…</option>
+              <option value="horaires">Horaires d'ouverture et jours fermés</option>
+              <option value="zone">Zone d'intervention (départements ou codes postaux)</option>
+              <option value="refuses">Produits ou interventions refusés</option>
+              <option value="garantie">Garantie et conditions</option>
+              <option value="delais">Délais habituels (rendez-vous, pièces)</option>
+              <option value="urgence">Que considérer comme une urgence</option>
+              <option value="tarifs">Frais de déplacement ou de diagnostic</option>
+            </select>
+            <div style="font-size:11px;color:var(--texte-faint);margin-top:4px;">Un modèle ajoute une entrée « Règle interne » désactivée : complétez le texte puis cochez « Actif », sinon les assistants l'ignorent.</div>
             <div class="hint" style="font-size:11px;color:var(--texte-faint);margin-top:5px;">FAQ, procédures, règles internes propres à ce client. Pas encore branché sur les bots — stockage seul pour l'instant. Enregistrement automatique.</div>
           </div>
         </div>
@@ -2894,6 +2905,24 @@ function afficherConnaissanceUI(){
 document.getElementById("ajouterConnaissanceBtn").addEventListener("click", function(){
   if (!editingId) return;
   connaissanceEntrees.push({ categorie: "FAQ", titre: "", contenu: "", actif: true, metier: "" });
+  enregistrerConnaissance().then(afficherConnaissanceUI);
+});
+// Modèles d'exceptions courantes : l'entrée est créée DÉSACTIVÉE (actif:false) avec une trame à compléter ;
+// tant que le patron ne l'a pas écrite et cochée « Actif », les assistants ne la reçoivent pas.
+var MODELES_CONNAISSANCE = {
+  horaires: { titre: "Horaires d'ouverture et jours fermés", contenu: "Nous intervenons du lundi au vendredi de ... h à ... h. Fermés : ..." },
+  zone: { titre: "Zone d'intervention", contenu: "Nous intervenons uniquement dans les départements / codes postaux suivants : ... Au-delà, proposer au client de contacter l'agence." },
+  refuses: { titre: "Produits ou interventions refusés", contenu: "Nous n'intervenons pas sur : ... (marques, produits, types de pannes)." },
+  garantie: { titre: "Garantie et conditions", contenu: "Garantie : ... ans sur ... ; sont exclus : ... Pièces et main d'oeuvre : ..." },
+  delais: { titre: "Délais habituels", contenu: "Délai moyen pour un rendez-vous : ... jours. Délai moyen pour une pièce commandée : ... jours." },
+  urgence: { titre: "Que considérer comme une urgence", contenu: "Sont urgents : ... (ex. porte de garage bloquée ouverte, vitre cassée, fuite). Pour une urgence : ..." },
+  tarifs: { titre: "Frais de déplacement ou de diagnostic", contenu: "Déplacement : ... € ; diagnostic : ... € (déduit du devis si accepté : oui / non)." }
+};
+document.getElementById("modeleConnaissance").addEventListener("change", function(){
+  var m = MODELES_CONNAISSANCE[this.value];
+  this.value = "";
+  if (!m || !editingId) return;
+  connaissanceEntrees.push({ categorie: "Règle interne", titre: m.titre, contenu: m.contenu, actif: false, metier: "" });
   enregistrerConnaissance().then(afficherConnaissanceUI);
 });
 toggleSection("connaissanceToggleBtn", "connaissanceBody", "connaissanceChevron");
