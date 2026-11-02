@@ -6,7 +6,7 @@ export default {
   trade_id: "plomberie_chauffage",
 
   nom_metier:
-    "la plomberie et le chauffage (chaudieres, chauffe-eau, radiateurs, robinetterie, canalisations, VMC)",
+    "la plomberie, le chauffage et la climatisation (chaudieres, chauffe-eau, pompes a chaleur, radiateurs, robinetterie, canalisations, sanitaires, VMC)",
 
   produits: [
     "Chaudiere",
@@ -15,6 +15,9 @@ export default {
     "Robinetterie",
     "Canalisation",
     "VMC",
+    "Pompe a chaleur",
+    "Climatisation",
+    "Sanitaires (WC, lavabo, douche)",
   ],
 
   diagnostics: [
@@ -24,7 +27,7 @@ export default {
   ],
 
   regle_securite:
-    "Sur une odeur de gaz ou une fuite importante, invite le client a couper l'arrivee (gaz ou eau) et a aerer avant toute autre chose, en plus de contacter l'agence.",
+    "Sur une odeur de gaz ou un malaise (maux de tete, nausees) pres d'un appareil de chauffage : invite le client a aerer, a eteindre l'appareil, a sortir et a appeler les secours (112) ou le numero d'urgence gaz. Sur une fuite d'eau importante : couper l'arrivee d'eau generale, et le courant si l'eau touche des prises, avant toute autre chose, en plus de contacter l'agence.",
 
   // Pas encore d'equivalent "metre" pour ce metier dans Airtable :
   // l'outil consulter_historique_ouvertures renverra simplement

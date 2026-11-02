@@ -2,7 +2,7 @@ import { limiterChat } from "./_securite.js";
 import { messagesAvecSecours, estDemoSession } from "./_ia-secours.js";
 import { blocSystemeIko } from "./_systeme-iko.js";
 import { blocMetierMenuiserie } from "./_metier-menuiserie.js";
-import { blocSavoir } from "./_savoir-menuiserie.js";
+import { blocSavoirTous } from "./_savoir-metiers.js";
 import { normaliserConnaissance, blocPromptConnaissance, affinerPourPrompt } from "./_connaissance.js";
 import { blocPromptAnalyticsSAV, genererRecommandationsSAV, blocPromptRecommandationsSAV } from "../analytics-sav.js";
 import { nomAssistantDepuisEntree } from "./_assistants.js";
@@ -646,7 +646,7 @@ du ticket telle qu'elle est ecrite.
         max_tokens: 400,
         temperature: 0.3,
         system: [{ type: "text", text: buildSystemPrompt(connaissanceActuelle, analyticsSAVActuelles, nomAssistantActuel) + (body.reunion ? BLOC_REUNION_MAX : ""), cache_control: { type: "ephemeral" } },
-          { type: "text", text: blocSavoir("technicien", message + " " + ticketsContexte.filter(function (t) { return t && t.client && message.toLowerCase().indexOf(String(t.client).toLowerCase()) !== -1; }).map(function (t) { return (t.produit || "") + " " + (t.probleme || ""); }).join(" ")) }],
+          { type: "text", text: blocSavoirTous("technicien", message + " " + ticketsContexte.filter(function (t) { return t && t.client && message.toLowerCase().indexOf(String(t.client).toLowerCase()) !== -1; }).map(function (t) { return (t.produit || "") + " " + (t.probleme || ""); }).join(" ")) }],
         tools: TOOLS,
         tool_choice: { type: "any" },
         messages: [{ role: "user", content: messageUtilisateur }],
@@ -794,7 +794,7 @@ async function traiterDiagnostic(req, res, body, cle) {
         max_tokens: 700,
         temperature: 0.2,
         system: [{ type: "text", text: SYSTEM_PROMPT_DIAGNOSTIC, cache_control: { type: "ephemeral" } },
-          { type: "text", text: blocSavoir("technicien", contexteTicket.produit + " " + contexteTicket.probleme + " " + message) }],
+          { type: "text", text: blocSavoirTous("technicien", contexteTicket.produit + " " + contexteTicket.probleme + " " + message) }],
         tools: [OUTIL_DIAGNOSTIC],
         tool_choice: { type: "tool", name: "diagnostic_assiste" },
         messages: [{ role: "user", content: blocsContenu }],

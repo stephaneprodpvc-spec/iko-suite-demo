@@ -2,7 +2,7 @@ import { limiterChat } from "./_securite.js";
 import { messagesAvecSecours, estDemoSession } from "./_ia-secours.js";
 import { blocSystemeIko } from "./_systeme-iko.js";
 import { blocMetierMenuiserie } from "./_metier-menuiserie.js";
-import { blocSavoir } from "./_savoir-menuiserie.js";
+import { blocSavoirTous } from "./_savoir-metiers.js";
 import { normaliserConnaissance, blocPromptConnaissance, affinerPourPrompt } from "./_connaissance.js";
 import { blocPromptAnalyticsSAV, genererRecommandationsSAV, blocPromptRecommandationsSAV } from "../analytics-sav.js";
 
@@ -790,7 +790,7 @@ precis :
         max_tokens: 500,
         temperature: 0.1,
         system: [{ type: "text", text: buildSystemPrompt(connaissanceActuelle, analyticsSAVActuelles) + (body.reunion ? BLOC_REUNION_IKO : ""), cache_control: { type: "ephemeral" } },
-          { type: "text", text: blocSavoir("dashboard", message + " " + (Array.isArray(historique) ? historique.slice(-2).map(function (h) { return h && h.texte ? h.texte : ""; }).join(" ") : "")) }],
+          { type: "text", text: blocSavoirTous("dashboard", message + " " + (Array.isArray(historique) ? historique.slice(-2).map(function (h) { return h && h.texte ? h.texte : ""; }).join(" ") : "")) }],
         tools: TOOLS,
         tool_choice: { type: "any" },
         messages: [{ role: "user", content: messageUtilisateur }],

@@ -16,6 +16,8 @@ import { creneauxLibres, identDepuisClientId } from "./_planning.js";
 import { messagesAvecSecours } from "./_ia-secours.js";
 import vocabMenuiserie from "./_trades/menuiserie.js";
 import vocabPlomberieChauffage from "./_trades/plomberie_chauffage.js";
+import vocabElectricite from "./_trades/electricite.js";
+import vocabGeneraliste from "./_trades/generaliste.js";
 import { blocSystemeIko } from "./_systeme-iko.js";
 import { alerter } from "./_alertes.js";
 import { photosHtml, adressesPhotos, ajouterMailsAuCorps, marqueClient } from "./_mail.js";
@@ -25,7 +27,7 @@ function sansBalises(v) {
   return typeof v === "string" ? v.replace(/[<>]/g, "") : v;
 }
 import { blocMetierMenuiserie } from "./_metier-menuiserie.js";
-import { blocSavoir, phraseSecurite } from "./_savoir-menuiserie.js";
+import { blocSavoirTous, phraseSecuriteTous } from "./_savoir-metiers.js";
 import { extraireConnaissanceDuRecord, blocPromptConnaissance, affinerPourPrompt } from "./_connaissance.js";
 import { nomAssistant as resoudreNomAssistant, NOMS_PAR_DEFAUT } from "./_assistants.js";
 import { enteteMake } from './_make.js';
@@ -35,7 +37,23 @@ import { enteteMake } from './_make.js';
 const TRADES = {
   menuiserie: vocabMenuiserie,
   plomberie_chauffage: vocabPlomberieChauffage,
+  electricite: vocabElectricite,
+  generaliste: vocabGeneraliste,
 };
+
+// Valeur du champ Airtable « Métier » de la fiche client -> identifiant de métier. Un métier inconnu retombe sur le métier
+// « generaliste » (multi-métiers) et non plus sur la menuiserie.
+const METIER_VERS_ID = {
+  "Menuiserie": "menuiserie",
+  "Plomberie & Chauffage": "plomberie_chauffage",
+  "Électricité": "electricite",
+  "Electricité": "electricite",
+  "Autre": "generaliste",
+};
+function metierVersId(metier) {
+  if (!metier) return null;
+  return METIER_VERS_ID[metier] || "generaliste";
+}
 function loadTradeVocab(tradeId) {
   return TRADES[tradeId] || TRADES.menuiserie;
 }
@@ -320,7 +338,7 @@ async function resoudreClient(slug) {
     const rec = (json.records || [])[0];
     if (!rec) return null;
     const metier = rec.fields && rec.fields["Métier"];
-    const metierId = metier === "Menuiserie" ? "menuiserie" : (metier === "Plomberie & Chauffage" ? "plomberie_chauffage" : null);
+    const metierId = metierVersId(metier);
     const [questionnaire, agences] = await Promise.all([
       obtenirQuestionnaireClient(rec.id),
       obtenirAgencesClient(rec.id, rec.fields && rec.fields["Nom client"], rec.fields && rec.fields["Nombre agences"]),
@@ -653,7 +671,7 @@ function avecSecurite(texte, messages) {
   try {
     const client = messages.filter(function (c) { return c.role === "user" && typeof c.content === "string" && c.content.indexOf("[Consigne interne") !== 0; }).map(function (c) { return c.content; }).join(" ");
     const dits = messages.filter(function (c) { return c.role === "assistant" && typeof c.content === "string"; }).map(function (c) { return c.content; }).join(" ");
-    const phrase = phraseSecurite(client);
+    const phrase = phraseSecuriteTous(client);
     if (!phrase || dits.indexOf(phrase) !== -1 || String(texte).indexOf(phrase) !== -1) return texte;
     return phrase + " " + texte;
   } catch (e) { return texte; }
@@ -783,7 +801,9 @@ sait deja qui tu es, ce n'est pas ta premiere reunion avec eux.
         temperature: 0.6,
         system: [{ type: "text", text: buildSystemPrompt(vocabActuel, agencesNomsActuels, questionnaireActuel, connaissanceActuelle, nomAssistantActuel) + (req.body.reunion ? BLOC_REUNION_AMANDINE : ""), cache_control: { type: "ephemeral" } }]
           // Savoir technique (menuiserie exterieure) : fiches des produits evoques dans la conversation, ajoutees apres le bloc mis en cache.
-          .concat(vocabActuel.trade_id === "menuiserie" ? [{ type: "text", text: blocSavoir("amandine", convertis.filter(function (c) { return c.role === "user" && typeof c.content === "string"; }).slice(-4).map(function (c) { return c.content; }).join(" "), { photos: photosJointesActuelles.length > 0 }) }] : []),
+          // Savoir technique multi-metiers : menuiserie, electricite, plomberie, chauffage, climatisation, ventilation, serrurerie, couverture
+          // (choisi d'apres les mots du client et le metier de l'entreprise).
+          .concat([{ type: "text", text: blocSavoirTous("amandine", convertis.filter(function (c) { return c.role === "user" && typeof c.content === "string"; }).slice(-4).map(function (c) { return c.content; }).join(" "), { photos: photosJointesActuelles.length > 0, trade: vocabActuel.trade_id }) }]),
         tools: toolsActuels,
         messages: avecPhotosVisibles(convertis, photosJointesActuelles),
       },

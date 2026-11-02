@@ -9,55 +9,180 @@
     "admin": "Poste de pilotage"
   },
   "aide_page": {
-    "dashboard": ["d-vue", "d-ticket", "d-nouveau-rdv", "d-planning", "d-devis", "d-piece", "d-iko", "d-centrale", "d-fermetures", "g-roles"],
-    "technicien": ["t-journee", "t-pars", "t-intervention", "t-issues", "t-devis", "t-itineraire", "t-entretien", "t-max"],
-    "acces": ["d-acces", "g-connexion"],
-    "equipe": ["d-equipe"],
-    "entretien": ["d-entretien"],
-    "admin": ["e-clients", "e-creer-iko", "e-connaissance", "e-planning-reglages", "e-alertes", "e-prospect"]
+    "dashboard": [
+      "d-vue",
+      "d-ticket",
+      "d-nouveau-rdv",
+      "d-planning",
+      "d-devis",
+      "d-piece",
+      "d-iko",
+      "d-centrale",
+      "d-fermetures",
+      "g-roles"
+    ],
+    "technicien": [
+      "t-journee",
+      "t-pars",
+      "t-intervention",
+      "t-issues",
+      "t-devis",
+      "t-itineraire",
+      "t-entretien",
+      "t-max"
+    ],
+    "acces": [
+      "d-acces",
+      "g-connexion"
+    ],
+    "equipe": [
+      "d-equipe"
+    ],
+    "entretien": [
+      "d-entretien"
+    ],
+    "admin": [
+      "e-clients",
+      "e-creer-iko",
+      "e-connaissance",
+      "e-planning-reglages",
+      "e-alertes",
+      "e-prospect"
+    ]
   },
   "demarrer": {
     "patron": [
-      { "id": "p1", "texte": "Ouvrez « Centrale de direction », puis « Mise en service » : tout doit être « OK » ou vous dit quoi compléter.", "lien": "/dashboard.html" },
-      { "id": "p2", "texte": "Créez les accès de vos responsables d'agence et de vos techniciens (« Mes accès »).", "lien": "/acces.html" },
-      { "id": "p3", "texte": "Ajoutez vos techniciens dans « Équipe » avec leur zone et leurs compétences.", "lien": "/equipe.html" },
-      { "id": "p4", "texte": "Bloquez vos jours de fermeture (Centrale > « Fermetures »).", "lien": "/dashboard.html" },
-      { "id": "p5", "texte": "Choisissez un dossier de sauvegarde (Centrale > « Mise en service » > « Choisir le dossier »)." },
-      { "id": "p6", "texte": "Faites un essai complet : déclarez une demande de test sur votre page client, puis suivez-la jusqu'à la clôture." },
-      { "id": "p7", "texte": "Installez l'application sur votre téléphone.", "lien": "/guide.html#g-installer" }
+      {
+        "id": "p1",
+        "texte": "Ouvrez « Centrale de direction », puis « Mise en service » : tout doit être « OK » ou vous dit quoi compléter.",
+        "lien": "/dashboard.html"
+      },
+      {
+        "id": "p2",
+        "texte": "Créez les accès de vos responsables d'agence et de vos techniciens (« Mes accès »).",
+        "lien": "/acces.html"
+      },
+      {
+        "id": "p3",
+        "texte": "Ajoutez vos techniciens dans « Équipe » avec leur zone et leurs compétences.",
+        "lien": "/equipe.html"
+      },
+      {
+        "id": "p4",
+        "texte": "Bloquez vos jours de fermeture (Centrale > « Fermetures »).",
+        "lien": "/dashboard.html"
+      },
+      {
+        "id": "p5",
+        "texte": "Choisissez un dossier de sauvegarde (Centrale > « Mise en service » > « Choisir le dossier »)."
+      },
+      {
+        "id": "p6",
+        "texte": "Faites un essai complet : déclarez une demande de test sur votre page client, puis suivez-la jusqu'à la clôture."
+      },
+      {
+        "id": "p7",
+        "texte": "Installez l'application sur votre téléphone.",
+        "lien": "/guide.html#g-installer"
+      }
     ],
     "agence": [
-      { "id": "a1", "texte": "Ouvrez le tableau de bord et repérez la tuile « Nouveaux » et la zone « À traiter »." },
-      { "id": "a2", "texte": "Ouvrez un ticket et assignez un technicien (bouton « Assigner »)." },
-      { "id": "a3", "texte": "Répondez à un message client (badge rouge « Messages clients »)." },
-      { "id": "a4", "texte": "Prenez un rendez-vous reçu par téléphone avec « + Nouveau RDV »." },
-      { "id": "a5", "texte": "Essayez IKO : maintenez la sphère et dites « Ouvre la facturation » ou « Filtre sur mon agence »." },
-      { "id": "a6", "texte": "Installez l'application sur votre téléphone.", "lien": "/guide.html#g-installer" }
+      {
+        "id": "a1",
+        "texte": "Ouvrez le tableau de bord et repérez la tuile « Nouveaux » et la zone « À traiter »."
+      },
+      {
+        "id": "a2",
+        "texte": "Ouvrez un ticket et assignez un technicien (bouton « Assigner »)."
+      },
+      {
+        "id": "a3",
+        "texte": "Répondez à un message client (badge rouge « Messages clients »)."
+      },
+      {
+        "id": "a4",
+        "texte": "Prenez un rendez-vous reçu par téléphone avec « + Nouveau RDV »."
+      },
+      {
+        "id": "a5",
+        "texte": "Essayez IKO : maintenez la sphère et dites « Ouvre la facturation » ou « Filtre sur mon agence »."
+      },
+      {
+        "id": "a6",
+        "texte": "Installez l'application sur votre téléphone.",
+        "lien": "/guide.html#g-installer"
+      }
     ],
     "technicien": [
-      { "id": "t1", "texte": "Connectez-vous et changez le mot de passe temporaire (12 caractères minimum)." },
-      { "id": "t2", "texte": "Installez l'application sur votre téléphone.", "lien": "/guide.html#g-installer" },
-      { "id": "t3", "texte": "Touchez « Itinéraire » et choisissez votre application GPS." },
-      { "id": "t4", "texte": "Ouvrez une intervention (« Gérer l'intervention → ») et ajoutez une photo." },
-      { "id": "t5", "texte": "Essayez « Je pars — prévenir le client » sur un ticket de test." },
-      { "id": "t6", "texte": "Ajoutez vos interventions à votre agenda (lien en haut de l'écran)." },
-      { "id": "t7", "texte": "Parlez à Max : maintenez la sphère « MAX » et dites « Ouvre l'itinéraire »." }
+      {
+        "id": "t1",
+        "texte": "Connectez-vous et changez le mot de passe temporaire (12 caractères minimum)."
+      },
+      {
+        "id": "t2",
+        "texte": "Installez l'application sur votre téléphone.",
+        "lien": "/guide.html#g-installer"
+      },
+      {
+        "id": "t3",
+        "texte": "Touchez « Itinéraire » et choisissez votre application GPS."
+      },
+      {
+        "id": "t4",
+        "texte": "Ouvrez une intervention (« Gérer l'intervention → ») et ajoutez une photo."
+      },
+      {
+        "id": "t5",
+        "texte": "Essayez « Je pars — prévenir le client » sur un ticket de test."
+      },
+      {
+        "id": "t6",
+        "texte": "Ajoutez vos interventions à votre agenda (lien en haut de l'écran)."
+      },
+      {
+        "id": "t7",
+        "texte": "Parlez à Max : maintenez la sphère « MAX » et dites « Ouvre l'itinéraire »."
+      }
     ],
     "editeur": [
-      { "id": "e1", "texte": "Créez la fiche du client (nom, métier, couleurs, modules, nombre d'agences).", "lien": "/admin.html" },
-      { "id": "e2", "texte": "Cliquez sur « Créer son IKO » : copiez le mot de passe temporaire et le message d'accès, envoyez-les séparément." },
-      { "id": "e3", "texte": "Réglez le planning du client (bouton « Planning » de la fiche)." },
-      { "id": "e4", "texte": "Remplissez « Connaissance entreprise » avec les modèles (horaires, garantie, produits refusés…) puis cochez « Actif »." },
-      { "id": "e5", "texte": "Vérifiez « Mise en service » dans le tableau de bord du client." },
-      { "id": "e6", "texte": "Activez Face ID / empreinte sur votre appareil (menu « Sécurité »)." },
-      { "id": "e7", "texte": "Activez les alertes sur votre téléphone (tableau de bord > Centrale > Gestion d'incident)." }
+      {
+        "id": "e1",
+        "texte": "Créez la fiche du client (nom, métier, couleurs, modules, nombre d'agences).",
+        "lien": "/admin.html"
+      },
+      {
+        "id": "e2",
+        "texte": "Cliquez sur « Créer son IKO » : copiez le mot de passe temporaire et le message d'accès, envoyez-les séparément."
+      },
+      {
+        "id": "e3",
+        "texte": "Réglez le planning du client (bouton « Planning » de la fiche)."
+      },
+      {
+        "id": "e4",
+        "texte": "Remplissez « Connaissance entreprise » avec les modèles (horaires, garantie, produits refusés…) puis cochez « Actif »."
+      },
+      {
+        "id": "e5",
+        "texte": "Vérifiez « Mise en service » dans le tableau de bord du client."
+      },
+      {
+        "id": "e6",
+        "texte": "Activez Face ID / empreinte sur votre appareil (menu « Sécurité »)."
+      },
+      {
+        "id": "e7",
+        "texte": "Activez les alertes sur votre téléphone (tableau de bord > Centrale > Gestion d'incident)."
+      }
     ]
   },
   "sections": [
     {
       "id": "c-declarer",
       "titre": "Déclarer une panne (client)",
-      "roles": ["client"],
+      "roles": [
+        "client"
+      ],
       "resume": "Vous pouvez parler à Amandine, l'assistante, ou remplir le formulaire. Dans les deux cas un numéro de ticket vous est donné.",
       "etapes": [
         "Ouvrez la page d'accueil de l'entreprise.",
@@ -68,12 +193,22 @@
         "Vérifiez le récapitulatif et cliquez sur « Confirmer et envoyer ma demande ». Notez votre numéro (SAV-2026-1234)."
       ],
       "astuce": "Les premières dates sont proposées à partir d'une semaine. Pour une urgence (infiltration d'eau, porte bloquée ouverte, vitrage cassé…), choisissez le problème marqué URGENT : l'intervention est prévue sous 24 à 48 h.",
-      "mots": ["sav", "ticket", "formulaire", "amandine", "panne", "urgence", "photo"]
+      "mots": [
+        "sav",
+        "ticket",
+        "formulaire",
+        "amandine",
+        "panne",
+        "urgence",
+        "photo"
+      ]
     },
     {
       "id": "c-suivre",
       "titre": "Suivre ma demande (client)",
-      "roles": ["client"],
+      "roles": [
+        "client"
+      ],
       "resume": "Le suivi montre où en est votre dossier : demande reçue, prise en charge, terminée.",
       "etapes": [
         "Cliquez sur « Suivre ma demande » dans le mail reçu : c'est le plus simple.",
@@ -81,12 +216,19 @@
         "Ouvrez votre demande pour voir le rendez-vous, le diagnostic, le devis, et l'arrivée du technicien."
       ],
       "astuce": "Le numéro de ticket seul ne suffit jamais : il faut aussi votre e-mail ou votre téléphone. Après plusieurs essais ratés (8 en 10 minutes), attendez quelques minutes.",
-      "mots": ["suivi", "numero", "statut", "technicien en route"]
+      "mots": [
+        "suivi",
+        "numero",
+        "statut",
+        "technicien en route"
+      ]
     },
     {
       "id": "c-date",
       "titre": "Changer ou annuler mon rendez-vous (client)",
-      "roles": ["client"],
+      "roles": [
+        "client"
+      ],
       "resume": "Tant que la demande n'est pas terminée, vous pouvez déplacer ou annuler le rendez-vous depuis le suivi.",
       "etapes": [
         "Ouvrez votre demande dans le suivi, bloc « Gérer ma demande ».",
@@ -94,12 +236,20 @@
         "Pour annuler : « Annuler ma demande », indiquez un motif (obligatoire) puis « Confirmer l'annulation ». Votre créneau est libéré."
       ],
       "astuce": "Vous pouvez aussi écrire à l'agence dans « Échanger avec votre agence » en donnant une période (« en décembre, l'après-midi ») : une nouvelle date vous est proposée.",
-      "mots": ["rendez-vous", "date", "reporter", "annulation", "decaler"]
+      "mots": [
+        "rendez-vous",
+        "date",
+        "reporter",
+        "annulation",
+        "decaler"
+      ]
     },
     {
       "id": "c-messages",
       "titre": "Écrire à l'agence et ajouter des photos (client)",
-      "roles": ["client"],
+      "roles": [
+        "client"
+      ],
       "resume": "Dans le suivi, vous échangez directement avec l'agence, comme par SMS.",
       "etapes": [
         "Ouvrez votre demande, bloc « Échanger avec votre agence ».",
@@ -107,12 +257,19 @@
         "Pour ajouter des photos ou un document : « Ajouter une photo ou un document » (10 fichiers au maximum par dossier)."
       ],
       "astuce": "L'agence est prévenue tout de suite. Vous recevez un mail pour confirmer que votre message est bien arrivé.",
-      "mots": ["message", "photo", "document", "contact"]
+      "mots": [
+        "message",
+        "photo",
+        "document",
+        "contact"
+      ]
     },
     {
       "id": "c-devis",
       "titre": "Signer et payer un devis (client)",
-      "roles": ["client"],
+      "roles": [
+        "client"
+      ],
       "resume": "Le devis vous arrive par mail, avec un lien pour le lire, le signer électroniquement et payer l'acompte.",
       "etapes": [
         "Cliquez sur « Consulter et signer mon devis » dans le mail.",
@@ -122,12 +279,20 @@
         "Pour refuser : « Je refuse ce devis », avec un motif facultatif."
       ],
       "astuce": "Si la signature électronique se prépare, la page se met à jour toute seule. Si le paiement en ligne n'est pas activé, votre agence vous indique comment régler.",
-      "mots": ["devis", "signature", "acompte", "paiement", "yousign"]
+      "mots": [
+        "devis",
+        "signature",
+        "acompte",
+        "paiement",
+        "yousign"
+      ]
     },
     {
       "id": "c-avis",
       "titre": "Donner son avis (client)",
-      "roles": ["client"],
+      "roles": [
+        "client"
+      ],
       "resume": "Après l'intervention, un mail vous demande votre avis. Cela prend 10 secondes.",
       "etapes": [
         "Cliquez sur « Donner mon avis » dans le mail (ou sur le panneau d'avis de votre suivi).",
@@ -135,12 +300,18 @@
         "Cliquez sur « Envoyer mon avis »."
       ],
       "astuce": "Pour une note de 1 ou 2, l'équipe vous recontacte rapidement pour trouver une solution.",
-      "mots": ["avis", "note", "etoiles"]
+      "mots": [
+        "avis",
+        "note",
+        "etoiles"
+      ]
     },
     {
       "id": "c-entretien",
       "titre": "Demander un contrat d'entretien (client)",
-      "roles": ["client"],
+      "roles": [
+        "client"
+      ],
       "resume": "Une visite régulière pour garder vos fenêtres, volets, portails et portes en bon état. Sans engagement : un conseiller vous rappelle.",
       "etapes": [
         "Dans Amandine, cliquez sur « Contrat d'entretien ».",
@@ -148,12 +319,20 @@
         "Cliquez sur « Demander mon contrat »."
       ],
       "astuce": "Une fois le contrat validé par l'agence, vous choisissez vous-même vos dates de visite depuis le lien de votre mail.",
-      "mots": ["entretien", "maintenance", "visite", "contrat"]
+      "mots": [
+        "entretien",
+        "maintenance",
+        "visite",
+        "contrat"
+      ]
     },
     {
       "id": "d-vue",
       "titre": "Comprendre le tableau de bord",
-      "roles": ["patron", "agence"],
+      "roles": [
+        "patron",
+        "agence"
+      ],
       "resume": "C'est l'écran de travail de l'agence : tickets, planning et IKO, l'assistant vocal.",
       "etapes": [
         "En haut : « Messages clients » (rouge) et « RDV modifiés » vous montrent ce qui attend une réponse.",
@@ -163,12 +342,21 @@
         "Le bouton « Vue complète » / « Vue simple » ajoute ou retire des blocs. Sur téléphone, la vue simple est automatique."
       ],
       "astuce": "Le patron voit « Toutes agences », la Centrale de direction, « Entretien » et « Mes accès ». Un responsable d'agence ne voit que son agence.",
-      "mots": ["dashboard", "accueil", "tuiles", "vue simple", "vue complete"]
+      "mots": [
+        "dashboard",
+        "accueil",
+        "tuiles",
+        "vue simple",
+        "vue complete"
+      ]
     },
     {
       "id": "d-ticket",
       "titre": "Traiter un ticket",
-      "roles": ["patron", "agence"],
+      "roles": [
+        "patron",
+        "agence"
+      ],
       "resume": "Chaque ticket se déplie pour voir le client, les photos, le diagnostic de Max et les actions possibles.",
       "etapes": [
         "Cliquez sur le ticket pour le déplier.",
@@ -179,12 +367,21 @@
         "« Archiver » range le ticket dans les Archives."
       ],
       "astuce": "Le badge « Message non lu » disparaît quand vous marquez le message comme lu.",
-      "mots": ["ticket", "statut", "assigner", "archiver", "message client"]
+      "mots": [
+        "ticket",
+        "statut",
+        "assigner",
+        "archiver",
+        "message client"
+      ]
     },
     {
       "id": "d-nouveau-rdv",
       "titre": "Créer un rendez-vous reçu par téléphone",
-      "roles": ["patron", "agence"],
+      "roles": [
+        "patron",
+        "agence"
+      ],
       "resume": "Quand un client appelle, vous créez son ticket vous-même.",
       "etapes": [
         "Cliquez sur « + Nouveau RDV ».",
@@ -193,12 +390,19 @@
         "Validez : le numéro de ticket s'affiche."
       ],
       "astuce": "Le créneau est réservé dans le planning tout de suite : personne d'autre ne peut le prendre.",
-      "mots": ["nouveau rdv", "telephone", "creer un ticket"]
+      "mots": [
+        "nouveau rdv",
+        "telephone",
+        "creer un ticket"
+      ]
     },
     {
       "id": "d-planning",
       "titre": "Lire le planning",
-      "roles": ["patron", "agence"],
+      "roles": [
+        "patron",
+        "agence"
+      ],
       "resume": "L'onglet « Planning » montre les rendez-vous du mois, jour par jour.",
       "etapes": [
         "Ouvrez l'onglet « Planning ».",
@@ -206,12 +410,19 @@
         "Cliquez sur un jour pour voir les rendez-vous et le technicien, puis « Ouvrir le ticket »."
       ],
       "astuce": "Les visites d'entretien apparaissent aussi dans le planning : un créneau ne peut pas être réservé deux fois.",
-      "mots": ["calendrier", "agenda", "creneaux"]
+      "mots": [
+        "calendrier",
+        "agenda",
+        "creneaux"
+      ]
     },
     {
       "id": "d-devis",
       "titre": "Établir et envoyer un devis",
-      "roles": ["patron", "agence"],
+      "roles": [
+        "patron",
+        "agence"
+      ],
       "resume": "Pour un ticket en statut « Devis à faire », le devis se fait en deux étapes.",
       "etapes": [
         "Sur le ticket, cliquez sur « Établir et envoyer le devis » (ou ouvrez la fenêtre « Devis »).",
@@ -220,24 +431,39 @@
         "Cliquez sur « Envoyer le devis au client ». Il reçoit le PDF et le lien de signature."
       ],
       "astuce": "Suivez les devis dans la fenêtre « Devis » : À faire, Envoyé, Suivi, Attente fournisseur, Refusé, Signés.",
-      "mots": ["devis", "signature", "catalogue", "yousign"]
+      "mots": [
+        "devis",
+        "signature",
+        "catalogue",
+        "yousign"
+      ]
     },
     {
       "id": "d-piece",
       "titre": "Suivre une pièce à commander",
-      "roles": ["patron", "agence"],
+      "roles": [
+        "patron",
+        "agence"
+      ],
       "resume": "Quand le technicien signale une pièce à commander, le ticket passe en « Attente pièce ».",
       "etapes": [
         "Ouvrez le ticket : le bloc pièce apparaît.",
         "Indiquez le fournisseur et cliquez sur « Marquer commandée ».",
         "À la réception, cliquez sur « Pièce reçue — relancer le RDV »."
       ],
-      "mots": ["piece", "fournisseur", "commande"]
+      "mots": [
+        "piece",
+        "fournisseur",
+        "commande"
+      ]
     },
     {
       "id": "d-iko",
       "titre": "Parler à IKO",
-      "roles": ["patron", "agence"],
+      "roles": [
+        "patron",
+        "agence"
+      ],
       "resume": "IKO est l'assistant du tableau de bord : la sphère flottante, qu'on déplace où l'on veut.",
       "etapes": [
         "Touchez la sphère pour écrire, maintenez-la pour parler, glissez-la pour la déplacer.",
@@ -246,12 +472,21 @@
         "Le bouton « Conversation continue » le laisse écouter en permanence. Dites « stop » pour arrêter."
       ],
       "astuce": "Pour les actions sensibles (bloquer des dates, créer un rendez-vous, annuler, supprimer), IKO prépare seulement : c'est vous qui validez.",
-      "mots": ["ia", "assistant", "voix", "vocal", "sphere", "micro"]
+      "mots": [
+        "ia",
+        "assistant",
+        "voix",
+        "vocal",
+        "sphere",
+        "micro"
+      ]
     },
     {
       "id": "d-centrale",
       "titre": "La Centrale de direction",
-      "roles": ["patron"],
+      "roles": [
+        "patron"
+      ],
       "resume": "Le cockpit du patron : indicateurs de l'entreprise et huit outils.",
       "etapes": [
         "Cliquez sur « Centrale de direction ».",
@@ -260,12 +495,21 @@
         "Les tuiles ouvrent : Analytics SAV, Facturation, Intelligence commerciale, Équipe, Fermetures, Entretien, Mise en service, Gestion d'incident."
       ],
       "astuce": "Les alertes sur téléphone et la réparation automatique sont gérées par l'éditeur IKO. Vous gardez le diagnostic express et les fiches « Que faire en cas d'incident ».",
-      "mots": ["direction", "analytics", "facturation", "mise en service", "incident", "indicateurs"]
+      "mots": [
+        "direction",
+        "analytics",
+        "facturation",
+        "mise en service",
+        "incident",
+        "indicateurs"
+      ]
     },
     {
       "id": "d-fermetures",
       "titre": "Fermer des dates (congés, jours fériés)",
-      "roles": ["patron"],
+      "roles": [
+        "patron"
+      ],
       "resume": "Aucun rendez-vous ni visite d'entretien n'est proposé sur les dates bloquées.",
       "etapes": [
         "Centrale de direction > « Fermetures ».",
@@ -273,12 +517,19 @@
         "Cliquez sur « Bloquer les créneaux ».",
         "Un message pour prévenir les agences est préparé : envoyez-le par Gmail, par votre messagerie, ou copiez-le."
       ],
-      "mots": ["conges", "ferie", "vacances", "bloquer"]
+      "mots": [
+        "conges",
+        "ferie",
+        "vacances",
+        "bloquer"
+      ]
     },
     {
       "id": "d-acces",
       "titre": "Créer les accès de l'équipe (Mes accès)",
-      "roles": ["patron"],
+      "roles": [
+        "patron"
+      ],
       "resume": "Vous créez ici la connexion d'un technicien ou d'un responsable d'agence. Chaque agence ne voit que ses données.",
       "etapes": [
         "Dans le tableau de bord, cliquez sur « Mes accès ».",
@@ -288,12 +539,22 @@
         "La personne se connecte et choisit son propre mot de passe (12 caractères minimum)."
       ],
       "astuce": "Aucun mail n'est envoyé automatiquement. Pour un oubli de mot de passe : « Nouveau mot de passe » (vous saisissez le vôtre pour confirmer). Pour suspendre quelqu'un : « Couper l'accès ».",
-      "mots": ["compte", "utilisateur", "mot de passe", "technicien", "responsable", "identifiant", "oubli"]
+      "mots": [
+        "compte",
+        "utilisateur",
+        "mot de passe",
+        "technicien",
+        "responsable",
+        "identifiant",
+        "oubli"
+      ]
     },
     {
       "id": "d-equipe",
       "titre": "Gérer les techniciens (Équipe)",
-      "roles": ["patron"],
+      "roles": [
+        "patron"
+      ],
       "resume": "La fiche d'un technicien sert à IKO pour proposer le bon technicien sur chaque ticket.",
       "etapes": [
         "Ouvrez « Équipe » (Centrale de direction).",
@@ -301,12 +562,19 @@
         "Sur une fiche : « Modifier », « Désactiver » / « Activer », « Supprimer »."
       ],
       "astuce": "Ne confondez pas : la fiche « Équipe » sert à l'affectation des tickets, la connexion se crée dans « Mes accès ».",
-      "mots": ["technicien", "zone", "competences", "capacite"]
+      "mots": [
+        "technicien",
+        "zone",
+        "competences",
+        "capacite"
+      ]
     },
     {
       "id": "d-entretien",
       "titre": "Gérer les contrats d'entretien",
-      "roles": ["patron"],
+      "roles": [
+        "patron"
+      ],
       "resume": "Les contrats se gèrent à part du SAV, sur le même planning : aucun rendez-vous en double.",
       "etapes": [
         "Une demande reçue apparaît avec « Nouvelle demande » : choisissez la fréquence et le montant annuel, puis « Valider le contrat » (ou « Refuser »).",
@@ -315,36 +583,57 @@
         "« Rappeler » envoie un mail avant la visite ; « Devis » crée un dossier à chiffrer ; « Suspendre » ou « Résilier » arrêtent le contrat."
       ],
       "astuce": "Une anomalie signalée par un technicien apparaît en haut avec « Marquer traitée ».",
-      "mots": ["contrat", "visite", "maintenance", "periodicite"]
+      "mots": [
+        "contrat",
+        "visite",
+        "maintenance",
+        "periodicite"
+      ]
     },
     {
       "id": "d-miseenservice",
       "titre": "Mise en service et sauvegarde",
-      "roles": ["patron"],
+      "roles": [
+        "patron"
+      ],
       "resume": "« Mise en service » contrôle que tout est prêt. Les points « À compléter » disent quoi faire.",
       "etapes": [
         "Centrale de direction > « Mise en service ».",
         "Corrigez les points « À compléter ».",
         "Pour sauvegarder : « Choisir le dossier », puis « Sauvegarder maintenant ». La sauvegarde automatique tourne toutes les 30 minutes tant que le tableau de bord est ouvert (Chrome ou Edge)."
       ],
-      "mots": ["sauvegarde", "backup", "pret"]
+      "mots": [
+        "sauvegarde",
+        "backup",
+        "pret"
+      ]
     },
     {
       "id": "d-export",
       "titre": "Exporter les tickets ou les avis",
-      "roles": ["patron", "agence"],
+      "roles": [
+        "patron",
+        "agence"
+      ],
       "resume": "Les tickets et les avis s'exportent en Excel ou en PDF.",
       "etapes": [
         "Onglet « Tickets » : « Exporter », choisissez les dates, puis « Excel » ou « PDF ».",
         "Tuile « Note client » : ouvre les avis, avec un export Excel."
       ],
       "astuce": "L'export respecte les filtres en cours.",
-      "mots": ["excel", "pdf", "imprimer", "avis"]
+      "mots": [
+        "excel",
+        "pdf",
+        "imprimer",
+        "avis"
+      ]
     },
     {
       "id": "t-journee",
       "titre": "Ma journée de technicien",
-      "roles": ["technicien"],
+      "roles": [
+        "technicien"
+      ],
       "resume": "L'espace technicien classe vos interventions par onglet.",
       "etapes": [
         "« Aujourd'hui » : les interventions du jour.",
@@ -353,12 +642,20 @@
         "Sur chaque carte : le téléphone (appel direct), l'adresse (ouvre le GPS) et « Détails » pour les photos et le message du client."
       ],
       "astuce": "Un badge « RDV modifié » signale un changement de date : touchez-le pour confirmer que vous l'avez vu.",
-      "mots": ["max", "interventions", "onglets", "aujourd'hui", "retard"]
+      "mots": [
+        "max",
+        "interventions",
+        "onglets",
+        "aujourd'hui",
+        "retard"
+      ]
     },
     {
       "id": "t-pars",
       "titre": "Prévenir le client que j'arrive",
-      "roles": ["technicien"],
+      "roles": [
+        "technicien"
+      ],
       "resume": "Un bouton prévient le client avec une heure d'arrivée.",
       "etapes": [
         "Sur la carte du ticket, touchez « Je pars — prévenir le client ».",
@@ -366,12 +663,19 @@
         "Le client reçoit un mail et voit « Votre technicien est en route » dans son suivi."
       ],
       "astuce": "Si le message indique que l'envoi a échoué, ou qu'il n'y a ni e-mail ni téléphone, appelez le client.",
-      "mots": ["je pars", "en route", "arrivee", "prevenir"]
+      "mots": [
+        "je pars",
+        "en route",
+        "arrivee",
+        "prevenir"
+      ]
     },
     {
       "id": "t-intervention",
       "titre": "Faire l'intervention et la clôturer",
-      "roles": ["technicien"],
+      "roles": [
+        "technicien"
+      ],
       "resume": "Tout se fait dans « Gérer l'intervention → ».",
       "etapes": [
         "Ajoutez des photos avec « Ajouter des photos » : Max les lit et propose un diagnostic.",
@@ -381,12 +685,21 @@
         "Faites signer le client au doigt, puis « Confirmer — SAV terminé »."
       ],
       "astuce": "Un bon d'intervention PDF signé est créé et le client reçoit un mail pour donner son avis.",
-      "mots": ["cloturer", "terminer", "compte-rendu", "signature", "photo", "bon d'intervention"]
+      "mots": [
+        "cloturer",
+        "terminer",
+        "compte-rendu",
+        "signature",
+        "photo",
+        "bon d'intervention"
+      ]
     },
     {
       "id": "t-issues",
       "titre": "Pièce à commander, replanifier, annuler",
-      "roles": ["technicien"],
+      "roles": [
+        "technicien"
+      ],
       "resume": "Quand l'intervention ne peut pas se terminer, choisissez l'issue dans « Gérer l'intervention → ».",
       "etapes": [
         "« Pièce à commander » : indiquez la pièce. Le ticket passe en « Attente pièce » et l'agence est prévenue.",
@@ -394,12 +707,19 @@
         "« Annuler le RDV » : motif obligatoire (client absent, annulation…). Le créneau est libéré.",
         "« Débloquer et intervenir plus tôt » : sur un devis envoyé, avance la date d'intervention."
       ],
-      "mots": ["piece", "replanifier", "annuler", "absent"]
+      "mots": [
+        "piece",
+        "replanifier",
+        "annuler",
+        "absent"
+      ]
     },
     {
       "id": "t-devis",
       "titre": "Devis chez un client payant",
-      "roles": ["technicien"],
+      "roles": [
+        "technicien"
+      ],
       "resume": "Deux cas selon que vous avez le matériel sur place ou non.",
       "etapes": [
         "Choisissez « Devis — Client payant ».",
@@ -407,12 +727,20 @@
         "Réparation impossible sur place : « Diagnostic transmis, devis établi ensuite ». Expliquez pour l'agence : le ticket passe en « Devis à faire »."
       ],
       "astuce": "La photo d'un chèque est facultative et privée : elle n'est jamais envoyée au client ni dans les mails.",
-      "mots": ["devis", "cheque", "encaisser", "paiement", "acompte"]
+      "mots": [
+        "devis",
+        "cheque",
+        "encaisser",
+        "paiement",
+        "acompte"
+      ]
     },
     {
       "id": "t-itineraire",
       "titre": "Itinéraire du jour et agenda",
-      "roles": ["technicien"],
+      "roles": [
+        "technicien"
+      ],
       "resume": "L'itinéraire propose le meilleur ordre pour enchaîner vos interventions.",
       "etapes": [
         "Touchez « Itinéraire ».",
@@ -421,12 +749,20 @@
         "« Ma semaine » imprime les interventions de la semaine.",
         "Le lien « Ajouter mes interventions à mon agenda » s'ajoute à Google, Apple ou Outlook (« Ajouter un agenda par URL »)."
       ],
-      "mots": ["gps", "route", "agenda", "semaine", "adresse"]
+      "mots": [
+        "gps",
+        "route",
+        "agenda",
+        "semaine",
+        "adresse"
+      ]
     },
     {
       "id": "t-entretien",
       "titre": "Visites d'entretien",
-      "roles": ["technicien"],
+      "roles": [
+        "technicien"
+      ],
       "resume": "Les visites des contrats d'entretien de votre agence sont dans « Entretien ».",
       "etapes": [
         "Touchez « Entretien » : visites En retard, Aujourd'hui, Cette semaine, Plus tard.",
@@ -434,24 +770,38 @@
         "Choisissez Conforme, À surveiller ou Anomalie, indiquez les pièces à prévoir et vos observations."
       ],
       "astuce": "Une anomalie remonte automatiquement à l'agence.",
-      "mots": ["entretien", "visite", "anomalie"]
+      "mots": [
+        "entretien",
+        "visite",
+        "anomalie"
+      ]
     },
     {
       "id": "t-max",
       "titre": "Parler à Max",
-      "roles": ["technicien"],
+      "roles": [
+        "technicien"
+      ],
       "resume": "Max est l'assistant du technicien, sans les mains.",
       "etapes": [
         "Touchez la sphère « MAX » pour écrire, maintenez-la pour parler.",
         "Exemples : « Ouvre l'itinéraire », « Appelle le client Dupont », « Je pars dans 15 minutes ».",
         "Max aide aussi pour le diagnostic, lit les photos et met le compte-rendu en forme. Ses suggestions sont à vérifier."
       ],
-      "mots": ["ia", "assistant", "voix", "micro", "appeler"]
+      "mots": [
+        "ia",
+        "assistant",
+        "voix",
+        "micro",
+        "appeler"
+      ]
     },
     {
       "id": "e-clients",
       "titre": "Créer et gérer un client",
-      "roles": ["editeur"],
+      "roles": [
+        "editeur"
+      ],
       "resume": "Le Poste de pilotage est l'outil de l'éditeur : une fiche par entreprise cliente.",
       "etapes": [
         "Menu « Clients » > « + Nouveau client ».",
@@ -460,12 +810,21 @@
         "« Accès bloqué » suspend tous les écrans du client (impayé)."
       ],
       "astuce": "« Supprimer » est irréversible : exportez d'abord la liste en CSV si besoin.",
-      "mots": ["fiche client", "modules", "agences", "couleurs", "logo", "bloquer"]
+      "mots": [
+        "fiche client",
+        "modules",
+        "agences",
+        "couleurs",
+        "logo",
+        "bloquer"
+      ]
     },
     {
       "id": "e-creer-iko",
       "titre": "« Créer son IKO » : ouvrir l'accès d'un client",
-      "roles": ["editeur"],
+      "roles": [
+        "editeur"
+      ],
       "resume": "Le bouton contrôle la fiche, crée les agences et le compte du patron.",
       "etapes": [
         "Sur la fiche du client, cliquez sur « Créer son IKO ».",
@@ -474,12 +833,20 @@
         "Copiez le mot de passe temporaire (affiché UNE seule fois) et le « message d'accès », puis envoyez-les séparément au patron."
       ],
       "astuce": "Vous pouvez relancer sans créer de doublons. Utilisez « Copier pour le coffre » pour ranger le mot de passe dans votre coffre.",
-      "mots": ["provisioning", "creer iko", "mot de passe temporaire", "patron", "onboarding"]
+      "mots": [
+        "provisioning",
+        "creer iko",
+        "mot de passe temporaire",
+        "patron",
+        "onboarding"
+      ]
     },
     {
       "id": "e-connaissance",
       "titre": "Connaissance entreprise : les exceptions du client",
-      "roles": ["editeur"],
+      "roles": [
+        "editeur"
+      ],
       "resume": "Les règles propres à chaque entreprise (horaires, produits refusés, garantie…) sont lues par Amandine, Max et IKO.",
       "etapes": [
         "Fiche du client > « Connaissance entreprise » > « + Ajouter une entrée ».",
@@ -488,12 +855,21 @@
         "Choisissez la catégorie : FAQ, Procédure ou Règle interne."
       ],
       "astuce": "Les assistants appliquent les règles internes mais ne les récitent pas mot à mot aux clients.",
-      "mots": ["exceptions", "regles", "faq", "procedure", "horaires", "garantie"]
+      "mots": [
+        "exceptions",
+        "regles",
+        "faq",
+        "procedure",
+        "horaires",
+        "garantie"
+      ]
     },
     {
       "id": "e-planning-reglages",
       "titre": "Régler le planning d'un client",
-      "roles": ["editeur"],
+      "roles": [
+        "editeur"
+      ],
       "resume": "Le bouton « Planning » de la fiche règle les créneaux, par entreprise ou par agence.",
       "etapes": [
         "Fiche du client > « Planning ».",
@@ -501,12 +877,19 @@
         "Enregistrez : les créneaux se créent au fil de l'eau."
       ],
       "astuce": "Le client final voit des dates à partir de 7 jours par défaut.",
-      "mots": ["creneaux", "delai", "capacite", "jours feries"]
+      "mots": [
+        "creneaux",
+        "delai",
+        "capacite",
+        "jours feries"
+      ]
     },
     {
       "id": "e-alertes",
       "titre": "Alertes, vérifications et Face ID",
-      "roles": ["editeur"],
+      "roles": [
+        "editeur"
+      ],
       "resume": "Vous êtes prévenu quand un client a un problème.",
       "etapes": [
         "Menu « Alertes clients » : journal des incidents par client, « Tout marquer comme traité ».",
@@ -514,12 +897,21 @@
         "Menu « Sécurité » : « Vérifications automatiques » (quotidien ou hebdomadaire) et « Activer Face ID / empreinte sur cet appareil » (une fois par appareil)."
       ],
       "astuce": "Sur iPhone, ajoutez d'abord IKO à l'écran d'accueil pour recevoir les notifications.",
-      "mots": ["alerte", "notification", "securite", "face id", "empreinte", "incident"]
+      "mots": [
+        "alerte",
+        "notification",
+        "securite",
+        "face id",
+        "empreinte",
+        "incident"
+      ]
     },
     {
       "id": "e-prospect",
       "titre": "Devis prospect : vendre IKO",
-      "roles": ["editeur"],
+      "roles": [
+        "editeur"
+      ],
       "resume": "Un devis commercial pour un prospect, avec les modules proposés.",
       "etapes": [
         "Menu « Devis prospect » > « + Nouveau devis ».",
@@ -527,12 +919,22 @@
         "« Imprimer », « Enregistrer sous (PDF) » ou « Envoyer par email ».",
         "Quand le client accepte : « Client a accepté → créer en Production »."
       ],
-      "mots": ["prospect", "commercial", "tarif", "abonnement"]
+      "mots": [
+        "prospect",
+        "commercial",
+        "tarif",
+        "abonnement"
+      ]
     },
     {
       "id": "g-connexion",
       "titre": "Se connecter, mot de passe temporaire",
-      "roles": ["patron", "agence", "technicien", "editeur"],
+      "roles": [
+        "patron",
+        "agence",
+        "technicien",
+        "editeur"
+      ],
       "resume": "Vous recevez un identifiant et un mot de passe temporaire. À la première connexion, vous choisissez le vôtre.",
       "etapes": [
         "Ouvrez la page de l'application : vous arrivez sur la connexion si vous n'êtes pas connecté.",
@@ -540,12 +942,24 @@
         "Votre session dure 15 minutes puis se renouvelle toute seule, pendant 7 jours au maximum."
       ],
       "astuce": "Après 5 mots de passe faux de suite, le compte est bloqué 15 minutes. Il n'y a pas de lien « mot de passe oublié » : demandez un nouveau mot de passe à votre responsable (« Mes accès > Nouveau mot de passe »).",
-      "mots": ["connexion", "login", "mot de passe", "oublie", "bloque", "identifiant"]
+      "mots": [
+        "connexion",
+        "login",
+        "mot de passe",
+        "oublie",
+        "bloque",
+        "identifiant"
+      ]
     },
     {
       "id": "g-roles",
       "titre": "Qui voit quoi",
-      "roles": ["patron", "agence", "technicien", "editeur"],
+      "roles": [
+        "patron",
+        "agence",
+        "technicien",
+        "editeur"
+      ],
       "resume": "Chaque personne ne voit que ce qui la concerne.",
       "etapes": [
         "Client : sa demande, son devis, son contrat (par lien du mail ou numéro de ticket + e-mail ou téléphone).",
@@ -555,12 +969,23 @@
         "Éditeur IKO : toutes les entreprises et le Poste de pilotage."
       ],
       "astuce": "Les données d'une entreprise ne sont jamais visibles par une autre : la séparation est faite côté serveur.",
-      "mots": ["droits", "permissions", "roles", "agence", "acces"]
+      "mots": [
+        "droits",
+        "permissions",
+        "roles",
+        "agence",
+        "acces"
+      ]
     },
     {
       "id": "g-sav",
       "titre": "Le parcours d'un SAV, de bout en bout",
-      "roles": ["client", "patron", "agence", "technicien"],
+      "roles": [
+        "client",
+        "patron",
+        "agence",
+        "technicien"
+      ],
       "resume": "De la panne à l'avis du client, en sept étapes.",
       "etapes": [
         "Déclaration : le client déclare sa panne (Amandine ou formulaire), choisit un créneau, reçoit un numéro et un mail de confirmation. L'agence reçoit un mail.",
@@ -571,12 +996,22 @@
         "Clôture : statut « Terminé », bon d'intervention signé disponible pour le client.",
         "Avis : le client note l'intervention. Une note faible remonte à l'agence."
       ],
-      "mots": ["processus", "workflow", "etapes", "parcours", "cycle"]
+      "mots": [
+        "processus",
+        "workflow",
+        "etapes",
+        "parcours",
+        "cycle"
+      ]
     },
     {
       "id": "g-installer",
       "titre": "Installer l'application sur le téléphone",
-      "roles": ["patron", "agence", "technicien"],
+      "roles": [
+        "patron",
+        "agence",
+        "technicien"
+      ],
       "resume": "IKO s'installe comme une application, sans passer par un magasin.",
       "etapes": [
         "Ouvrez la page dans le navigateur de votre téléphone (Safari sur iPhone, Chrome sur Android).",
@@ -584,21 +1019,140 @@
         "Ouvrez ensuite IKO depuis l'icône : les notifications fonctionnent mieux ainsi."
       ],
       "astuce": "Sur iPhone, les notifications ne marchent que si l'application a été ajoutée à l'écran d'accueil.",
-      "mots": ["application", "installer", "ecran d'accueil", "notifications", "iphone", "android"]
+      "mots": [
+        "application",
+        "installer",
+        "ecran d'accueil",
+        "notifications",
+        "iphone",
+        "android"
+      ]
     }
   ],
   "faq": [
-    { "q": "Un client dit qu'il ne retrouve pas sa demande.", "r": "Il doit saisir son numéro de ticket ET l'e-mail ou le téléphone donné lors de la demande, ou utiliser le bouton « Suivre ma demande » du mail. Après 8 essais ratés en 10 minutes, il doit attendre quelques minutes.", "roles": ["patron", "agence"] },
-    { "q": "Le client peut-il changer ou annuler son rendez-vous tout seul ?", "r": "Oui, dans son suivi, bloc « Gérer ma demande ». L'annulation demande un motif. L'agence est prévenue et le créneau est libéré.", "roles": ["patron", "agence", "client"] },
-    { "q": "Comment l'agence sait-elle qu'il y a une nouvelle demande ou un message ?", "r": "Elle reçoit un mail, voit le badge rouge « Messages clients » et le bouton « RDV modifiés » dans le tableau de bord, et les techniciens reçoivent une notification sur leur téléphone.", "roles": ["patron", "agence"] },
-    { "q": "Quelqu'un a oublié son mot de passe.", "r": "Il n'y a pas de lien « mot de passe oublié ». Le patron ouvre « Mes accès » et clique sur « Nouveau mot de passe » à côté de la personne : un mot de passe temporaire s'affiche une seule fois. Pour le patron, c'est l'éditeur IKO qui le régénère.", "roles": ["patron", "agence", "technicien"] },
-    { "q": "Que voit un responsable d'agence par rapport au patron ?", "r": "Uniquement son agence. Il n'a ni « Toutes agences », ni Centrale de direction, ni « Entretien », ni « Mes accès ».", "roles": ["patron", "agence"] },
-    { "q": "Comment fermer des dates (congés, jour férié) ?", "r": "Centrale de direction > « Fermetures » : agence, dates, motif, puis « Bloquer les créneaux ». Aucun rendez-vous ni visite d'entretien n'est alors proposé.", "roles": ["patron"] },
-    { "q": "Comment IKO ou Max m'écoutent-ils ?", "r": "Maintenez la sphère (ou le micro) pour parler, ou écrivez dans le champ. Le bouton de conversation continue les laisse écouter ; dites « stop » pour arrêter.", "roles": ["patron", "agence", "technicien"] },
-    { "q": "Le technicien voit-il tous les tickets ?", "r": "Il voit les interventions de son agence, classées en Aujourd'hui, En retard, À venir, Urgent, Terminés et Annulés.", "roles": ["patron", "agence", "technicien"] },
-    { "q": "Que se passe-t-il quand le technicien clique sur « Je pars » ?", "r": "Le client reçoit un mail « votre technicien est en route » avec l'heure d'arrivée et voit un bandeau orange dans son suivi pendant 4 heures.", "roles": ["patron", "agence", "technicien", "client"] },
-    { "q": "Comment un client signe-t-il son devis ?", "r": "Il clique sur « Consulter et signer mon devis » dans le mail, puis « Signer électroniquement mon devis ». Une fois signé, il peut payer l'acompte de 30 % en ligne si le paiement est activé.", "roles": ["patron", "agence", "technicien", "client"] },
-    { "q": "Les assistants peuvent-ils se tromper ?", "r": "Oui. Les diagnostics de Max et les suggestions d'IKO sont à vérifier. Les actions sensibles (annulation, suppression, blocage de dates) ne sont jamais faites sans votre validation.", "roles": ["patron", "agence", "technicien"] },
-    { "q": "Mes données sont-elles visibles par une autre entreprise ?", "r": "Non. Chaque entreprise est séparée des autres côté serveur, et chaque agence ne voit que ses propres données.", "roles": ["patron", "agence", "technicien", "client"] }
+    {
+      "q": "Un client dit qu'il ne retrouve pas sa demande.",
+      "r": "Il doit saisir son numéro de ticket ET l'e-mail ou le téléphone donné lors de la demande, ou utiliser le bouton « Suivre ma demande » du mail. Après 8 essais ratés en 10 minutes, il doit attendre quelques minutes.",
+      "roles": [
+        "patron",
+        "agence"
+      ]
+    },
+    {
+      "q": "Le client peut-il changer ou annuler son rendez-vous tout seul ?",
+      "r": "Oui, dans son suivi, bloc « Gérer ma demande ». L'annulation demande un motif. L'agence est prévenue et le créneau est libéré.",
+      "roles": [
+        "patron",
+        "agence",
+        "client"
+      ]
+    },
+    {
+      "q": "Comment l'agence sait-elle qu'il y a une nouvelle demande ou un message ?",
+      "r": "Elle reçoit un mail, voit le badge rouge « Messages clients » et le bouton « RDV modifiés » dans le tableau de bord, et les techniciens reçoivent une notification sur leur téléphone.",
+      "roles": [
+        "patron",
+        "agence"
+      ]
+    },
+    {
+      "q": "Quelqu'un a oublié son mot de passe.",
+      "r": "Il n'y a pas de lien « mot de passe oublié ». Le patron ouvre « Mes accès » et clique sur « Nouveau mot de passe » à côté de la personne : un mot de passe temporaire s'affiche une seule fois. Pour le patron, c'est l'éditeur IKO qui le régénère.",
+      "roles": [
+        "patron",
+        "agence",
+        "technicien"
+      ]
+    },
+    {
+      "q": "Que voit un responsable d'agence par rapport au patron ?",
+      "r": "Uniquement son agence. Il n'a ni « Toutes agences », ni Centrale de direction, ni « Entretien », ni « Mes accès ».",
+      "roles": [
+        "patron",
+        "agence"
+      ]
+    },
+    {
+      "q": "Comment fermer des dates (congés, jour férié) ?",
+      "r": "Centrale de direction > « Fermetures » : agence, dates, motif, puis « Bloquer les créneaux ». Aucun rendez-vous ni visite d'entretien n'est alors proposé.",
+      "roles": [
+        "patron"
+      ]
+    },
+    {
+      "q": "Comment IKO ou Max m'écoutent-ils ?",
+      "r": "Maintenez la sphère (ou le micro) pour parler, ou écrivez dans le champ. Le bouton de conversation continue les laisse écouter ; dites « stop » pour arrêter.",
+      "roles": [
+        "patron",
+        "agence",
+        "technicien"
+      ]
+    },
+    {
+      "q": "Le technicien voit-il tous les tickets ?",
+      "r": "Il voit les interventions de son agence, classées en Aujourd'hui, En retard, À venir, Urgent, Terminés et Annulés.",
+      "roles": [
+        "patron",
+        "agence",
+        "technicien"
+      ]
+    },
+    {
+      "q": "Que se passe-t-il quand le technicien clique sur « Je pars » ?",
+      "r": "Le client reçoit un mail « votre technicien est en route » avec l'heure d'arrivée et voit un bandeau orange dans son suivi pendant 4 heures.",
+      "roles": [
+        "patron",
+        "agence",
+        "technicien",
+        "client"
+      ]
+    },
+    {
+      "q": "Comment un client signe-t-il son devis ?",
+      "r": "Il clique sur « Consulter et signer mon devis » dans le mail, puis « Signer électroniquement mon devis ». Une fois signé, il peut payer l'acompte de 30 % en ligne si le paiement est activé.",
+      "roles": [
+        "patron",
+        "agence",
+        "technicien",
+        "client"
+      ]
+    },
+    {
+      "q": "Les assistants peuvent-ils se tromper ?",
+      "r": "Oui. Les diagnostics de Max et les suggestions d'IKO sont à vérifier. Les actions sensibles (annulation, suppression, blocage de dates) ne sont jamais faites sans votre validation.",
+      "roles": [
+        "patron",
+        "agence",
+        "technicien"
+      ]
+    },
+    {
+      "q": "Mes données sont-elles visibles par une autre entreprise ?",
+      "r": "Non. Chaque entreprise est séparée des autres côté serveur, et chaque agence ne voit que ses propres données.",
+      "roles": [
+        "patron",
+        "agence",
+        "technicien",
+        "client"
+      ]
+    },
+    {
+      "q": "IKO fonctionne-t-il pour d'autres métiers que la menuiserie ?",
+      "r": "Oui. La fiche client indique le métier (menuiserie, plomberie et chauffage, électricité, ou autre). Amandine, Max et IKO connaissent aussi la climatisation et les pompes à chaleur, la ventilation, la serrurerie et la couverture, et ont une méthode générale pour tout autre métier du bâtiment ou du dépannage.",
+      "roles": [
+        "patron",
+        "agence",
+        "technicien",
+        "editeur"
+      ]
+    },
+    {
+      "q": "IKO peut-il se connecter à mon logiciel de devis et de facturation ?",
+      "r": "Pas encore automatiquement. Vous pouvez déjà importer votre catalogue produits depuis un fichier Excel ou CSV et exporter tickets, avis et devis en Excel ou PDF. Les connexions directes avec d'autres logiciels sont à l'étude.",
+      "roles": [
+        "patron",
+        "editeur"
+      ]
+    }
   ]
 }
