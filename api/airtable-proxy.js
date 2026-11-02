@@ -257,6 +257,20 @@ async function ecrireConfigPush(baseId, headers, config) {
   });
 }
 
+// Cache court (60 s) de la fiche Clients du tenant de la session : chaque requete du dashboard / technicien
+// relisait cette fiche (1 appel Airtable de plus par requete) ; le forfait gratuit n'autorise que 1000 appels/mois.
+// Tout changement de la table Clients vide ce cache (voir plus bas), donc modules actifs / blocage restent fiables.
+const cacheClientTenant = new Map();
+async function lireClientTenant(baseId, headers, tenantId) {
+  const c = cacheClientTenant.get(tenantId);
+  if (c && Date.now() - c.t < 60000) return { ok: true, status: 200, json: async () => c.rec };
+  const r = await fetch('https://api.airtable.com/v0/' + baseId + '/Clients/' + tenantId, { headers });
+  if (!r.ok) return r;
+  const rec = await r.json();
+  cacheClientTenant.set(tenantId, { t: Date.now(), rec });
+  return { ok: true, status: 200, json: async () => rec };
+}
+
 // AUTH #010 — Contrôle centralisé "Modules actifs". Extrait du bloc
 // Planning Commercial (AUTH #007), où cette même logique existait déjà en
 // ligne pour le module "Commerce" : réutilisé ici tel quel, pas une
@@ -270,7 +284,7 @@ async function ecrireConfigPush(baseId, headers, config) {
 async function verifierModuleActif(baseId, headers, tenantId, moduleRequis) {
   let recClient;
   try {
-    const r = await fetch('https://api.airtable.com/v0/' + baseId + '/Clients/' + tenantId, { headers });
+    const r = await lireClientTenant(baseId, headers, tenantId);
     if (!r.ok) return { ok: false, status: 403, error: 'Accès refusé : tenant de session introuvable.' };
     recClient = await r.json();
   } catch (err) {
@@ -1106,7 +1120,7 @@ export default async function handler(req, res) {
       }
       let recClientSessionISAV;
       try {
-        const rClientSessionISAV = await fetch('https://api.airtable.com/v0/' + baseId + '/Clients/' + session.tenantId, { headers });
+        const rClientSessionISAV = await lireClientTenant(baseId, headers, session.tenantId);
         if (!rClientSessionISAV.ok) return res.status(403).json({ error: 'Accès refusé : tenant de session introuvable.' });
         recClientSessionISAV = await rClientSessionISAV.json();
       } catch (err) {
@@ -1337,7 +1351,7 @@ export default async function handler(req, res) {
       // fournie par le navigateur — avant de construire le filtre.
       let nomTenantListe;
       try {
-        const rTenantListe = await fetch('https://api.airtable.com/v0/' + baseId + '/Clients/' + session.tenantId, { headers });
+        const rTenantListe = await lireClientTenant(baseId, headers, session.tenantId);
         if (!rTenantListe.ok) return res.status(403).json({ error: 'Accès refusé : tenant de session introuvable.' });
         const recTenantListe = await rTenantListe.json();
         nomTenantListe = (recTenantListe.fields || {})['Nom client'];
@@ -1466,7 +1480,7 @@ export default async function handler(req, res) {
 
         let nomTenantOM;
         try {
-          const rTenantOM = await fetch('https://api.airtable.com/v0/' + baseId + '/Clients/' + session.tenantId, { headers });
+          const rTenantOM = await lireClientTenant(baseId, headers, session.tenantId);
           if (!rTenantOM.ok) return res.status(403).json({ error: 'Accès refusé : tenant de session introuvable.' });
           const recTenantOM = await rTenantOM.json();
           nomTenantOM = (recTenantOM.fields || {})['Nom client'];
@@ -1594,7 +1608,7 @@ export default async function handler(req, res) {
         }
         let nomTenant;
         try {
-          const rTenant = await fetch('https://api.airtable.com/v0/' + baseId + '/Clients/' + session.tenantId, { headers });
+          const rTenant = await lireClientTenant(baseId, headers, session.tenantId);
           if (!rTenant.ok) return res.status(403).json({ error: 'Accès refusé : tenant de session introuvable.' });
           const recTenant = await rTenant.json();
           nomTenant = (recTenant.fields || {})['Nom client'];
@@ -1708,6 +1722,7 @@ export default async function handler(req, res) {
         });
       }
     }
+    if (req.method !== 'GET' && req.method !== 'HEAD' && premierSegment.toLowerCase() === 'clients') cacheClientTenant.clear();
     if (req.method !== 'GET' && req.method !== 'HEAD' && airtableRes.ok && premierSegment.toLowerCase() !== 'journal actions') {
       const corps = req.body || {};
       const champs = Object.keys(corps.fields || (Array.isArray(corps.records) && corps.records[0] && corps.records[0].fields) || {});
