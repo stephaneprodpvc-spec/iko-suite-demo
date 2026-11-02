@@ -111,6 +111,44 @@ export async function alerter({ cle, titre, message, client = null, force = fals
   }
 }
 
+// Date de première détection du signal « RDV modifié » par ticket : ajoute les nouveaux, oublie ceux qui ne sont plus signalés.
+// Fonction pure. Retourne { vus, change }.
+export function majRdvVus(anciens, idsSignales, maintenant) {
+  const base = anciens && typeof anciens === 'object' && !Array.isArray(anciens) ? anciens : {};
+  const vus = {};
+  let change = Object.keys(base).length !== 0 && Object.keys(base).some((id) => !idsSignales.includes(id));
+  idsSignales.forEach((id) => {
+    if (Number.isFinite(base[id])) vus[id] = base[id];
+    else { vus[id] = maintenant; change = true; }
+  });
+  return { vus, change };
+}
+
+// Rétention du journal d'audit « Journal actions » : une ligne par écriture, sans limite, elle finirait par saturer les
+// 1000 entrées du forfait gratuit d'Airtable. Supprime au plus `max` lignes plus vieilles que IKO_JOURNAL_JOURS (60 par
+// défaut ; « 0 » désactive la purge). Ne lève jamais d'exception. Retourne le nombre de lignes supprimées.
+export async function purgerJournalActions({ max = 50, maintenant = Date.now() } = {}) {
+  try {
+    const reglage = process.env.IKO_JOURNAL_JOURS;
+    if (reglage === '0') return 0;
+    const jours = Number(reglage) > 0 ? Number(reglage) : 60;
+    const limite = new Date(maintenant - jours * 86400000).toISOString();
+    const url = 'https://api.airtable.com/v0/' + baseId() + '/Journal%20actions?maxRecords=' + max + '&fields%5B%5D=Action&filterByFormula=' +
+      encodeURIComponent('IS_BEFORE({Date}, "' + limite + '")');
+    const r = await fetch(url, { headers: entetesAirtable() });
+    if (!r.ok) return 0;
+    const anciens = ((await r.json()).records || []).map((x) => x.id);
+    let supprimes = 0;
+    for (let i = 0; i < anciens.length; i += 10) {
+      const lot = anciens.slice(i, i + 10);
+      const d = await fetch('https://api.airtable.com/v0/' + baseId() + '/Journal%20actions?' + lot.map((id) => 'records%5B%5D=' + encodeURIComponent(id)).join('&'), { method: 'DELETE', headers: entetesAirtable() });
+      if (!d.ok) break;
+      supprimes += lot.length;
+    }
+    return supprimes;
+  } catch (e) { return 0; }
+}
+
 // Inscrit plusieurs lignes au journal en une seule lecture/écriture de la configuration. Ne lève jamais d'exception.
 export async function journaliserLot(lignes) {
   try {
@@ -217,7 +255,17 @@ export async function handleSurveillance(req, res) {
       };
       regrouper(tickets.filter((t) => t.fields.Qualification === 'Oui' && !t.fields['Technicien assigné'] && heuresDepuis(t.createdTime) > seuils.urgentSansTechnicienH), 'urgents-sans-technicien', 'ticket(s) urgent(s) sans technicien depuis plus de ' + seuils.urgentSansTechnicienH + ' h');
       regrouper(tickets.filter((t) => t.fields['Message client non lu'] === true && (() => { const h = dernierHorodatageMessage(t.fields['Message client']); return h && heuresDepuis(h) > seuils.messageNonLuH; })()), 'messages-sans-reponse', 'message(s) client sans réponse depuis plus de ' + seuils.messageNonLuH + ' h');
-      regrouper(tickets.filter((t) => t.fields['RDV modifié - notif technicien'] === true && heuresDepuis(t.createdTime) > seuils.rdvModifieNonVuH), 'rdv-modifie-non-vu', 'rendez-vous modifié(s) pas vu(s) par le technicien');
+      // Âge du signal « RDV modifié » : Airtable ne donne pas la date de modification d'un ticket (seulement sa création) ;
+      // on note donc la PREMIÈRE fois où ce contrôle voit le signal (config.alertes.rdvVus) et on mesure depuis cette date.
+      const marques = tickets.filter((t) => t.fields['RDV modifié - notif technicien'] === true);
+      let vusRdv = {};
+      try {
+        const cfg = await lireConfig();
+        const maj = majRdvVus(cfg.alertes.rdvVus, marques.map((t) => t.id), Date.now());
+        vusRdv = maj.vus;
+        if (maj.change) { cfg.alertes.rdvVus = maj.vus; await ecrireConfig(cfg); }
+      } catch (e) { vusRdv = {}; }
+      regrouper(marques.filter((t) => vusRdv[t.id] && (Date.now() - vusRdv[t.id]) / 3600000 > seuils.rdvModifieNonVuH), 'rdv-modifie-non-vu', 'rendez-vous modifié(s) pas vu(s) par le technicien');
     }
   } catch (e) { problemes.push({ cle: 'base-erreur', client: null, texte: 'Contrôle impossible : erreur de lecture de la base' }); }
   // Réparation automatique (créneaux bloqués à tort, créneaux non réservés) : faite chaque jour avec le contrôle.
@@ -234,7 +282,9 @@ export async function handleSurveillance(req, res) {
     await journaliserLot(problemes.map((p) => ({ cle: p.cle, titre: 'IKO : ' + p.texte.split(' : ')[0].replace(/^\d+ /, ''), message: p.texte, client: p.client })));
     alerte = await alerter({ cle: 'surveillance:' + [...new Set(problemes.map((p) => p.cle))].sort().join('+'), titre: 'IKO : ' + problemes.length + ' point(s) à traiter', message: problemes.map((p) => p.texte).join(' — '), sansJournal: true });
   }
-  return res.status(200).json({ controle: new Date().toISOString(), problemes, alerte, reparation });
+  // Rétention du journal d'audit (voir purgerJournalActions) : faite avec le contrôle quotidien.
+  const journalPurge = await purgerJournalActions();
+  return res.status(200).json({ controle: new Date().toISOString(), problemes, alerte, reparation, journalPurge });
 }
 
 // Notification en direct (téléphone) aux techniciens d'une agence : appareils enregistrés avec cette agence (ou « global »).
