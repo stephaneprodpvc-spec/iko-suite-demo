@@ -171,8 +171,9 @@ async function lireCorpsJson(req) {
 export async function handleAlerte(req, res) {
   if (!verifierOrigine(req, { strict: true })) return reponseBloquee(res, 'origine');
   const session = verifierSession(req);
-  if (!session || session.mdpAChanger || !['SUPER_ADMIN_IKO', 'TENANT_ADMIN'].includes(session.role)) return res.status(403).json({ error: 'Accès refusé.' });
-  if (session.agence && session.role !== 'SUPER_ADMIN_IKO') return res.status(403).json({ error: 'Réservé au responsable de l\'entreprise.' });
+  // Réservé au super-administrateur IKO (audit 02/11/2026) : la configuration d'alerte (e-mail, téléphone, appareils) est celle de
+  // la supervision d'IKO, commune à tous les clients ; un patron de client ne doit ni la lire ni la modifier.
+  if (!session || session.mdpAChanger || session.role !== 'SUPER_ADMIN_IKO') return res.status(403).json({ error: 'Accès refusé.' });
   const superAdmin = session.role === 'SUPER_ADMIN_IKO';
   try {
     if (req.method === 'GET') {

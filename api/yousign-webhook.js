@@ -17,7 +17,7 @@ import crypto from 'crypto';
 import { handlePaiement, handleStripe, handleSauvegarde } from './_paiement.js';
 import { handleRappelVeille } from './_rappels.js';
 import { handleAgenda } from './_agenda.js';
-import { verifierOrigine, verifierDebit } from './_securite.js';
+import { verifierOrigine, verifierDebit, verifierSession } from './_securite.js';
 import { handleAlerte, handleSurveillance, lireConfig, ecrireConfig } from './_alertes.js';
 import { handleReparation } from './_reparation.js';
 import { enteteMake } from './_make.js';
@@ -43,6 +43,29 @@ async function handleDownload(req, res) {
   const token = process.env.YOUSIGN_API_KEY;
   if (!requestId || !token) {
     return res.status(400).json({ error: 'Paramètre download manquant ou YOUSIGN_API_KEY absente.' });
+  }
+  // Contrôle d'accès (audit 02/11/2026) : session valide obligatoire, la demande doit correspondre à un devis connu, et un
+  // compte client ne télécharge que les devis de SON entreprise (le super-administrateur IKO voit tout).
+  const session = verifierSession(req);
+  if (!session) return res.status(401).json({ error: 'Connexion requise.' });
+  if (!/^[A-Za-z0-9_-]{8,80}$/.test(String(requestId))) return res.status(400).json({ error: 'Identifiant de demande invalide.' });
+  try {
+    const baseAt = process.env.AIRTABLE_BASE_ID || 'appkI8RKHkYNWY86U';
+    const formule = '{Yousign Request ID}="' + String(requestId) + '"';
+    const rd = await fetch('https://api.airtable.com/v0/' + baseAt + '/Devis?maxRecords=1&filterByFormula=' + encodeURIComponent(formule), {
+      headers: { Authorization: 'Bearer ' + process.env.AIRTABLE_TOKEN }
+    });
+    if (!rd.ok) return res.status(502).json({ error: 'Vérification du devis impossible.' });
+    const devis = ((await rd.json()).records || [])[0];
+    if (!devis) return res.status(404).json({ error: 'Devis introuvable.' });
+    if (session.role !== 'SUPER_ADMIN_IKO') {
+      const idsClient = (devis.fields || {})['Client Record ID'];
+      if (!session.tenantId || !Array.isArray(idsClient) || !idsClient.includes(session.tenantId)) {
+        return res.status(403).json({ error: 'Accès refusé.' });
+      }
+    }
+  } catch (err) {
+    return res.status(502).json({ error: 'Vérification du devis impossible.' });
   }
   const base = process.env.YOUSIGN_ENV === 'production'
     ? 'https://api.yousign.app/v3'

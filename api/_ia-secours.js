@@ -110,13 +110,14 @@ export function corpsGemini(corps) {
 }
 
 // Demo / interne ou client reel ? Les endpoints de Max et d'IKO recoivent les tickets depuis l'ecran et ne
-// connaissent pas le client : on se fie a la SESSION. Un compte rattache a un client (tenantId) = vrai client :
-// jamais de secours gratuit. Pas de session ou super administrateur (sans client) = demo / usage interne.
+// connaissent pas le client : on se fie a la SESSION. Secours autorise seulement pour une session valide de super
+// administrateur sans client (toi, la demo). Un compte rattache a un client (tenantId), une session expiree ou absente
+// (le patron d'un vrai client peut avoir un jeton expire) : jamais de secours gratuit.
 export async function estDemoSession(req) {
   try {
     const { verifierSession } = await import("./_securite.js");
     const s = verifierSession(req);
-    return !s || !s.tenantId;
+    return !!s && s.role === "SUPER_ADMIN_IKO" && !s.tenantId;
   } catch {
     return false; // dans le doute : pas de secours
   }

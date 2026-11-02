@@ -107,10 +107,10 @@ export function reponseBloquee(res, raison) {
 // est traitee comme une session SUPER_ADMIN_IKO (aucune connexion requise).
 // Une vraie session valide (cookie iko_access) reste prioritaire.
 // Pour REACTIVER la protection : variable d'environnement Vercel
-// IKO_DEMO_OUVERT=0 (ou mettre la constante ci-dessous a false), puis redeployer.
-// Des que la variable IKO_MDP_UNIQUE est definie (mot de passe commun a tous
-// les modules, voir verif-securite.js), le mode ouvert se ferme tout seul.
-export const MODE_DEMO_OUVERT = process.env.IKO_DEMO_OUVERT !== "0" && !process.env.IKO_MDP_UNIQUE;
+// FERME PAR DEFAUT (audit 02/11/2026) : un oubli de variable d'environnement ne doit jamais rouvrir l'acces complet.
+// Le mode ouvert n'existe que si IKO_DEMO_OUVERT=1 est defini explicitement (le serveur local de demonstration le fait
+// lui-même, voir iko-local/bac-a-sable.mjs) ET qu'aucun mot de passe commun IKO_MDP_UNIQUE n'est defini.
+export const MODE_DEMO_OUVERT = process.env.IKO_DEMO_OUVERT === "1" && !process.env.IKO_MDP_UNIQUE;
 
 export const SESSION_DEMO = { userId: "demo", tenantId: undefined, role: "SUPER_ADMIN_IKO", mdpAChanger: false };
 
