@@ -759,6 +759,10 @@ export default async function handler(req, res) {
   if (premierSegment.toLowerCase() === 'utilisateurs') {
     return res.status(403).json({ error: 'Accès à cette ressource non autorisé via ce proxy.' });
   }
+  // Audience du site vitrine : lue et écrite uniquement par /api/audience (directement chez Airtable), jamais via ce proxy.
+  if (premierSegment.toLowerCase() === 'audience') {
+    return res.status(403).json({ error: 'Accès à cette ressource non autorisé via ce proxy.' });
+  }
 
   // Journal d'audit : alimenté UNIQUEMENT par ce serveur (voir journaliser ci-dessous). Écriture interdite
   // via le proxy ; lecture réservée au super-admin IKO (poste de pilotage).

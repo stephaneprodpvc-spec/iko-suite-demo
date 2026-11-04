@@ -992,6 +992,14 @@ export default async function handler(req, res) {
 
       // --- Comportement EXISTANT, inchangé : pas d'"action" = déclenchement
       // manuel de la vérification depuis admin.html ("Lancer maintenant"). ---
+      // Réservé à l'éditeur connecté : le rapport révèle l'état de la configuration
+      // et consomme des appels Airtable (audit du 04/11/2026).
+      if (!verifierOrigine(req)) return reponseBloquee(res, "origine");
+      if (!verifierDebit(req, { max: 10, fenetreMs: 10 * 60_000, cle: "verif-manuelle" })) return reponseBloquee(res, "debit");
+      const sessionVerif = verifierSession(req);
+      if (!sessionVerif || sessionVerif.role !== "SUPER_ADMIN_IKO" || sessionVerif.mdpAChanger) {
+        return res.status(403).json({ erreur: "Accès refusé : droits administrateur requis." });
+      }
       const rapport = await executerVerifications();
       return res.status(200).json(rapport);
     }
@@ -1004,6 +1012,7 @@ export default async function handler(req, res) {
 
       // --- Comportement EXISTANT, inchangé : déclenchement automatique
       // (cron Vercel), vérifie d'abord si c'est le bon moment programmé. ---
+      if (!verifierDebit(req, { max: 30, fenetreMs: 10 * 60_000, cle: "verif-cron" })) return reponseBloquee(res, "debit");
       const config = await lireConfig();
       if (!estLeMomentProgramme(config)) {
         return res.status(200).json({ execute: false, raison: "hors programmation" });
