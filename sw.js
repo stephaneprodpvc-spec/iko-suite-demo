@@ -52,6 +52,8 @@ self.addEventListener('notificationclick', (event) => {
 // Network-first for navigation/API calls, cache-first fallback for core static assets.
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
+  // Sessions et comptes : jamais gardés en cache (un téléphone partagé ne doit pas rejouer une session hors ligne).
+  if (/\/api\/(verif-securite|airtable\/auth|airtable\/Utilisateurs)/.test(event.request.url)) return;
 
   event.respondWith(
     fetch(event.request)
