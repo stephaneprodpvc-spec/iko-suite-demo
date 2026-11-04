@@ -50,6 +50,7 @@ import { verifierOrigine, verifierDebit, reponseBloquee, verifierSession, MODE_D
 import { signalerAbus } from "./_abus.js";
 import { initialiserPlanning, lireReglagesBruts, enregistrerReglages, REGLAGES_DEFAUT } from "./_planning.js";
 import { gererCreerComptes, gererRegenererMotDePasse, gererCreerComptesEquipe, gererListerEquipe, gererStatutCompte } from "./_comptes.js";
+import { gererDemandeMotDePasse } from "./_mdp-oublie.js";
 import { agenceRestreinte } from "./_agences.js";
 import { optionsEnregistrement, enregistrerCle, etatCle, supprimerCle, optionsConnexion, connexionCle } from "./_cles-acces.js";
 
@@ -953,6 +954,11 @@ export default async function handler(req, res) {
       }
       if (action === "logout") {
         return gererLogout(req, res);
+      }
+      if (action === "mdp_oublie") {
+        if (!verifierOrigine(req)) return reponseBloquee(res, "origine");
+        if (!verifierDebit(req, { max: 5, fenetreMs: 10 * 60_000, cle: "mdp-oublie" })) return reponseBloquee(res, "debit");
+        return gererDemandeMotDePasse(req, res, contexteComptes());
       }
       if (action === "changer_mot_de_passe") {
         if (!verifierOrigine(req)) return reponseBloquee(res, "origine");

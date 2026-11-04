@@ -101,7 +101,7 @@ input:focus,select:focus{outline:none;border-color:#FF6B00;box-shadow:0 0 0 3px 
       $('compte').textContent = '(' + eq.length + ')';
       $('liste').innerHTML = eq.map(function (m, i) {
         return '<div class="carte' + (m.actif ? '' : ' coupe') + '"><div class="ligne"><div><div class="nom">' + esc(m.nom || m.identifiant) + '</div><div class="petit">' + esc(m.identifiant) + '</div>' +
-          '<div style="margin-top:6px"><span class="puce ' + (m.agence ? 'noir' : 'or') + '">' + esc(etiquette(m)) + '</span>' + (m.agence ? '<span class="puce">' + esc(m.agence) + '</span>' : '<span class="puce">Toutes les agences</span>') + (m.actif ? '' : '<span class="puce rouge">Accès coupé</span>') + '</div>' +
+          '<div style="margin-top:6px"><span class="puce ' + (m.agence ? 'noir' : 'or') + '">' + esc(etiquette(m)) + '</span>' + (m.agence ? '<span class="puce">' + esc(m.agence) + '</span>' : '<span class="puce">Toutes les agences</span>') + (m.actif ? '' : '<span class="puce rouge">Accès coupé</span>') + (m.demandeMdp ? '<span class="puce or">A demandé un nouveau mot de passe</span>' : '') + '</div>' +
           '<div class="petit">' + (m.derniereConnexion ? 'Dernière connexion : ' + esc(new Date(m.derniereConnexion).toLocaleDateString('fr-FR')) : 'Jamais connecté') + '</div></div>' +
           (m.moi || (!m.agence && m.role === 'TENANT_ADMIN') ? '<div class="petit">C\'est toi</div>' : '<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="g" data-a="mdp" data-i="' + i + '" type="button">Nouveau mot de passe</button><button class="g" data-a="statut" data-i="' + i + '" type="button">' + (m.actif ? 'Couper l\'accès' : 'Rouvrir l\'accès') + '</button></div>') +
           '</div></div>';

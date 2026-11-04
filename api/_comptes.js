@@ -6,6 +6,8 @@
 // Champs Airtable OPTIONNELS de la table Utilisateurs : « Agence » et « Nom » (texte). S'ils n'existent pas encore,
 // la creation retombe automatiquement sur les champs de base (reponse : champsAgence=false) : rien ne casse.
 
+import { demandesEnAttente, effacerDemande } from "./_mdp-oublie.js";
+
 const ROLES = ["TENANT_ADMIN", "TECHNICIEN", "COMMERCIAL", "CLIENT"];
 const ROLES_EQUIPE = ["TENANT_ADMIN", "TECHNICIEN"]; // ce qu'un patron peut creer : responsable d'agence ou technicien
 const MAX_PAR_APPEL = 8; // bcrypt (12 tours) ~0,3 s par compte : reste sous la limite de 10 s de Vercel Hobby
@@ -135,9 +137,11 @@ export async function gererListerEquipe(req, res, ctx) {
     const formule = 'FIND("' + String(nomClient).replace(/\\/g, "\\\\").replace(/"/g, '\\"') + '", ARRAYJOIN({tenantId}))';
     const r = await fetch(urlTable(ctx, encodeURIComponent(ctx.UTILISATEURS_TABLE) + "?pageSize=100&filterByFormula=" + encodeURIComponent(formule)), { headers: ctx.airtableHeaders() });
     if (!r.ok) return res.status(502).json({ erreur: "Lecture impossible." });
+    const demandes = await demandesEnAttente(ctx);
     const equipe = ((await r.json()).records || [])
       .filter((u) => [].concat((u.fields || {})["tenantId"] || []).includes(s.tenantId))
-      .map((u) => { const f = u.fields || {}; return { identifiant: f["Identifiant"] || "", role: f["Rôle"] || "", agence: f["Agence"] || "", nom: f["Nom"] || "", actif: (f["Statut"] || "Actif") === "Actif", derniereConnexion: f["Dernière connexion"] || null, moi: u.id === s.userId }; });
+      .map((u) => { const f = u.fields || {}; return { identifiant: f["Identifiant"] || "", role: f["Rôle"] || "", agence: f["Agence"] || "", nom: f["Nom"] || "", actif: (f["Statut"] || "Actif") === "Actif", derniereConnexion: f["Dernière connexion"] || null, moi: u.id === s.userId, demandeMdp: demandes.has(String(f["Identifiant"] || "").toLowerCase()) }; })
+      .sort((a, b) => Number(b.demandeMdp) - Number(a.demandeMdp));
     return res.status(200).json({ ok: true, equipe });
   } catch (e) { return res.status(502).json({ erreur: "Lecture impossible." }); }
 }
@@ -192,6 +196,7 @@ export async function gererRegenererMotDePasse(req, res, ctx) {
   await ctx.majUtilisateur(user.userId, {
     "Hash mot de passe": await ctx.bcrypt.hash(temporaire, 12), "Échecs de connexion": 0, "Bloqué jusqu'à": null, "Dernier tokenId refresh valide": null,
   });
+  await effacerDemande(ctx, user.identifiant); // la demande « mot de passe oublié » est traitée
   return res.status(200).json({ ok: true, identifiant: user.identifiant, motDePasseTemporaire: temporaire });
 }
 

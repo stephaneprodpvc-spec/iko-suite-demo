@@ -56,8 +56,12 @@
     </div>
     <div class="msg" id="msg"></div>
     <div class="etat" id="etat"></div>
+    <button id="btnOubli" class="btn-secondary" type="button">Mot de passe oublié ?</button>
+    <div id="blocOubli" style="display:none;">
+      <div class="note" style="margin-top:8px;">Écris ton identifiant ci-dessus, puis appuie sur le bouton : ton responsable est prévenu et te donne un nouveau mot de passe.</div>
+      <button id="btnDemande" class="btn-primary" type="button">Prévenir mon responsable</button>
+    </div>
     <div class="note">
-      Mot de passe oublié ? Demandez-en un nouveau à votre responsable (« Mes accès »).
       Besoin d'aide ? <a href="/guide.html">Guide d'utilisation</a>.
     </div>
   </div>
@@ -160,6 +164,25 @@
     var retour = retourDemande();
     if (retour) { window.location.href = retour; return; }
     afficherEtat({ ok: true, role: json.role, message: 'Mot de passe changé.' });
+  });
+
+  // --- Mot de passe oublié : la demande part chez le responsable (« Mes accès »), aucun e-mail ---
+  $('btnOubli').addEventListener('click', function () {
+    var bloc = $('blocOubli'); bloc.style.display = bloc.style.display === 'none' ? 'block' : 'none';
+    if (bloc.style.display === 'block') $('identifiant').focus();
+  });
+  $('btnDemande').addEventListener('click', async function () {
+    afficherMsg(''); afficherEtat(null);
+    var ident = $('identifiant').value.trim();
+    if (ident.length < 3) { afficherMsg('Écris d\'abord ton identifiant.'); $('identifiant').focus(); return; }
+    $('btnDemande').disabled = true;
+    try {
+      var r = await fetch('/api/verif-securite', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'mdp_oublie', identifiant: ident }) });
+      var json = await r.json().catch(function () { return {}; });
+      if (r.ok) { etat.textContent = json.message || 'Demande envoyée.'; $('blocOubli').style.display = 'none'; }
+      else { afficherMsg(json.erreur || 'Trop de demandes, réessaie dans quelques minutes.'); }
+    } catch (e) { afficherMsg('Erreur réseau.'); }
+    $('btnDemande').disabled = false;
   });
 
   $('btnSession').addEventListener('click', async function () {
