@@ -14,6 +14,8 @@ const SEUIL_ALERTE = 12;      // événements suspects en 10 min => alerte
 const SEUIL_BLOCAGE = 40;     // événements suspects en 10 min => blocage 15 min
 const DUREE_BLOCAGE_MS = 15 * 60 * 1000;
 const ANTI_REPETITION_MS = 60 * 60 * 1000;
+const SEUIL_FAUX_LIENS = 10;  // faux liens de suivi en 10 min => blocage long
+const DUREE_BLOCAGE_LONG_MS = 24 * 60 * 60 * 1000;
 
 function ipDe(req) {
   try { return String((req.headers && req.headers['x-forwarded-for']) || (req.socket && req.socket.remoteAddress) || 'inconnue').split(',')[0].trim(); } catch (e) { return 'inconnue'; }
@@ -38,13 +40,16 @@ export function signalerAbus(req, type) {
     evenements.set(ip, liste);
     if (evenements.size > 5000) evenements.clear(); // garde-fou mémoire
     if (liste.length >= SEUIL_BLOCAGE && !bloques.has(ip)) bloques.set(ip, maintenant + DUREE_BLOCAGE_MS);
+    // Faux liens de suivi / numéros inventés : un humain ne fait pas ça. Au-delà de 10 essais en 10 min => blocage 24 h.
+    const faux = liste.filter((e) => e.type === 'jeton-invalide' || e.type === 'suivi-introuvable').length;
+    if (faux >= SEUIL_FAUX_LIENS && (bloques.get(ip) || 0) < maintenant + DUREE_BLOCAGE_LONG_MS - 1000) bloques.set(ip, maintenant + DUREE_BLOCAGE_LONG_MS);
     if (liste.length >= SEUIL_ALERTE && maintenant - (alertes.get(ip) || 0) > ANTI_REPETITION_MS) {
       alertes.set(ip, maintenant);
       const parType = {}; liste.forEach((e) => { parType[e.type] = (parType[e.type] || 0) + 1; });
       const detail = Object.keys(parType).map((k) => parType[k] + ' × ' + (LIBELLES[k] || k)).join(', ');
       import('./_alertes.js').then((m) => m.alerter({
         cle: 'abus:' + masquer(ip), titre: 'IKO : activité suspecte détectée',
-        message: 'Adresse ' + masquer(ip) + ' : ' + detail + ' en moins de 10 minutes.' + (liste.length >= SEUIL_BLOCAGE ? ' Adresse bloquée 15 minutes.' : ' Surveillée.'),
+        message: 'Adresse ' + masquer(ip) + ' : ' + detail + ' en moins de 10 minutes.' + (faux >= SEUIL_FAUX_LIENS ? ' Adresse bloquée 24 heures.' : liste.length >= SEUIL_BLOCAGE ? ' Adresse bloquée 15 minutes.' : ' Surveillée.'),
       })).catch(() => {});
     }
   } catch (e) { /* surveillance non bloquante */ }
