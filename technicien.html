@@ -2767,9 +2767,11 @@ function ModalAction({ ticket, onClose, onDone }) {
             <div style={{display:"flex",alignItems:"center",gap:"8px",marginBottom:"16px"}}>
               <span style={{fontSize:"14px",fontWeight:"700",color:C.white}}>✓ Valider l'intervention</span>
             </div>
-            <div style={{background:C.vertDim,border:"1px solid rgba(var(--iko-primary-rgb),0.3)",borderRadius:"10px",padding:"10px 14px",marginBottom:"14px",fontSize:"12px",color:C.vert}}>
-              Intervention sous garantie — rien à facturer au client.
-            </div>
+            {!quiPaie && (
+              <div style={{background:C.vertDim,border:"1px solid rgba(var(--iko-primary-rgb),0.3)",borderRadius:"10px",padding:"10px 14px",marginBottom:"14px",fontSize:"12px",color:C.vert}}>
+                Choisis la cause du SAV plus bas : IKO te dit tout de suite qui paie.
+              </div>
+            )}
             <BlocCompteRenduMax commentaire={commentaire} setCommentaire={setCommentaire}
               placeholder="Ex : Joint remplacé, fenêtre fonctionnelle. Client satisfait." rows={3}
               enregistrementCREnCours={enregistrementCREnCours} dicterCompteRendu={dicterCompteRendu} arreterDicteeCompteRendu={arreterDicteeCompteRendu}
