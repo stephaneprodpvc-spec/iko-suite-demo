@@ -2284,6 +2284,59 @@ function ModalDevis({ ticket, onClose, onSent }) {
   );
 }
 
+// ==================== « Qui paie ? » : dossiers dont la décision attend le responsable ====================
+function lireQuiPaie(t) { try { return JSON.parse(t.fields?.["Qui paie détail"] || "null"); } catch (e) { return null; } }
+function ModalQuiPaie({ tickets, onClose, onRefresh }) {
+  const [enCours, setEnCours] = React.useState(null);
+  const [erreur, setErreur] = React.useState("");
+  const [copie, setCopie] = React.useState("");
+  const aValider = tickets.filter(t => { const q = lireQuiPaie(t); return q && q.decision === "a_valider"; });
+  const decisions = tickets.filter(t => { const q = lireQuiPaie(t); return q && q.decision !== "a_valider"; }).slice(0, 8);
+  const libelle = { fabricant: "le fabricant", client: "le client", poseur: "le poseur", entreprise: "votre entreprise", contrat: "le contrat d'entretien", "selon-conditions": "à déterminer", "a-definir": "à déterminer" };
+  const trancher = async (t, q, choix) => {
+    setEnCours(t.id); setErreur("");
+    const nouveau = { ...q, decision: choix === "entreprise" ? "valide_a_charge_entreprise" : "valide", dateValidation: new Date().toISOString() };
+    if (choix === "entreprise") { nouveau.payeur = "entreprise"; nouveau.deplacementFacture = false; nouveau.texteFacturation = ""; }
+    const resume = "Paie : " + (libelle[nouveau.payeur] || nouveau.payeur) + (nouveau.deplacementFacture ? " · déplacement facturé" : "") + " · validé par le responsable";
+    try {
+      const r = await fetch('/api/airtable/tenant/Tickets%20SAV/' + t.id, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ fields: { "Qui paie": resume, "Qui paie détail": JSON.stringify(nouveau) } }) });
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      if (onRefresh) await onRefresh();
+    } catch (e) { setErreur("Décision non enregistrée (" + e.message + "). Réessaie."); }
+    setEnCours(null);
+  };
+  const bouton = (plein) => ({ padding: "8px 14px", borderRadius: "8px", fontSize: "12px", fontWeight: "800", cursor: "pointer", border: plein ? "none" : "1px solid var(--iko-primary)", background: plein ? "var(--iko-primary)" : "transparent", color: plein ? "#fff" : "var(--iko-primary)" });
+  return (
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.65)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center",padding:"16px"}} onClick={onClose}>
+      <div onClick={e => e.stopPropagation()} style={{background:"#111",color:"#fff",borderRadius:"16px",maxWidth:"680px",width:"100%",maxHeight:"88vh",overflowY:"auto",padding:"20px",border:"1px solid var(--iko-primary)"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"6px"}}>
+          <div style={{fontSize:"17px",fontWeight:"900"}}>Qui paie ? <span style={{color:"var(--iko-primary)"}}>{aValider.length} à valider</span></div>
+          <button onClick={onClose} aria-label="Fermer" style={{background:"none",border:"none",color:"#fff",fontSize:"18px",cursor:"pointer"}}>✕</button>
+        </div>
+        <div style={{fontSize:"12px",color:"#9CA3AF",marginBottom:"14px"}}>IKO décide seul quand les preuves sont claires. Ici : seulement les cas douteux, à trancher en un clic.</div>
+        {erreur && <div style={{color:"#EF4444",fontSize:"12px",marginBottom:"8px"}}>{erreur}</div>}
+        {aValider.length === 0 && <div style={{padding:"18px",textAlign:"center",color:"#9CA3AF",fontSize:"13px"}}>Rien à valider. IKO a tout réglé seul.</div>}
+        {aValider.map(t => { const q = lireQuiPaie(t); return (
+          <div key={t.id} style={{border:"1px solid rgba(255,255,255,0.15)",borderRadius:"12px",padding:"12px",marginBottom:"10px"}}>
+            <div style={{fontSize:"11px",color:"var(--iko-primary)",fontWeight:"800"}}>{t.fields?.Name} · {t.fields?.["Cause SAV"] || ""}</div>
+            <div style={{fontSize:"14px",fontWeight:"800",margin:"2px 0"}}>{t.fields?.["Nom"] || t.fields?.["Client"] || t.fields?.["Nom client"] || "Client"} — {t.fields?.Produit || ""}</div>
+            <div style={{fontSize:"12px",color:"#D1D5DB",marginBottom:"4px"}}>Proposition d'IKO : <b>{libelle[q.payeur] || q.payeur}</b>{q.deplacementFacture ? " · déplacement facturé" + (q.montantDeplacement ? " (" + q.montantDeplacement + " € HT)" : "") : ""}</div>
+            <div style={{fontSize:"11px",color:"#9CA3AF",marginBottom:"8px"}}>{q.raison}</div>
+            {q.texteFacturation && <div style={{fontSize:"11px",color:"#D1D5DB",background:"rgba(255,255,255,0.06)",borderRadius:"8px",padding:"8px",marginBottom:"8px"}}>{q.texteFacturation} <button onClick={() => { try { navigator.clipboard.writeText(q.texteFacturation); setCopie(t.id); } catch (e) {} }} style={{background:"none",border:"none",color:"var(--iko-primary)",cursor:"pointer",fontSize:"11px",textDecoration:"underline"}}>{copie === t.id ? "Copié" : "Copier le message"}</button></div>}
+            <div style={{display:"flex",gap:"8px",flexWrap:"wrap"}}>
+              <button disabled={enCours === t.id} onClick={() => trancher(t, q, "valider")} style={bouton(true)}>Valider la proposition</button>
+              <button disabled={enCours === t.id} onClick={() => trancher(t, q, "entreprise")} style={bouton(false)}>Je prends à ma charge</button>
+            </div>
+          </div>); })}
+        {decisions.length > 0 && (<div style={{marginTop:"14px"}}>
+          <div style={{fontSize:"11px",fontWeight:"800",color:"#9CA3AF",marginBottom:"6px"}}>DERNIÈRES DÉCISIONS</div>
+          {decisions.map(t => <div key={t.id} style={{fontSize:"11px",color:"#D1D5DB",padding:"4px 0",borderTop:"1px solid rgba(255,255,255,0.08)"}}><b>{t.fields?.Name}</b> — {t.fields?.["Qui paie"]}</div>)}
+        </div>)}
+      </div>
+    </div>
+  );
+}
+
 function ModalGestionDevis({ tickets, onClose, onRefresh }) {
   const [sousOnglet, setSousOnglet] = React.useState("a_faire");
   const [agenceFiltreDevis, setAgenceFiltreDevis] = React.useState("global");
@@ -6303,6 +6356,8 @@ function Dashboard({ agenceAccess, onClose }) {
     });
   }, []);
   const [showModalGestionDevis, setShowModalGestionDevis] = React.useState(false);
+  const [showQuiPaie, setShowQuiPaie] = React.useState(false);
+  const nbQuiPaieAValider = tickets.filter(t => { const q = lireQuiPaie(t); return q && q.decision === "a_valider"; }).length;
   const [showModalNotes, setShowModalNotes] = React.useState(false);
   const [successTicket, setSuccessTicket] = React.useState(null);
   const [modalAnnulation, setModalAnnulation] = React.useState(null);
@@ -7421,6 +7476,9 @@ function Dashboard({ agenceAccess, onClose }) {
           onBack={() => { setShowModalMiseEnService(false); setShowModalDirigeant(true); }}
         />
       )}
+      {showQuiPaie && (
+        <ModalQuiPaie tickets={tickets} onClose={() => setShowQuiPaie(false)} onRefresh={charger}/>
+      )}
       {showModalGestionDevis && (
         <ModalGestionDevis
           tickets={tickets}
@@ -7503,6 +7561,10 @@ function Dashboard({ agenceAccess, onClose }) {
               RDV modifiés <span style={{background:"#fff",color:C.bleu,borderRadius:"10px",padding:"1px 7px",fontSize:"10px"}}>{stats.rdvModifies}</span>
             </button>
           )}
+          <button className="glass-btn" onClick={() => setShowQuiPaie(true)} title="Qui paie ? Décisions de facturation du SAV"
+            style={{padding:"8px 14px",fontSize:"12px",display:"flex",alignItems:"center",gap:"6px"}}>
+            Qui paie ? {nbQuiPaieAValider > 0 && <span style={{background:"var(--iko-primary)",color:"#fff",borderRadius:"10px",padding:"1px 6px",fontSize:"10px"}}>{nbQuiPaieAValider}</span>}
+          </button>
           <button className="glass-btn" onClick={() => setShowModalGestionDevis(true)}
             style={{padding:"8px 14px",fontSize:"12px",display:"flex",alignItems:"center",gap:"6px"}}>
             Devis {stats.devisEnAttente > 0 && <span style={{background:"var(--iko-primary)",color:"#fff",borderRadius:"10px",padding:"1px 6px",fontSize:"10px"}}>{stats.devisEnAttente}</span>}
