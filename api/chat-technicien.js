@@ -332,7 +332,7 @@ async function traiterAnalysePhoto(req, res, body, cle) {
     if (!reponse.ok) {
       const detail = await reponse.text();
       console.error("Erreur API Anthropic (analyse photo):", reponse.status, detail);
-      return res.status(502).json({ erreur: "Analyse photo momentanément indisponible." });
+      return res.status(502).json({ erreur: "Analyse automatique indisponible pour le moment : la photo est bien enregistrée." });
     }
 
     const data = await reponse.json();
