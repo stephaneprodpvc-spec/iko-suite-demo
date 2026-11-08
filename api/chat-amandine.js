@@ -306,7 +306,7 @@ async function obtenirAgencesClient(clientId, clientNom, nombreAgences) {
     // ARRAYJOIN() sur un lien renvoie le NOM affiche (pas l'ID) : on filtre par
     // nom, puis on verifie le lien par ID sur les enregistrements recus.
     const plafond = Math.max(1, Math.min(10, parseInt(nombreAgences, 10) || 10));
-    const formule = encodeURIComponent('AND(FIND("' + String(clientNom).replace(/"/g, '\\"') + '", ARRAYJOIN({Client})), {Actif}=1)');
+    const formule = encodeURIComponent('AND(FIND("' + String(clientNom).replace(/\\/g, "\\\\").replace(/"/g, '\\"') + '", ARRAYJOIN({Client})), {Actif}=1)');
     const url = "https://api.airtable.com/v0/" + AIRTABLE_BASE + "/" + encodeURIComponent("Agences") +
       "?filterByFormula=" + formule + "&maxRecords=50";
     const r = await fetch(url, { headers: airtableHeaders() });
@@ -331,7 +331,7 @@ async function obtenirAgencesClient(clientId, clientNom, nombreAgences) {
 async function resoudreClient(slug) {
   if (!slug) return null;
   try {
-    const formule = encodeURIComponent('{Slug}="' + String(slug).replace(/"/g, '\\"') + '"');
+    const formule = encodeURIComponent('{Slug}="' + String(slug).replace(/\\/g, "\\\\").replace(/"/g, '\\"') + '"');
     const r = await fetch("https://api.airtable.com/v0/" + AIRTABLE_BASE + "/Clients?filterByFormula=" + formule + "&maxRecords=1", { headers: airtableHeaders() });
     if (!r.ok) return null;
     const json = await r.json();
@@ -420,8 +420,8 @@ async function reserverCreneauServeur(input, clientId) {
       const dispo = await creneauxLibres(ctxPl, ident, { agence: input.agence, date: dateIso });
       let duJour = (dispo.creneaux || []).filter(function (c) { return c.date === dateIso; });
       // La période demandée est respectée : on ne bascule JAMAIS un client du matin vers l'après-midi sans qu'il le sache.
-      const estMatin = function (c) { const t = String(c.creneau || ""); return t.indexOf("Matin") === 0 || (/^d{1,2}h/.test(t) && parseInt(t, 10) < 13); };
-      const estAprem = function (c) { const t = String(c.creneau || ""); return t.indexOf("Après-midi") === 0 || (/^d{1,2}h/.test(t) && parseInt(t, 10) >= 13); };
+      const estMatin = function (c) { const t = String(c.creneau || ""); return t.indexOf("Matin") === 0 || (/^\d{1,2}h/.test(t) && parseInt(t, 10) < 13); };
+      const estAprem = function (c) { const t = String(c.creneau || ""); return t.indexOf("Après-midi") === 0 || (/^\d{1,2}h/.test(t) && parseInt(t, 10) >= 13); };
       if (input.rdv_periode === "matin") duJour = duJour.filter(estMatin);
       else if (input.rdv_periode === "apres_midi") duJour = duJour.filter(estAprem);
       else if (duJour.some(estMatin) && duJour.some(estAprem)) {
@@ -620,7 +620,7 @@ async function executerOutil(nom, input, clientId, tradeId, agencesObjets, photo
     const recherche = String(input.recherche || "").trim().slice(0, 100);
     if (!recherche) return { trouve: false };
     try {
-      const formuleFicheBase = "OR(FIND(LOWER(\"" + recherche.replace(/"/g, '\\"') + "\"),LOWER({Client})),FIND(\"" + recherche.replace(/"/g, '\\"') + "\",{Téléphone}))";
+      const formuleFicheBase = "OR(FIND(LOWER(\"" + recherche.replace(/\\/g, "\\\\").replace(/"/g, '\\"') + "\"),LOWER({Client})),FIND(\"" + recherche.replace(/\\/g, "\\\\").replace(/"/g, '\\"') + "\",{Téléphone}))";
       const formuleFiche = filtreAvecClientServeur(formuleFicheBase, clientId);
       const urlFiches = "https://api.airtable.com/v0/" + AIRTABLE_BASE + "/" + encodeURIComponent("Métrés") +
         "?filterByFormula=" + encodeURIComponent(formuleFiche) +

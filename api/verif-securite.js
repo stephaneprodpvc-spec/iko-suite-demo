@@ -179,7 +179,7 @@ function signRefreshToken(user, tokenId) {
 }
 
 async function lireUtilisateurParIdentifiant(identifiant) {
-  const formule = "LOWER({Identifiant})=\"" + identifiant.toLowerCase().replace(/"/g, '\\"') + "\"";
+  const formule = "LOWER({Identifiant})=\"" + identifiant.toLowerCase().replace(/\\/g, "\\\\").replace(/"/g, '\\"') + "\"";
   const url = "https://api.airtable.com/v0/" + AIRTABLE_BASE + "/" + encodeURIComponent(UTILISATEURS_TABLE) +
     "?filterByFormula=" + encodeURIComponent(formule) + "&maxRecords=1";
   const r = await fetch(url, { headers: airtableHeaders() });
@@ -544,7 +544,7 @@ async function preparerIko(clientId, identifiantDemande) {
   // --- Agences : etat des lieux (comparaison par nom + lien Client verifie par ID) ---
   let existantes = [];
   if (nom) {
-    const formuleAg = 'FIND("' + nom.replace(/"/g, '\\"') + '", ARRAYJOIN({Client}))';
+    const formuleAg = 'FIND("' + nom.replace(/\\/g, "\\\\").replace(/"/g, '\\"') + '", ARRAYJOIN({Client}))';
     const dataAg = await lireJsonAirtable(base + encodeURIComponent("Agences") + "?filterByFormula=" + encodeURIComponent(formuleAg) + "&maxRecords=50");
     existantes = (dataAg.records || [])
       .filter((a) => Array.isArray(a.fields && a.fields["Client"]) && a.fields["Client"].includes(clientId))

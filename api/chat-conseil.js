@@ -64,7 +64,7 @@ async function obtenirAgencesClient(clientId) {
 async function resoudreClient(slug) {
   if (!slug) return null;
   try {
-    const formule = encodeURIComponent('{Slug}="' + String(slug).replace(/"/g, '\\"') + '"');
+    const formule = encodeURIComponent('{Slug}="' + String(slug).replace(/\\/g, "\\\\").replace(/"/g, '\\"') + '"');
     const r = await fetch("https://api.airtable.com/v0/" + AIRTABLE_BASE + "/Clients?filterByFormula=" + formule + "&maxRecords=1", { headers: airtableHeaders() });
     if (!r.ok) return null;
     const json = await r.json();

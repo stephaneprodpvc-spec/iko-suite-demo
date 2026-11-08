@@ -475,7 +475,7 @@ async function relayerWebhook(req, res, urlCible, actionsAutorisees, ctx) {
     if (slugClient && ctx) clientARattacher = slugClient; // resolu ci-dessous
     if (slugClient && corpsRelaye.agence && ctx) {
       try {
-        const echap = (v) => String(v).replace(/"/g, '\\"');
+        const echap = (v) => String(v).replace(/\\/g, "\\\\").replace(/"/g, '\\"');
         const rc = await fetch('https://api.airtable.com/v0/' + ctx.baseId + '/Clients?filterByFormula=' + encodeURIComponent('{Slug}="' + echap(slugClient) + '"') + '&maxRecords=1', { headers: ctx.headers });
         const recClient = ((await rc.json()).records || [])[0];
         if (recClient && recClient.fields && recClient.fields['Nom client']) {
@@ -975,7 +975,7 @@ export default async function handler(req, res) {
     if (slugDemande) {
       const segmentsSlug = subPathRaw.split('/').filter(Boolean);
       const recordIdActuel = segmentsSlug[1];
-      const slugEchappe = slugDemande.replace(/"/g, '\\"');
+      const slugEchappe = slugDemande.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
       let formuleSlug = 'LOWER({Slug})=LOWER("' + slugEchappe + '")';
       if (recordIdActuel) {
         formuleSlug = 'AND(' + formuleSlug + ', RECORD_ID()!="' + recordIdActuel + '")';
@@ -1154,7 +1154,7 @@ export default async function handler(req, res) {
         // navigateur, aucun second appel nécessaire).
         const nomTenantPC = (recClientSessionPC.fields || {})['Nom client'];
         if (!nomTenantPC) return res.status(403).json({ error: 'Accès refusé : tenant de session incomplet.' });
-        const formuleTenantPC = 'FIND("' + String(nomTenantPC).replace(/"/g, '\\"') + '", ARRAYJOIN({Compte client}))';
+        const formuleTenantPC = 'FIND("' + String(nomTenantPC).replace(/\\/g, "\\\\").replace(/"/g, '\\"') + '", ARRAYJOIN({Compte client}))';
         rest.filterByFormula = rest.filterByFormula ? 'AND(' + rest.filterByFormula + ', ' + formuleTenantPC + ')' : formuleTenantPC;
       } else if (req.method === 'POST') {
         // Création : stamping serveur systématique, jamais de confiance
@@ -1223,7 +1223,7 @@ export default async function handler(req, res) {
       } else if (req.method === 'GET') {
         const nomTenantISAV = (recClientSessionISAV.fields || {})['Nom client'];
         if (!nomTenantISAV) return res.status(403).json({ error: 'Accès refusé : tenant de session incomplet.' });
-        const formuleTenantISAV = 'FIND("' + String(nomTenantISAV).replace(/"/g, '\\"') + '", ARRAYJOIN({Compte client}))';
+        const formuleTenantISAV = 'FIND("' + String(nomTenantISAV).replace(/\\/g, "\\\\").replace(/"/g, '\\"') + '", ARRAYJOIN({Compte client}))';
         rest.filterByFormula = rest.filterByFormula ? 'AND(' + rest.filterByFormula + ', ' + formuleTenantISAV + ')' : formuleTenantISAV;
       } else if (req.method === 'POST') {
         if (!req.body) req.body = {};
@@ -1428,7 +1428,7 @@ export default async function handler(req, res) {
         return res.status(502).json({ error: 'Erreur en résolvant le tenant de session.', details: String(err) });
       }
       if (!nomTenantListe) return res.status(403).json({ error: 'Accès refusé : tenant de session incomplet.' });
-      const formuleTenantListe = 'FIND("' + String(nomTenantListe).replace(/"/g, '\\"') + '", ARRAYJOIN({' + conf.champ + '}))';
+      const formuleTenantListe = 'FIND("' + String(nomTenantListe).replace(/\\/g, "\\\\").replace(/"/g, '\\"') + '", ARRAYJOIN({' + conf.champ + '}))';
       rest.filterByFormula = rest.filterByFormula ? 'AND(' + rest.filterByFormula + ', ' + formuleTenantListe + ')' : formuleTenantListe;
     } else if (req.method === 'POST') {
       // Création : si le champ tenant est explicitement fourni par le
@@ -1562,7 +1562,7 @@ export default async function handler(req, res) {
         // que le correctif liste Métrés de ce jalon — cf. plus haut).
         let idsMetresDuTenant = [];
         try {
-          const formuleMetresTenant = 'FIND("' + String(nomTenantOM).replace(/"/g, '\\"') + '", ARRAYJOIN({Compte client}))';
+          const formuleMetresTenant = 'FIND("' + String(nomTenantOM).replace(/\\/g, "\\\\").replace(/"/g, '\\"') + '", ARRAYJOIN({Compte client}))';
           const rMetresOM = await fetch('https://api.airtable.com/v0/' + baseId + '/' + encodeURIComponent('Métrés') + '?filterByFormula=' + encodeURIComponent(formuleMetresTenant) + '&maxRecords=500', { headers });
           if (rMetresOM.ok) {
             const jsonMetresOM = await rMetresOM.json();
@@ -1685,7 +1685,7 @@ export default async function handler(req, res) {
           return res.status(502).json({ error: 'Erreur en résolvant le tenant de session.', details: String(err) });
         }
         if (!nomTenant) return res.status(403).json({ error: 'Accès refusé : tenant de session incomplet.' });
-        const formuleTenantTicket = 'FIND("' + String(nomTenant).replace(/"/g, '\\"') + '", ARRAYJOIN({Compte client}))';
+        const formuleTenantTicket = 'FIND("' + String(nomTenant).replace(/\\/g, "\\\\").replace(/"/g, '\\"') + '", ARRAYJOIN({Compte client}))';
         rest.filterByFormula = rest.filterByFormula ? 'AND(' + rest.filterByFormula + ', ' + formuleTenantTicket + ')' : formuleTenantTicket;
       } else {
         // PATCH/DELETE/POST sans recordId sur cette route : aucun usage
