@@ -950,6 +950,14 @@
         <input type="number" id="fMontantDiag" min="0" step="0.01" placeholder="Ex : 45.00" style="width:100%;padding:12px 14px;border-radius:13px;border:1px solid var(--border);background:rgba(255,255,255,0.04);color:var(--texte);font-size:13.5px;outline:none;font-family:inherit;">
         <div class="hint" style="font-size:11px;color:var(--texte-faint);margin-top:5px;">Facturé au client non garanti et non existant si le technicien n'a pas le matériel sur place. Déduit automatiquement si le devis proposé ensuite est accepté.</div>
 
+        <label>« Qui paie ? » : qui décide pour la facturation du SAV</label>
+        <select id="fQuiPaieMode">
+          <option value="ia">IKO décide seul quand les preuves sont claires</option>
+          <option value="valider">Le responsable valide toutes les décisions</option>
+        </select>
+        <input type="number" id="fQuiPaieSeuil" min="0" step="1" placeholder="Seuil en € : au-dessus, le responsable valide (vide = aucun seuil)" style="width:100%;margin-top:8px;padding:12px 14px;border-radius:13px;border:1px solid var(--border);background:rgba(255,255,255,0.04);color:var(--texte);font-size:13.5px;outline:none;font-family:inherit;">
+        <div class="hint" style="font-size:11px;color:var(--texte-faint);margin-top:5px;">Cas douteux (preuve ou garantie manquante) : toujours envoyés au responsable. Réglage enregistré avec la fiche.</div>
+
         <label>Lien avis Google (facultatif)</label>
         <input type="url" id="fLienGoogle" placeholder="https://g.page/r/…/review" style="width:100%;padding:12px 14px;border-radius:13px;border:1px solid var(--border);background:rgba(255,255,255,0.04);color:var(--texte);font-size:13.5px;outline:none;font-family:inherit;">
         <div class="hint" style="font-size:11px;color:var(--texte-faint);margin-top:5px;margin-bottom:12px;">Proposé automatiquement aux clients qui donnent 4 ou 5 étoiles après leur SAV.</div>
@@ -2016,6 +2024,8 @@ function chargerDansFormulaire(id){
   document.getElementById("fNbAgences").value = f["Nombre agences"] || 1;
   document.getElementById("fMontantDiag").value = f["Montant diagnostic HT"] != null ? f["Montant diagnostic HT"] : "";
   document.getElementById("fLienGoogle").value = f["Lien avis Google"] || "";
+  document.getElementById("fQuiPaieMode").value = /valider/i.test(f["Qui paie mode"] || "") ? "valider" : "ia";
+  document.getElementById("fQuiPaieSeuil").value = f["Qui paie seuil"] ? f["Qui paie seuil"] : "";
   setModulesActifs(f["Modules actifs"]);
   dessinerDiagramme();
   document.getElementById("submitBtn").textContent = "Enregistrer les modifications";
@@ -3093,6 +3103,7 @@ function reinitialiserFormulaire(){
   document.getElementById("diagramWrap").style.display = "none";
   document.getElementById("fNbAgences").value = 1;
   document.getElementById("fMontantDiag").value = "";
+  document.getElementById("fQuiPaieMode").value = "ia"; document.getElementById("fQuiPaieSeuil").value = "";
   document.getElementById("fLienGoogle").value = "";
   document.getElementById("agencesWrap").style.display = "none";
   document.getElementById("utilisateursWrap").style.display = "none";
@@ -3143,6 +3154,8 @@ document.getElementById("clientForm").addEventListener("submit", function(e){
     "Ville": document.getElementById("fVille").value.trim(),
     "Nombre agences": Math.max(1, Math.min(10, parseInt(document.getElementById("fNbAgences").value, 10) || 1)),
     "Montant diagnostic HT": document.getElementById("fMontantDiag").value.trim() === "" ? null : Math.max(0, parseFloat(document.getElementById("fMontantDiag").value) || 0),
+    "Qui paie mode": document.getElementById("fQuiPaieMode").value,
+    "Qui paie seuil": document.getElementById("fQuiPaieSeuil").value.trim() === "" ? null : Math.max(0, parseInt(document.getElementById("fQuiPaieSeuil").value, 10) || 0),
     "Lien avis Google": /^https?:\/\//.test(document.getElementById("fLienGoogle").value.trim()) ? document.getElementById("fLienGoogle").value.trim() : null
   };
   if (logoUrl) fields["Logo"] = [{ url: logoUrl }];
