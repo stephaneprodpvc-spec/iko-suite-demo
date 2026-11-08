@@ -850,11 +850,10 @@ sait deja qui tu es, ce n'est pas ta premiere reunion avec eux.
     let suggestionsReponse = [];
     const bas = texte.toLowerCase();
     if (!ticketCreeActuel) {
-      if (/(convient|je l'enregistre|je confirme|c'est bien ça|est-ce correct|d'accord)[^.?!]*?s*$/i.test(texte)) suggestionsReponse = ["Oui, c'est parfait", "Non, je veux modifier"];
-      else {
-        const citees = propositionsDates.filter(function (d) { return bas.indexOf(d.toLowerCase()) !== -1; });
-        if (citees.length >= 2) suggestionsReponse = citees;
-      }
+      // Dates citees d'abord (choix d'un creneau) ; sinon question de confirmation (la phrase finale peut se terminer par « ? »).
+      const citees = propositionsDates.filter(function (d) { return bas.indexOf(d.toLowerCase()) !== -1; });
+      if (citees.length >= 2) suggestionsReponse = citees;
+      else if (/(convient|je l'enregistre|je confirme|c'est bien ça|est-ce correct|d'accord)[^.?!]*\??\s*$/i.test(texte) && !/\b(quel|quelle|quand|lequel|laquelle)\b/i.test(texte.split(/[.!]/).pop() || "")) suggestionsReponse = ["Oui, c'est parfait", "Non, je veux modifier"];
     }
     return res.status(200).json({ reponse: avecSecurite(texte, convertis), ...(suggestionsReponse.length ? { suggestions: suggestionsReponse } : {}), ...(ticketCreeActuel ? { ticket_cree: ticketCreeActuel } : {}) });
   }

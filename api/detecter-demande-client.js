@@ -233,9 +233,7 @@ async function poserDateAutomatiquement(ticket, identClient, agence, dateIso, pe
     if (fp.Statut === "Pris" || fp.Statut === "Bloqué") return null;
     const prise = await fetch("https://api.airtable.com/v0/" + AIRTABLE_BASE + "/Planning/" + encodeURIComponent(choisi.id), { method: "PATCH", headers: airtableHeaders(), body: JSON.stringify({ fields: { Statut: "Pris" } }) });
     if (!prise.ok) return null;
-    if (f.PlanningID) {
-      await fetch("https://api.airtable.com/v0/" + AIRTABLE_BASE + "/Planning/" + encodeURIComponent(f.PlanningID), { method: "PATCH", headers: airtableHeaders(), body: JSON.stringify({ fields: { Statut: "Libre" } }) }).catch(function () {});
-    }
+    // L'ancien créneau n'est libéré qu'APRÈS la mise à jour du ticket (voir plus bas) ; si le ticket échoue, on relâche le nouveau.
     const jourLabel = new Date(dateIso + "T12:00:00").toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" });
     const nouveauCreneau = (choisi.creneau || "") + " — " + jourLabel;
     const ancien = f["Créneau"] || "";
@@ -247,7 +245,13 @@ async function poserDateAutomatiquement(ticket, identClient, agence, dateIso, pe
       body: JSON.stringify({ fields: { "Créneau": nouveauCreneau, PlanningID: choisi.id, Statut: ["En cours", "Devis à faire", "Devis envoyé", "Devis - Suivi", "Devis - Attente fournisseur", "Attente pièce"].includes(f.Statut) ? f.Statut : "Nouveau", "Proposition auto en attente": false, "Proposition auto créneau": "", "Proposition auto mois": "",
         "RDV modifié - notif technicien": true, "En route depuis": null, "Arrivée estimée": null, "Réponse agence": reponseExistante ? reponseExistante + "\n\n[" + horodatage + "]\n" + confirmation : "[" + horodatage + "]\n" + confirmation } }),
     });
-    if (!patch.ok) return null;
+    if (!patch.ok) {
+      await fetch("https://api.airtable.com/v0/" + AIRTABLE_BASE + "/Planning/" + encodeURIComponent(choisi.id), { method: "PATCH", headers: airtableHeaders(), body: JSON.stringify({ fields: { Statut: "Libre" } }) }).catch(function () {});
+      return null;
+    }
+    if (f.PlanningID && f.PlanningID !== choisi.id) {
+      await fetch("https://api.airtable.com/v0/" + AIRTABLE_BASE + "/Planning/" + encodeURIComponent(f.PlanningID), { method: "PATCH", headers: airtableHeaders(), body: JSON.stringify({ fields: { Statut: "Libre" } }) }).catch(function () {});
+    }
     // Prévenir : mail à l'agence (Make) et notification en direct aux techniciens.
     try {
       const corps = { marque: "iko", action: "rdv_modifie", ticket: f.Name, agence: f.Agence || agence, ancien_creneau: ancien, nouveau_creneau: nouveauCreneau, auteur_modification: auteur || "client (déplacé automatiquement par IKO)" };

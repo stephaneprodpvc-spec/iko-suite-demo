@@ -6756,11 +6756,21 @@ function Dashboard({ agenceAccess, onClose }) {
   };
 
   const updateStatus = async (id, newStatus) => {
+    const ancienStatut = (tickets.find(t => t.id===id)?.fields?.Statut);
     setTickets(prev => prev.map(t => t.id===id?{...t,fields:{...t.fields,Statut:newStatus}}:t));
-    await fetch('/api/airtable/tenant/Tickets SAV/'+id, {
-      method:'PATCH', headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({fields:{Statut:newStatus}})
-    });
+    let ok = false;
+    try {
+      const r = await fetch('/api/airtable/tenant/Tickets SAV/'+id, {
+        method:'PATCH', headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({fields:{Statut:newStatus}})
+      });
+      ok = r.ok;
+    } catch (e) { console.error(e); }
+    if (!ok) {
+      // Échec d'enregistrement : on remet l'ancien statut à l'écran (jamais un statut affiché qui n'existe pas dans la base).
+      setTickets(prev => prev.map(t => t.id===id?{...t,fields:{...t.fields,Statut:ancienStatut}}:t));
+      window.ikoMessage("Le changement de statut n'a pas pu être enregistré. Réessaie dans un instant.");
+    }
   };
 
   // Techniciens de l'équipe (table Techniciens, filtrée par client côté serveur) et charge en cours par technicien.

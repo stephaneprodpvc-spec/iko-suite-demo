@@ -275,7 +275,7 @@ const TOOLS = [
     input_schema: {
       type: "object",
       properties: {
-        agence: { type: "string", enum: [...AGENCES_VALIDES, "toutes"] },
+        agence: { type: "string", description: "Nom exact de l'agence comme dans la liste fournie (ex : Agence 1, Agence 5) ou toutes" },
       },
       required: ["agence"],
     },
@@ -366,7 +366,7 @@ const TOOLS = [
     input_schema: {
       type: "object",
       properties: {
-        agence: { type: "string", enum: AGENCES_VALIDES },
+        agence: { type: "string", description: "Nom exact de l'agence (ex : Agence 1, Agence 5)" },
         date_debut: { type: "string", description: "Format AAAA-MM-JJ." },
         date_fin: { type: "string", description: "Format AAAA-MM-JJ." },
         motif: { type: "string", enum: MOTIFS_BLOCAGE_VALIDES },
@@ -380,7 +380,7 @@ const TOOLS = [
     input_schema: {
       type: "object",
       properties: {
-        agence: { type: "string", enum: AGENCES_VALIDES },
+        agence: { type: "string", description: "Nom exact de l'agence (ex : Agence 1, Agence 5)" },
       },
       required: [],
     },
@@ -445,7 +445,7 @@ const TOOLS = [
     input_schema: {
       type: "object",
       properties: {
-        agence: { type: "string", enum: AGENCES_VALIDES },
+        agence: { type: "string", description: "Nom exact de l'agence (ex : Agence 1, Agence 5)" },
         ticket_id: { type: "string", description: "Identifiant exact (champ id) du ticket du client concerne, si designe : l'agence du ticket est alors utilisee." },
       },
       required: [],
