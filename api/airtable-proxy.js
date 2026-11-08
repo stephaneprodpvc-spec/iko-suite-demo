@@ -253,6 +253,7 @@ const ACTIONS_WEBHOOK_AUTORISEES = [
   'devis_auto_envoye', 'devis_deblocage', 'demande_note', 'rdv_commercial',
   'technicien_en_route', 'rappel_veille', 'demande_paiement', 'avis_google',
   'piece_a_commander', 'piece_commandee', 'piece_recue', 'entretien_rappel',
+  'qui_paie_client',
 ];
 // Whitelist separee et distincte pour le scenario metreur/BE (URL Make
 // differente ci-dessus) : jamais melangee avec la liste principale.
@@ -369,6 +370,42 @@ async function handlerPush(req, res, baseId, headers, session) {
   }
 }
 
+// « Qui paie ? » : envoie au client le message de facturation du déplacement. Le texte, le destinataire et la décision
+// sont lus sur le ticket (Airtable), jamais pris du navigateur. Une seule fois par ticket. Exige une session connectée.
+async function envoyerQuiPaieClient(req, res, urlCible, ctx) {
+  try {
+    if (!ctx || !ctx.connecte) return res.status(401).json({ error: 'Connexion requise.' });
+    const num = String((req.body && req.body.ticket) || '').trim().toUpperCase();
+    if (!/^[A-Z0-9-]{4,30}$/.test(num)) return res.status(400).json({ error: 'Ticket invalide.' });
+    const r = await fetch('https://api.airtable.com/v0/' + ctx.baseId + '/Tickets%20SAV?filterByFormula=' + encodeURIComponent('UPPER({Name})="' + num + '"') + '&maxRecords=1', { headers: ctx.headers });
+    if (!r.ok) return res.status(502).json({ error: 'Ticket illisible.' });
+    const rec = ((await r.json()).records || [])[0];
+    if (!rec) return res.status(404).json({ error: 'Ticket introuvable.' });
+    const f = rec.fields || {};
+    if (ctx.tenantId && !(Array.isArray(f['Compte client']) && f['Compte client'].includes(ctx.tenantId))) return res.status(403).json({ error: 'Accès refusé.' });
+    let q = null; try { q = JSON.parse(f['Qui paie détail'] || 'null'); } catch (e) { q = null; }
+    const ignorer = (raison) => res.status(200).json({ ok: true, envoye: false, raison });
+    if (!q || !['auto', 'valide'].includes(q.decision)) return ignorer('decision-non-validee');
+    if (q.payeur !== 'client' || !q.deplacementFacture || !q.texteFacturation) return ignorer('rien-a-facturer-au-client');
+    if (q.messageEnvoye) return ignorer('deja-envoye');
+    const corps = { ticket: num, texte_facturation: String(q.texteFacturation) };
+    const clientDuTicket = await enrichirDepuisTicket(corps, ctx);
+    if (corps.desinscrit) return ignorer('client-desinscrit');
+    if (!/^[^\s@,;<>"']+@[^\s@,;<>"']+\.[^\s@,;<>"']+$/.test(String(corps['e-mail'] || '').trim())) return ignorer('pas-d-email');
+    const marque = await marqueClient(clientDuTicket || ctx.tenantId || null);
+    ajouterMailsAuCorps(corps, 'qui_paie_client', marque);
+    corps.action = 'reponse_agence'; // route Make existante : retrouve le ticket, envoie mail_objet / mail_html à son e-mail
+    const w = await fetch(urlCible, { method: 'POST', headers: enteteMake({ 'Content-Type': 'application/json' }), body: JSON.stringify(corps) });
+    if (!w.ok) return res.status(502).json({ error: 'Envoi impossible.' });
+    q.messageEnvoye = new Date().toISOString();
+    await fetch('https://api.airtable.com/v0/' + ctx.baseId + '/Tickets%20SAV/' + rec.id, { method: 'PATCH', headers: { ...ctx.headers, 'Content-Type': 'application/json' }, body: JSON.stringify({ fields: { 'Qui paie détail': JSON.stringify(q) } }) });
+    return res.status(200).json({ ok: true, envoye: true });
+  } catch (err) {
+    console.error('Qui paie : envoi au client', err);
+    return res.status(502).json({ error: 'Erreur envoi.' });
+  }
+}
+
 // Relais webhook partage entre /webhook (scenario principal) et
 // /webhook-metreur (scenario distinct) : whitelist + URL cible passees en
 // parametre pour ne jamais melanger les deux. Supporte GET (query string
@@ -409,6 +446,10 @@ async function relayerWebhook(req, res, urlCible, actionsAutorisees, ctx) {
   // AUTRE valeur doit figurer dans la whitelist fournie.
   if (actionDemandee !== undefined && !actionsAutorisees.includes(actionDemandee)) {
     return res.status(400).json({ error: 'Action non reconnue.' });
+  }
+  // « Qui paie ? » : message de facturation au client, envoyé par la route Make « reponse_agence » (mail prêt à l'emploi).
+  if (actionDemandee === 'qui_paie_client' && actionsAutorisees === ACTIONS_WEBHOOK_AUTORISEES) {
+    return envoyerQuiPaieClient(req, res, urlCible, ctx);
   }
   // Nouvelle demande SAV (pas de champ "action") : on ajoute au payload Make le
   // lien de suivi personnel du client, genere ICI (cle serveur). Toujours
@@ -835,7 +876,7 @@ export default async function handler(req, res) {
   }
 
   if (subPathRaw === 'webhook') {
-    return relayerWebhook(req, res, MAKE_WEBHOOK_URL, ACTIONS_WEBHOOK_AUTORISEES, { baseId, headers, tenantId: session && session.tenantId });
+    return relayerWebhook(req, res, MAKE_WEBHOOK_URL, ACTIONS_WEBHOOK_AUTORISEES, { baseId, headers, tenantId: session && session.tenantId, connecte: !!(session && session.userId) });
   }
 
   if (subPathRaw === 'creneaux') {

@@ -2301,6 +2301,9 @@ function ModalQuiPaie({ tickets, onClose, onRefresh }) {
     try {
       const r = await fetch('/api/airtable/tenant/Tickets%20SAV/' + t.id, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ fields: { "Qui paie": resume, "Qui paie détail": JSON.stringify(nouveau) } }) });
       if (!r.ok) throw new Error("HTTP " + r.status);
+      if (nouveau.payeur === "client" && nouveau.deplacementFacture && nouveau.texteFacturation) {
+        try { await fetch('/api/airtable/webhook', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'qui_paie_client', ticket: t.fields?.Name }) }); } catch (e) { /* non bloquant */ }
+      }
       if (onRefresh) await onRefresh();
     } catch (e) { setErreur("Décision non enregistrée (" + e.message + "). Réessaie."); }
     setEnCours(null);

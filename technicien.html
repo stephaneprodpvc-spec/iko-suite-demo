@@ -2519,6 +2519,10 @@ function ModalAction({ ticket, onClose, onDone }) {
         setSaving(false);
         return;
       }
+      // « Qui paie ? » : décision claire (prise seule par IKO) et client à facturer -> message au client (le serveur relit le ticket et décide).
+      if ((mode === "terminer" || mode === "devis_place") && causeSav && quiPaie && quiPaie.decision === "auto" && quiPaie.texteFacturation) {
+        try { await fetch('/api/airtable/webhook', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'qui_paie_client', ticket: ticket.fields?.Name }) }); } catch (e) { /* non bloquant */ }
+      }
       // Cohérence du planning : quand le technicien déplace le rendez-vous, l'ancien
       // créneau doit être libéré et le nouveau réservé (comme côté client/tableau de bord),
       // sinon l'agenda reste faux et le même créneau peut être reproposé à un autre client.

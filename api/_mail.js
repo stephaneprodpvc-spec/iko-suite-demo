@@ -148,6 +148,11 @@ export function construireMails(action, d, marque) {
           recap([['Produit', esc(d.produit)], ['Problème', esc(d.probleme)], ['Montant TTC', `<b style="font-size:18px;color:${lisible(OR, '#FFFFFF')};">${esc(d.montant)}</b>`]]) +
           (d.message ? encart(esc(d.message)) : '') + bouton('Consulter et signer mon devis', d.lien) +
           p('<span style="font-size:13px;color:#6B6B6B;">Vous pouvez accepter ou refuser le devis en ligne, en quelques clics.</span>') }) };
+    case 'qui_paie_client':
+      // Décision « Qui paie ? » : le texte vient du ticket (lu côté serveur), jamais du navigateur.
+      return { objet: `${t} : facturation du déplacement et du diagnostic`, html: cadre({ resume: 'Information sur la facturation de votre intervention.', bandeau: 'Service après-vente', titre: 'Facturation de votre intervention',
+        corps: bonjour(d) + p(`Suite à l'intervention de votre demande <b>${esc(t)}</b> :`) + encart(esc(d.texte_facturation)) +
+          p('<span style="font-size:13px;color:#6B6B6B;">Une question ? Répondez simplement à ce message, l\'agence reviendra vers vous.</span>') }) };
     case 'devis_signe':
     case 'devis_accepte':
       return { objet: `${t} : votre devis est signé`, html: cadre({ resume: 'Merci, votre devis est signé.', bandeau: 'Devis', titre: 'Votre devis est signé',
