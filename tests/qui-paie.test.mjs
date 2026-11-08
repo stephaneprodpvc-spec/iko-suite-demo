@@ -66,6 +66,18 @@ test("aucun montant inventé : sans montant déplacement, pas de texte de factur
   const r = decider({ cause: "Usure normale", nbPhotos: 1 });
   assert.equal(r.texteFacturation, ""); assert.equal(r.montantDeplacement, undefined);
 });
+test("garantie « N/A » : inconnue, donc à valider (on ne facture jamais le client sur une supposition)", () => {
+  assert.equal(etatGarantie("N/A"), "inconnue");
+  const r = decider({ cause: "Défaut produit", garantie: "N/A" });
+  assert.equal(r.decision, "a_valider"); assert.notEqual(r.payeur, "client");
+});
+test("les 5 types d'activité réels d'Airtable sont bien compris", () => {
+  assert.equal(typeActivite("Fabricant"), "fabricant non poseur");
+  assert.equal(typeActivite("Fabricant-poseur"), "fabricant-poseur");
+  assert.equal(typeActivite("Revendeur"), "distributeur");
+  assert.equal(typeActivite("Revendeur-poseur"), "poseur");
+  assert.equal(typeActivite("Artisan-poseur"), "poseur");
+});
 test("lecture des types d'activité et de la garantie", () => {
   assert.equal(typeActivite("Fabricant-poseur"), "fabricant-poseur");
   assert.equal(typeActivite("Fabricant non poseur"), "fabricant non poseur");

@@ -1425,7 +1425,7 @@ function SignaturePad({ onChange }) {
 }
 
 // Bloc affiché à la fin d'une intervention : alimente les analyses « coût du SAV » et le bon d'intervention signé.
-function BlocClotureTerrain({ cause, setCause, duree, setDuree, coutPieces, setCoutPieces, setSignature, quiPaie }) {
+function BlocClotureTerrain({ cause, setCause, duree, setDuree, coutPieces, setCoutPieces, setSignature, quiPaie, poseur, setPoseur }) {
   const lib = { fontSize:"11px", color:"#6B7280", display:"block", marginBottom:"6px", fontWeight:"700" };
   return (
     <div style={{marginBottom:"14px"}}>
@@ -1445,6 +1445,12 @@ function BlocClotureTerrain({ cause, setCause, duree, setDuree, coutPieces, setC
           <div style={{fontSize:"13px",fontWeight:"800",marginBottom:"4px"}}>{quiPaie.resume}</div>
           <div style={{fontSize:"11px",color:"#D1D5DB"}}>{quiPaie.raison}</div>
           {quiPaie.decision !== "auto" && quiPaie.raisonValidation && <div style={{fontSize:"11px",color:"#FF9A3C",marginTop:"4px",fontWeight:"700"}}>Envoyé au responsable pour validation ({quiPaie.raisonValidation}).{quiPaie.manque && quiPaie.manque.indexOf("photo") >= 0 ? " Ajoute une photo pour que ce soit décidé tout seul." : ""}</div>}
+        </div>
+      )}
+      {quiPaie && cause === "Erreur de pose" && quiPaie.payeur !== "entreprise" && setPoseur && (
+        <div style={{marginBottom:"12px"}}>
+          <label style={lib}>Qui a posé la menuiserie ? (nom du poseur)</label>
+          <input type="text" value={poseur || ""} onChange={e => setPoseur(e.target.value)} placeholder="Ex : Poseur Dupont SARL"/>
         </div>
       )}
       <div style={{display:"flex",gap:"10px",marginBottom:"12px"}}>
@@ -2042,6 +2048,7 @@ function ModalAction({ ticket, onClose, onDone }) {
     setPhotoChequeEnCours(false);
   };
   const [causeSav, setCauseSav] = React.useState("");
+  const [poseurSaisi, setPoseurSaisi] = React.useState(String(ticket.fields?.Poseur || ""));
   const [dureeMin, setDureeMin] = React.useState("");
   const [coutPieces, setCoutPieces] = React.useState("");
   const [signatureClient, setSignatureClient] = React.useState(null);
@@ -2060,7 +2067,7 @@ function ModalAction({ ticket, onClose, onDone }) {
     cause: causeSav,
     garantie: ticket.fields?.Garantie,
     typeActivite: window.IKO_CLIENT_INFO?.["Type d'activité"],
-    poseurConnu: !!(ticket.fields?.Poseur || ticket.fields?.["Nom poseur"]),
+    poseurConnu: !!String(poseurSaisi || "").trim(),
     nbPhotos: String(photosTicket || "").split(",").map(s => s.trim()).filter(Boolean).length,
     montantDeplacement: Number(window.IKO_CLIENT_INFO?.["Montant diagnostic HT"]) || 0,
     montantEnjeu: totalTTCAuto || 0,
@@ -2492,6 +2499,7 @@ function ModalAction({ ticket, onClose, onDone }) {
       if ((mode === "terminer" || mode === "devis_place") && causeSav) fields["Cause SAV"] = causeSav;
       // « Qui paie ? » : décision gardée dans le ticket (preuve). Nécessite les champs Airtable « Qui paie » et « Qui paie détail ».
       if ((mode === "terminer" || mode === "devis_place") && causeSav && quiPaie) {
+        if (causeSav === "Erreur de pose" && String(poseurSaisi || "").trim()) fields["Poseur"] = String(poseurSaisi).trim();
         fields["Qui paie"] = quiPaie.resume;
         fields["Qui paie détail"] = JSON.stringify({ payeur: quiPaie.payeur, deplacementFacture: quiPaie.deplacementFacture, montantDeplacement: quiPaie.montantDeplacement || 0, prevenirPoseur: quiPaie.prevenirPoseur, decision: quiPaie.decision, raison: quiPaie.raison, raisonValidation: quiPaie.raisonValidation || "", texteFacturation: quiPaie.texteFacturation, date: new Date().toISOString() });
       }
@@ -2778,7 +2786,7 @@ function ModalAction({ ticket, onClose, onDone }) {
               texteDicteBrut={texteDicteBrut} setTexteDicteBrut={setTexteDicteBrut}
               structurationEnCours={structurationEnCours} structurerCompteRendu={structurerCompteRendu}
               compteRenduStructure={compteRenduStructure} utiliserCompteRenduStructure={utiliserCompteRenduStructure}/>
-            <BlocClotureTerrain cause={causeSav} setCause={setCauseSav} duree={dureeMin} setDuree={setDureeMin} coutPieces={coutPieces} setCoutPieces={setCoutPieces} setSignature={setSignatureClient} quiPaie={quiPaie}/>
+            <BlocClotureTerrain cause={causeSav} setCause={setCauseSav} duree={dureeMin} setDuree={setDureeMin} coutPieces={coutPieces} setCoutPieces={setCoutPieces} setSignature={setSignatureClient} quiPaie={quiPaie} poseur={poseurSaisi} setPoseur={setPoseurSaisi}/>
             <button onClick={confirmer} disabled={saving}
               style={{width:"100%",padding:"14px",background:saving?"#D1D5DB":C.vert,color:saving?C.muted:"#fff",border:"none",borderRadius:"12px",fontSize:"14px",fontWeight:"900",cursor:saving?"not-allowed":"pointer"}}>
               {saving ? "⏳ Enregistrement..." : "✓ Confirmer — SAV terminé"}
@@ -2862,7 +2870,7 @@ function ModalAction({ ticket, onClose, onDone }) {
               structurationEnCours={structurationEnCours} structurerCompteRendu={structurerCompteRendu}
               compteRenduStructure={compteRenduStructure} utiliserCompteRenduStructure={utiliserCompteRenduStructure}/>
 
-            <BlocClotureTerrain cause={causeSav} setCause={setCauseSav} duree={dureeMin} setDuree={setDureeMin} coutPieces={coutPieces} setCoutPieces={setCoutPieces} setSignature={setSignatureClient} quiPaie={quiPaie}/>
+            <BlocClotureTerrain cause={causeSav} setCause={setCauseSav} duree={dureeMin} setDuree={setDureeMin} coutPieces={coutPieces} setCoutPieces={setCoutPieces} setSignature={setSignatureClient} quiPaie={quiPaie} poseur={poseurSaisi} setPoseur={setPoseurSaisi}/>
             <button onClick={confirmer} disabled={saving||!lignesAuto.length||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailAuto.trim())||!modePaiementPlace||!encaissementOk||photoChequeEnCours}
               style={{width:"100%",padding:"14px",background:(saving||!lignesAuto.length||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailAuto.trim())||!modePaiementPlace||!encaissementOk||photoChequeEnCours)?"#D1D5DB":C.vert,color:(saving||!lignesAuto.length)?C.muted:"#fff",border:"none",borderRadius:"12px",fontSize:"14px",fontWeight:"900",cursor:saving?"not-allowed":"pointer"}}>
               {saving ? "⏳ Enregistrement..." : "Confirmer devis, encaissement et intervention"}

@@ -27,7 +27,7 @@
     if (g === false) return 'non';
     var t = norm(g);
     if (!t) return 'inconnue';
-    if (/^non|hors|expir|n\/a/.test(t)) return 'non';
+    if (/^non|hors|expir/.test(t)) return 'non'; // « N/A » (garantie non demandée) reste « inconnue » : jamais facturer le client sur une supposition
     if (/^oui|sous garantie|garanti/.test(t)) return 'oui';
     return 'inconnue';
   }
