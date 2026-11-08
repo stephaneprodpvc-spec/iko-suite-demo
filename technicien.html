@@ -2455,14 +2455,7 @@ function ModalAction({ ticket, onClose, onDone }) {
         fields.Statut = "Annulé";
         fields.Commentaire = "Annulé : " + commentaire;
         fields["Raison annulation"] = commentaire.trim(); // exigé par le serveur pour toute annulation
-        const planningId = ticket.fields?.PlanningID;
-        if (planningId) {
-          await fetch('/api/airtable/Planning/'+planningId, {
-            method:'PATCH',
-            headers:{'Content-Type':'application/json'},
-            body:JSON.stringify({fields:{Statut:'Libre'}})
-          });
-        }
+        // Le créneau est libéré APRÈS l'enregistrement de l'annulation (plus bas) : si l'annulation échoue, le RDV reste réservé.
       } else if (mode === "piece") {
         fields.Statut = "Attente pièce";
         fields["Pièce à commander"] = pieceTexte.trim();
@@ -2534,6 +2527,10 @@ function ModalAction({ ticket, onClose, onDone }) {
       // Cohérence du planning : quand le technicien déplace le rendez-vous, l'ancien
       // créneau doit être libéré et le nouveau réservé (comme côté client/tableau de bord),
       // sinon l'agenda reste faux et le même créneau peut être reproposé à un autre client.
+      if (mode === "annuler" && ticket.fields?.PlanningID) {
+        try { await fetch('/api/airtable/Planning/' + ticket.fields.PlanningID, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ fields: { Statut: 'Libre' } }) }); }
+        catch (e) { console.error('Libération du créneau (annulation)', e); }
+      }
       if (mode === "piece" && ticket.fields?.PlanningID) {
         try {
           await fetch('/api/airtable/Planning/' + ticket.fields.PlanningID, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ fields: { Statut: 'Libre' } }) });
@@ -2548,10 +2545,14 @@ function ModalAction({ ticket, onClose, onDone }) {
             const libres = await window.IKO_creneaux.charger({ agence: ticket.fields?.Agence, creneau: newCreneau, date: newDate, admin: 1, clientId: window.IKO_CLIENT_ID });
             if (libres.length) nouveauPlanningId = libres[0].id;
           }
+          let reservationOk = true;
           if (nouveauPlanningId && nouveauPlanningId !== ancienPlanningId) {
-            await fetch('/api/airtable/Planning/' + nouveauPlanningId, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ fields: { Statut: 'Pris' } }) });
+            const rPris = await fetch('/api/airtable/Planning/' + nouveauPlanningId, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ fields: { Statut: 'Pris' } }) });
+            reservationOk = rPris.ok;
+            if (!rPris.ok) { console.error('Réservation du nouveau créneau refusée', rPris.status); nouveauPlanningId = ancienPlanningId; }
           }
-          if (ancienPlanningId && ancienPlanningId !== nouveauPlanningId) {
+          // L'ancien créneau n'est libéré que si le nouveau est bien réservé (ou s'il n'y en a pas besoin).
+          if (reservationOk && ancienPlanningId && ancienPlanningId !== nouveauPlanningId) {
             await fetch('/api/airtable/Planning/' + ancienPlanningId, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ fields: { Statut: 'Libre' } }) });
           }
           if (ancienPlanningId !== nouveauPlanningId) {
