@@ -989,15 +989,16 @@ function ModalRdv({ agenceAccess, onClose, onSuccess, initialAgence }) {
       let planningId = '';
       if (planJson.records?.length > 0) {
         planningId = planJson.records[0].id;
-        await fetch('/api/airtable/Planning/' + planningId, {
+        const rPris = await fetch('/api/airtable/Planning/' + planningId, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ fields: { Statut: 'Pris' } })
         });
+        if (!rPris.ok) { setError("Ce créneau n'a pas pu être réservé (déjà pris ?). Choisis un autre créneau."); setSaving(false); return; }
       }
       const urgentTexte = isUrgentProbleme(form.produit, form.probleme) ? "Oui" : "Non";
       const garantieTexte = form.garantie ? "Oui - Facture " + (form.facture || "") : "Non / Hors garantie";
-      await fetch(WEBHOOK, {
+      const rWebhook = await fetch(WEBHOOK, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -1009,6 +1010,13 @@ function ModalRdv({ agenceAccess, onClose, onSuccess, initialAgence }) {
           garantie: garantieTexte, facture: form.facture, urgent: urgentTexte, photos: '', planningId
         })
       });
+      if (!rWebhook.ok) {
+        // Le ticket n'a pas été créé : on relâche le créneau réservé et on le dit.
+        if (planningId) { try { await fetch('/api/airtable/Planning/' + planningId, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fields: { Statut: 'Libre' } }) }); } catch (e2) {} }
+        setError("Le rendez-vous n'a pas pu être créé. Réessaie dans un instant.");
+        setSaving(false);
+        return;
+      }
       try {
         await fetch('/api/airtable/push', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -7200,6 +7208,17 @@ function Dashboard({ agenceAccess, onClose }) {
   const confirmerAnnulation = async (ticket, motif) => {
     const fields = { Statut: "Annulé", Commentaire: "Annulé : " + motif.trim(), "Raison annulation": motif.trim() };
     const planningId = ticket?.fields?.PlanningID;
+    // 1) l'annulation est enregistrée ; 2) seulement ensuite le créneau est libéré (sinon un échec laisserait un RDV actif sans créneau réservé).
+    let ok = false;
+    try {
+      const r = await fetch('/api/airtable/tenant/Tickets SAV/'+ticket.id, {
+        method:'PATCH', headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({fields})
+      });
+      ok = r.ok;
+    } catch(e) { console.error(e); }
+    if (!ok) { window.ikoMessage("L'annulation n'a pas pu être enregistrée. Réessaie dans un instant."); return; }
+    setTickets(prev => prev.map(t => t.id===ticket.id?{...t,fields:{...t.fields,...fields}}:t));
     if (planningId) {
       try {
         await fetch('/api/airtable/Planning/'+planningId, {
@@ -7208,16 +7227,22 @@ function Dashboard({ agenceAccess, onClose }) {
         });
       } catch(e) { console.error(e); }
     }
-    setTickets(prev => prev.map(t => t.id===ticket.id?{...t,fields:{...t.fields,...fields}}:t));
-    await fetch('/api/airtable/tenant/Tickets SAV/'+ticket.id, {
-      method:'PATCH', headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({fields})
-    });
     setModalAnnulation(null);
   };
 
   const confirmerSuppression = async (ticket) => {
     const planningId = ticket?.fields?.PlanningID;
+    const fields = { Statut: "Supprimé" };
+    let ok = false;
+    try {
+      const r = await fetch('/api/airtable/tenant/Tickets SAV/'+ticket.id, {
+        method:'PATCH', headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({fields})
+      });
+      ok = r.ok;
+    } catch(e) { console.error(e); }
+    if (!ok) { window.ikoMessage("La suppression n'a pas pu être enregistrée. Réessaie dans un instant."); return; }
+    setTickets(prev => prev.map(t => t.id===ticket.id?{...t,fields:{...t.fields,...fields}}:t));
     if (planningId) {
       try {
         await fetch('/api/airtable/Planning/'+planningId, {
@@ -7226,14 +7251,6 @@ function Dashboard({ agenceAccess, onClose }) {
         });
       } catch(e) { console.error(e); }
     }
-    const fields = { Statut: "Supprimé" };
-    setTickets(prev => prev.map(t => t.id===ticket.id?{...t,fields:{...t.fields,...fields}}:t));
-    try {
-      await fetch('/api/airtable/tenant/Tickets SAV/'+ticket.id, {
-        method:'PATCH', headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({fields})
-      });
-    } catch(e) { console.error(e); }
     setModalSuppression(null);
   };
 
