@@ -443,14 +443,26 @@ function CreneauPicker({ agenceVille, onSelect }) {
     setLoading(false);
   };
 
+  const [msgCreneau, setMsgCreneau] = React.useState("");
   const choisir = async (dateInfo) => {
+    setMsgCreneau("");
     try {
-      await fetch('/api/airtable/Planning/' + dateInfo.ids[0], {
+      // Le créneau est-il encore libre ? (un autre client a pu le prendre) puis réservation : si l'un des deux échoue, on ne continue pas.
+      const rp = await fetch('/api/airtable/Planning/' + dateInfo.ids[0]);
+      const dp = await rp.json().catch(() => ({}));
+      if (!rp.ok || !dp.fields || dp.fields.Statut !== 'Libre') throw new Error('pris');
+      const rr = await fetch('/api/airtable/Planning/' + dateInfo.ids[0], {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ fields: { Statut: 'Pris' } })
       });
-    } catch(e) { console.error(e); }
+      if (!rr.ok) throw new Error('reservation');
+    } catch(e) {
+      console.error(e);
+      setMsgCreneau("Ce créneau vient d'être pris par quelqu'un d'autre. Choisissez-en un autre, la liste est mise à jour.");
+      if (typeCreneau) charger(typeCreneau);
+      return;
+    }
     const d = new Date(dateInfo.date + 'T12:00:00');
     const label = d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
     onSelect(typeCreneau.label + ' (' + IKO_creneaux.heure(dateInfo, typeCreneau.heure) + ') \u2014 ' + label, dateInfo.ids[0]);
@@ -482,6 +494,7 @@ function CreneauPicker({ agenceVille, onSelect }) {
           style={{fontSize:"10px",color:"#94A3B8",background:"none",border:"none",cursor:"pointer"}}>← Changer</button>
       </div>
       <div style={{fontSize:"10px",color:"#94A3B8",marginBottom:"10px"}}>Premières disponibilités à partir d'une semaine</div>
+      {msgCreneau && <div style={{padding:"8px 10px",marginBottom:"10px",borderRadius:"8px",background:"#FEF2F2",color:F.rouge,fontSize:"11px",fontWeight:"700"}}>{msgCreneau}</div>}
       {loading && <div style={{textAlign:"center",padding:"16px",color:"#64748B",fontSize:"12px"}}>⏳ Chargement des disponibilités...</div>}
       {!loading && dates.length === 0 && (
         <div style={{textAlign:"center",padding:"16px",color:F.rouge,fontSize:"12px"}}>Aucune disponibilité. Essayez l'autre créneau.</div>

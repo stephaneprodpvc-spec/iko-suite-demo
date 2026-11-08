@@ -854,13 +854,14 @@ function App() {
     setRaisonManquante(false);
     setAnnulEnCours(true); setAnnulErr(false);
     try {
-      await libererCreneauSiBesoin(ticket.fields?.PlanningID);
       const resp = await fetch('/api/airtable/Tickets%20SAV/' + ticket.id, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ fields: { Statut: 'Annulé', 'Raison annulation': raison } })
       });
       if (!resp.ok) throw new Error('patch failed');
+      // Le créneau n'est libéré qu'une fois l'annulation bien enregistrée (sinon le ticket garderait un RDV sans créneau réservé).
+      await libererCreneauSiBesoin(ticket.fields?.PlanningID);
       setTicket(prev => ({ ...prev, fields: { ...prev.fields, Statut: 'Annulé', 'Raison annulation': raison } }));
       setShowAnnulerConfirm(false);
       setRaisonAnnulation("");
@@ -876,12 +877,18 @@ function App() {
     try {
       const ancienCreneau = ticket.fields?.Créneau || '';
       const nouvelleId = dateInfo.ids[0];
-      await fetch('/api/airtable/Planning/' + nouvelleId, {
+      // 1) Le créneau est-il encore libre ? (un autre client a pu le prendre entre-temps : jamais deux RDV sur le même créneau)
+      const rPlan = await fetch('/api/airtable/Planning/' + nouvelleId);
+      const dPlan = await rPlan.json().catch(() => ({}));
+      if (!rPlan.ok || !dPlan.fields || dPlan.fields.Statut !== 'Libre') throw new Error('creneau pris');
+      // 2) Réservation du nouveau créneau (échec = on s'arrête, rien n'est modifié)
+      const rPris = await fetch('/api/airtable/Planning/' + nouvelleId, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ fields: { Statut: 'Pris' } })
       });
-      await libererCreneauSiBesoin(ticket.fields?.PlanningID);
+      if (!rPris.ok) throw new Error('reservation');
+      // 3) L'ancien créneau n'est libéré qu'APRÈS la mise à jour du ticket (plus bas) : si le ticket échoue, on relâche le nouveau.
       const d = new Date(dateInfo.date + 'T12:00:00');
       const label = d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
       const nouveauCreneau = typeCreneau.label + ' (' + IKO_creneaux.heure(dateInfo, typeCreneau.heure) + ') — ' + label;
@@ -894,7 +901,8 @@ function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ fields: { Créneau: nouveauCreneau, PlanningID: nouvelleId, Statut: 'Nouveau', "Proposition auto en attente": false, "Proposition auto créneau": "", "Proposition auto mois": "", "RDV modifié - notif technicien": true, "En route depuis": null, "Arrivée estimée": null, "Réponse agence": nouvelleReponse } })
       });
-      if (!resp.ok) throw new Error('patch failed');
+      if (!resp.ok) { await libererCreneauSiBesoin(nouvelleId); throw new Error('patch failed'); }
+      await libererCreneauSiBesoin(ticket.fields?.PlanningID);
       setTicket(prev => ({ ...prev, fields: { ...prev.fields, Créneau: nouveauCreneau, PlanningID: nouvelleId, Statut: 'Nouveau', "Proposition auto en attente": false, "Proposition auto créneau": "", "Proposition auto mois": "", "En route depuis": null, "Arrivée estimée": null, "Réponse agence": nouvelleReponse } }));
       setShowChanger(false);
       setChangeOk(true);
