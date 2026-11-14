@@ -1424,6 +1424,9 @@ export default async function handler(req, res) {
         if (!ticketLieId) {
           return res.status(400).json({ error: "Ticket SAV obligatoire pour créer une intervention." });
         }
+        if (!/^rec[A-Za-z0-9]{14}$/.test(String(ticketLieId))) {
+          return res.status(400).json({ error: 'Identifiant de ticket invalide.' });
+        }
         // Verification que le ticket lie appartient au meme tenant AVANT
         // toute creation : sans ca, un ticket_id fourni par erreur (ou de
         // mauvaise foi) pourrait rattacher une intervention au dossier
