@@ -618,7 +618,10 @@ async function executerOutil(nom, input, clientId, tradeId, agencesObjets, photo
     const vocabCourant = loadTradeVocab(tradeId || TRADE_ID);
     if (!vocabCourant.historique.disponible) return { trouve: false };
     const recherche = String(input.recherche || "").trim().slice(0, 100);
-    if (!recherche) return { trouve: false };
+    // Audit n°3 : outil accessible à tout visiteur du chat. Une recherche courte (« a », « 06 ») énumérait les dossiers d'autres
+    // clients. Il faut un nom ou un numéro assez précis, et la réponse ne contient plus ni nom ni adresse (la personne qui parle
+    // est déjà identifiée par la conversation) : seulement les ouvertures posées.
+    if (recherche.replace(/\s+/g, "").length < 6) return { trouve: false, precision: "Demande le nom complet ou le numéro de téléphone complet du client." };
     try {
       const formuleFicheBase = "OR(FIND(LOWER(\"" + recherche.replace(/\\/g, "\\\\").replace(/"/g, '\\"') + "\"),LOWER({Client})),FIND(\"" + recherche.replace(/\\/g, "\\\\").replace(/"/g, '\\"') + "\",{Téléphone}))";
       const formuleFiche = filtreAvecClientServeur(formuleFicheBase, clientId);
@@ -648,8 +651,6 @@ async function executerOutil(nom, input, clientId, tradeId, agencesObjets, photo
           };
         });
         resultats.push({
-          client: fiche.fields["Client"] || "",
-          adresse: fiche.fields["Adresse"] || "",
           date_mesure: fiche.fields["Date"] || "",
           ouvertures: ouvertures,
         });

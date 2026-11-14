@@ -11,7 +11,7 @@ import { blocSystemeIko } from "./_systeme-iko.js";
 import { blocMetierMenuiserie } from "./_metier-menuiserie.js";
 import { enteteMake } from "./_make.js";
 import { ajouterMailsAuCorps, marqueClient, enrichirDepuisTicket } from "./_mail.js";
-import { pousserAgence } from "./_alertes.js";
+import { pousserAgence, tenantDe } from "./_alertes.js";
 
 const MAKE_WEBHOOK = "https://hook.eu1.make.com/n3lwi92wldkf22jcemmjfem334p4mv6a"; // même scénario que le proxy
 // IKO pose lui-même la nouvelle date quand le client en cite une précise et qu'elle est libre. Désactivable : IKO_REPLANIF_AUTO=0.
@@ -260,7 +260,7 @@ async function poserDateAutomatiquement(ticket, identClient, agence, dateIso, pe
       ajouterMailsAuCorps(corps, "rdv_modifie", await marqueClient(clientId));
       await fetch(MAKE_WEBHOOK, { method: "POST", headers: enteteMake({ "Content-Type": "application/json" }), body: JSON.stringify(corps) });
     } catch (e) { console.error("Notification agence (rdv déplacé) :", e); }
-    await pousserAgence({ agence: f.Agence || agence, titre: "RDV modifié — " + (f.Name || ""), message: (f.Client || "Client") + " : " + nouveauCreneau });
+    await pousserAgence({ agence: f.Agence || agence, tenant: tenantDe(f), titre: "RDV modifié — " + (f.Name || ""), message: (f.Client || "Client") + " : " + nouveauCreneau });
     return nouveauCreneau;
   } catch (e) {
     console.error("poserDateAutomatiquement :", e);
@@ -335,7 +335,7 @@ export default async function handler(req, res) {
     if (rdvChoisi && ticketId) {
       // Le client vient de choisir une date dans la conversation : on prévient les techniciens de l'agence (notification en direct).
       const t = await chargerTicket(String(ticketId));
-      if (t) { const f = t.fields || {}; await pousserAgence({ agence: f.Agence || agence, titre: "RDV modifié — " + (f.Name || ""), message: (f.Client || "Client") + " : " + (f["Créneau"] || "") }); }
+      if (t) { const f = t.fields || {}; await pousserAgence({ agence: f.Agence || agence, tenant: tenantDe(f), titre: "RDV modifié — " + (f.Name || ""), message: (f.Client || "Client") + " : " + (f["Créneau"] || "") }); }
       return res.status(200).json({ ok: true });
     }
     if (!ticketId || !texte || !agence) return res.status(400).json({ error: "Parametres manquants" });
@@ -348,7 +348,7 @@ export default async function handler(req, res) {
       const ft = ticketRec.fields || {};
       const extrait = String(texte).replace(/\s+/g, " ").trim().slice(0, 110);
       if (!["Terminé", "Annulé", "Supprimé"].includes(ft.Statut)) {
-        await pousserAgence({ agence: ft.Agence || agence, titre: (/\?/.test(extrait) ? "Question du client — " : "Information du client — ") + (ft.Name || ""), message: (ft.Client || "Client") + " : " + extrait });
+        await pousserAgence({ agence: ft.Agence || agence, tenant: tenantDe(ft), titre: (/\?/.test(extrait) ? "Question du client — " : "Information du client — ") + (ft.Name || ""), message: (ft.Client || "Client") + " : " + extrait });
       }
     }
     // Simple accusé / remerciement du client : réponse directe et sûre, sans IA.

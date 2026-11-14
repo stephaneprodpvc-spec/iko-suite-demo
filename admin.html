@@ -1724,14 +1724,14 @@ function afficherClients(){
   wrap.innerHTML = clients.map(function(c){
     var f = c.fields || {};
     var nom = f["Nom client"] || "—";
-    var couleur = f["Couleur principale"] || couleurDe(nom);
-    var modules = (f["Modules actifs"] || []).map(function(m){ return "<span class='badge'>" + m + "</span>"; }).join("");
+    var couleur = /^#[0-9a-fA-F]{3,8}$/.test(String(f["Couleur principale"] || "")) ? f["Couleur principale"] : couleurDe(nom);
+    var modules = (f["Modules actifs"] || []).map(function(m){ return "<span class='badge'>" + escHtml(m) + "</span>"; }).join("");
     var statut = f["Statut client"] || "Actif";
     return "<div class='client-item' data-id='" + c.id + "'>" +
-      "<div class='swatch' style='background:" + couleur + "'>" + initiales(nom) + "</div>" +
+      "<div class='swatch' style='background:" + couleur + "'>" + escHtml(initiales(nom)) + "</div>" +
       "<div class='ci-main'>" +
-        "<div class='ci-nom'>" + nom + "</div>" +
-        "<div class='ci-metier'>" + (f["Métier"] || "—") + "</div>" +
+        "<div class='ci-nom'>" + escHtml(nom) + "</div>" +
+        "<div class='ci-metier'>" + escHtml(f["Métier"] || "—") + "</div>" +
         "<div class='ci-modules'>" + modules + "</div>" +
       "</div>" +
       "<button type='button' class='client-devis-btn' data-id='" + c.id + "' title='Devis & Facturation'>🧾</button>" +

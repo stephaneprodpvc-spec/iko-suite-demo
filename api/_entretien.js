@@ -15,7 +15,7 @@ import { verifierOrigine, verifierDebit, verifierSession } from './_securite.js'
 import { signalerAbus } from './_abus.js';
 import { enteteMake } from './_make.js';
 import { ajouterMailsAuCorps, marqueClient, retirerMailClient, estDesinscrit } from './_mail.js';
-import { pousserAgence } from './_alertes.js';
+import { pousserAgence, tenantDe } from './_alertes.js';
 
 const MAKE_WEBHOOK = 'https://hook.eu1.make.com/n3lwi92wldkf22jcemmjfem334p4mv6a';
 const TABLE = 'Contrats%20entretien';
@@ -113,7 +113,7 @@ export async function handlerEntretien(req, res, { baseId, headers }) {
       const rc2 = await airtable(baseId, headers, TABLE, { method: 'POST', body: JSON.stringify({ fields }) });
       if (!rc2.ok) { console.error('Entretien : création impossible', rc2.status, await rc2.text().catch(() => '')); return res.status(502).json({ error: 'Enregistrement impossible, réessayez dans un instant.' }); }
       const cree = await rc2.json();
-      await pousserAgence({ agence, titre: "Nouvelle demande de contrat d'entretien", message: nom + ' — ' + (equip.join(', ') || 'équipements à préciser') });
+      await pousserAgence({ agence, tenant: clientId || '', titre: "Nouvelle demande de contrat d'entretien", message: nom + ' — ' + (equip.join(', ') || 'équipements à préciser') });
       await notifierMake({ marque: 'iko', action: 'entretien_demande', marqueur_entretien_demande: '1', ticket: reference, nom, 'e-mail': mail, tel, agence, adresse, equipements: equip.join(', '), frequence, message,
         lien_suivi: lienSuivi(null, { email: mail, tel, ticket: reference }), email_agence: '' }, clientId);
       return res.status(200).json({ ok: true, reference, id: cree.id });
@@ -164,7 +164,7 @@ export async function handlerEntretien(req, res, { baseId, headers }) {
       const maj = await airtable(baseId, headers, TABLE + '/' + contrat.id, { method: 'PATCH', body: JSON.stringify({ fields: { 'Visites (JSON)': JSON.stringify(nouvelles), 'Prochaine visite': prochaine(nouvelles) || undefined } }) });
       if (!maj.ok) { await airtable(baseId, headers, 'Planning/' + pid, { method: 'PATCH', body: JSON.stringify({ fields: { Statut: 'Libre' } }) }); return res.status(502).json({ error: 'Enregistrement impossible, réessayez.' }); }
       const lisible = new Date(date + 'T12:00:00').toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
-      await pousserAgence({ agence, titre: 'Visite d\'entretien planifiée', message: (f.Client || 'Client') + ' — ' + lisible + ' (' + visite.creneau + ')' });
+      await pousserAgence({ agence, tenant: tenantDe(f), titre: 'Visite d\'entretien planifiée', message: (f.Client || 'Client') + ' — ' + lisible + ' (' + visite.creneau + ')' });
       await notifierMake({ marque: 'iko', desinscrit: estDesinscrit(f), action: 'entretien_visite', marqueur_entretien_visite: '1', ticket: f['Référence'] || '', nom: f.Client, 'e-mail': f.Email || '', tel: f['Téléphone'] || '', agence, adresse: f.Adresse || '',
         date_visite: lisible, creneau: visite.creneau, equipements: f['Équipements'] || '', lien_suivi: f.Email ? lienSuivi(null, { email: f.Email, tel: f['Téléphone'], ticket: f['Référence'] || '' }) : '', email_agence: '' }, clientId);
       return res.status(200).json({ ok: true, visites: nouvelles, visite });
@@ -178,7 +178,7 @@ export async function handlerEntretien(req, res, { baseId, headers }) {
       if (v.planningId) await airtable(baseId, headers, 'Planning/' + v.planningId, { method: 'PATCH', body: JSON.stringify({ fields: { Statut: 'Libre' } }) });
       const nouvelles = visites.filter((x) => x.id !== v.id);
       await airtable(baseId, headers, TABLE + '/' + contrat.id, { method: 'PATCH', body: JSON.stringify({ fields: { 'Visites (JSON)': JSON.stringify(nouvelles), 'Prochaine visite': prochaine(nouvelles) || undefined } }) });
-      await pousserAgence({ agence, titre: 'Visite d\'entretien annulée', message: (f.Client || 'Client') + ' — ' + v.date });
+      await pousserAgence({ agence, tenant: tenantDe(f), titre: 'Visite d\'entretien annulée', message: (f.Client || 'Client') + ' — ' + v.date });
       return res.status(200).json({ ok: true, visites: nouvelles });
     }
 

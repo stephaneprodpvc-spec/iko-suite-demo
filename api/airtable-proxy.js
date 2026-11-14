@@ -382,6 +382,23 @@ async function verifierModuleActif(baseId, headers, tenantId, moduleRequis) {
   return { ok: true, recClient };
 }
 
+// Audit n°3 : adresses de notification acceptées = uniquement les services de notification des navigateurs (sinon le serveur
+// enverrait des requêtes vers n'importe quelle adresse choisie par un visiteur).
+const SERVICES_PUSH = ['fcm.googleapis.com', 'android.googleapis.com', 'updates.push.services.mozilla.com', 'push.services.mozilla.com', 'web.push.apple.com', 'push.apple.com', 'notify.windows.com'];
+export function endpointPushValide(endpoint) {
+  try {
+    const u = new URL(String(endpoint || ''));
+    if (u.protocol !== 'https:' || String(endpoint).length > 800) return false;
+    const h = u.hostname.toLowerCase();
+    return SERVICES_PUSH.some((s) => h === s || h.endsWith('.' + s));
+  } catch (e) { return false; }
+}
+// Lien ouvert au clic sur la notification : chemin interne uniquement (jamais un site extérieur : hameçonnage).
+export function lienPushSur(url) {
+  const v = String(url || '/technicien.html');
+  return /^\/[A-Za-z0-9_\-./?=&%]{0,200}$/.test(v) && !v.startsWith('//') ? v : '/technicien.html';
+}
+
 async function handlerPush(req, res, baseId, headers, session) {
   // Push n'est utilise que par des pages internes (dashboard.html,
   // technicien.html) - aucune page publique ne l'appelle. Quand une session
@@ -406,18 +423,32 @@ async function handlerPush(req, res, baseId, headers, session) {
   const body = req.body || {};
 
   try {
+    // Sans connexion : aucune inscription, aucun envoi (avant, n'importe qui pouvait recevoir les notifications des techniciens,
+    // noms des clients compris, ou leur envoyer des notifications avec un lien pirate).
+    if (!session) return res.status(401).json({ error: 'Connexion requise.' });
     if (body.subscribe && body.subscription && body.agence) {
+      const sub = body.subscription;
+      if (!endpointPushValide(sub.endpoint) || !sub.keys || typeof sub.keys.p256dh !== 'string' || typeof sub.keys.auth !== 'string' || sub.keys.p256dh.length > 200 || sub.keys.auth.length > 100) {
+        return res.status(400).json({ error: 'Abonnement non valide.' });
+      }
+      let agence = String(body.agence).trim().slice(0, 60);
+      if (session.role !== 'SUPER_ADMIN_IKO') {
+        if (agence === 'alertes') return res.status(403).json({ error: 'Alertes réservées au poste de pilotage.' });
+        if (session.agence) agence = session.agence; // compte d'agence : toujours la sienne
+      }
       const config = await lireConfigPush(baseId, headers);
-      const endpoint = body.subscription.endpoint;
-      config.pushSubscriptions = config.pushSubscriptions.filter((s) => s.endpoint !== endpoint);
-      config.pushSubscriptions.push({ agence: body.agence, endpoint, keys: body.subscription.keys });
+      const tenant = session.tenantId || '';
+      config.pushSubscriptions = config.pushSubscriptions.filter((s) => s.endpoint !== sub.endpoint);
+      if (config.pushSubscriptions.filter((s) => s.tenant === tenant).length >= 60) return res.status(429).json({ error: "Trop d'appareils enregistrés." });
+      config.pushSubscriptions.push({ agence, tenant, endpoint: sub.endpoint, keys: { p256dh: sub.keys.p256dh, auth: sub.keys.auth } });
       await ecrireConfigPush(baseId, headers, config);
       return res.status(200).json({ ok: true });
     }
     if (body.action === 'send' && body.agence) {
       const config = await lireConfigPush(baseId, headers);
-      const cibles = config.pushSubscriptions.filter((s) => s.agence === body.agence);
-      const payload = JSON.stringify({ title: body.title || 'Iko Suite', body: body.body || '', url: body.url || '/technicien.html' });
+      // Un compte d'entreprise n'atteint que les appareils de SA entreprise et de l'agence demandée ; le super admin garde la main.
+      const cibles = config.pushSubscriptions.filter((s) => s.agence === body.agence && s.agence !== 'alertes' && (session.role === 'SUPER_ADMIN_IKO' || (session.tenantId && s.tenant === session.tenantId)));
+      const payload = JSON.stringify({ title: String(body.title || 'Iko Suite').slice(0, 120), body: String(body.body || '').slice(0, 300), url: lienPushSur(body.url) });
       const morts = [];
       await Promise.all(cibles.map(async (s) => {
         try { await webpush.sendNotification({ endpoint: s.endpoint, keys: s.keys }, payload); }
@@ -958,6 +989,8 @@ export default async function handler(req, res) {
     const INTERNES = ['contrats entretien', 'techniciens', 'métrés', 'catalogue produits', "grille main d'œuvre", 'mise en page devis'];
     if (INTERNES.includes(table)) return refuser();
     if (estListe && table === 'tickets sav' && !/^\{(Devis Token|Note Token)\}="[A-Za-z0-9_-]{12,}"$/.test(formule)) return refuser();
+    // Recherche d'un ticket par jeton (lien de devis ou d'avis) : quelques essais par adresse seulement, contre les devinettes.
+    if (estListe && table === 'tickets sav' && !verifierDebit(req, { max: 30, fenetreMs: 10 * 60 * 1000, cle: 'jeton-ticket' })) return res.status(429).json({ error: 'Trop de tentatives. Réessayez dans quelques minutes.' });
     if (estListe && table === 'devis') {
       if (!/^FIND\("SAV-\d{4}-\d{3,6}",ARRAYJOIN\(\{Ticket lié\}\)\)$/.test(formule)) return refuser();
       if (!verifierDebit(req, { max: 8, fenetreMs: 10 * 60 * 1000, cle: 'recherche-devis' })) return res.status(429).json({ error: 'Trop de tentatives. Réessayez dans quelques minutes.' });

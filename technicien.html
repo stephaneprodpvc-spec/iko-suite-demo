@@ -1185,7 +1185,7 @@ function ModalDevis({ ticket, onClose, onSent }) {
     setSaving(false);
   };
 
-  const genererToken = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-6);
+  const genererToken = () => Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) => (b % 36).toString(36)).join('');
   const emailValide = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
   const montantHT = lignes.reduce((s, l) => s + (l.totalHT || 0), 0);
   const montantTTC = lignes.reduce((s, l) => s + (l.totalTTC != null ? l.totalTTC : l.totalHT * 1.2), 0);
@@ -2447,7 +2447,7 @@ function ModalAction({ ticket, onClose, onDone }) {
       if (mode === "terminer") {
         fields.Statut = "Terminé";
         if (commentaire) fields.Commentaire = commentaire;
-        noteToken = Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-6);
+        noteToken = Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) => (b % 36).toString(36)).join('');
         fields["Note Token"] = noteToken;
       } else if (mode === "devis_place") {
         fields.Statut = "Terminé";
@@ -2455,7 +2455,7 @@ function ModalAction({ ticket, onClose, onDone }) {
         if (reglementSurPlace && choixEncaisse && choixEncaisse !== "aucun") fields["Montant encaissé"] = montantEncaisse;
         if (modePaiementPlace === "Chèque" && photoChequeUrl) fields["Photo chèque"] = photoChequeUrl;
         if (commentaire) fields.Commentaire = commentaire;
-        noteToken = Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-6);
+        noteToken = Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) => (b % 36).toString(36)).join('');
         fields["Note Token"] = noteToken;
       } else if (mode === "annuler") {
         fields.Statut = "Annulé";

@@ -2089,7 +2089,7 @@ function ModalDevis({ ticket, onClose, onSent }) {
     setSaving(false);
   };
 
-  const genererToken = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-6);
+  const genererToken = () => Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) => (b % 36).toString(36)).join('');
   const emailValide = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
   const montantHT = lignes.reduce((s, l) => s + (l.totalHT || 0), 0);
   const montantTTC = lignes.reduce((s, l) => s + (l.totalTTC != null ? l.totalTTC : l.totalHT * 1.2), 0);

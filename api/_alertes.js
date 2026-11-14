@@ -290,13 +290,31 @@ export async function handleSurveillance(req, res) {
 
 // Notification en direct (téléphone) aux techniciens d'une agence : appareils enregistrés avec cette agence (ou « global »).
 // Ne lève jamais d'exception. Retourne le nombre d'appareils prévenus.
-export async function pousserAgence({ agence, titre, message, url = '/technicien.html' }) {
+// Entreprise (identifiant rec…) d'un enregistrement : lien « Compte client ».
+export function tenantDe(fields) {
+  const v = fields && fields['Compte client'];
+  return Array.isArray(v) ? String(v[0] || '') : (typeof v === 'string' ? v : '');
+}
+// Audit n°3 : un appareil n'est prévenu que s'il appartient à la MÊME entreprise (avant, deux entreprises avec une « Agence 1 »
+// se recevaient mutuellement les notifications, noms de clients compris) et que l'agence est la même (« Agence 1 » ≠ « Agence 10 »).
+// Les anciens abonnements sans entreprise (poste de pilotage / démo) ne reçoivent que les notifications « global ».
+export function appareilsConcernes(subs, agence, tenant) {
+  const ag = String(agence || '').trim().toLowerCase();
+  const t = String(tenant || '');
+  return (subs || []).filter((s) => {
+    if (s.agence === AGENCE_PUSH) return false;
+    const sa = String(s.agence || '').trim().toLowerCase();
+    const memeAgence = sa === 'global' || (ag && (sa === ag || ag.startsWith(sa + ' ') || sa.startsWith(ag + ' ')));
+    if (!s.tenant) return sa === 'global';
+    return !!t && s.tenant === t && memeAgence;
+  });
+}
+export async function pousserAgence({ agence, titre, message, url = '/technicien.html', tenant = '' }) {
   try {
     if (!process.env.VAPID_PUBLIC_KEY || !process.env.VAPID_PRIVATE_KEY) return 0;
     webpush.setVapidDetails(process.env.VAPID_SUBJECT || 'mailto:stephane.prodpvc@gmail.com', process.env.VAPID_PUBLIC_KEY, process.env.VAPID_PRIVATE_KEY);
     const c = await lireConfig();
-    const ag = String(agence || '');
-    const cibles = c.pushSubscriptions.filter((s) => s.agence !== AGENCE_PUSH && (s.agence === 'global' || (ag && (String(s.agence).startsWith(ag) || ag.startsWith(String(s.agence))))));
+    const cibles = appareilsConcernes(c.pushSubscriptions, agence, tenant);
     let envoyes = 0; const morts = [];
     await Promise.all(cibles.map(async (s) => {
       try { await webpush.sendNotification({ endpoint: s.endpoint, keys: s.keys }, JSON.stringify({ title: titre, body: message, url })); envoyes++; }
