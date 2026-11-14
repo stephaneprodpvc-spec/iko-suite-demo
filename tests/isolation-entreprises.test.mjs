@@ -28,6 +28,12 @@ const db = {
   "Questionnaire SAV": [{ id: "recQUESTA0000001", fields: { Question: "Question Alpha", Client: [A] } }],
   Utilisateurs: [{ id: "recUSERA000000001", fields: { Identifiant: "user-alpha", "Hash mot de passe": "HASH-A", tenantId: [A] } }],
   "Journal actions": [{ id: "recJOURNAL000001", fields: { Action: "journal alpha" } }],
+  "Contrôles Chantier": [{ id: "recCHANTIERA0001", fields: { Chantier: "Chantier Alpha", "Compte client": [A] } }],
+  "Planning Commercial": [{ id: "recPLCOMA0000001", fields: { Date: "2026-12-02", "Créneau": "Matin Alpha", "Compte client": [A] } }],
+  "Ouvertures Métré": [{ id: "recOUVERTA000001", fields: { "Repère": "Ouverture Alpha", "Métré": ["recMETREA0000001"] } }],
+  "Grille Main d'œuvre": [{ id: "recGRILLEA000001", fields: { "Type d'action": "Grille Alpha", Client: [A] } }],
+  "Mise en page Devis": [{ id: "recMISEPAGEA0001", fields: { Name: "Mise en page Alpha", Client: [A] } }],
+  Audience: [{ id: "recAUDIENCE00001", fields: { Jour: "2026-11-01", Donnees: "audience alpha" } }],
 };
 const faux = creerFaux(db);
 globalThis.fetch = async (url, opt) => { if (String(url).includes("hook.eu1.make.com")) return { ok: true, status: 200, json: async () => ({}) }; return faux(url, opt); };
@@ -36,7 +42,7 @@ const cookieDe = (s) => "iko_access=" + jwt.sign(s, process.env.JWT_ACCESS_SECRE
 const PATRON_B = { userId: "recPATRON0000002B", tenantId: B, role: "TENANT_ADMIN" };
 const TECH_B = { userId: "recTECHNIC000002B", tenantId: B, role: "TECHNICIEN", agence: "Agence B" };
 const SUPER = { userId: "recSUPER000000001", role: "SUPER_ADMIN_IKO" };
-const SECRETS = /victime-a|0611111111|1 rue A|secret-a|REGLE-SECRETE|NOTE-A|agence-a@|tech-a@|c-a@|HASH-A|Client Alpha|Contrat Alpha|Metre Alpha|Rdv Alpha|Constat Alpha|Produit Alpha|Question Alpha|user-alpha|journal alpha/;
+const SECRETS = /victime-a|0611111111|1 rue A|secret-a|REGLE-SECRETE|NOTE-A|agence-a@|tech-a@|c-a@|HASH-A|Client Alpha|Contrat Alpha|Metre Alpha|Rdv Alpha|Constat Alpha|Produit Alpha|Question Alpha|user-alpha|journal alpha|Chantier Alpha|Matin Alpha|Ouverture Alpha|Grille Alpha|Mise en page Alpha|audience alpha/;
 let n = 0;
 async function appeler(session, methode, chemin, corps, query = {}) {
   const req = { method: methode, query: { path: chemin, ...query }, body: corps, headers: { origin: "http://localhost:3000", cookie: session ? cookieDe(session) : "", "x-forwarded-for": "10.8.0." + (++n) }, socket: { remoteAddress: "10.8.0.1" } };
@@ -52,6 +58,12 @@ const LECTURES = [
   ["RDV Commercial", {}], ["tenant/RDV Commercial", {}], ["Interventions SAV", {}], ["Interventions SAV/recINTERVA000001", {}], ["tenant/Interventions SAV", {}],
   ["Catalogue Produits", {}], ["Catalogue Produits/recCATAA00000001", {}], ["Questionnaire SAV", {}], ["Questionnaire SAV/recQUESTA0000001", {}],
   ["Utilisateurs", {}], ["Utilisateurs/recUSERA000000001", {}], ["Journal actions", {}],
+  ["Contrôles Chantier", {}], ["Contrôles Chantier/recCHANTIERA0001", {}], ["Planning Commercial", {}], ["tenant/Planning Commercial", {}], ["Planning Commercial/recPLCOMA0000001", {}],
+  ["Ouvertures Métré", {}], ["Ouvertures Métré/recOUVERTA000001", {}], ["Grille Main d'œuvre", {}], ["Grille Main d'œuvre/recGRILLEA000001", {}],
+  ["Mise en page Devis", {}], ["Mise en page Devis/recMISEPAGEA0001", {}], ["Audience", {}], ["Audience/recAUDIENCE00001", {}],
+  ["Agences", { filterByFormula: 'FIND("Entreprise Alpha", ARRAYJOIN({Client}))' }], ["Techniciens", { filterByFormula: 'FIND("Entreprise Alpha", ARRAYJOIN({Compte client}))' }],
+  ["Tickets SAV", { filterByFormula: 'FIND("Entreprise Alpha", ARRAYJOIN({Compte client}))' }], ["tenant/Tickets SAV", { filterByFormula: 'FIND("Entreprise Alpha", ARRAYJOIN({Compte client}))' }],
+  ["Contrats entretien", { filterByFormula: 'FIND("Entreprise Alpha", ARRAYJOIN({Compte client}))' }], ["Métrés", { filterByFormula: 'FIND("Entreprise Alpha", ARRAYJOIN({Compte client}))' }],
 ];
 const ECRITURES = [
   ["PATCH", "Tickets SAV/recTICKETA0000001", { fields: { Email: "pirate@x.fr" } }], ["DELETE", "Tickets SAV/recTICKETA0000001"], ["DELETE", "tenant/Tickets SAV/recTICKETA0000001"],
@@ -61,23 +73,47 @@ const ECRITURES = [
   ["PATCH", "Techniciens/recTECHA00000001", { fields: { Email: "pirate@x.fr" } }], ["PATCH", "Contrats entretien/recCONTRATA00001", { fields: { Email: "pirate@x.fr" } }],
   ["PATCH", "Catalogue Produits/recCATAA00000001", { fields: { "Désignation": "x" } }], ["PATCH", "Questionnaire SAV/recQUESTA0000001", { fields: { Question: "x" } }],
   ["POST", "Clients", { fields: { "Nom client": "Faux" } }], ["POST", "Tickets SAV", { fields: { Name: "X" } }],
+  // création chez A (lien « Compte client » / « Client » vers l'entreprise A) et modifications de tables restantes
+  ["POST", "Techniciens", { fields: { Nom: "Faux tech", "Compte client": [A] } }], ["POST", "Contrats entretien", { fields: { Client: "Faux", "Compte client": [A] } }],
+  ["POST", "Métrés", { fields: { Name: "Faux", "Compte client": [A] } }], ["POST", "RDV Commercial", { fields: { Name: "Faux", "Compte client": [A] } }],
+  ["POST", "Interventions SAV", { fields: { Name: "Faux", "Compte client": [A] } }], ["POST", "Catalogue Produits", { fields: { "Désignation": "Faux", Client: [A] } }],
+  ["POST", "Agences", { fields: { "Nom agence": "Faux", Client: [A] } }], ["POST", "Planning", { fields: { Date: "2030-01-01", Statut: "Libre", "Compte client": [A] } }],
+  ["POST", "Planning Commercial", { fields: { Date: "2030-01-01", "Compte client": [A] } }], ["POST", "Devis", { fields: { "N° devis": "FAUX", Client: [A] } }],
+  ["POST", "Grille Main d'œuvre", { fields: { "Type d'action": "Faux", Client: [A] } }], ["POST", "Mise en page Devis", { fields: { Name: "Faux", Client: [A] } }],
+  ["POST", "Questionnaire SAV", { fields: { Question: "Faux", Client: [A] } }], ["POST", "Utilisateurs", { fields: { Identifiant: "faux", "Rôle": "SUPER_ADMIN_IKO" } }],
+  ["POST", "Journal actions", { fields: { Action: "faux" } }], ["POST", "Audience", { fields: { Jour: "x" } }], ["POST", "Contrôles Chantier", { fields: { Chantier: "Faux", "Compte client": [A] } }],
+  ["POST", "Ouvertures Métré", { fields: { "Repère": "Faux", "Métré": ["recMETREA0000001"] } }],
+  ["PATCH", "Planning Commercial/recPLCOMA0000001", { fields: { "Créneau": "x" } }], ["PATCH", "tenant/Planning Commercial/recPLCOMA0000001", { fields: { "Créneau": "x" } }],
+  ["PATCH", "RDV Commercial/recRDVA000000001", { fields: { Client: "x" } }], ["PATCH", "tenant/RDV Commercial/recRDVA000000001", { fields: { Client: "x" } }],
+  ["PATCH", "Métrés/recMETREA0000001", { fields: { Client: "x" } }], ["PATCH", "Interventions SAV/recINTERVA000001", { fields: { "Constat / Diagnostic": "x" } }],
+  ["PATCH", "tenant/Interventions SAV/recINTERVA000001", { fields: { "Constat / Diagnostic": "x" } }], ["PATCH", "Ouvertures Métré/recOUVERTA000001", { fields: { "Repère": "x" } }],
+  ["PATCH", "Contrôles Chantier/recCHANTIERA0001", { fields: { Chantier: "x" } }], ["PATCH", "Grille Main d'œuvre/recGRILLEA000001", { fields: { "Type d'action": "x" } }],
+  ["PATCH", "Mise en page Devis/recMISEPAGEA0001", { fields: { Name: "x" } }], ["PATCH", "Utilisateurs/recUSERA000000001", { fields: { "Rôle": "SUPER_ADMIN_IKO" } }],
+  ["PATCH", "Audience/recAUDIENCE00001", { fields: { Donnees: "x" } }], ["PATCH", "Journal actions/recJOURNAL000001", { fields: { Action: "x" } }],
+  ["DELETE", "Techniciens/recTECHA00000001"], ["DELETE", "Métrés/recMETREA0000001"], ["DELETE", "Ouvertures Métré/recOUVERTA000001"], ["DELETE", "Planning/recPLANA00000001"],
+  ["DELETE", "Devis/recDEVISA0000001"], ["DELETE", "Agences/recAGENCEA000001"], ["DELETE", "Contrats entretien/recCONTRATA00001"], ["DELETE", "Clients/" + A],
+  ["DELETE", "Utilisateurs/recUSERA000000001"], ["DELETE", "Journal actions/recJOURNAL000001"], ["DELETE", "Interventions SAV/recINTERVA000001"],
 ];
 
 for (const [nom, session] of [["compte de l'entreprise B (patron)", PATRON_B], ["compte de l'entreprise B (technicien)", TECH_B], ["visiteur sans compte", null]]) {
   test("lectures : " + nom + " ne voit aucune donnée de l'entreprise A", async () => {
+    const problemes = [];
     for (const [chemin, query] of LECTURES) {
       // Un devis se lit par son identifiant SANS compte : c'est le lien reçu par e-mail (identifiant secret, non listable).
       if (!session && chemin === "Devis/recDEVISA0000001") continue;
       const r = await appeler(session, "GET", chemin, undefined, query);
-      assert.ok(!SECRETS.test(JSON.stringify(r.corps || "")), "FUITE sur GET " + chemin + " (" + r.code + ") : " + JSON.stringify(r.corps).slice(0, 200));
+      if (SECRETS.test(JSON.stringify(r.corps || ""))) problemes.push("FUITE sur GET " + chemin + " " + JSON.stringify(query) + " (" + r.code + ")");
     }
+    assert.deepEqual(problemes, []);
   });
   test("écritures : " + nom + " ne modifie rien chez l'entreprise A", async () => {
     const avant = JSON.stringify(db);
+    const problemes = [];
     for (const [methode, chemin, corps] of ECRITURES) {
       const r = await appeler(session, methode, chemin, corps);
-      assert.ok(!(r.code >= 200 && r.code < 300), "ÉCRITURE ACCEPTÉE : " + methode + " " + chemin + " (" + r.code + ")");
+      if (r.code >= 200 && r.code < 300) problemes.push("ÉCRITURE ACCEPTÉE : " + methode + " " + chemin + " (" + r.code + ")");
     }
+    assert.deepEqual(problemes, []);
     assert.equal(JSON.stringify(db), avant, "la base a changé");
   });
 }
@@ -126,4 +162,41 @@ test("le super administrateur peut toujours créer, modifier et supprimer une fi
   assert.equal(cree.code, 200);
   assert.equal((await appeler(SUPER, "PATCH", "Clients/" + cree.corps.id, { fields: { "Accès bloqué": true } })).code, 200);
   assert.equal((await appeler(SUPER, "DELETE", "Clients/" + cree.corps.id)).code, 200);
+});
+
+test("création sans lien d'entreprise : l'enregistrement est rattaché à l'entreprise du compte (jamais orphelin, jamais chez une autre)", async () => {
+  const r = await appeler(PATRON_B, "POST", "Devis", { fields: { "N° devis": "DEV-B-NEUF" } });
+  assert.equal(r.code, 200);
+  assert.deepEqual(r.corps.fields.Client, [B]);
+  const lot = await appeler(PATRON_B, "POST", "Catalogue Produits", { records: [{ fields: { "Désignation": "Produit B1" } }, { fields: { "Désignation": "Produit B2" } }] });
+  assert.equal(lot.code, 200);
+  assert.ok(lot.corps.records.every((x) => x.fields.Client && x.fields.Client[0] === B));
+  const piege = await appeler(PATRON_B, "POST", "Catalogue Produits", { records: [{ fields: { "Désignation": "OK", Client: [B] } }, { fields: { "Désignation": "Piège", Client: [A] } }] });
+  assert.equal(piege.code, 403);
+  assert.equal((await appeler(PATRON_B, "PATCH", "Devis/" + r.corps.id, { fields: { Client: [A] } })).code, 403); // on ne donne pas un enregistrement à une autre entreprise
+});
+
+// FAILLE CRITIQUE (14/11/2026) : « Planning/../Utilisateurs » donnait à un visiteur la table des comptes (empreintes de mots de passe).
+test("chemins piégés (.., ./, encodés) : refusés pour tous, aucune empreinte de mot de passe ne sort", async () => {
+  const chemins = ["Planning/../Utilisateurs", "Planning/./../Utilisateurs", "Planning/..\\Utilisateurs", "Tickets SAV/../Utilisateurs", "Clients/../Utilisateurs",
+    "Agences/../Journal actions", "Planning/../../appAUTREBASE0001/Tickets SAV", "Planning/../../meta/bases", "../Utilisateurs", "Planning//../Utilisateurs", "Planning/%2e%2e/Utilisateurs",
+    "Planning/x?filterByFormula=1", "Planning/x#y", "Planning/\u0000", "content/../../Utilisateurs", "tenant/Tickets SAV/../../Utilisateurs"];
+  const problemes = [];
+  for (const [nom, session] of [["visiteur", null], ["patron B", PATRON_B], ["technicien B", TECH_B], ["super admin", SUPER]]) {
+    for (const chemin of chemins) {
+      for (const methode of ["GET", "PATCH", "DELETE", "POST"]) {
+        const r = await appeler(session, methode, chemin, methode === "GET" || methode === "DELETE" ? undefined : { fields: { Statut: "Pris" } });
+        const txt = JSON.stringify(r.corps || "");
+        if (/HASH-A|user-alpha|Hash mot/.test(txt) || (r.code >= 200 && r.code < 300 && /Utilisateurs|Journal|appAUTREBASE|meta/.test(chemin))) problemes.push(nom + " " + methode + " " + chemin + " -> " + r.code);
+      }
+    }
+  }
+  assert.deepEqual(problemes, []);
+});
+
+test("chemins normaux toujours acceptés (tables à espaces, apostrophes, accents ; identifiants)", async () => {
+  assert.equal((await appeler(SUPER, "GET", "Grille Main d'œuvre")).code, 200);
+  assert.equal((await appeler(SUPER, "GET", "Métrés")).code, 200);
+  assert.equal((await appeler(SUPER, "GET", "Tickets SAV/recTICKETA0000001")).code, 200);
+  assert.equal((await appeler(null, "GET", "Planning")).code, 200);
 });

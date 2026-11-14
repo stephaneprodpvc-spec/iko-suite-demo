@@ -783,6 +783,17 @@ export default async function handler(req, res) {
 
   const { path, ...rest } = req.query || {};
   const cheminBrut = Array.isArray(path) ? path.join('/') : (path || '');
+  // FAILLE CRITIQUE CORRIGÉE (audit n°3, 14/11/2026) : « Planning/../Utilisateurs » passait les contrôles (qui lisent le PREMIER mot du
+  // chemin : « Planning », table publique) puis l'adresse envoyée à Airtable était simplifiée en « …/Utilisateurs » : un visiteur
+  // SANS compte lisait la table des comptes (empreintes de mots de passe comprises) et n'importe quelle autre table, voire une autre
+  // base. Désormais : aucun segment « . » ou « .. », aucun caractère de contrôle, barre oblique inverse, point d'interrogation ou
+  // dièse, et un chemin d'une longueur raisonnable. (Le décodage de « %2e%2e » ou « ..%2F » est déjà fait ici par Vercel.)
+  {
+    const segmentsChemin = String(cheminBrut).split('/');
+    if (String(cheminBrut).length > 400 || segmentsChemin.some((s) => s === '.' || s === '..' || /[\\\u0000-\u001f\u007f?#]/.test(s) || /^%2e/i.test(s))) {
+      return res.status(400).json({ error: 'Chemin non valide.' });
+    }
+  }
 
   // CHANTIER MULTI-TENANT #1 (Option B) — route interne dédiée pour
   // "Tickets SAV" : /api/airtable/tenant/Tickets SAV. Le préfixe "tenant/"
@@ -988,6 +999,10 @@ export default async function handler(req, res) {
     const refuser = () => res.status(401).json({ error: 'Connexion requise.' });
     const INTERNES = ['contrats entretien', 'techniciens', 'métrés', 'catalogue produits', "grille main d'œuvre", 'mise en page devis'];
     if (INTERNES.includes(table)) return refuser();
+    // Liste blanche (audit n°3) : sans connexion, SEULES ces tables se lisent (créneaux, ticket / devis / fiche publique, agences).
+    // Avant, c'était une liste noire : toute autre table (ex. « Contrôles Chantier », ou une table ajoutée demain) restait lisible par tous.
+    // (Les routes propres du proxy — créneaux, clé publique des notifications, relais, suivi, entretien, carnet — contrôlent elles-mêmes leurs accès.)
+    if (!['planning', 'tickets sav', 'devis', 'clients', 'agences', 'creneaux', 'push', 'webhook', 'webhook-metreur', 'suivi', 'entretien', 'carnet'].includes(table)) return refuser();
     if (estListe && table === 'tickets sav' && !/^\{(Devis Token|Note Token)\}="[A-Za-z0-9_-]{12,}"$/.test(formule)) return refuser();
     // Recherche d'un ticket par jeton (lien de devis ou d'avis) : quelques essais par adresse seulement, contre les devinettes.
     if (estListe && table === 'tickets sav' && !verifierDebit(req, { max: 30, fenetreMs: 10 * 60 * 1000, cle: 'jeton-ticket' })) return res.status(429).json({ error: 'Trop de tentatives. Réessayez dans quelques minutes.' });
@@ -1047,6 +1062,35 @@ export default async function handler(req, res) {
       return res.status(contentRes.status).json(data);
     } catch (err) {
       return res.status(502).json({ error: 'Erreur en contactant Airtable (content)' });
+    }
+  }
+
+  // RATTACHEMENT À L'ENTREPRISE (audit n°3) : un compte d'entreprise ne crée ni ne déplace un enregistrement vers une autre
+  // entreprise. Le lien « entreprise » de chaque table est TOUJOURS celui de la session : imposé à la création s'il manque,
+  // refusé s'il désigne une autre entreprise. (Avant, le patron de B pouvait créer des créneaux, des devis ou des produits au catalogue
+  // « chez » A en renseignant le lien de A, et polluer ses tarifs.) Le super admin garde la main.
+  const LIEN_ENTREPRISE = {
+    'Planning': 'Compte client', 'Tickets SAV': 'Compte client', 'Devis': 'Client', 'Catalogue Produits': 'Client', "Grille Main d'œuvre": 'Client',
+    'Mise en page Devis': 'Client', 'Techniciens': 'Compte client', 'Contrats entretien': 'Compte client', 'Métrés': 'Compte client',
+    'RDV Commercial': 'Compte client', 'Interventions SAV': 'Compte client', 'Planning Commercial': 'Compte client', 'Agences': 'Client',
+    'Contrôles Chantier': 'Compte client', 'Questionnaire SAV': 'Client',
+  };
+  if (session && session.role !== 'SUPER_ADMIN_IKO' && (req.method === 'POST' || req.method === 'PATCH') && LIEN_ENTREPRISE[premierSegment] && req.body && typeof req.body === 'object') {
+    const champLien = LIEN_ENTREPRISE[premierSegment];
+    const lots = Array.isArray(req.body.records) ? req.body.records : [req.body];
+    for (const lot of lots) {
+      if (!lot || typeof lot !== 'object') continue;
+      if (!lot.fields || typeof lot.fields !== 'object') { if (req.method === 'POST') lot.fields = {}; else continue; }
+      if (Object.prototype.hasOwnProperty.call(lot.fields, champLien)) {
+        const v = lot.fields[champLien];
+        const liste = Array.isArray(v) ? v : [v];
+        if (!session.tenantId || liste.length !== 1 || liste[0] !== session.tenantId) {
+          return res.status(403).json({ error: "Accès refusé : cet enregistrement doit rester rattaché à votre entreprise." });
+        }
+      } else if (req.method === 'POST') {
+        if (!session.tenantId) return res.status(403).json({ error: 'Accès refusé : session sans entreprise.' });
+        lot.fields[champLien] = [session.tenantId];
+      }
     }
   }
 
@@ -1514,6 +1558,7 @@ export default async function handler(req, res) {
     'RDV Commercial': { champ: 'Compte client', filtrageListeFiable: false },
     'Contrats entretien': { champ: 'Compte client', filtrageListeFiable: false },
     'Techniciens': { champ: 'Compte client', filtrageListeFiable: false },
+    'Contrôles Chantier': { champ: 'Compte client', filtrageListeFiable: false },
   };
 
   if (session && session.role !== 'SUPER_ADMIN_IKO' && TABLES_TENANT_CONFIRME[premierSegment]) {
@@ -1873,6 +1918,12 @@ export default async function handler(req, res) {
   }
   const qs = params.toString();
   const airtableUrl = 'https://api.airtable.com/v0/' + baseId + '/' + encodedSubPath + (qs ? '?' + qs : '');
+  // Deuxième verrou : si l'adresse, une fois normalisée par le navigateur/serveur, ne désigne plus exactement ce chemin
+  // dans NOTRE base, la requête est refusée (jamais envoyée à Airtable).
+  try {
+    const u = new URL(airtableUrl);
+    if (u.hostname !== 'api.airtable.com' || u.pathname !== '/v0/' + baseId + '/' + encodedSubPath) return res.status(400).json({ error: 'Chemin non valide.' });
+  } catch (e) { return res.status(400).json({ error: 'Chemin non valide.' }); }
 
   const init = {
     method: req.method,
