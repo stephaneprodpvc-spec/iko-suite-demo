@@ -37,6 +37,13 @@ function hoteAutorise(h) {
   try { if (h === new URL(process.env.SUIVI_BASE_URL || 'https://iko-suite-demo.vercel.app').hostname.toLowerCase()) return true; } catch (e) { /* ignore */ }
   return false;
 }
+// Liens de paiement : uniquement ceux que l'ENTREPRISE a enregistrés dans sa fiche (jamais le navigateur), chez un prestataire de paiement connu.
+const HOTES_PAIEMENT = ['buy.stripe.com', 'checkout.stripe.com', 'paypal.me', 'www.paypal.com', 'pay.sumup.com', 'payment-links.mollie.com'];
+export function lienPaiementSur(u) {
+  const v = String(u || '').trim();
+  if (!/^https:\/\/[^\s"'<>]{8,400}$/.test(v)) return '';
+  try { return HOTES_PAIEMENT.includes(new URL(v).hostname.toLowerCase()) ? v : ''; } catch (e) { return ''; }
+}
 const lien = (u) => {
   const v = String(u || '').trim();
   if (!URL_SURE.test(v)) return '';
@@ -59,7 +66,7 @@ export function photosHtml(photos) {
 // ---------- éléments de mise en page ----------
 const ligne = (l, v) => `<tr><td style="padding:8px 0;width:36%;font:700 12px Arial,sans-serif;color:#6B6B6B;text-transform:uppercase;letter-spacing:.5px;vertical-align:top;">${l}</td><td style="padding:8px 0;font:14px Arial,sans-serif;color:#0D0D0D;vertical-align:top;">${v}</td></tr>`;
 const recap = (lignes) => `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-top:1px solid #EEE;margin:18px 0 6px;">${lignes.filter(([, v]) => v !== '' && v != null).map(([l, v]) => ligne(l, v)).join('')}</table>`;
-const bouton = (texte, url) => (lien(url) ? `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:22px auto 6px;"><tr><td style="background:${OR};border-radius:10px;"><a href="${esc(lien(url))}" style="display:inline-block;padding:14px 30px;font:700 15px Arial,sans-serif;color:${contraste(OR)};text-decoration:none;">${esc(texte)}</a></td></tr></table>` : '');
+const bouton = (texte, url, verifie) => ((verifie ? lienPaiementSur(url) : lien(url)) ? `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:22px auto 6px;"><tr><td style="background:${OR};border-radius:10px;"><a href="${esc(verifie ? lienPaiementSur(url) : lien(url))}" style="display:inline-block;padding:14px 30px;font:700 15px Arial,sans-serif;color:${contraste(OR)};text-decoration:none;">${esc(texte)}</a></td></tr></table>` : '');
 const teinte = (hex, a) => `rgba(${[1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16)).join(',')},${a})`; // fond léger de la couleur du client
 const encart = (html, fond = null, bord = OR) => `<div style="background:${fond || teinte(OR, 0.1)};border-left:4px solid ${bord};border-radius:8px;padding:14px 16px;margin:18px 0;font:14px/1.5 Arial,sans-serif;color:#0D0D0D;">${html}</div>`;
 const p = (html) => `<p style="margin:0 0 14px;font:15px/1.6 Arial,sans-serif;color:#2B2B2B;">${html}</p>`;
@@ -151,7 +158,7 @@ export function construireMails(action, d, marque) {
     case 'qui_paie_client':
       // Décision « Qui paie ? » : le texte vient du ticket (lu côté serveur), jamais du navigateur.
       return { objet: `${t} : facturation du déplacement et du diagnostic`, html: cadre({ resume: 'Information sur la facturation de votre intervention.', bandeau: 'Service après-vente', titre: 'Facturation de votre intervention',
-        corps: bonjour(d) + p(`Suite à l'intervention de votre demande <b>${esc(t)}</b> :`) + encart(esc(d.texte_facturation)) +
+        corps: bonjour(d) + p(`Suite à l'intervention de votre demande <b>${esc(t)}</b> :`) + encart(esc(d.texte_facturation)) + bouton('Payer en ligne', d.lien_paiement, true) +
           p('<span style="font-size:13px;color:#6B6B6B;">Une question ? Répondez simplement à ce message, l\'agence reviendra vers vous.</span>') }) };
     case 'devis_signe':
     case 'devis_accepte':
@@ -206,7 +213,8 @@ export function construireMails(action, d, marque) {
 export function ajouterMailsAuCorps(corps, action, marque) {
   try {
     // Lien « Ne plus recevoir d'e-mails » : calculé ici (jamais pris du navigateur), uniquement si le client a une adresse.
-    delete corps.lien_stop;
+    delete corps.lien_stop; delete corps.lien_paiement;
+    if (action === 'qui_paie_client' && marque && marque.lienPaiement) { const lp = lienPaiementSur(marque.lienPaiement); if (lp) corps.lien_paiement = lp; }
     const adr = normaliserEmail(corps['e-mail']);
     if (adr) { const ls = lienStop(adr); if (ls) corps.lien_stop = ls; }
     const m = construireMails(action, corps, marque);
@@ -259,7 +267,7 @@ export async function marqueClient(clientId) {
     const r = await fetch('https://api.airtable.com/v0/' + base + '/Clients/' + clientId, { headers: { Authorization: 'Bearer ' + process.env.AIRTABLE_TOKEN } });
     if (!r.ok) return null;
     const f = (await r.json()).fields || {};
-    const v = { nom: f['Nom client'] || '', principale: f['Couleur principale'] || '', secondaire: f['Couleur secondaire'] || '' };
+    const v = { nom: f['Nom client'] || '', principale: f['Couleur principale'] || '', secondaire: f['Couleur secondaire'] || '', lienPaiement: f['Lien de paiement'] || '' };
     cacheMarque.set(clientId, { t: Date.now(), v });
     return v;
   } catch (e) { return null; }

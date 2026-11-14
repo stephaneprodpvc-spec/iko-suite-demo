@@ -962,6 +962,10 @@
         <input type="url" id="fLienGoogle" placeholder="https://g.page/r/…/review" style="width:100%;padding:12px 14px;border-radius:13px;border:1px solid var(--border);background:rgba(255,255,255,0.04);color:var(--texte);font-size:13.5px;outline:none;font-family:inherit;">
         <div class="hint" style="font-size:11px;color:var(--texte-faint);margin-top:5px;margin-bottom:12px;">Proposé automatiquement aux clients qui donnent 4 ou 5 étoiles après leur SAV.</div>
 
+        <label>Lien de paiement en ligne (facultatif)</label>
+        <input type="url" id="fLienPaiement" placeholder="https://buy.stripe.com/…" style="width:100%;padding:12px 14px;border-radius:13px;border:1px solid var(--border);background:rgba(255,255,255,0.04);color:var(--texte);font-size:13.5px;outline:none;font-family:inherit;">
+        <div class="hint" style="font-size:11px;color:var(--texte-faint);margin-top:5px;margin-bottom:12px;">Le lien de paiement de l'ENTREPRISE (Stripe, PayPal, SumUp ou Mollie). Quand IKO facture un déplacement au client, le message contient un bouton « Payer en ligne » vers ce lien : l'argent va directement chez l'entreprise.</div>
+
         <div id="agencesWrap" style="display:none;">
           <button type="button" class="secondary" id="agencesToggleBtn" style="width:100%;text-align:left;display:flex;justify-content:space-between;align-items:center;margin-top:18px;">
             <span>Agences <span id="agencesCount" style="color:var(--texte-faint);font-weight:400;"></span></span><span id="agencesChevron">▾</span>
@@ -2024,6 +2028,7 @@ function chargerDansFormulaire(id){
   document.getElementById("fNbAgences").value = f["Nombre agences"] || 1;
   document.getElementById("fMontantDiag").value = f["Montant diagnostic HT"] != null ? f["Montant diagnostic HT"] : "";
   document.getElementById("fLienGoogle").value = f["Lien avis Google"] || "";
+  document.getElementById("fLienPaiement").value = f["Lien de paiement"] || "";
   document.getElementById("fQuiPaieMode").value = /valider/i.test(f["Qui paie mode"] || "") ? "valider" : "ia";
   document.getElementById("fQuiPaieSeuil").value = f["Qui paie seuil"] ? f["Qui paie seuil"] : "";
   setModulesActifs(f["Modules actifs"]);
@@ -3105,6 +3110,7 @@ function reinitialiserFormulaire(){
   document.getElementById("fMontantDiag").value = "";
   document.getElementById("fQuiPaieMode").value = "ia"; document.getElementById("fQuiPaieSeuil").value = "";
   document.getElementById("fLienGoogle").value = "";
+  document.getElementById("fLienPaiement").value = "";
   document.getElementById("agencesWrap").style.display = "none";
   document.getElementById("utilisateursWrap").style.display = "none";
   document.getElementById("questionnaireWrap").style.display = "none";
@@ -3137,6 +3143,14 @@ document.getElementById("clientForm").addEventListener("submit", function(e){
   msg.className = "msg"; msg.textContent = "Enregistrement…";
 
   var logoUrl = document.getElementById("fLogo").value.trim();
+  // Lien de paiement : seulement chez un prestataire connu (même liste que les e-mails : jamais un lien quelconque vers un client).
+  var lienPaiement = document.getElementById("fLienPaiement").value.trim();
+  var HOTES_PAIEMENT = ["buy.stripe.com", "checkout.stripe.com", "paypal.me", "www.paypal.com", "pay.sumup.com", "payment-links.mollie.com"];
+  var hotePaiement = ""; try { hotePaiement = new URL(lienPaiement).hostname.toLowerCase(); } catch (er) {}
+  if (lienPaiement && (!/^https:\/\//.test(lienPaiement) || HOTES_PAIEMENT.indexOf(hotePaiement) === -1)) {
+    msg.className = "msg err"; msg.textContent = "Lien de paiement non accepté : utilisez un lien Stripe, PayPal, SumUp ou Mollie (https). Pour un autre prestataire, demandez son ajout.";
+    return;
+  }
   var fields = {
     "Nom client": document.getElementById("fNom").value.trim(),
     "Slug": document.getElementById("fSlug").value.trim(),
@@ -3156,6 +3170,7 @@ document.getElementById("clientForm").addEventListener("submit", function(e){
     "Montant diagnostic HT": document.getElementById("fMontantDiag").value.trim() === "" ? null : Math.max(0, parseFloat(document.getElementById("fMontantDiag").value) || 0),
     "Qui paie mode": document.getElementById("fQuiPaieMode").value,
     "Qui paie seuil": document.getElementById("fQuiPaieSeuil").value.trim() === "" ? null : Math.max(0, parseInt(document.getElementById("fQuiPaieSeuil").value, 10) || 0),
+    "Lien de paiement": lienPaiement || null,
     "Lien avis Google": /^https?:\/\//.test(document.getElementById("fLienGoogle").value.trim()) ? document.getElementById("fLienGoogle").value.trim() : null
   };
   if (logoUrl) fields["Logo"] = [{ url: logoUrl }];

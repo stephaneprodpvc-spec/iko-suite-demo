@@ -63,7 +63,7 @@ export function lireJeton(jeton) {
 // Base du lien : jamais issue d'un en-tete libre (un tiers pourrait faire
 // pointer le lien du mail vers un site pirate). Seuls les domaines du projet
 // sont acceptes ; sinon repli sur la production.
-function baseLien(req) {
+export function baseLien(req) {
   const h = String((req && req.headers && (req.headers["x-forwarded-host"] || req.headers.host)) || "").split(",")[0].trim();
   if (/^iko-suite-demo[a-z0-9-]*\.vercel\.app$/.test(h)) return "https://" + h;
   return process.env.SUIVI_BASE_URL || BASE_PROD;

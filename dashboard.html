@@ -6,6 +6,8 @@
 <script>/* Échappement HTML des données affichées dans les fenêtres d'impression/export (audit n°2, 02/11/2026) */window.ikoEsc=function(v){return String(v==null?"":v).replace(/[&<>"']/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c];});};</script>
 <script src="/theme.js"></script>
 <script src="/creneaux.js"></script>
+<script src="/gains.js"></script>
+<script src="/qrcode.js"></script>
 <script src="/iko-sauvegarde.js"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Iko Suite — Dashboard Agences</title>
@@ -2342,6 +2344,214 @@ function ModalQuiPaie({ tickets, onClose, onRefresh }) {
         {decisions.length > 0 && (<div style={{marginTop:"14px"}}>
           <div style={{fontSize:"11px",fontWeight:"800",color:"#9CA3AF",marginBottom:"6px"}}>DERNIÈRES DÉCISIONS</div>
           {decisions.map(t => <div key={t.id} style={{fontSize:"11px",color:"#D1D5DB",padding:"4px 0",borderTop:"1px solid rgba(255,255,255,0.08)"}}><b>{t.fields?.Name}</b> — {t.fields?.["Qui paie"]}</div>)}
+        </div>)}
+      </div>
+    </div>
+  );
+}
+
+// ---- « Gains & rapports » : ce que IKO fait gagner, retour qualité fabricant, étiquettes QR du carnet produit ----
+function ouvrirFenetreImpression(titre, corpsHtml) {
+  const w = window.open("", "_blank");
+  if (!w) { window.ikoMessage("Autorise l'ouverture de fenêtres pour imprimer."); return; }
+  w.document.write("<!doctype html><html lang='fr'><head><meta charset='utf-8'><title>" + window.ikoEsc(titre) + "</title><style>"
+    + "body{font-family:Arial,sans-serif;color:#111;margin:24px}h1{font-size:20px;margin:0 0 4px}h2{font-size:14px;margin:18px 0 6px}"
+    + ".sous{color:#6B6B6B;font-size:12px;margin-bottom:14px}table{border-collapse:collapse;width:100%;font-size:12px}"
+    + "th{background:#111;color:#fff;text-align:left;padding:6px 8px}td{border-bottom:1px solid #ddd;padding:6px 8px;vertical-align:top}"
+    + ".note{font-size:11px;color:#6B6B6B;margin-top:16px}.grille{display:flex;flex-wrap:wrap;gap:10px}"
+    + ".etiquette{width:62mm;border:1.5px solid #111;border-radius:6px;padding:6px;text-align:center;page-break-inside:avoid}"
+    + ".etiquette svg{width:42mm;height:42mm}.etiquette b{display:block;font-size:11px}.etiquette span{font-size:9px;color:#444}"
+    + "@media print{body{margin:10mm}}</style></head><body>" + corpsHtml + "</body></html>");
+  w.document.close();
+  setTimeout(() => { try { w.focus(); w.print(); } catch (e) {} }, 400);
+}
+
+function ModalGainsRapports({ tickets, onClose, onRefresh }) {
+  const G = window.IKOGains;
+  const [onglet, setOnglet] = React.useState("gains");
+  const [periode, setPeriode] = React.useState("3mois");
+  const [devisSignes, setDevisSignes] = React.useState([]);
+  const [erreur, setErreur] = React.useState("");
+  const [enCours, setEnCours] = React.useState(null);
+  const lire = (cle) => { try { return localStorage.getItem(cle) || ""; } catch (e) { return ""; } };
+  const [minutes, setMinutes] = React.useState(lire("iko_gains_minutes"));
+  const [taux, setTaux] = React.useState(lire("iko_gains_taux"));
+  const garder = (cle, v, set) => { set(v); try { localStorage.setItem(cle, v); } catch (e) {} };
+  const [destinataire, setDestinataire] = React.useState("");
+  // Carnet produit (QR)
+  const [form, setForm] = React.useState({ produit: "", reference: "", datePose: "", poseur: "", garantieAns: "2", nb: "1" });
+  const [carnet, setCarnet] = React.useState(null);
+  const [creation, setCreation] = React.useState(false);
+
+  React.useEffect(() => {
+    let annule = false;
+    fetch('/api/airtable/Devis?filterByFormula=' + encodeURIComponent('{Statut}="Validé"') + '&maxRecords=100')
+      .then(r => r.ok ? r.json() : { records: [] })
+      .then(j => { if (!annule) setDevisSignes(j.records || []); })
+      .catch(() => {});
+    return () => { annule = true; };
+  }, []);
+
+  const bornes = G.bornes(periode);
+  const gains = G.calculerGains(tickets, devisSignes, bornes);
+  const rapport = G.agregerRetourQualite(tickets, bornes);
+  const aEncaisser = G.listeAEncaisser(tickets);
+  const temps = G.tempsGagne(gains.nbTickets, minutes, taux);
+  const eur = (n) => (Math.round(n * 100) / 100).toLocaleString("fr-FR", { minimumFractionDigits: 0, maximumFractionDigits: 2 }) + " €";
+  const libellePeriode = { mois: "ce mois-ci", "3mois": "les 3 derniers mois", "12mois": "les 12 derniers mois", tout: "depuis le début" }[periode];
+
+  const marquerPaye = async (t) => {
+    setEnCours(t.id); setErreur("");
+    try {
+      const q = G.lireDetail(t) || {};
+      q.paiement = { statut: "paye", date: new Date().toISOString() };
+      const r = await fetch('/api/airtable/tenant/Tickets%20SAV/' + t.id, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ fields: { "Qui paie détail": JSON.stringify(q) } }) });
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      if (onRefresh) await onRefresh();
+    } catch (e) { setErreur("Paiement non enregistré (" + e.message + "). Réessaie."); }
+    setEnCours(null);
+  };
+
+  const telechargerCsv = () => {
+    const blob = new Blob(["﻿" + G.csvRetourQualite(rapport)], { type: "text/csv;charset=utf-8" });
+    const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "retour-qualite-" + new Date().toISOString().slice(0, 10) + ".csv";
+    document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  };
+  const imprimerRapport = () => {
+    const e = window.ikoEsc;
+    const nom = (window.IKO_CLIENT_INFO && window.IKO_CLIENT_INFO["Nom client"]) || "";
+    let h = "<h1>Retour qualité" + (destinataire ? " — " + e(destinataire) : "") + "</h1><div class='sous'>" + e(nom) + " · SAV de " + e(libellePeriode) + " · édité le " + new Date().toLocaleDateString("fr-FR") + "</div>";
+    h += "<div class='sous'><b>" + rapport.total + "</b> SAV analysés, dont <b>" + rapport.clotures + "</b> clôturés. Cause non renseignée : " + rapport.sansCause + ".</div>";
+    h += "<table><tr><th>Produit</th><th>SAV</th><th>Défaut produit / pièce / malfaçon</th><th>Erreur de pose</th><th>Utilisation / usure</th><th>Sous garantie</th><th>Pièces citées</th></tr>";
+    rapport.lignes.forEach(l => {
+      const pieces = Object.keys(l.pieces).sort((a, b) => l.pieces[b] - l.pieces[a]).map(p => e(p) + " (x" + l.pieces[p] + ")").join("<br>");
+      h += "<tr><td><b>" + e(l.produit) + "</b></td><td>" + l.total + "</td><td>" + l.dontFabricant + "</td><td>" + l.dontPose + "</td><td>" + l.dontUtilisation + "</td><td>" + l.garantie + "</td><td>" + pieces + "</td></tr>";
+    });
+    h += "</table><div class='note'>Chiffres tirés des tickets SAV de l'entreprise sur la période. La cause est celle choisie par le technicien à la clôture. Sur un petit nombre de dossiers, ces chiffres sont des indications, pas des statistiques.</div>";
+    ouvrirFenetreImpression("Retour qualité", h);
+  };
+
+  const creerCode = async () => {
+    setCreation(true); setErreur(""); setCarnet(null);
+    try {
+      const r = await fetch('/api/airtable/carnet', { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "creer", produit: form.produit, reference: form.reference, datePose: form.datePose, poseur: form.poseur, garantieAns: form.garantieAns, slug: (window.IKO_CLIENT_INFO && window.IKO_CLIENT_INFO["Slug"]) || new URLSearchParams(window.location.search).get("client") || "", entreprise: (window.IKO_CLIENT_INFO && window.IKO_CLIENT_INFO["Nom client"]) || "" }) });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(j.error || ("HTTP " + r.status));
+      const qr = window.qrcode(0, "M"); qr.addData(j.url); qr.make();
+      setCarnet({ url: j.url, svg: qr.createSvgTag(4, 2, "QR code du carnet produit", "QR code").replace(/ (width|height)="[^"]*"/g, "").replace("<svg", '<svg width="100%" height="100%"') });
+    } catch (e) { setErreur(String(e.message || e)); }
+    setCreation(false);
+  };
+  const imprimerEtiquettes = () => {
+    if (!carnet) return;
+    const e = window.ikoEsc;
+    const nom = (window.IKO_CLIENT_INFO && window.IKO_CLIENT_INFO["Nom client"]) || "";
+    const n = Math.max(1, Math.min(60, parseInt(form.nb, 10) || 1));
+    const une = "<div class='etiquette'>" + carnet.svg + "<b>" + e(form.produit) + "</b><span>Scannez pour le carnet et le SAV · " + e(nom) + "</span></div>";
+    ouvrirFenetreImpression("Étiquettes QR", "<div class='grille'>" + Array(n).fill(une).join("") + "</div>");
+  };
+
+  const champ = { width: "100%", padding: "9px 10px", borderRadius: "8px", border: "1px solid rgba(255,255,255,0.25)", background: "#1b1b1b", color: "#fff", fontSize: "13px" };
+  const etiquette = { fontSize: "11px", color: "#9CA3AF", display: "block", margin: "8px 0 3px", fontWeight: 700 };
+  const bouton = (plein) => ({ padding: "9px 14px", borderRadius: "8px", fontSize: "12px", fontWeight: 800, cursor: "pointer", border: plein ? "none" : "1px solid var(--iko-primary)", background: plein ? "var(--iko-primary)" : "transparent", color: plein ? "#fff" : "var(--iko-primary)" });
+  const onglets = [["gains", "Ce que IKO vous fait gagner"], ["qualite", "Retour qualité"], ["qr", "Étiquettes QR"]];
+
+  return (
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.65)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center",padding:"16px"}} onClick={onClose}>
+      <div onClick={e => e.stopPropagation()} style={{background:"#111",color:"#fff",borderRadius:"16px",maxWidth:"820px",width:"100%",maxHeight:"90vh",overflowY:"auto",padding:"18px",border:"1px solid var(--iko-primary)"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"10px"}}>
+          <div style={{fontSize:"17px",fontWeight:900}}>Gains &amp; rapports</div>
+          <button onClick={onClose} aria-label="Fermer" style={{background:"none",border:"none",color:"#fff",fontSize:"18px",cursor:"pointer"}}>✕</button>
+        </div>
+        <div style={{display:"flex",gap:"6px",flexWrap:"wrap",marginBottom:"12px"}}>
+          {onglets.map(([id, nom]) => <button key={id} onClick={() => { setOnglet(id); setErreur(""); }} style={{...bouton(onglet === id), borderRadius:"20px"}}>{nom}</button>)}
+        </div>
+        {onglet !== "qr" && (
+          <div style={{display:"flex",gap:"6px",flexWrap:"wrap",alignItems:"center",marginBottom:"12px",fontSize:"12px",color:"#9CA3AF"}}>
+            Période :
+            {[["mois", "Ce mois"], ["3mois", "3 mois"], ["12mois", "12 mois"], ["tout", "Tout"]].map(([id, nom]) => <button key={id} onClick={() => setPeriode(id)} style={{padding:"4px 10px",borderRadius:"14px",fontSize:"11px",fontWeight:700,cursor:"pointer",border:"1px solid " + (periode === id ? "var(--iko-primary)" : "rgba(255,255,255,0.25)"),background:periode === id ? "var(--iko-primary)" : "transparent",color:"#fff"}}>{nom}</button>)}
+          </div>
+        )}
+        {erreur && <div style={{color:"#EF4444",fontSize:"12px",marginBottom:"8px"}}>{erreur}</div>}
+
+        {onglet === "gains" && (<div>
+          <EntetePro titre={"Résultats · " + libellePeriode} sous="Chiffres réels tirés de vos tickets et de vos devis signés. Rien n'est estimé."
+            kpis={[
+              { label: "Tickets reçus", valeur: gains.nbTickets },
+              { label: "Décisions « Qui paie » prises par IKO seul", valeur: gains.quiPaie.auto, accent: true },
+              { label: "Déplacements facturés à un tiers", valeur: gains.deplacementsFactures.nb },
+              { label: "À encaisser (HT)", valeur: gains.aEncaisser.montant, suffixe: " €", decimales: 2, accent: gains.aEncaisser.nb > 0, alerte: false },
+              { label: "Déjà encaissé (HT)", valeur: gains.payes.montant, suffixe: " €", decimales: 2 },
+              { label: "Devis signés (TTC)", valeur: gains.devisSignes.montantTTC, suffixe: " €", decimales: 2 },
+              { label: "Encaissé sur place", valeur: gains.encaisseSurPlace, suffixe: " €", decimales: 2 },
+            ]}
+            donut={{ titre: "Qui paie ?", segments: [
+              { label: "Réglé par IKO seul", valeur: gains.quiPaie.auto },
+              { label: "Validé par le responsable", valeur: gains.quiPaie.validesResponsable },
+              { label: "À votre charge", valeur: gains.quiPaie.chargeEntreprise },
+              { label: "En attente de validation", valeur: gains.quiPaie.aValider },
+            ] }}/>
+          <div style={{fontSize:"12px",color:"#D1D5DB",marginBottom:"10px"}}>
+            {gains.deplacementsFactures.nb > 0
+              ? <>Sur {libellePeriode}, <b>{gains.deplacementsFactures.nb}</b> déplacement(s) ont été facturés à un tiers (client, poseur ou fabricant) plutôt que supportés par vous{gains.deplacementsFactures.montant > 0 ? <> : <b>{eur(gains.deplacementsFactures.montant)} HT</b></> : ""}.</>
+              : <>Aucun déplacement facturé à un tiers sur cette période.</>}
+            {gains.devisSignes.nb > 0 && <> {gains.devisSignes.nb} devis signé(s) en ligne.</>}
+          </div>
+          <div style={{border:"1px solid rgba(255,255,255,0.15)",borderRadius:"12px",padding:"12px",marginBottom:"12px"}}>
+            <div style={{fontSize:"12px",fontWeight:800,marginBottom:"4px"}}>Temps gagné (votre estimation)</div>
+            <div style={{fontSize:"11px",color:"#9CA3AF",marginBottom:"6px"}}>IKO ne devine pas : indiquez combien de minutes de secrétariat un dossier vous demandait avant (prise de rendez-vous, relances, messages), et le coût d'une heure.</div>
+            <div style={{display:"flex",gap:"10px",flexWrap:"wrap"}}>
+              <label style={{flex:"1 1 160px"}}><span style={etiquette}>Minutes gagnées par dossier</span><input style={champ} inputMode="decimal" value={minutes} onChange={e => garder("iko_gains_minutes", e.target.value, setMinutes)} placeholder="ex : 10"/></label>
+              <label style={{flex:"1 1 160px"}}><span style={etiquette}>Coût d'une heure (€)</span><input style={champ} inputMode="decimal" value={taux} onChange={e => garder("iko_gains_taux", e.target.value, setTaux)} placeholder="ex : 30"/></label>
+            </div>
+            <div style={{fontSize:"13px",marginTop:"8px",fontWeight:700}}>{temps ? <>≈ {temps.heures} h gagnées{temps.euros !== null ? <> · ≈ {eur(temps.euros)}</> : ""} sur {gains.nbTickets} dossier(s)</> : <span style={{color:"#9CA3AF",fontWeight:400}}>Renseignez les minutes pour voir le résultat.</span>}</div>
+          </div>
+          <div style={{fontSize:"12px",fontWeight:800,marginBottom:"6px"}}>À ENCAISSER ({aEncaisser.length})</div>
+          {aEncaisser.length === 0 && <div style={{fontSize:"12px",color:"#9CA3AF",padding:"6px 0"}}>Rien à encaisser : tout est réglé.</div>}
+          {aEncaisser.map(t => { const q = G.lireDetail(t) || {}; return (
+            <div key={t.id} style={{border:"1px solid rgba(255,255,255,0.15)",borderRadius:"10px",padding:"10px",marginBottom:"8px",display:"flex",gap:"10px",alignItems:"center",flexWrap:"wrap"}}>
+              <div style={{flex:"1 1 220px",fontSize:"12px"}}>
+                <b style={{color:"var(--iko-primary)"}}>{t.fields?.Name}</b> · {t.fields?.Client || "Client"}<br/>
+                <span style={{color:"#9CA3AF"}}>{q.payeur === "poseur" ? "À facturer au poseur" : q.payeur === "fabricant" ? "À facturer au fabricant" : "À payer par le client"}{q.montantDeplacement ? " · " + eur(q.montantDeplacement) + " HT" : ""}</span>
+              </div>
+              <button disabled={enCours === t.id} onClick={() => marquerPaye(t)} style={bouton(true)}>Marquer payé</button>
+            </div>); })}
+        </div>)}
+
+        {onglet === "qualite" && (<div>
+          <div style={{fontSize:"12px",color:"#D1D5DB",marginBottom:"10px"}}>Pour chaque produit : combien de SAV, et pour quelle cause. Un document à envoyer au fabricant pour qu'il corrige à la source. Les causes viennent du choix du technicien à la clôture.</div>
+          <label><span style={etiquette}>Destinataire du rapport (facultatif, ex : nom du fabricant)</span><input style={champ} value={destinataire} onChange={e => setDestinataire(e.target.value)} maxLength={80}/></label>
+          <div style={{fontSize:"12px",margin:"10px 0",color:"#D1D5DB"}}><b>{rapport.total}</b> SAV · <b>{rapport.clotures}</b> clôturés · cause non renseignée : <b>{rapport.sansCause}</b></div>
+          {rapport.lignes.length === 0 && <div style={{padding:"14px",textAlign:"center",color:"#9CA3AF",fontSize:"13px"}}>Aucun SAV sur cette période.</div>}
+          {rapport.lignes.length > 0 && (<div style={{overflowX:"auto"}}><table style={{width:"100%",borderCollapse:"collapse",fontSize:"12px"}}>
+            <thead><tr style={{textAlign:"left",color:"var(--iko-primary)"}}><th style={{padding:"6px"}}>Produit</th><th>SAV</th><th>Défaut / pièce</th><th>Pose</th><th>Utilisation</th><th>Garantie</th></tr></thead>
+            <tbody>{rapport.lignes.map(l => <tr key={l.produit} style={{borderTop:"1px solid rgba(255,255,255,0.1)"}}><td style={{padding:"6px",fontWeight:700}}>{l.produit}</td><td>{l.total}</td><td>{l.dontFabricant}</td><td>{l.dontPose}</td><td>{l.dontUtilisation}</td><td>{l.garantie}</td></tr>)}</tbody>
+          </table></div>)}
+          <div style={{display:"flex",gap:"8px",marginTop:"12px",flexWrap:"wrap"}}>
+            <button disabled={!rapport.lignes.length} onClick={imprimerRapport} style={bouton(true)}>Imprimer / enregistrer en PDF</button>
+            <button disabled={!rapport.lignes.length} onClick={telechargerCsv} style={bouton(false)}>Télécharger en tableau (CSV)</button>
+          </div>
+        </div>)}
+
+        {onglet === "qr" && (<div>
+          <div style={{fontSize:"12px",color:"#D1D5DB",marginBottom:"8px"}}>Collez cet autocollant sur la menuiserie posée. Le client le scanne : il voit son carnet (date de pose, poseur, garantie) et son SAV démarre déjà rempli, sans chercher sa facture. Les informations sont certifiées dans le code : personne ne peut les modifier.</div>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(220px,1fr))",gap:"0 12px"}}>
+            <label><span style={etiquette}>Produit posé *</span><input style={champ} value={form.produit} maxLength={80} onChange={e => setForm({ ...form, produit: e.target.value })} placeholder="ex : Fenêtre PVC 2 vantaux"/></label>
+            <label><span style={etiquette}>Référence / n° de facture</span><input style={champ} value={form.reference} maxLength={40} onChange={e => setForm({ ...form, reference: e.target.value })}/></label>
+            <label><span style={etiquette}>Date de pose *</span><input style={champ} type="date" value={form.datePose} max={new Date().toISOString().slice(0, 10)} onChange={e => setForm({ ...form, datePose: e.target.value })}/></label>
+            <label><span style={etiquette}>Posé par (si ce n'est pas vous)</span><input style={champ} value={form.poseur} maxLength={80} onChange={e => setForm({ ...form, poseur: e.target.value })}/></label>
+            <label><span style={etiquette}>Garantie (années)</span><input style={champ} inputMode="numeric" value={form.garantieAns} onChange={e => setForm({ ...form, garantieAns: e.target.value })}/></label>
+            <label><span style={etiquette}>Nombre d'étiquettes à imprimer</span><input style={champ} inputMode="numeric" value={form.nb} onChange={e => setForm({ ...form, nb: e.target.value })}/></label>
+          </div>
+          <div style={{display:"flex",gap:"8px",marginTop:"12px",flexWrap:"wrap"}}>
+            <button disabled={creation || !form.produit.trim() || !form.datePose} onClick={creerCode} style={bouton(true)}>{creation ? "Création…" : "Créer le code"}</button>
+            {carnet && <button onClick={imprimerEtiquettes} style={bouton(false)}>Imprimer les étiquettes</button>}
+          </div>
+          {carnet && (<div style={{marginTop:"14px",display:"flex",gap:"14px",alignItems:"center",flexWrap:"wrap"}}>
+            <div style={{background:"#fff",borderRadius:"10px",padding:"6px",width:"150px",height:"150px"}} dangerouslySetInnerHTML={{ __html: carnet.svg }}/>
+            <div style={{fontSize:"11px",color:"#9CA3AF",flex:"1 1 220px",wordBreak:"break-all"}}>Lien du code (à tester avec votre téléphone) :<br/><a href={carnet.url} target="_blank" rel="noopener noreferrer" style={{color:"var(--iko-primary)"}}>{carnet.url.slice(0, 70)}…</a></div>
+          </div>)}
+          <div style={{fontSize:"11px",color:"#9CA3AF",marginTop:"12px"}}>Le code n'est pas enregistré chez nous : il contient tout. Gardez l'autocollant imprimé ; pour un autre produit, créez un autre code.</div>
         </div>)}
       </div>
     </div>
@@ -6368,6 +6578,8 @@ function Dashboard({ agenceAccess, onClose }) {
   }, []);
   const [showModalGestionDevis, setShowModalGestionDevis] = React.useState(false);
   const [showQuiPaie, setShowQuiPaie] = React.useState(false);
+  const [showGains, setShowGains] = React.useState(false);
+  const nbAEncaisser = window.IKOGains ? window.IKOGains.listeAEncaisser(tickets).length : 0;
   const nbQuiPaieAValider = tickets.filter(t => { const q = lireQuiPaie(t); return q && q.decision === "a_valider"; }).length;
   const [showModalNotes, setShowModalNotes] = React.useState(false);
   const [successTicket, setSuccessTicket] = React.useState(null);
@@ -7506,6 +7718,9 @@ function Dashboard({ agenceAccess, onClose }) {
           onBack={() => { setShowModalMiseEnService(false); setShowModalDirigeant(true); }}
         />
       )}
+      {showGains && (
+        <ModalGainsRapports tickets={tickets} onClose={() => setShowGains(false)} onRefresh={charger}/>
+      )}
       {showQuiPaie && (
         <ModalQuiPaie tickets={tickets} onClose={() => setShowQuiPaie(false)} onRefresh={charger}/>
       )}
@@ -7591,6 +7806,10 @@ function Dashboard({ agenceAccess, onClose }) {
               RDV modifiés <span style={{background:"#fff",color:C.bleu,borderRadius:"10px",padding:"1px 7px",fontSize:"10px"}}>{stats.rdvModifies}</span>
             </button>
           )}
+          <button className="glass-btn" onClick={() => setShowGains(true)} title="Ce que IKO vous fait gagner, retour qualité pour le fabricant, étiquettes QR"
+            style={{padding:"8px 14px",fontSize:"12px",display:"flex",alignItems:"center",gap:"6px"}}>
+            Gains &amp; rapports {nbAEncaisser > 0 && <span style={{background:"var(--iko-primary)",color:"#fff",borderRadius:"10px",padding:"1px 6px",fontSize:"10px"}}>{nbAEncaisser}</span>}
+          </button>
           <button className="glass-btn" onClick={() => setShowQuiPaie(true)} title="Qui paie ? Décisions de facturation du SAV"
             style={{padding:"8px 14px",fontSize:"12px",display:"flex",alignItems:"center",gap:"6px"}}>
             Qui paie ? {nbQuiPaieAValider > 0 && <span style={{background:"var(--iko-primary)",color:"#fff",borderRadius:"10px",padding:"1px 6px",fontSize:"10px"}}>{nbQuiPaieAValider}</span>}

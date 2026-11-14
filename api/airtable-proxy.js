@@ -29,6 +29,7 @@ import { photosHtml, adressesPhotos, ajouterMailsAuCorps, marqueClient, enrichir
 import { verifierSession, verifierDebit, verifierOrigine } from './_securite.js';
 import { lienSuivi, lireJeton, normaliserEmail, normaliserTel } from './_suivi.js';
 import { handlerEntretien } from './_entretien.js';
+import { handlerCarnet } from './_carnet.js';
 import { signalerAbus } from './_abus.js';
 import { creneauxLibres, identDepuisClientId, AGENCES_DEMO } from './_planning.js';
 import { enteteMake } from './_make.js';
@@ -889,6 +890,10 @@ export default async function handler(req, res) {
 
   if (subPathRaw === 'entretien') {
     return handlerEntretien(req, res, { baseId, headers });
+  }
+
+  if (subPathRaw === 'carnet') {
+    return handlerCarnet(req, res, { baseId, headers, session });
   }
 
   if (subPathRaw === 'webhook-metreur') {

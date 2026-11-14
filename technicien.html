@@ -2048,7 +2048,13 @@ function ModalAction({ ticket, onClose, onDone }) {
     setPhotoChequeEnCours(false);
   };
   const [causeSav, setCauseSav] = React.useState("");
-  const [poseurSaisi, setPoseurSaisi] = React.useState(String(ticket.fields?.Poseur || ""));
+  // Poseur : champ du ticket, sinon celui du carnet produit (QR code scanné par le client : « Carnet produit IKO — Poseur : … »).
+  const [poseurSaisi, setPoseurSaisi] = React.useState(() => {
+    const direct = String(ticket.fields?.Poseur || "").trim();
+    if (direct) return direct;
+    const m = /Carnet produit IKO — Poseur : ([^—\n]+?)(?: — |\s*$)/.exec(String(ticket.fields?.["Problème"] || ""));
+    return m && !/^non précisé$/i.test(m[1].trim()) ? m[1].trim() : "";
+  });
   const [dureeMin, setDureeMin] = React.useState("");
   const [coutPieces, setCoutPieces] = React.useState("");
   const [signatureClient, setSignatureClient] = React.useState(null);

@@ -306,6 +306,9 @@ const AGENCES = [
 // table Agences (Actif=1) de ce client, plafonnee par Clients."Nombre agences" (max 10) ;
 // a defaut de lignes, "Agence 1..N" selon "Nombre agences".
 const SLUG_CLIENT = (new URLSearchParams(window.location.search).get('client') || '').trim();
+// QR code collé sur la menuiserie (page produit.html) : le jeton porte le produit, la date de pose, le poseur et la garantie (infalsifiable).
+const CARNET_JETON = (new URLSearchParams(window.location.search).get('carnet') || '').trim();
+function dateFr(iso) { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(iso || '')); return m ? m[3] + '/' + m[2] + '/' + m[1] : ''; }
 async function chargerAgencesClient() {
   if (!SLUG_CLIENT) return null;
   try {
@@ -569,6 +572,17 @@ function App() {
   const [photos, setPhotos] = React.useState([]);
   const [factureFichier, setFactureFichier] = React.useState(null);
   const bottomRef = React.useRef(null);
+  const [carnet, setCarnet] = React.useState(null);
+  React.useEffect(() => {
+    if (!CARNET_JETON) return;
+    fetch('/api/airtable/carnet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'lire', c: CARNET_JETON }) })
+      .then(r => r.ok ? r.json() : null)
+      .then(j => {
+        const c = j && j.carnet;
+        if (!c || (SLUG_CLIENT && c.slug !== SLUG_CLIENT)) return; // un code d'une autre entreprise n'est jamais utilisé ici
+        setCarnet(c); setTypeClient('existant'); setGarantie(!!c.sousGarantie); setFacture(c.reference || 'Carnet produit IKO');
+      }).catch(() => {});
+  }, []);
 
   React.useEffect(() => {
     if (!SLUG_CLIENT) return;
@@ -590,7 +604,7 @@ function App() {
     if (!client.tel.trim()) e.tel = true;
     if (!client.email.trim()) e.email = true;
     setErreurs(e);
-    if (garantie === true && !facture.trim()) { setErreurs(prev => ({...prev, facture: true})); return false; }
+    if (garantie === true && !facture.trim() && !carnet) { setErreurs(prev => ({...prev, facture: true})); return false; }
     return Object.keys(e).length === 0;
   };
 
@@ -642,9 +656,16 @@ function App() {
       if (factureFichier) {
         factureUrl = await uploadCloudinary(factureFichier);
       }
-      const garantieTexte = garantie === true
+      let garantieTexte = garantie === true
         ? "Oui — Facture " + facture
         : (garantie === false ? "Non / Hors garantie" : "N/A");
+      // Carnet du produit : la garantie vient du jeton signé (calculée par le serveur), pas de la réponse du client.
+      let problemeTexte = probleme.label, produitTexte = produit.label.substring(2).trim() + (sousType ? ' — ' + sousType : '');
+      if (carnet) {
+        garantieTexte = carnet.sousGarantie ? "Oui — Facture " + (carnet.reference || "carnet produit IKO") : "Non / Hors garantie (garantie terminée le " + dateFr(carnet.garantieJusqu) + ")";
+        produitTexte = carnet.produit;
+        problemeTexte = probleme.label + ' — Carnet produit IKO — Poseur : ' + (String(carnet.poseur || 'non précisé').replace(/—/g, '-')) + ' — Posé le ' + dateFr(carnet.datePose) + ' — Garantie jusqu’au ' + dateFr(carnet.garantieJusqu) + (carnet.reference ? ' — Réf. ' + carnet.reference : '');
+      }
       const urgentTexte = probleme.urgent ? "Oui" : "Non";
       await envoyerWebhook({
         marque: 'iko',
@@ -655,11 +676,11 @@ function App() {
         tel: client.tel,
         "e-mail": client.email,
         adresse: adresseComplete,
-        produit: produit.label.substring(2).trim() + (sousType ? ' — ' + sousType : ''),
-        probleme: probleme.label,
+        produit: produitTexte,
+        probleme: problemeTexte,
         creneau,
         garantie: garantieTexte,
-        facture,
+        facture: carnet ? (carnet.reference || '') : facture,
         urgent: urgentTexte,
         photos: photoUrls,
         facture_photo: factureUrl,
@@ -697,6 +718,14 @@ function App() {
       <div style={{height:"3px",background:"linear-gradient(90deg," + F.or + "," + F.orClair + "," + F.or + ")",flexShrink:0}} />
 
       <div style={{flex:1,overflowY:"auto",padding:"14px",display:"flex",flexDirection:"column",gap:"10px"}}>
+        {carnet && etape !== "merci" && (
+          <div style={{background:F.marine,color:F.blanc,borderRadius:"12px",padding:"10px 12px",fontSize:"11px",lineHeight:"1.6",border:"1px solid " + F.or}}>
+            <div style={{fontWeight:"800",color:F.or,letterSpacing:"1px",fontSize:"10px"}}>PRODUIT IDENTIFIÉ PAR LE CODE</div>
+            <div style={{fontWeight:"700",fontSize:"13px"}}>{carnet.produit}</div>
+            <div>Posé le {dateFr(carnet.datePose)}{carnet.poseur ? " par " + carnet.poseur : ""}</div>
+            <div>{carnet.sousGarantie ? "Sous garantie jusqu'au " : "Garantie terminée le "}{dateFr(carnet.garantieJusqu)}</div>
+          </div>
+        )}
 
         {etape === "agence" && (
           <>

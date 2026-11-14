@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex">
+<title>Carnet du produit — IKO</title>
+<style>
+  :root { --noir:#111; --orange:#FF6B00; --orange-clair:#FFC48A; --gris:#6B6B6B; --fond:#F5F3F0; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; background: var(--noir); color: var(--noir); min-height: 100vh; display: flex; flex-direction: column; align-items: center; padding: 0 16px 32px; }
+  header { width: 100%; max-width: 480px; padding: 22px 4px 14px; color: #fff; }
+  header .marque { font-size: 11px; font-weight: 800; letter-spacing: 3px; color: var(--orange); text-transform: uppercase; }
+  header h1 { font-size: 22px; font-weight: 900; margin-top: 4px; }
+  .carte { width: 100%; max-width: 480px; background: #fff; border-radius: 18px; padding: 20px; border-top: 5px solid var(--orange); }
+  .entreprise { font-size: 12px; font-weight: 700; color: var(--gris); text-transform: uppercase; letter-spacing: 1px; }
+  .produit { font-size: 22px; font-weight: 900; margin: 4px 0 14px; line-height: 1.25; }
+  dl { display: grid; grid-template-columns: auto 1fr; gap: 8px 14px; font-size: 14px; margin-bottom: 16px; }
+  dt { color: var(--gris); }
+  dd { font-weight: 700; }
+  .garantie { border-radius: 12px; padding: 12px 14px; font-size: 14px; font-weight: 800; margin-bottom: 16px; }
+  .garantie.oui { background: var(--noir); color: var(--orange-clair); border: 1px solid var(--orange); }
+  .garantie.non { background: #FFF3EB; color: #7A2E00; border: 1px solid #FFD9BF; }
+  .garantie small { display: block; font-weight: 400; font-size: 12px; margin-top: 2px; opacity: .85; }
+  .bouton { display: block; text-align: center; background: var(--orange); color: #fff; text-decoration: none; font-weight: 900; font-size: 16px; padding: 15px; border-radius: 12px; }
+  .bouton:focus-visible { outline: 3px solid var(--noir); outline-offset: 2px; }
+  .note { font-size: 12px; color: var(--gris); margin-top: 14px; line-height: 1.5; text-align: center; }
+  .erreur { text-align: center; padding: 8px 0; }
+  .erreur b { display: block; font-size: 16px; margin-bottom: 6px; }
+  #chargement { color: var(--gris); text-align: center; padding: 20px 0; }
+</style>
+</head>
+<body>
+<header>
+  <div class="marque">IKO · Carnet du produit</div>
+  <h1>Votre menuiserie</h1>
+</header>
+<main class="carte" id="contenu"><div id="chargement">Lecture du code…</div></main>
+<script>
+(function () {
+  var conteneur = document.getElementById('contenu');
+  function texte(el, valeur) { el.textContent = valeur; return el; }
+  function ligne(dl, nom, valeur) {
+    if (!valeur) return;
+    var dt = document.createElement('dt'), dd = document.createElement('dd');
+    texte(dt, nom); texte(dd, valeur); dl.appendChild(dt); dl.appendChild(dd);
+  }
+  function dateFr(iso) { var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(iso || '')); return m ? m[3] + '/' + m[2] + '/' + m[1] : ''; }
+  function erreur(titre, detail) {
+    conteneur.innerHTML = '';
+    var d = document.createElement('div'); d.className = 'erreur';
+    var b = document.createElement('b'); texte(b, titre);
+    d.appendChild(b); d.appendChild(document.createTextNode(detail));
+    conteneur.appendChild(d);
+  }
+  var jeton = (new URLSearchParams(window.location.search).get('c') || '').trim();
+  if (!jeton) { erreur('Code incomplet', "Scannez de nouveau l'autocollant collé sur votre menuiserie."); return; }
+  fetch('/api/airtable/carnet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'lire', c: jeton }) })
+    .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j, status: r.status }; }); })
+    .then(function (rep) {
+      if (rep.status === 429) { erreur('Un instant', 'Trop de lectures en peu de temps. Réessayez dans quelques minutes.'); return; }
+      if (!rep.ok || !rep.j || !rep.j.carnet) { erreur('Code non reconnu', "Ce code n'est pas valide. Contactez l'entreprise qui a posé votre menuiserie."); return; }
+      var c = rep.j.carnet;
+      conteneur.innerHTML = '';
+      var ent = document.createElement('div'); ent.className = 'entreprise'; texte(ent, c.entreprise || 'Entreprise');
+      var prod = document.createElement('div'); prod.className = 'produit'; texte(prod, c.produit);
+      var dl = document.createElement('dl');
+      ligne(dl, 'Posé le', dateFr(c.datePose));
+      ligne(dl, 'Posé par', c.poseur);
+      ligne(dl, 'Référence', c.reference);
+      ligne(dl, 'Garantie', c.garantieAns + (c.garantieAns > 1 ? ' ans' : ' an'));
+      var g = document.createElement('div'); g.className = 'garantie ' + (c.sousGarantie ? 'oui' : 'non');
+      g.appendChild(document.createTextNode(c.sousGarantie ? 'Sous garantie' : 'Garantie terminée'));
+      var s = document.createElement('small'); texte(s, (c.sousGarantie ? "Jusqu'au " : 'Depuis le ') + dateFr(c.garantieJusqu)); g.appendChild(s);
+      var a = document.createElement('a'); a.className = 'bouton'; texte(a, 'Signaler un problème avec ce produit');
+      a.href = 'index.html?client=' + encodeURIComponent(c.slug) + '&carnet=' + encodeURIComponent(jeton);
+      var n = document.createElement('p'); n.className = 'note';
+      texte(n, 'Ce carnet est certifié : les informations sont enregistrées dans le code et ne peuvent pas être modifiées. Le service après-vente démarre avec ces informations, sans avoir à chercher votre facture.');
+      [ent, prod, dl, g, a, n].forEach(function (el) { conteneur.appendChild(el); });
+    })
+    .catch(function () { erreur('Connexion impossible', 'Vérifiez votre réseau et réessayez.'); });
+})();
+</script>
+</body>
+</html>
