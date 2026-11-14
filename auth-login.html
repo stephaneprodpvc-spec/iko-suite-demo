@@ -195,6 +195,8 @@
   $('btnLogout').addEventListener('click', async function () {
     afficherMsg(''); afficherEtat(null);
     var res = await appel('logout', 'POST');
+    // Poste partagé : on vide aussi les copies hors ligne gardées par le navigateur (tickets, coordonnées des clients).
+    try { if (window.caches) { var noms = await caches.keys(); await Promise.all(noms.map(function (n) { return caches.delete(n); })); } } catch (e) {}
     afficherEtat(res.json);
   });
 })();

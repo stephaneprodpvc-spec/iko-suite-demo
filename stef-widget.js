@@ -22,8 +22,8 @@ try {
     map.type = 'importmap';
     map.textContent = JSON.stringify({
       imports: {
-        'three': 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js',
-        'three/addons/': 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/'
+        'three': '/vendor/three/three.module.js',
+        'three/addons/': '/vendor/three/addons/'
       }
     });
     document.head.appendChild(map);

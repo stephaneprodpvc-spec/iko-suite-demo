@@ -45,6 +45,70 @@ const CHAMPS_SUIVI = [
   'Pièce à commander', 'Commande pièce', 'Date réception prévue',
 ];
 
+// LECTURE PAR UN VISITEUR SANS SESSION (audit securite n°3, 14/11/2026) : les pages publiques (Amandine, suivi, devis, avis)
+// n'ont besoin que de quelques champs. Avant ce filtre, la fiche d'une entreprise (trouvée par son slug, visible dans les liens)
+// renvoyait la liste de TOUS ses tickets (identifiants), et chaque ticket renvoyait nom, e-mail, téléphone, adresse, photos et
+// décisions de facturation : n'importe qui pouvait donc récupérer les données des clients finaux. Seuls ces champs sortent
+// désormais ; une session connectée (patron, agence, technicien) reçoit toujours les données complètes de son entreprise.
+const CHAMPS_PUBLICS = {
+  'clients': ['Nom client', 'Slug', 'Couleur principale', 'Couleur secondaire', 'Logo', 'Accès bloqué', 'Nombre agences', 'Assistants (JSON)', 'Lien avis Google', 'Statut client'],
+  'tickets sav': CHAMPS_SUIVI.concat(['Photos', 'Yousign Signer Link', 'Devis Signé']),
+  'agences': ['Nom agence', 'Client', 'Actif'],
+};
+export function filtrerPourAnonyme(table, data) {
+  const liste = CHAMPS_PUBLICS[String(table || '').replace(/%20/g, ' ').toLowerCase()];
+  if (!liste || !data || typeof data !== 'object') return data;
+  const garder = (rec) => {
+    if (!rec || !rec.fields) return;
+    const f = {};
+    liste.forEach((c) => { if (c in rec.fields) f[c] = rec.fields[c]; });
+    rec.fields = f;
+  };
+  if (Array.isArray(data.records)) data.records.forEach(garder); else if (data.fields) garder(data);
+  return data;
+}
+
+// ÉCRITURE PAR UN VISITEUR SANS SESSION (audit securite n°3, 14/11/2026). Avant ce filtre, n'importe qui pouvait modifier
+// n'importe quel champ d'un ticket (e-mail, statut, décision de facturation…), bloquer tout le planning, changer l'e-mail d'une
+// agence (donc recevoir les notifications avec les coordonnées des clients) ou marquer un devis « Validé ». Désormais seuls les
+// gestes réellement faits par les pages publiques (suivi, devis, avis, prise de rendez-vous) passent, champ par champ.
+const STATUTS_TICKET_PUBLICS = ['Annulé', 'Nouveau', 'Devis refusé'];
+const ECRITURE_PUBLIQUE = {
+  'tickets sav': {
+    champs: ['Message client', 'Message client non lu', 'Photos', 'Statut', 'Raison annulation', 'Commentaire', 'Créneau', 'PlanningID',
+      'Proposition auto en attente', 'Proposition auto créneau', 'Proposition auto mois', 'RDV modifié - notif technicien',
+      'En route depuis', 'Arrivée estimée', 'Réponse agence', 'Note', 'Note Commentaire'],
+  },
+  'planning': { champs: ['Statut'] },
+  'devis': { champs: ['Yousign Signer Link', 'Devis refusé', 'Motif refus', 'Categorie refus'] },
+};
+const LIEN_YOUSIGN = /^https:\/\/([a-z0-9-]+\.)*yousign\.(app|com)\/[^\s"'<>]{0,1500}$/i;
+const LIEN_PHOTO = /^https:\/\/res\.cloudinary\.com\/[A-Za-z0-9_\-./%~]+$/;
+// Retourne null si l'écriture est permise, sinon { code, message }.
+export function verifierEcritureAnonyme(table, methode, recordId, corps) {
+  const regle = ECRITURE_PUBLIQUE[String(table || '').replace(/%20/g, ' ').toLowerCase()];
+  const refus = (message, code) => ({ code: code || 401, message });
+  if (!regle || methode !== 'PATCH' || !recordId) return refus('Authentification requise pour modifier cette ressource.');
+  if (!corps || typeof corps !== 'object' || Array.isArray(corps) || Object.keys(corps).some((k) => k !== 'fields')) return refus('Requête non autorisée sans connexion.', 400);
+  const champs = corps.fields;
+  if (!champs || typeof champs !== 'object' || Array.isArray(champs) || !Object.keys(champs).length) return refus('Requête non autorisée sans connexion.', 400);
+  for (const [nom, valeur] of Object.entries(champs)) {
+    if (!regle.champs.includes(nom)) return refus('Champ non modifiable sans connexion : ' + nom, 403);
+    if (typeof valeur === 'string' && valeur.length > 8000) return refus('Texte trop long.', 400);
+    if (nom === 'Statut') {
+      const permis = String(table).toLowerCase() === 'planning' ? ['Pris', 'Libre'] : STATUTS_TICKET_PUBLICS;
+      if (!permis.includes(valeur)) return refus('Statut non autorisé sans connexion.', 403);
+    }
+    if (nom === 'Yousign Signer Link' && !LIEN_YOUSIGN.test(String(valeur || ''))) return refus('Lien de signature non autorisé.', 400);
+    if (nom === 'Photos') {
+      const liens = String(valeur || '').split(',').map((s) => s.trim()).filter(Boolean);
+      if (liens.length > 12 || !liens.every((l) => LIEN_PHOTO.test(l))) return refus('Adresse de photo non autorisée.', 400);
+    }
+    if (nom === 'Note' && !(Number.isInteger(valeur) && valeur >= 1 && valeur <= 5)) return refus('Note invalide.', 400);
+  }
+  return null;
+}
+
 // Formule Airtable : tickets d'un meme client (meme e-mail OU meme telephone).
 function formuleClient({ email, tel }) {
   const parts = [];
@@ -419,6 +483,11 @@ async function relayerWebhook(req, res, urlCible, actionsAutorisees, ctx) {
   }
   if (!verifierOrigine(req)) {
     return res.status(403).json({ error: 'Origine non autorisée.' });
+  }
+  // Sans session : un visiteur normal déclare une demande, écrit un message ou accepte un devis (quelques envois par heure).
+  // Au-delà, c'est quelqu'un qui cherche à faire envoyer des e-mails à des clients en devinant des numéros de ticket.
+  if (!(ctx && ctx.connecte) && !verifierDebit(req, { max: 40, fenetreMs: 3600 * 1000, cle: 'relais-public' })) {
+    return res.status(429).json({ error: 'Trop de demandes. Réessayez plus tard.' });
   }
 
   if (req.method === 'GET') {
@@ -926,6 +995,13 @@ export default async function handler(req, res) {
     } catch (err) {
       return res.status(502).json({ error: 'Erreur en contactant Airtable (content)', details: String(err) });
     }
+  }
+
+  // Visiteur sans session : écritures limitées à la liste blanche ci-dessus (audit n°3) + plafond de débit.
+  if (!session && req.method !== 'GET' && req.method !== 'HEAD') {
+    const refusEcriture = verifierEcritureAnonyme(premierSegment, req.method, subPathRaw.split('/').filter(Boolean)[1], req.body);
+    if (refusEcriture) return res.status(refusEcriture.code).json({ error: refusEcriture.message });
+    if (!verifierDebit(req, { max: 60, fenetreMs: 3600 * 1000, cle: 'ecriture-publique' })) return res.status(429).json({ error: 'Trop de demandes. Réessayez plus tard.' });
   }
 
   // req.query est déjà décodé par Vercel/Node : on ré-encode proprement
@@ -1756,6 +1832,7 @@ export default async function handler(req, res) {
   try {
     const airtableRes = await fetch(airtableUrl, init);
     const data = await airtableRes.json().catch(() => ({}));
+    if (!session && airtableRes.ok) filtrerPourAnonyme(premierSegment, data); // lecture ET réponse d'écriture : jamais plus que les champs publics
     if (postFiltreAgence && Array.isArray(data.records)) data.records = await postFiltreAgence(data.records);
     // Enrichissement serveur (AUTH #008 suite) : pour une LISTE
     // d'Interventions SAV, on resout le nom affichable ("Identifiant") de

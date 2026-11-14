@@ -1,4 +1,4 @@
-const CACHE_NAME = 'iko-suite-sav-v2';
+const CACHE_NAME = 'iko-suite-sav-v3';
 const CORE_ASSETS = [
   '/',
   '/index.html',
@@ -52,6 +52,8 @@ self.addEventListener('notificationclick', (event) => {
 // Network-first for navigation/API calls, cache-first fallback for core static assets.
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
+  // Sites extérieurs (polices, photos Cloudinary…) : le navigateur les charge lui-même, sous la politique de sécurité de la page ; jamais copiés ici.
+  try { if (new URL(event.request.url).origin !== self.location.origin) return; } catch (e) { return; }
   // Sessions et comptes : jamais gardés en cache (un téléphone partagé ne doit pas rejouer une session hors ligne).
   if (/\/api\/(verif-securite|airtable\/auth|airtable\/Utilisateurs)/.test(event.request.url)) return;
 

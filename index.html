@@ -20,9 +20,9 @@
 // au rendu PC / tablette (iPad) / iPhone qui sont deja corrects.
 if (/Android/i.test(navigator.userAgent)) document.documentElement.classList.add('is-android');
 </script>
-<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="/vendor/react-18.3.1.production.min.js"></script>
+<script src="/vendor/react-dom-18.3.1.production.min.js"></script>
+<script src="/vendor/babel-standalone-8.1.2.min.js"></script>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body { font-family: 'Segoe UI', sans-serif; background: var(--iko-bg-clair); min-height: 100vh; }
@@ -1065,8 +1065,8 @@ if ('serviceWorker' in navigator) {
 <script type="importmap">
 {
   "imports": {
-    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
-    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+    "three": "/vendor/three/three.module.js",
+    "three/addons/": "/vendor/three/addons/"
   }
 }
 </script>
