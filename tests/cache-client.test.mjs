@@ -47,7 +47,7 @@ test("la fiche du client n'est relue qu'une fois par minute pour des lectures su
 
 test("une modification de la table Clients vide le cache : la fiche est relue", async () => {
   const avant = lecturesClient;
-  await http({ methode: "PATCH", chemin: "Clients/" + A, corps: { fields: { Notes: "x" } } });
+  await http({ methode: "PATCH", chemin: "Clients/" + A, corps: { fields: { "Couleur principale": "#FF6B00" } } });
   await http({ chemin: "Interventions SAV" });
   assert.ok(lecturesClient > avant, "la fiche doit etre relue apres une ecriture sur Clients");
 });

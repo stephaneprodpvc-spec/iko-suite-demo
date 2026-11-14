@@ -82,7 +82,7 @@ async function handleDownload(req, res) {
     res.setHeader('Content-Disposition', 'inline; filename="devis-signe.pdf"');
     return res.status(200).send(buf);
   } catch (err) {
-    return res.status(502).json({ error: 'Erreur en contactant Yousign', details: String(err) });
+    return res.status(502).json({ error: 'Erreur en contactant Yousign' });
   }
 }
 

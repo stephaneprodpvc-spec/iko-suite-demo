@@ -389,7 +389,7 @@ window.IKO_CLIENT_READY = (async function () {
     if (couleur) document.documentElement.style.setProperty('--orange', couleur);
     var logoEl = document.querySelector('header .logo');
     if (logoEl) {
-      if (logo) { logoEl.innerHTML = '<img src="' + logo + '" alt="" style="height:16px;display:block;">'; }
+      if (logo && /^https:\/\//.test(logo)) { logoEl.textContent = ''; var imgLogo = document.createElement('img'); imgLogo.src = logo; imgLogo.alt = ''; imgLogo.style.cssText = 'height:16px;display:block;'; logoEl.appendChild(imgLogo); }
       else if (nom) { logoEl.textContent = nom.slice(0, 3).toUpperCase(); }
     }
     var titreEl = document.querySelector('header .titre');

@@ -1,4 +1,4 @@
-import { limiterChat } from "./_securite.js";
+import { limiterChat, verifierSession } from "./_securite.js";
 import { messagesAvecSecours, estDemoSession } from "./_ia-secours.js";
 import { blocSystemeIko } from "./_systeme-iko.js";
 import { blocMetierMenuiserie } from "./_metier-menuiserie.js";
@@ -695,6 +695,8 @@ export default async function handler(req, res) {
   }
 
   if (limiterChat(req, res)) return;
+  // Audit n°3 : assistant interne (écran connecté). Sans session valide, aucun appel à l'IA (sinon n'importe qui consomme votre crédit).
+  { const sessionIA = verifierSession(req); if (!sessionIA || sessionIA.mdpAChanger) return res.status(401).json({ erreur: "Connexion requise." }); }
 
   const cle = process.env.ANTHROPIC_API_KEY;
   if (!cle) {

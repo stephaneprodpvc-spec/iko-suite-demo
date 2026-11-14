@@ -2848,7 +2848,7 @@ async function chargerTicketsPourAnalytics(idsDistincts) {
   if (manquants.length > 0) {
     await Promise.all(manquants.map(async id => {
       try {
-        const r = await fetch('/api/airtable/Tickets%20SAV/' + id);
+        const r = await fetch('/api/airtable/tenant/Tickets%20SAV/' + id);
         _ticketsAnalyticsCache[id] = r.ok ? await r.json() : null;
       } catch (e) {
         _ticketsAnalyticsCache[id] = null;

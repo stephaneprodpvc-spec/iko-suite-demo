@@ -1019,6 +1019,12 @@ export default async function handler(req, res) {
       // --- Comportement EXISTANT, inchangé : déclenchement automatique
       // (cron Vercel), vérifie d'abord si c'est le bon moment programmé. ---
       if (!verifierDebit(req, { max: 30, fenetreMs: 10 * 60_000, cle: "verif-cron" })) return reponseBloquee(res, "debit");
+      // Audit n°3 : ce déclencheur planifié était ouvert à tout visiteur (au moment programmé il exécutait les vérifications et
+      // renvoyait le rapport). Il exige maintenant le secret des tâches planifiées (comme /api/surveillance) ou le super admin connecté.
+      const secretCron = process.env.CRON_SECRET;
+      const sessionDeclencheur = verifierSession(req);
+      const autorise = (secretCron && req.headers.authorization === "Bearer " + secretCron) || (sessionDeclencheur && sessionDeclencheur.role === "SUPER_ADMIN_IKO" && !sessionDeclencheur.mdpAChanger);
+      if (!autorise) return res.status(401).json({ erreur: "Non autorise." });
       const config = await lireConfig();
       if (!estLeMomentProgramme(config)) {
         return res.status(200).json({ execute: false, raison: "hors programmation" });

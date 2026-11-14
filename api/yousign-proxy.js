@@ -169,6 +169,6 @@ export default async function handler(req, res) {
       res.send(text);
     }
   } catch (err) {
-    res.status(502).json({ error: 'Erreur en contactant Yousign', details: String(err) });
+    res.status(502).json({ error: 'Erreur en contactant Yousign' });
   }
 }

@@ -372,7 +372,7 @@ async function verifierModuleActif(baseId, headers, tenantId, moduleRequis) {
     if (!r.ok) return { ok: false, status: 403, error: 'Accès refusé : tenant de session introuvable.' };
     recClient = await r.json();
   } catch (err) {
-    return { ok: false, status: 502, error: 'Erreur en résolvant le tenant de session.', details: String(err) };
+    return { ok: false, status: 502, error: 'Erreur en résolvant le tenant de session.' };
   }
   const modulesActifs = (recClient.fields || {})['Modules actifs'];
   const liste = Array.isArray(modulesActifs) ? modulesActifs : [];
@@ -431,7 +431,7 @@ async function handlerPush(req, res, baseId, headers, session) {
     }
     return res.status(400).json({ error: 'Requête push invalide.' });
   } catch (err) {
-    return res.status(502).json({ error: 'Erreur push', details: String(err) });
+    return res.status(502).json({ error: 'Erreur push' });
   }
 }
 
@@ -748,7 +748,7 @@ export default async function handler(req, res) {
   // AUTH #004 : verification de session, sans effet de bord. null si aucune
   // session valide (comportement historique conserve dans ce cas, cf.
   // commentaire de tete de fichier - mode de coexistence).
-  const session = verifierSession(req);
+  let session = verifierSession(req);
 
   const { path, ...rest } = req.query || {};
   const cheminBrut = Array.isArray(path) ? path.join('/') : (path || '');
@@ -801,6 +801,21 @@ export default async function handler(req, res) {
     return res.status(403).json({ error: 'Changement de mot de passe obligatoire.', mdpAChanger: true });
   }
 
+  // ISOLATION ENTRE ENTREPRISES (audit securite n°3, 14/11/2026). Les routes historiques « Tickets SAV » (sans tenant/) et la
+  // recherche « Clients » par filtre n'ont AUCUN contrôle d'entreprise : un compte connecté d'une entreprise B pouvait y lister,
+  // lire, modifier et supprimer les tickets de l'entreprise A (noms, e-mails, téléphones, adresses), et lire les fiches de toutes les
+  // entreprises. Les pages internes passent par tenant/Tickets SAV et par Clients/<identifiant> : ces deux accès gardent le
+  // contrôle d'entreprise. Ici, un compte qui n'est pas le super admin est traité comme un simple VISITEUR sur ces deux accès
+  // (champs publics seulement, écritures de la liste blanche seulement).
+  if (session && session.role !== 'SUPER_ADMIN_IKO') {
+    const idDemande = subPathRaw.split('/').filter(Boolean)[1];
+    if ((premierSegment === 'Tickets SAV' && !routeTenantTickets) || (premierSegment === 'Clients' && req.method === 'GET' && !idDemande)) session = null;
+  }
+  // Questionnaire SAV : réservé au poste de pilotage (l'assistante Amandine le lit côté serveur, jamais par ce proxy).
+  if (premierSegment === 'Questionnaire SAV' && (!session || session.role !== 'SUPER_ADMIN_IKO')) {
+    return res.status(session ? 403 : 401).json({ error: 'Accès à cette ressource non autorisé via ce proxy.' });
+  }
+
   // ETAPE 1 : journalisation des appels sans session (aucun blocage).
   if (!session) journaliserSansSession(req, premierSegment);
 
@@ -810,6 +825,11 @@ export default async function handler(req, res) {
     if (!session) return res.status(401).json({ error: 'Authentification requise pour supprimer.' });
     if (session.role !== 'SUPER_ADMIN_IKO' && session.role !== 'TENANT_ADMIN') {
       return res.status(403).json({ error: 'Suppression réservée aux administrateurs.' });
+    }
+    // Un patron ne supprime que ce que ses écrans suppriment (tickets, techniciens, métrés) : jamais sa propre fiche entreprise,
+    // ses agences, ses devis ou le planning (audit sécurité n°3). Le super admin garde tout.
+    if (session.role !== 'SUPER_ADMIN_IKO' && !['Tickets SAV', 'Techniciens', 'Ouvertures Métré', 'Métrés'].includes(premierSegment)) {
+      return res.status(403).json({ error: 'Suppression réservée au poste de pilotage.' });
     }
   }
 
@@ -837,7 +857,7 @@ export default async function handler(req, res) {
         if (dataAU && Array.isArray(dataAU.records)) dataAU.records.forEach(rec => { if (rec.fields && rec.fields["Clé d'accès ID"]) { rec.fields["Clé d'accès active"] = true; } if (rec.fields) delete rec.fields["Clé d'accès ID"]; });
         return res.status(rAU.status).json(dataAU);
       } catch (err) {
-        return res.status(502).json({ error: 'Erreur en contactant Airtable', details: String(err) });
+        return res.status(502).json({ error: 'Erreur en contactant Airtable' });
       }
     }
     if (req.method === 'PATCH' && recordIdAU) {
@@ -860,7 +880,7 @@ export default async function handler(req, res) {
         }
         return res.status(rAU.status).json(dataAU);
       } catch (err) {
-        return res.status(502).json({ error: 'Erreur en contactant Airtable', details: String(err) });
+        return res.status(502).json({ error: 'Erreur en contactant Airtable' });
       }
     }
     // Autre méthode (POST/DELETE) ou GET avec recordId : hors périmètre
@@ -993,7 +1013,7 @@ export default async function handler(req, res) {
       const data = await contentRes.json().catch(() => ({}));
       return res.status(contentRes.status).json(data);
     } catch (err) {
-      return res.status(502).json({ error: 'Erreur en contactant Airtable (content)', details: String(err) });
+      return res.status(502).json({ error: 'Erreur en contactant Airtable (content)' });
     }
   }
 
@@ -1041,6 +1061,15 @@ export default async function handler(req, res) {
     if (!session) {
       return res.status(401).json({ error: 'Authentification requise pour modifier Clients.' });
     }
+    // Audit sécurité n°3 : un patron ne crée pas d'entreprise et ne change que l'apparence de SA fiche (couleurs, logo) ;
+    // jamais son accès bloqué, ses modules, son statut ni ses réglages (réservés au poste de pilotage).
+    if (session.role !== 'SUPER_ADMIN_IKO') {
+      const champsEcrits = Object.keys((req.body && req.body.fields) || {});
+      const corpsOk = req.body && typeof req.body === 'object' && Object.keys(req.body).every((k) => k === 'fields');
+      if (req.method === 'POST' || !corpsOk || !champsEcrits.length || champsEcrits.some((c) => !['Couleur principale', 'Couleur secondaire', 'Logo'].includes(c))) {
+        return res.status(403).json({ error: 'Modification réservée au poste de pilotage.' });
+      }
+    }
   }
   // AUTH #014 — Unicité du Slug, contrôlée SERVEUR (jamais uniquement
   // côté admin.html). Ne s'applique que si le champ Slug est réellement
@@ -1074,7 +1103,7 @@ export default async function handler(req, res) {
           return res.status(409).json({ error: 'Ce slug est déjà utilisé par un autre client.' });
         }
       } catch (err) {
-        return res.status(502).json({ error: 'Erreur en vérifiant l\'unicité du slug.', details: String(err) });
+        return res.status(502).json({ error: 'Erreur en vérifiant l\'unicité du slug.' });
       }
     }
   }
@@ -1117,7 +1146,7 @@ export default async function handler(req, res) {
         }
         recPlanningCheck = await rP.json();
       } catch (err) {
-        return res.status(502).json({ error: 'Erreur en vérifiant la propriété tenant de ce créneau.', details: String(err) });
+        return res.status(502).json({ error: 'Erreur en vérifiant la propriété tenant de ce créneau.' });
       }
       const valeurCompteClient = (recPlanningCheck.fields || {})['Compte client'];
       const idsLiesPlanning = Array.isArray(valeurCompteClient) ? valeurCompteClient : (valeurCompteClient ? [valeurCompteClient] : []);
@@ -1212,7 +1241,7 @@ export default async function handler(req, res) {
           }
           recPC = await rPC.json();
         } catch (err) {
-          return res.status(502).json({ error: 'Erreur en vérifiant la propriété tenant de ce créneau commercial.', details: String(err) });
+          return res.status(502).json({ error: 'Erreur en vérifiant la propriété tenant de ce créneau commercial.' });
         }
         const valeurCompteClientPC = (recPC.fields || {})['Compte client'];
         const idsLiesPC = Array.isArray(valeurCompteClientPC) ? valeurCompteClientPC : (valeurCompteClientPC ? [valeurCompteClientPC] : []);
@@ -1274,7 +1303,7 @@ export default async function handler(req, res) {
         if (!rClientSessionISAV.ok) return res.status(403).json({ error: 'Accès refusé : tenant de session introuvable.' });
         recClientSessionISAV = await rClientSessionISAV.json();
       } catch (err) {
-        return res.status(502).json({ error: 'Erreur en résolvant le tenant de session.', details: String(err) });
+        return res.status(502).json({ error: 'Erreur en résolvant le tenant de session.' });
       }
       const segmentsISAV = subPathRaw.split('/').filter(Boolean);
       const recordIdISAV = segmentsISAV[1];
@@ -1289,7 +1318,7 @@ export default async function handler(req, res) {
           }
           recISAV = await rISAV.json();
         } catch (err) {
-          return res.status(502).json({ error: 'Erreur en vérifiant la propriété tenant de cette intervention.', details: String(err) });
+          return res.status(502).json({ error: 'Erreur en vérifiant la propriété tenant de cette intervention.' });
         }
         const valeurCompteClientISAV = (recISAV.fields || {})['Compte client'];
         const idsLiesISAV = Array.isArray(valeurCompteClientISAV) ? valeurCompteClientISAV : (valeurCompteClientISAV ? [valeurCompteClientISAV] : []);
@@ -1332,7 +1361,7 @@ export default async function handler(req, res) {
             return res.status(403).json({ error: "Accès refusé : ce ticket n'appartient pas à votre tenant." });
           }
         } catch (err) {
-          return res.status(502).json({ error: 'Erreur en vérifiant le ticket lié.', details: String(err) });
+          return res.status(502).json({ error: 'Erreur en vérifiant le ticket lié.' });
         }
         // AUTH #008 correctif A2 : meme principe pour le Technicien fourni,
         // si present. Sans ce controle, un appel API forge (session valide
@@ -1353,7 +1382,7 @@ export default async function handler(req, res) {
               return res.status(403).json({ error: "Accès refusé : ce technicien n'appartient pas à votre tenant." });
             }
           } catch (err) {
-            return res.status(502).json({ error: 'Erreur en vérifiant le technicien lié.', details: String(err) });
+            return res.status(502).json({ error: 'Erreur en vérifiant le technicien lié.' });
           }
         }
         req.body.fields['Compte client'] = [session.tenantId];
@@ -1474,7 +1503,7 @@ export default async function handler(req, res) {
         }
         recCheck = await rCheck.json();
       } catch (err) {
-        return res.status(502).json({ error: 'Erreur en vérifiant la propriété tenant de cet enregistrement.', details: String(err) });
+        return res.status(502).json({ error: 'Erreur en vérifiant la propriété tenant de cet enregistrement.' });
       }
       const valeurChamp = (recCheck.fields || {})[conf.champ];
       const idsLies = Array.isArray(valeurChamp) ? valeurChamp : (valeurChamp ? [valeurChamp] : []);
@@ -1506,7 +1535,7 @@ export default async function handler(req, res) {
         const recTenantListe = await rTenantListe.json();
         nomTenantListe = (recTenantListe.fields || {})['Nom client'];
       } catch (err) {
-        return res.status(502).json({ error: 'Erreur en résolvant le tenant de session.', details: String(err) });
+        return res.status(502).json({ error: 'Erreur en résolvant le tenant de session.' });
       }
       if (!nomTenantListe) return res.status(403).json({ error: 'Accès refusé : tenant de session incomplet.' });
       const formuleTenantListe = 'FIND("' + String(nomTenantListe).replace(/\\/g, "\\\\").replace(/"/g, '\\"') + '", ARRAYJOIN({' + conf.champ + '}))';
@@ -1579,7 +1608,7 @@ export default async function handler(req, res) {
           }
           recOM = await rOM.json();
         } catch (err) {
-          return res.status(502).json({ error: 'Erreur en vérifiant la propriété tenant de cette ouverture.', details: String(err) });
+          return res.status(502).json({ error: 'Erreur en vérifiant la propriété tenant de cette ouverture.' });
         }
         const metreLies = (recOM.fields || {})['Métré'];
         const idsMetre = Array.isArray(metreLies) ? metreLies : (metreLies ? [metreLies] : []);
@@ -1635,7 +1664,7 @@ export default async function handler(req, res) {
           const recTenantOM = await rTenantOM.json();
           nomTenantOM = (recTenantOM.fields || {})['Nom client'];
         } catch (err) {
-          return res.status(502).json({ error: 'Erreur en résolvant le tenant de session.', details: String(err) });
+          return res.status(502).json({ error: 'Erreur en résolvant le tenant de session.' });
         }
         if (!nomTenantOM) return res.status(403).json({ error: 'Accès refusé : tenant de session incomplet.' });
 
@@ -1650,7 +1679,7 @@ export default async function handler(req, res) {
             idsMetresDuTenant = (jsonMetresOM.records || []).map(r => r.id);
           }
         } catch (err) {
-          return res.status(502).json({ error: 'Erreur en résolvant les métrés du tenant.', details: String(err) });
+          return res.status(502).json({ error: 'Erreur en résolvant les métrés du tenant.' });
         }
 
         // Relaie la recherche du navigateur (filterByFormula par nom de
@@ -1669,7 +1698,7 @@ export default async function handler(req, res) {
           dataOM = await rOM.json().catch(() => ({}));
           if (!rOM.ok) return res.status(rOM.status).json(dataOM);
         } catch (err) {
-          return res.status(502).json({ error: 'Erreur en contactant Airtable', details: String(err) });
+          return res.status(502).json({ error: 'Erreur en contactant Airtable' });
         }
 
         // Post-filtrage — échec fermé : ne garde que les ouvertures dont
@@ -1736,7 +1765,7 @@ export default async function handler(req, res) {
           }
           recTicketCheck = await rTicket.json();
         } catch (err) {
-          return res.status(502).json({ error: 'Erreur en vérifiant la propriété tenant de ce ticket.', details: String(err) });
+          return res.status(502).json({ error: 'Erreur en vérifiant la propriété tenant de ce ticket.' });
         }
         const valeurCompteClient = (recTicketCheck.fields || {})['Compte client'];
         const idsLiesTicket = Array.isArray(valeurCompteClient) ? valeurCompteClient : (valeurCompteClient ? [valeurCompteClient] : []);
@@ -1763,7 +1792,7 @@ export default async function handler(req, res) {
           const recTenant = await rTenant.json();
           nomTenant = (recTenant.fields || {})['Nom client'];
         } catch (err) {
-          return res.status(502).json({ error: 'Erreur en résolvant le tenant de session.', details: String(err) });
+          return res.status(502).json({ error: 'Erreur en résolvant le tenant de session.' });
         }
         if (!nomTenant) return res.status(403).json({ error: 'Accès refusé : tenant de session incomplet.' });
         const formuleTenantTicket = 'FIND("' + String(nomTenant).replace(/\\/g, "\\\\").replace(/"/g, '\\"') + '", ARRAYJOIN({Compte client}))';
@@ -1881,6 +1910,6 @@ export default async function handler(req, res) {
     }
     res.status(airtableRes.status).json(data);
   } catch (err) {
-    res.status(502).json({ error: 'Erreur en contactant Airtable', details: String(err) });
+    res.status(502).json({ error: 'Erreur en contactant Airtable' });
   }
 }
