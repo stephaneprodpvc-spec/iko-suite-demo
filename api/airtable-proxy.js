@@ -109,6 +109,26 @@ export function verifierEcritureAnonyme(table, methode, recordId, corps) {
   return null;
 }
 
+// Une formule Airtable est « équilibrée » si ses parenthèses ne se referment jamais trop tôt, sont toutes refermées, et si chaque chaîne
+// entre guillemets (" ou ') est terminée (l'antislash protège le guillemet suivant). Longueur limitée.
+export function formuleEquilibree(f) {
+  const s = String(f);
+  if (s.length > 2000) return false;
+  let profondeur = 0, guillemet = '';
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i];
+    if (guillemet) {
+      if (c === '\\') { i++; continue; }
+      if (c === guillemet) guillemet = '';
+      continue;
+    }
+    if (c === '"' || c === "'") { guillemet = c; continue; }
+    if (c === '(') profondeur++;
+    else if (c === ')') { profondeur--; if (profondeur < 0) return false; }
+  }
+  return profondeur === 0 && guillemet === '';
+}
+
 // Formule Airtable : tickets d'un meme client (meme e-mail OU meme telephone).
 function formuleClient({ email, tel }) {
   const parts = [];
@@ -841,6 +861,17 @@ export default async function handler(req, res) {
   // fait, le proxy refuse toute requete de cette session.
   if (session && session.mdpAChanger) {
     return res.status(403).json({ error: 'Changement de mot de passe obligatoire.', mdpAChanger: true });
+  }
+
+  // FORMULES DE RECHERCHE ÉQUILIBRÉES (audit n°3, 5e passe). Pour une liste, le serveur ajoute son propre filtre d'entreprise à celui du
+  // navigateur : « AND(<formule du navigateur>, <filtre de l'entreprise>) ». Une formule piégée aux parenthèses ou guillemets
+  // déséquilibrés (« TRUE()) & IF(TRUE(), "x" ») pouvait refermer le AND plus tôt et faire disparaître le filtre d'entreprise.
+  // Toute formule doit donc être complète et équilibrée (parenthèses, guillemets) ; sinon elle est refusée.
+  if (typeof rest.filterByFormula === 'string' && !formuleEquilibree(rest.filterByFormula)) {
+    return res.status(400).json({ error: 'Formule de recherche non valide.' });
+  }
+  if (rest.filterByFormula !== undefined && typeof rest.filterByFormula !== 'string') {
+    return res.status(400).json({ error: 'Formule de recherche non valide.' });
   }
 
   // LISTE BLANCHE DES RESSOURCES (audit n°3, 4e passe). Jusqu'ici les règles se déclenchaient sur le NOM de la table : une table
