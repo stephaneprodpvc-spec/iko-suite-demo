@@ -131,6 +131,29 @@ window.ikoMessage = function (texte) {
     setTimeout(function () { d.style.transition = 'opacity .4s'; d.style.opacity = '0'; setTimeout(function () { d.remove(); }, 450); }, 4500);
   } catch (e) { console.log(texte); }
 };
+// Confirmation humaine avant toute action d'IKO qui change des données ou écrit à un client (audit n°3, 5e passe : le texte des tickets
+// est écrit par des clients ; un texte piégé pourrait pousser l'assistant à agir à leur place). Rien ne part sans un clic.
+window.ikoConfirmer = function (titre, detail) {
+  return new Promise(function (resolve) {
+    var fond = document.createElement('div');
+    fond.setAttribute('role', 'dialog'); fond.setAttribute('aria-modal', 'true');
+    fond.style.cssText = 'position:fixed;inset:0;z-index:10050;background:rgba(0,0,0,.72);display:flex;align-items:center;justify-content:center;padding:16px';
+    var boite = document.createElement('div');
+    boite.style.cssText = 'background:#111;color:#fff;border:1px solid #FF6B00;border-radius:16px;max-width:520px;width:100%;padding:18px;font:14px/1.5 -apple-system,Segoe UI,Arial,sans-serif';
+    var t = document.createElement('div'); t.style.cssText = 'font-weight:900;font-size:16px;margin-bottom:6px'; t.textContent = String(titre);
+    var d = document.createElement('div'); d.style.cssText = 'background:rgba(255,255,255,.08);border-radius:10px;padding:10px;margin:8px 0 12px;white-space:pre-wrap;max-height:40vh;overflow:auto;word-break:break-word'; d.textContent = String(detail);
+    var n = document.createElement('div'); n.style.cssText = 'font-size:11px;color:#9CA3AF;margin-bottom:12px'; n.textContent = "IKO propose cette action. Rien ne part sans ta validation.";
+    var ligne = document.createElement('div'); ligne.style.cssText = 'display:flex;gap:8px;justify-content:flex-end';
+    function bouton(texte, plein) { var b = document.createElement('button'); b.type = 'button'; b.textContent = texte; b.style.cssText = 'padding:9px 16px;border-radius:8px;font-weight:800;font-size:13px;cursor:pointer;border:1px solid #FF6B00;' + (plein ? 'background:#FF6B00;color:#fff' : 'background:transparent;color:#FF6B00'); return b; }
+    var non = bouton('Annuler', false), oui = bouton('Confirmer', true);
+    function fin(v) { document.removeEventListener('keydown', clavier, true); fond.remove(); resolve(v); }
+    function clavier(e) { if (e.key === 'Escape') { e.stopPropagation(); fin(false); } }
+    non.addEventListener('click', function () { fin(false); }); oui.addEventListener('click', function () { fin(true); });
+    document.addEventListener('keydown', clavier, true);
+    ligne.appendChild(non); ligne.appendChild(oui);
+    [t, d, n, ligne].forEach(function (x) { boite.appendChild(x); }); fond.appendChild(boite); document.body.appendChild(fond); oui.focus();
+  });
+};
 window.IKO_CLIENT_READY = (async function () {
   try {
     var resSession = await fetch('/api/verif-securite?action=session');
@@ -7115,7 +7138,9 @@ function Dashboard({ agenceAccess, onClose }) {
         setSearch(a.input.requete || '');
         setStatutFilter('tous'); setUrgentOnly(false); setMessagesOnly(false); setRdvModifieOnly(false);
       } else if (a.name === 'changer_statut' && a.input.ticket_id) {
-        updateStatus(a.input.ticket_id, a.input.nouveau_statut);
+        const tCible = tickets.find(x => x.id === a.input.ticket_id);
+        window.ikoConfirmer("Changer le statut du ticket ?", (tCible?.fields?.Name || "Ticket") + " (" + (tCible?.fields?.Client || "client") + ")\n" + (tCible?.fields?.Statut || "?") + "  →  " + a.input.nouveau_statut)
+          .then(ok => { if (ok) updateStatus(a.input.ticket_id, a.input.nouveau_statut); });
       } else if (a.name === 'filtrer_statut') {
         setStatutFilter(a.input.statut); setUrgentOnly(false); setMessagesOnly(false); setRdvModifieOnly(false);
       } else if (a.name === 'ouvrir_ticket') {
@@ -7124,18 +7149,21 @@ function Dashboard({ agenceAccess, onClose }) {
         const cible = tickets.find(x => x.id === a.input.ticket_id || x.fields?.Name === a.input.numero);
         if (!cible) return;
         if (a.input.destinataire === 'technicien') {
-          renvoyerMailTechnicien(cible.fields?.Name);
+          window.ikoConfirmer("Renvoyer le mail au technicien ?", (cible.fields?.Name || "Ticket") + " — " + (cible.fields?.Produit || "")).then(ok => { if (ok) renvoyerMailTechnicien(cible.fields?.Name); });
         } else if (cible.fields?.["Pas de contact client"]) {
           setAmandineErreur("Impossible : ce client n'a pas de contact email/téléphone exploitable.");
         } else {
-          renvoyerMailClient(cible.fields?.Name);
+          window.ikoConfirmer("Renvoyer le mail au CLIENT ?", (cible.fields?.Name || "Ticket") + " — " + (cible.fields?.Client || "client")).then(ok => { if (ok) renvoyerMailClient(cible.fields?.Name); });
         }
       } else if (a.name === 'marquer_message_lu') {
         const cible = tickets.find(x => x.id === a.input.ticket_id || x.fields?.Name === a.input.numero);
         if (cible) marquerMessageLu(cible);
       } else if (a.name === 'repondre_client') {
         const cible = tickets.find(x => x.id === a.input.ticket_id || x.fields?.Name === a.input.numero);
-        if (cible && a.input.message) repondreClient(cible, a.input.message);
+        if (cible && a.input.message) {
+          window.ikoConfirmer("Envoyer ce message au client ?", (cible.fields?.Name || "Ticket") + " — " + (cible.fields?.Client || "client") + "\n\n" + String(a.input.message).slice(0, 1500))
+            .then(ok => { if (ok) repondreClient(cible, a.input.message); });
+        }
       } else if (a.name === 'preparer_blocage_dates') {
         // Action multi-champs sur potentiellement de nombreux créneaux :
         // on ouvre le formulaire pré-rempli, la confirmation reste manuelle.
@@ -7177,7 +7205,9 @@ function Dashboard({ agenceAccess, onClose }) {
       } else if (a.name === 'prochain_rdv_disponible') {
         annoncerProchainsCreneaux(a.input.agence, a.input.ticket_id);
       } else if (a.name === 'deplacer_rdv') {
-        deplacerRdvParIKO(a.input.ticket_id, a.input.date, a.input.periode);
+        const tDep = tickets.find(x => x.id === a.input.ticket_id);
+        window.ikoConfirmer("Déplacer le rendez-vous ?", (tDep?.fields?.Name || "Ticket") + " (" + (tDep?.fields?.Client || "client") + ")\n" + (tDep?.fields?.["Créneau"] || "?") + "  →  " + String(a.input.date || "?") + (a.input.periode ? " (" + a.input.periode + ")" : ""))
+          .then(ok => { if (ok) deplacerRdvParIKO(a.input.ticket_id, a.input.date, a.input.periode); });
       } else if (a.name === 'lire_analyse_max') {
         const cible = tickets.find(x => x.id === a.input.ticket_id || x.fields?.Name === a.input.numero);
         remplacement = cible ? texteAnalyseMax(cible) : "Je n'ai pas trouvé ce ticket dans la liste.";
