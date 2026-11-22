@@ -2,6 +2,8 @@
 // (fiche entreprise, ticket par identifiant, agences). Une session connectée reçoit les données complètes.
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { existsSync } from "node:fs";
+if (!existsSync(new URL("../iko-local/donnees.mjs", import.meta.url))) { console.log("bac a sable local absent (Vercel) : test lance seulement en local"); process.exit(0); }
 import jwt from "jsonwebtoken";
 
 process.env.AIRTABLE_TOKEN = "faux";

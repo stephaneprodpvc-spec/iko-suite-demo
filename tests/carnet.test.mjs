@@ -1,5 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+delete process.env.CARNET_TOKEN_SECRET; delete process.env.SUIVI_TOKEN_SECRET;
 process.env.JWT_ACCESS_SECRET = "secret-de-test-carnet";
 const { creerCarnet, lireCarnet } = await import("../api/_carnet.js");
 

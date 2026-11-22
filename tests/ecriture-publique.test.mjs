@@ -2,6 +2,8 @@
 // Les cas « permis » reproduisent exactement les écritures des pages publiques (suivi, devis, avis, prise de rendez-vous).
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { existsSync } from "node:fs";
+if (!existsSync(new URL("../iko-local/donnees.mjs", import.meta.url))) { console.log("bac a sable local absent (Vercel) : test lance seulement en local"); process.exit(0); }
 
 process.env.AIRTABLE_TOKEN = "faux";
 process.env.AIRTABLE_BASE_ID = "appLOCALFICTIF000";
