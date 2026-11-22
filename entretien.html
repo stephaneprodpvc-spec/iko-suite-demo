@@ -118,7 +118,7 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:#FF6B00;box-sh
 (function(){
   var $=function(i){return document.getElementById(i)};
   var TABLE='/api/airtable/Contrats%20entretien', WEBHOOK='/api/airtable/webhook', ctx={id:null}, contrats=[];
-  var esc=function(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})};
+  var esc=function(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})};
   var iso=function(d){return new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,10)};
   var ajoutMois=function(dateIso,m){var d=new Date(dateIso+'T12:00:00');d.setMonth(d.getMonth()+m);return iso(d)};
   var fr=function(d){return d?new Date(d+'T12:00:00').toLocaleDateString('fr-FR'):'—'};

@@ -76,6 +76,17 @@ function verifierClientData(clientDataJSON, attendu) {
   return brut;
 }
 
+// Un défi de connexion ne sert QU'UNE FOIS (audit n°3, 5e passe). Sans cela, une réponse valide interceptée (iPhone : compteur de la clé
+// toujours à 0, donc contrôle du compteur sans effet) pouvait être rejouée pendant les 5 minutes de validité du défi.
+// Mémoire de l'instance du serveur : protège contre le rejeu immédiat ; le contrôle du compteur protège les clés qui en ont un.
+const defisConsommes = new Map();
+export function consommerDefi(defi, maintenant = Date.now()) {
+  for (const [k, exp] of defisConsommes) if (exp < maintenant) defisConsommes.delete(k);
+  if (defisConsommes.has(defi)) return false;
+  defisConsommes.set(defi, maintenant + 6 * 60 * 1000);
+  return true;
+}
+
 function jetonDefi(charge) { return jwt.sign(charge, secretDefi(), { expiresIn: 300 }); }
 function lireJetonDefi(jeton, genre) {
   let p; try { p = jwt.verify(String(jeton || ""), secretDefi()); } catch (e) { throw new Error("Défi invalide ou expiré : recommence."); }
@@ -181,6 +192,7 @@ export async function connexionCle(req, res, ctx) {
     if (!valide) return echec();
     const ancien = Number(f[CHAMP_COMPTEUR]) || 0;
     if ((ad.compteur || ancien) && ad.compteur <= ancien) return echec(); // compteur qui ne monte pas : cle clonee
+    if (!consommerDefi(defi.c)) return echec(); // défi déjà utilisé : rejeu
     const tokenId = crypto.randomUUID();
     await ctx.majUtilisateur(rec.id, { [CHAMP_COMPTEUR]: ad.compteur, "Échecs de connexion": 0, "Bloqué jusqu'à": null, "Dernier tokenId refresh valide": tokenId, "Dernière connexion": new Date().toISOString() });
     const user = { userId: rec.id, tenantId: (f["tenantId"] || [])[0] || null, role: f["Rôle"] || null, agence: agenceRestreinte(f["Agence"]) };

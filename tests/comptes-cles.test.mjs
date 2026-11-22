@@ -214,3 +214,13 @@ test("empreinte / visage : on peut la retirer", async () => {
   const o = await appeler({ action: "cle_options_connexion" }, sansSession);
   assert.equal((await appeler({ action: "cle_connexion", jeton: o.corps.jeton, ...tel.signer(o.corps.options.challenge, "http://localhost:3000", 1) }, sansSession)).code, 401);
 });
+
+// 5e passe : un défi de connexion par empreinte ne sert qu'une fois (rejeu d'une réponse interceptée)
+import { consommerDefi } from "../api/_cles-acces.js";
+test("défi de connexion à usage unique", () => {
+  const t0 = 1_000_000;
+  assert.equal(consommerDefi("defi-a", t0), true);
+  assert.equal(consommerDefi("defi-a", t0 + 1000), false);
+  assert.equal(consommerDefi("defi-b", t0 + 1000), true);
+  assert.equal(consommerDefi("defi-a", t0 + 7 * 60 * 1000), true); // expiré (le défi lui-même a expiré depuis 5 min)
+});

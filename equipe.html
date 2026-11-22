@@ -78,7 +78,7 @@ input:focus,select:focus{outline:none;border-color:#FF6B00;box-shadow:0 0 0 3px 
 (function(){
   var $=function(i){return document.getElementById(i)};
   var TABLE='/api/airtable/Techniciens', ctx={id:null}, items=[], edit=null, agencesListe=[];
-  var esc=function(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})};
+  var esc=function(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})};
   var ZONE='Zone (départements ou codes postaux)';
   async function contexte(){
     var r=await fetch('/api/verif-securite?action=session');
