@@ -101,3 +101,22 @@ test("tâches planifiées : acceptées avec le bon secret seulement", async () =
   const req = (secret) => appeler(yousign, null, { methode: "GET", query: { service: "rappel" } }).then((r) => r.code);
   assert.equal(await req("faux"), 401);
 });
+
+// 5e passe : gestion de l'équipe et des comptes = patron (ou super admin) seulement ; refusée au visiteur et à un technicien d'agence.
+const GESTION_EQUIPE = [
+  ["créer des comptes", { action: "creer_comptes", clientId: A, comptes: [{ identifiant: "faux@x.fr", role: "SUPER_ADMIN_IKO" }] }],
+  ["régénérer un mot de passe", { action: "regenerer_mot_de_passe", identifiant: "faux@x.fr" }],
+  ["créer des comptes d'équipe", { action: "creer_comptes_equipe", comptes: [{ identifiant: "faux@x.fr", role: "TENANT_ADMIN" }] }],
+  ["lister l'équipe", { action: "lister_equipe" }],
+  ["changer le statut d'un compte", { action: "statut_compte", identifiant: "faux@x.fr", statut: "Actif" }],
+];
+for (const nom of ["visiteur", "technicien"]) {
+  test("gestion d'équipe et de comptes : refusée pour un " + nom, async () => {
+    const ouverts = [];
+    for (const [libelle, corps] of GESTION_EQUIPE) {
+      const r = await appeler(verif, PROFILS[nom], { methode: "POST", body: corps });
+      if (![401, 403, 404].includes(r.code)) ouverts.push(libelle + " → " + r.code + " " + JSON.stringify(r.corps).slice(0, 90));
+    }
+    assert.deepEqual(ouverts, []);
+  });
+}
