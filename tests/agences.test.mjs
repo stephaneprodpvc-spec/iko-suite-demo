@@ -117,7 +117,7 @@ test("a la creation, l'agence est imposee par le serveur", async () => {
 });
 
 test("ressources hors perimetre : table par identifiant, reglages, comptes", async () => {
-  assert.equal((await lire("tblXXXXXXXXXXXXXX", AGENCE1)).code, 403);
+  assert.ok([403, 404].includes((await lire("tblXXXXXXXXXXXXXX", AGENCE1)).code)); // ressource inconnue (404) ou hors périmètre (403) : refusée dans les deux cas
   assert.equal((await lire("Utilisateurs", AGENCE1)).code, 403);
   assert.equal((await lire("Journal actions", AGENCE1)).code, 403);
   assert.equal((await http(proxy, { methode: "PATCH", chemin: "Catalogue Produits/recCATA100000001", corps: { fields: { "Désignation": "Piraté" } }, session: AGENCE1 })).code, 403);

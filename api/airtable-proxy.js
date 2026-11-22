@@ -843,6 +843,20 @@ export default async function handler(req, res) {
     return res.status(403).json({ error: 'Changement de mot de passe obligatoire.', mdpAChanger: true });
   }
 
+  // LISTE BLANCHE DES RESSOURCES (audit n°3, 4e passe). Jusqu'ici les règles se déclenchaient sur le NOM de la table : une table
+  // demandée par son identifiant interne (« tblNtYc… » au lieu de « Utilisateurs »), en minuscules ou avec une variante d'écriture
+  // passait donc à côté de toutes les protections (un compte connecté de n'importe quelle entreprise pouvait lire les comptes).
+  // Désormais, seul un nom EXACT de table connue (ou une route propre du proxy) est accepté, pour tout le monde, super admin compris.
+  {
+    const TABLES_CONNUES = ['Planning', 'Tickets SAV', 'Métrés', 'RDV Commercial', 'Planning Commercial', 'Contrôles Chantier', 'Ouvertures Métré', 'Clients',
+      'Questionnaire SAV', 'Agences', 'Catalogue Produits', "Grille Main d'œuvre", 'Mise en page Devis', 'Devis', 'Interventions SAV', 'Contrats entretien',
+      'Techniciens', 'Utilisateurs', 'Audience', 'Journal actions'];
+    const ROUTES_PROPRES = ['content', 'creneaux', 'push', 'webhook', 'webhook-metreur', 'suivi', 'entretien', 'carnet'];
+    if (!TABLES_CONNUES.includes(premierSegment) && !ROUTES_PROPRES.includes(premierSegment)) {
+      return res.status(404).json({ error: 'Ressource inconnue.' });
+    }
+  }
+
   // ISOLATION ENTRE ENTREPRISES (audit securite n°3, 14/11/2026). Les routes historiques « Tickets SAV » (sans tenant/) et la
   // recherche « Clients » par filtre n'ont AUCUN contrôle d'entreprise : un compte connecté d'une entreprise B pouvait y lister,
   // lire, modifier et supprimer les tickets de l'entreprise A (noms, e-mails, téléphones, adresses), et lire les fiches de toutes les
@@ -1049,6 +1063,10 @@ export default async function handler(req, res) {
   // place d'api.airtable.com, sans créer de fonction Vercel supplémentaire
   // (le projet est déjà au plafond de 12 fonctions sur le plan Hobby).
   if (subPathRaw.startsWith('content/')) {
+    // Audit n°3 (4e passe) : cette route n'avait AUCUN contrôle (n'importe quel compte connecté pouvait déposer un fichier sur n'importe quel
+    // enregistrement : logo d'une autre entreprise, PDF d'un devis…). Réservée au poste de pilotage, envoi d'un logo seulement.
+    if (!session || session.role !== 'SUPER_ADMIN_IKO') return res.status(session ? 403 : 401).json({ error: 'Réservé au poste de pilotage.' });
+    if (req.method !== 'POST' || !/^content\/rec[A-Za-z0-9]{14}\/(Logo|fld[A-Za-z0-9]{14})\/uploadAttachment$/.test(subPathRaw)) return res.status(400).json({ error: 'Requête non autorisée.' });
     const contentSubPath = subPathRaw.slice('content/'.length).split('/').filter(Boolean).map(encodeURIComponent).join('/');
     const baseId = process.env.AIRTABLE_BASE_ID || 'appkI8RKHkYNWY86U';
     const contentUrl = 'https://content.airtable.com/v0/' + baseId + '/' + contentSubPath;

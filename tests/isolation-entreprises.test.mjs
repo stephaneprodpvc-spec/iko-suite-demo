@@ -200,3 +200,29 @@ test("chemins normaux toujours acceptés (tables à espaces, apostrophes, accent
   assert.equal((await appeler(SUPER, "GET", "Tickets SAV/recTICKETA0000001")).code, 200);
   assert.equal((await appeler(null, "GET", "Planning")).code, 200);
 });
+
+// 4e passe : une table demandée par son identifiant interne (tbl…) contournait les règles écrites par nom.
+test("tables demandées par identifiant interne, en minuscules ou en variante : refusées pour tous, y compris pour un patron et un technicien", async () => {
+  const idsInternes = ["tblNtYcMBBYRVjEKw", "tbllRTCTqb0auqK6a", "tblvNOHtYXYkmTixG", "tblh1s7X6yXJlsTGW", "tbljQP0jGl8Vgfp5b", "tblhlcNp0IZmGFmEl", "tblBJkVIbJM0SHtJk"];
+  const variantes = ["utilisateurs", "UTILISATEURS", "Utilisateurs ", "Utilisateurs%20", "journal actions", "audience", "Clients ", "tickets sav", "Tickets  SAV", "TENANT/Tickets SAV", "tenant/Clients", "tenant/Devis", "tenant/Utilisateurs", "Métrés", "Métres"];
+  const problemes = [];
+  for (const [nom, session] of [["visiteur", null], ["patron B", PATRON_B], ["technicien B", TECH_B]]) {
+    for (const chemin of [...idsInternes, ...variantes]) {
+      for (const methode of ["GET", "PATCH", "POST", "DELETE"]) {
+        const r = await appeler(session, methode, chemin + (methode === "PATCH" || methode === "DELETE" ? "/recUSERA000000001" : ""), methode === "GET" || methode === "DELETE" ? undefined : { fields: { Statut: "Pris" } });
+        const txt = JSON.stringify(r.corps || "");
+        if (r.code >= 200 && r.code < 300 && /Utilisateurs|tbl|journal|audience|utilisateurs|UTILISATEURS/i.test(chemin) || /HASH-A|user-alpha|Hash mot/.test(txt)) problemes.push(nom + " " + methode + " " + chemin + " -> " + r.code);
+      }
+    }
+  }
+  assert.deepEqual(problemes, []);
+});
+
+test("dépôt de fichier (content/) : seulement le super admin, un logo, sur un identifiant bien formé", async () => {
+  const chemin = "content/recDEVISA0000001/Logo/uploadAttachment";
+  assert.equal((await appeler(null, "POST", chemin, { contentType: "image/png", file: "AAAA", filename: "x.png" })).code, 401);
+  assert.equal((await appeler(PATRON_B, "POST", chemin, { contentType: "image/png", file: "AAAA", filename: "x.png" })).code, 403);
+  assert.equal((await appeler(TECH_B, "POST", chemin, { contentType: "image/png", file: "AAAA", filename: "x.png" })).code, 403);
+  assert.equal((await appeler(SUPER, "POST", "content/recDEVISA0000001/Utilisateurs/uploadAttachment", {})).code, 400);
+  assert.equal((await appeler(SUPER, "GET", chemin)).code, 400);
+});
